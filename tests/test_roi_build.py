@@ -1022,7 +1022,9 @@ def test_country_packs_deterministic_and_split(tmp_path, monkeypatch):
             assert sz <= 30_000 + 200
     assert [x[4] for x in cd["c"]] == sorted(x[4] for x in cd["c"])     # filled in the index's order
     names = sorted(os.listdir(str(od)))
-    assert all(rb.PACK_RE.match(n) for n in names) and len(names) == len(cd["packs"])
+    cpn = sorted([cd["cp"]["file"], cd["cp"]["days"]])                  # 🌍 + the board's two files (same build)
+    assert all(rb.PACK_RE.match(n) for n in names if n not in cpn) and len(names) == len(cd["packs"]) + 2
+    assert all(rb.CP_RE.match(n) and not rb.PACK_RE.match(n) for n in cpn) and set(cpn) <= set(names)
     before = {n: open(os.path.join(str(od), n), "rb").read() for n in names}
     acc2 = rb.start(cube=True, cmon=acc.cmon)
     cd2, od2, _ = _cc_run(tmp_path, data, P, pre, spend, acc2)           # a second build: the same bytes
@@ -1099,7 +1101,9 @@ def test_country_app_step_file_and_isolation(tmp_path, monkeypatch):
     body = json.loads(full)
     assert body["cd"]["v"] == 1 and calls == [["s1"]] and acc.cdn == {"apps": 1, "countries": 6, "packs": 1, "failed": 0,
                                                                      "geo_failed": 0}   # only the app's own store read
-    assert sorted(os.listdir(str(out))) == ["roi_aaaaaaaaaaaa.json.gz", "roi_aaaaaaaaaaaa_c00.json.gz"]
+    assert sorted(os.listdir(str(out))) == ["roi_aaaaaaaaaaaa.json.gz", "roi_aaaaaaaaaaaa_c00.json.gz",
+                                            "roi_aaaaaaaaaaaa_cp.json.gz", "roi_aaaaaaaaaaaa_cpd.json.gz"]
+    assert body["cd"]["cp"]["file"] == "roi_aaaaaaaaaaaa_cp.json.gz" and len(body["cd"]["cp"]["v"]) == 12
     # every other byte of the file = the same cube without its country parts (no "cd")
     bare, acc_b, _ = _cc_app_step(tmp_path, monkeypatch, "bare", strip=True)
     assert "cd" not in json.loads(bare) and acc_b.cdn["apps"] == 0
@@ -1131,10 +1135,12 @@ def test_country_visit_failure_keeps_the_columns(tmp_path, monkeypatch):
 
 def test_country_stale_packs_and_line(tmp_path, monkeypatch):
     full, acc, out = _cc_app_step(tmp_path, monkeypatch, "s")
-    for f in ("roi_aaaaaaaaaaaa_c07.json.gz", "roi_bbbbbbbbbbbb_c00.json.gz"):   # an older build's: one too many /
-        open(os.path.join(str(out), f), "w").close()                         # another app's (gone now)
+    for f in ("roi_aaaaaaaaaaaa_c07.json.gz", "roi_bbbbbbbbbbbb_c00.json.gz",   # an older build's: one too many /
+              "roi_bbbbbbbbbbbb_cp.json.gz", "roi_bbbbbbbbbbbb_cpd.json.gz"):     # another app's (gone now)
+        open(os.path.join(str(out), f), "w").close()
     assert rb.finish(acc, {}, str(out)) == ["/roi*"]
-    assert sorted(os.listdir(str(out))) == ["roi.json.gz", "roi_aaaaaaaaaaaa.json.gz", "roi_aaaaaaaaaaaa_c00.json.gz"]
+    assert sorted(os.listdir(str(out))) == ["roi.json.gz", "roi_aaaaaaaaaaaa.json.gz", "roi_aaaaaaaaaaaa_c00.json.gz",
+                                            "roi_aaaaaaaaaaaa_cp.json.gz", "roi_aaaaaaaaaaaa_cpd.json.gz"]
     line = rb.pop_line()
     assert line.startswith("roi: apps 1,") and "; countries: apps 1, countries 6, packs 1, failed 0, ads split unread 0" in line
     assert "Alpha" not in line and "AA" not in line
@@ -1930,3 +1936,93 @@ def test_country_users_packs_stay_under_pack_max(tmp_path, monkeypatch):
         if sum(1 for x in cd["c"] if x[4] == ix) > 1:
             assert len(raw) <= 30_000 + 200
         assert json.loads(raw)["b"] == cd["b"]
+
+
+# ---- 🌍 the countries board's periods (owner, 2 Nov 2026: a period picker, All time by default, Custom too) ----
+
+def test_cp_day_final_ages_only():
+    hs = date(2026, 1, 1)
+    t = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, None, None, None, None]            # D0 … D30 complete, past it from m only
+    r = {"X": date(2026, 1, 11), "n": 40, "sp": 12.345, "spi": 1000.5, "u": [40, 9, 5], "df": 31, "t": t,
+         "m": [7.0, 8.0, 9.0, 9.5], "mf": 3}                               # 60 / 90 / 120 final, 150 not yet
+    assert rb._cp_day(r, hs) == [10, 40, 12.35, 1000.5, 9, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+    young = dict(r, t=[1.0, 2.0, 3.0, None, None, None, None, None, None, None], m=None, mf=0, df=2, sp=None, spi=None)
+    assert rb._cp_day(young, hs) == [10, 40, None, None, 9]               # no age final yet, cost not known
+    assert rb._cp_day(dict(young, df=1), hs)[4] is None                    # day 1 not final: no "back next day"
+    assert rb._cp_day({"X": hs, "n": 0, "sp": 0.0, "spi": 0.0, "u": None, "df": 0, "t": [None] * 10}, hs) is None
+    assert rb._cp_day({"X": hs, "n": None, "sp": 3.0, "spi": None, "u": None, "df": 0, "t": [None] * 10}, hs) == \
+        [0, 0, 3.0, None, None]                                            # "Not split": spend only
+
+
+def test_cp_periods_every_button():
+    got = {k: (lo.isoformat(), hi.isoformat()) for k, lo, hi in rb._cp_periods(date(2025, 10, 6), date(2026, 11, 2))}
+    assert got == {"today": ("2026-11-02", "2026-11-02"), "yday": ("2026-11-01", "2026-11-01"),
+                   "7": ("2026-10-27", "2026-11-02"), "30": ("2026-10-04", "2026-11-02"),
+                   "tm": ("2026-11-01", "2026-11-02"), "lm": ("2026-10-01", "2026-10-31"),
+                   "3m": ("2026-08-03", "2026-11-02"), "6m": ("2026-05-03", "2026-11-02"),
+                   "all": ("2025-10-06", "2026-11-02")}
+    short = {k: (lo.isoformat(), hi.isoformat()) for k, lo, hi in rb._cp_periods(date(2026, 10, 20), date(2026, 11, 2))}
+    assert short["lm"] == ("2026-10-20", "2026-10-31") and short["6m"] == short["all"] == ("2026-10-20", "2026-11-02")
+    assert "lm" not in {k for k, *_ in rb._cp_periods(date(2026, 11, 1), date(2026, 11, 2))}   # wholly before: out
+    assert rb._months_back(date(2026, 5, 31), 3) == date(2026, 2, 28) and rb._months_back(date(2026, 1, 15), 2) == \
+        date(2025, 11, 15)
+
+
+def test_cp_sum_known_cost_and_final_ages():
+    rows = [[0, 100, 10.0, 900.0, 20, 4.0, 6.0],          # cost known, D7 + D14 final
+            [1, 50, None, None, 10, 3.0],                  # cost not known: installs and day 1 only
+            [2, 30, 6.0, 540.0, None, 2.0],                # D7 final only; day 1 not final
+            [5, 20, 4.0, 360.0, 2]]                        # nothing final
+    idx = [r[0] for r in rows]
+    ar = [None] * len(rb.CP_A)
+    s = rb._cp_sum(rows, idx, 0, 5, ar)
+    assert s == [200, 150, 20.0, 1800.0, 32, 170, 6.0, 16.0, 130, 6.0, 10.0, 100]
+    assert ar[0] == [0, 2] and ar[1] == [0, 0] and ar[2] is None
+    ar2 = [None] * len(rb.CP_A)
+    assert rb._cp_sum(rows, idx, 3, 4, ar2) is None and rb._cp_sum(rows, idx, 2, 2, ar2) == [30, 30, 6.0, 540.0, 0, 0,
+                                                                                            2.0, 6.0, 30]
+    mixed = [[0, 10, 1.0, None, None, 0.5], [1, 10, 1.0, 90.0, None]]   # an app not billed: no "as billed" sum
+    assert rb._cp_sum(mixed, [0, 1], 0, 1, [None] * len(rb.CP_A))[3] is None
+
+
+def test_cp_files_all_time_ties_to_the_index(tmp_path):
+    import hashlib
+    data, P, pre, spend, acc = _cc_world(tmp_path)
+    cd, od, _ = _cc_run(tmp_path, data, P, pre, spend, acc)
+    m = cd["cp"]
+    with gzip.open(os.path.join(str(od), m["file"]), "rb") as f:
+        raw = f.read()
+    cp = json.loads(raw)
+    assert hashlib.sha1(raw).hexdigest()[:12] == m["v"] and cp["b"] == cd["b"] and cp["A"] == list(rb.CP_A)
+    assert cp["P"]["all"]["lo"] == cd["from"] and cp["P"]["all"]["hi"] == cd["thru"] == cp["thru"]
+    for cc, n, sp, spi, *_ in cd["c"]:                     # All time = the index's whole-history installs and spend
+        s = cp["P"]["all"]["c"].get(cc)
+        assert s is not None and s[0] == (n or 0) and s[2] == pytest.approx(sp or 0, abs=0.02 * max(1, len(cp["P"])))
+    with gzip.open(os.path.join(str(od), m["days"]), "rb") as f:
+        days = json.loads(f.read())
+    assert days["b"] == cd["b"] and set(days["c"]) == set(cp["P"]["all"]["c"])
+    for k, p in cp["P"].items():                           # every button = the same sums over the days file
+        i0 = (date.fromisoformat(p["lo"]) - date.fromisoformat(cp["from"])).days
+        i1 = (date.fromisoformat(p["hi"]) - date.fromisoformat(cp["from"])).days
+        for cc, rs in days["c"].items():
+            want = rb._cp_sum(rs, [r[0] for r in rs], i0, i1, [None] * len(rb.CP_A))
+            assert p["c"].get(cc) == want, (k, cc)
+
+
+def test_countries_gap_held_rows_get_the_engines_own_rule():
+    pay = {"p": None, "lo": 219, "hi": None, "never": True, "q80_365": 2.5, "upto": 365}
+    det = {"countries": {"win": {"weeks": 4}, "rows": [
+        {"cc": "AA", "verdict": "wait", "why": "gap", "pay": pay, "cpi": {"v": 2.2, "spend": 1000.0}, "n": 5000},
+        {"cc": "BB", "verdict": "wait", "why": "gap", "pay": dict(pay, p=40, lo=30, hi=44, never=False),
+         "cpi": {"v": 0.1, "spend": 50.0}, "n": 4000},
+        {"cc": "CC", "verdict": "wait", "why": "young", "pay": pay, "cpi": {"v": 2.2, "spend": 10.0}, "n": 3000},
+        {"cc": "DD", "verdict": "wait", "why": "gap", "cpi": {"v": None, "noads": True}, "n": 900},
+        {"cc": "EE", "verdict": "keep", "sure": True, "pay": {"p": 20}, "cpi": {"v": 0.1, "spend": 10.0}, "n": 700}]}}
+    c = rb._countries(det, 90)
+    by = {x["cc"]: x for x in c["rows"]}
+    assert by["AA"]["dec"] == "Cut" and by["AA"]["gap"] is True              # the engine's rule: even P_lo > 2H
+    assert by["BB"]["dec"] == "Scale" and by["BB"]["gap"] is True and by["BB"]["sure"] is True
+    assert by["CC"]["dec"] == "Too early" and "gap" not in by["CC"]          # not old enough: as before
+    assert by["DD"]["dec"] == "Too early" and "gap" not in by["DD"]          # no Ads cost: nothing to judge
+    assert "gap" not in by["EE"] and by["EE"]["dec"] == "Scale"
+    assert c["cut"]["n"] == 1 and c["cut"]["spend"] == 1000.0

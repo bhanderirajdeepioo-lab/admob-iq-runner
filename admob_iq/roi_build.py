@@ -145,6 +145,15 @@ months), "unp_lim"}, "geo": {"from", "till", "known_days", "unknown_days", "unti
 "usd"}, "diff" (+ "unk": the "--" row's part of "cty"), "ng": {"m": {month: [USD (6 decimals), its "unp", "own" |
 "app"]}, "usd" (Σ, 6 decimals), "all" (Σ All), "rel"}}. Any failure of it: no "cd", every other byte as without it
 (counted; the Ads split's read failing: every day unknown, counted too).
+🌍 The countries board's periods (owner, 2 Nov 2026: "period picker … default all time … jo period select kiya uska data jo
+bhi ho available"): from the same country rows, roi_<key>_cp.json.gz = every period button's sums per country (_cp_sum:
+installs, Ads cost of the days it is known, back on day 1, and per CP_A age the revenue / cost / installs of the days FINAL
+at that age — the page's ROAS, money back and verdict are ratios of these) and roi_<key>_cpd.json.gz = every country's
+board days (_cp_day), read by the page only for Custom; cd "cp" = {"file", "v", "days", "dv"} (sha1-12 of each). Both carry
+the packs' "b". A failure of them: no "cp" (the page keeps the 4-week board), the rest of "cd" as it is.
+The 4-week board ("cty"): a row the engine held for GA4's country split ("wait" / "gap": a window week with > 2% of its
+revenue / installs in no country) gets the engine's own rule on the same numbers (engine.value._cost_verdict) and
+"gap": true — the page marks it ≈ and says GA4's measured share without a country (cd "kc" "unp").
 roi.json.gz — every app's summary row (with its f4), the portfolio lifetime P/L and the portfolio install days (apps
 with spend), and the ranges the forms used (f4c).
 Pointer: dashboard["roi"] = {"file", "v", "apps": {app_id: {"file", "st", "r7", "u7", "pb", "lp"}}}.
@@ -156,6 +165,7 @@ of the file exactly as without it.
 One splat header rule (/roi*: the country packs too). Failure-isolated per app (counted) and as a whole; ONE
 counts-only line.
 """
+import bisect
 import gzip
 import hashlib
 import json
@@ -176,6 +186,10 @@ ALL_FILE = "roi.json.gz"
 PREFIX = "roi_"
 FILE_RE = re.compile(r"^roi_[0-9a-f]{12}\.json\.gz$")
 PACK_RE = re.compile(r"^roi_[0-9a-f]{12}_c\d{2,3}\.json\.gz$")     # 🌍 the country packs (the page checks the same)
+CP_RE = re.compile(r"^roi_[0-9a-f]{12}_cpd?\.json\.gz$")            # 🌍 the countries board: period sums / install days
+CP_V = 1
+CP_A = (7, 14, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360)   # … its ages (days): money back looks through
+                                                                    # every one; the page shows 7 / 30 / 90 / 180 / 360
 HEADER_PATHS = ["/roi*"]
 CD_V = 1
 PACK_THREADS = min(8, os.cpu_count() or 1)  # the packs of one app compressed side by side (the same bytes)
@@ -1149,8 +1163,16 @@ def _countries(detail, H):
     for r in c.get("rows") or []:
         v = r.get("verdict")
         pay = r.get("pay") or {}
+        sure, gap = r.get("sure"), False
+        cp_ = r.get("cpi") or {}
+        if v == "wait" and r.get("why") == "gap" and cp_.get("v") is not None and not cp_.get("thin") and pay:
+            # held by the engine for GA4's country split (a window week with > 2% of its revenue / installs in no
+            # country): the board says what the engine's own rule gives on the same numbers, marked ≈, with the
+            # measured gap beside it (owner, 2 Nov 2026: a decision hidden behind "Too early" helped no one)
+            rr = dict(r)
+            v, sure, gap = val._cost_verdict(rr, H, env=True), rr.get("sure"), True
         if v == "keep":
-            dec = "Scale" if (pay.get("p") is not None and pay["p"] <= H / 2 and r.get("sure")) else "Keep"
+            dec = "Scale" if (pay.get("p") is not None and pay["p"] <= H / 2 and sure) else "Keep"
         else:
             dec = DEC.get(v, "Normal")
         cp = r.get("cpi") or {}
@@ -1165,16 +1187,19 @@ def _countries(detail, H):
                      "back_proj": bool(back.get("90_proj")) if back else False,
                      "rpi": {k: (rpi.get(k) or {}).get("v") for k in ("1", "7", "30", "90")},
                      "pay": {k: pay.get(k) for k in ("p", "lo", "hi", "never", "obs")} if pay else None,
-                     "ret": {k: (r.get(k) or {}).get("v") for k in ("d1", "d7", "d30")}, "sure": bool(r.get("sure")),
+                     "ret": {k: (r.get(k) or {}).get("v") for k in ("d1", "d7", "d30")}, "sure": bool(sure),
                      "few": bool(r.get("few"))})
+        if gap:                                     # (only then: every other board byte as before)
+            rows[-1]["gap"] = True
     cut = [x for x in rows if x["dec"] == "Cut" and x["spend"]]
     win = c.get("win")
-    return {"rows": rows, "win": win, "geo_why": c.get("geo_why"), "H": H,
-            "cut": {"n": len(cut), "spend": _r(sum(x["spend"] for x in cut)),
+    out = {"rows": rows, "win": win, "geo_why": c.get("geo_why"), "H": H,
+           "cut": {"n": len(cut), "spend": _r(sum(x["spend"] for x in cut)),
                     "spend_src": _r(sum(x.get("spend_src") or 0 for x in cut), 2),
                     "rev90": _r(sum((x["rpi"].get("90") or 0) * (x["n"] or 0) for x in cut)),
                     "spend_all": _r(sum(x["spend"] or 0 for x in rows)),
                     "weeks": (win or {}).get("weeks") or (win or {}).get("size")}}
+    return out
 
 
 def _cty_months(P, ida, pre, sids, fxf):
@@ -1734,6 +1759,145 @@ def _row_users(r, ux, Uc, Wc, hs):
     r["uz"] = not nz
 
 
+def _cp_day(r, hs):
+    """🌍 One country install-day row (_cohorts / _cty) → the board's day: [days since hs, installs, Google Ads USD | null
+    (not known), as billed | null, users back on day 1 | null (not kept / not final), revenue at each CP_A age …
+    (AdMob-matched, final only; the trailing unknown ages left out)] — or None (nothing of its own)."""
+    t, m, mf = r.get("t") or [], r.get("m") or [], r.get("mf") or 0
+    rev = []
+    for a in CP_A:
+        if a <= 30:
+            v = t[T.index(a)] if t else None
+        else:
+            j = a // LATE_STEP - 2
+            v = m[j] if (a % LATE_STEP == 0 and j < mf and j < len(m)) else None
+        rev.append(None if v is None else round(v, 2))
+    while rev and rev[-1] is None:
+        rev.pop()
+    n, sp, u = r.get("n") or 0, r.get("sp"), r.get("u")
+    if not n and not sp and not any(rev):
+        return None
+    u1 = u[1] if (u and len(u) > 1 and u[1] is not None and (r.get("df") or 0) >= 2) else None
+    spi = r.get("spi")
+    return [(r["X"] - hs).days, int(n), None if sp is None else round(sp, 2), None if spi is None else round(spi, 2),
+            None if u1 is None else int(u1)] + rev
+
+
+def _months_back(d, k):
+    """The same day k calendar months before d (the month's last day when it is shorter)."""
+    y, m = d.year, d.month - k
+    while m <= 0:
+        y, m = y - 1, m + 12
+    nxt = date(y + (m == 12), m % 12 + 1, 1)
+    return date(y, m, min(d.day, (nxt - ONE).day))
+
+
+def _cp_periods(first, last):
+    """🌍 The board's period buttons (owner, 2 Nov 2026: "default all time … jo period select kiya uska data jo bhi ho
+    available"; every picker: Today … All time, Custom on the page) → [(key, first day, last day)] inside first … last
+    (a period wholly outside: left out)."""
+    tm0 = last.replace(day=1)
+    lm1 = tm0 - ONE
+    out = []
+    for k, lo, hi in (("today", last, last), ("yday", last - ONE, last - ONE), ("7", last - timedelta(days=6), last),
+                      ("30", last - timedelta(days=29), last), ("tm", tm0, last), ("lm", lm1.replace(day=1), lm1),
+                      ("3m", _months_back(last, 3) + ONE, last), ("6m", _months_back(last, 6) + ONE, last),
+                      ("all", first, last)):
+        lo, hi = max(lo, first), min(hi, last)
+        if lo <= hi:
+            out.append((k, lo, hi))
+    return out
+
+
+def _cp_sum(rows, idx, i0, i1, ar):
+    """One country's board days (sorted; idx = their day numbers) over install days i0 … i1 → [installs, installs of
+    the days with a known Google Ads cost, that cost (USD), as billed (null: not billed), users back on day 1, installs
+    of the days that count is final for, then per CP_A age: revenue, Ads cost, installs of the days FINAL at that age
+    with a known cost] (the trailing empty ages left out) or None (nothing). ar: the period's first / last day used at
+    each age (every country), widened here."""
+    lo, hi = bisect.bisect_left(idx, i0), bisect.bisect_right(idx, i1)
+    if lo >= hi:
+        return None
+    na = len(CP_A)
+    n = nk = u1 = nu1 = 0
+    sp = spi = 0.0
+    spi_ok = True
+    R, S, Nn = [0.0] * na, [0.0] * na, [0] * na
+    for k in range(lo, hi):
+        r = rows[k]
+        i, rn, rsp = r[0], r[1], r[2]
+        n += rn
+        if r[4] is not None:
+            u1 += r[4]
+            nu1 += rn
+        if rsp is None:
+            continue
+        nk += rn
+        sp += rsp
+        if r[3] is None:
+            spi_ok = False
+        else:
+            spi += r[3]
+        for j in range(len(r) - 5):
+            v = r[5 + j]
+            if v is None:
+                continue
+            R[j] += v
+            S[j] += rsp
+            Nn[j] += rn
+            e = ar[j]
+            if e is None:
+                ar[j] = [i, i]
+            elif i < e[0]:
+                e[0] = i
+            elif i > e[1]:
+                e[1] = i
+    if not n and not sp and not any(R):
+        return None
+    out = [n, nk, round(sp, 2), round(spi, 2) if spi_ok else None, u1, nu1]
+    k = na
+    while k and not (Nn[k - 1] or S[k - 1] or R[k - 1]):
+        k -= 1
+    for j in range(k):
+        out += [round(R[j], 2), round(S[j], 2), Nn[j]]
+    return out
+
+
+def _cp_files(days_by_cc, hs, thru, fthru, bid, key, out_dir):
+    """🌍 The countries board's two files → (names, cd["cp"]): roi_<key>_cp.json.gz = every period button's sums per
+    country ({"v", "b" (the packs' build: the same rows), "key", "from", "thru", "fthru", "first" (the first day with
+    installs), "A": CP_A, "P": {period: {"lo", "hi", "ar": [[first, last day used] | null per age], "c": {cc: _cp_sum}}}})
+    and roi_<key>_cpd.json.gz = every country's board days (_cp_day) for Custom (read by the page only then)."""
+    idx = {cc: [r[0] for r in rs] for cc, rs in days_by_cc.items()}
+    f0 = min((r[0] for rs in days_by_cc.values() for r in rs if r[1]), default=None)
+    P = {}
+    for k, lo, hi in _cp_periods(hs, thru):
+        i0, i1, ar, c = (lo - hs).days, (hi - hs).days, [None] * len(CP_A), {}
+        for cc in sorted(days_by_cc):
+            s = _cp_sum(days_by_cc[cc], idx[cc], i0, i1, ar)
+            if s is not None:
+                c[cc] = s
+        while ar and ar[-1] is None:
+            ar.pop()
+        P[k] = {"lo": _iso(lo), "hi": _iso(hi), "c": c,
+                "ar": [None if e is None else [_iso(hs + timedelta(days=e[0])), _iso(hs + timedelta(days=e[1]))]
+                       for e in ar]}
+    head = {"v": CP_V, "b": bid, "key": key, "from": _iso(hs), "A": list(CP_A)}
+    cp = dict(head, thru=_iso(thru), fthru=_iso(fthru), P=P,
+              first=_iso(hs + timedelta(days=f0)) if f0 is not None else None)
+    cpd = dict(head, c={cc: rs for cc, rs in sorted(days_by_cc.items())})
+    names, meta = [], {}
+    jobs = []
+    for nm, body, kk in (("%s%s_cp.json.gz" % (PREFIX, key), cp, ("file", "v")),
+                         ("%s%s_cpd.json.gz" % (PREFIX, key), cpd, ("days", "dv"))):
+        raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        jobs.append((os.path.join(out_dir, nm), raw))
+        names.append(nm)
+        meta[kk[0]], meta[kk[1]] = nm, hashlib.sha1(raw).hexdigest()[:12]
+    _write_packs(jobs)
+    return names, meta
+
+
 def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, out_dir, data_dir):
     """🌍 Every country's install-day rows (see the module doc) → the packs written + the file's "cd" (None: no country
     in the cube). Raises on a failure (the caller: no "cd", counted)."""
@@ -1825,6 +1989,7 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
     if ux is not None:
         ccs |= {cc for cc in set(cv.U) | set(cv.W) if cv.U.get(cc) or cv.W.get(cc)}
     allr = {r["X"]: r for r in rows}
+    cpd = {}                                        # 🌍 the board's days per country (_cp_day)
     s30, n30, u30 = {}, {}, {}
     out, meta = [], {}
     ym = [(D.year, D.month) for D in days]          # each day's month (kf_c's key) and month key, once per app
@@ -1902,6 +2067,9 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
             by[X] = r
         full = [by.get(X) or dict(zrow(X, X in unk, cc)[0]) for X in days]
         _statuses(full)
+        cr = [x for x in (_cp_day(r, hs) for r in full) if x]
+        if cr:
+            cpd[cc] = cr
         rows_out, n_tot, sp_tot, spi_tot, known, na_days = [], 0, 0.0, 0.0, False, 0
         for r in full:
             X = r["X"]
@@ -1949,6 +2117,9 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
                  "qo": 0}
             ro = _row_out(r)
             rows_out.append([ro[0]] if ro == _row_out(_zrow(X, thru, fthru, u, NOT_SPLIT, billed)) else ro)
+            x = _cp_day(r, hs)
+            if x:
+                cpd.setdefault(NOT_SPLIT, []).append(x)
             if sp is not None:
                 known = True
                 sp_tot += sp
@@ -1986,6 +2157,13 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
             meta[cc][4] = i
     _write_packs(jobs)
     jobs = None
+    cpm = None
+    try:                                            # 🌍 the board's period sums + days (a failure: no "cp")
+        cnames, cpm = _cp_files(cpd, hs, thru, fthru, bid, key, out_dir)
+        names += cnames
+    except Exception as e:
+        print("roi countries board skipped: %s" % type(e).__name__, file=sys.stderr)
+    cpd = None
     # Σ countries vs the All row (D30, the install days both have final): the measured gap of the two k's / reads
     dd = [X for X in days if X in s30 and X + timedelta(days=30) <= fthru and X in allr
           and allr[X]["t"][J30] is not None]
@@ -1999,6 +2177,8 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
                    "rel": _r(sc_ / sa - 1) if sa else None, "n_all": sum(allr[X]["n"] for X in dd),
                    "n_cty": sum(n30.get(X, 0) for X in dd), "unk": _r(sum(u30.get(X, 0.0) for X in dd), 2)},
           "ng": {"m": ng, "usd": _r(ngs, 6), "all": _r(nga, 2), "rel": _r(ngs / nga) if nga else None}}
+    if cpm:
+        cd["cp"] = cpm
     if ux is not None:                              # 👥 only with users' files: what the country users rest on
         cd["uu"] = ux["info"]
     acc.packs.update(names)
@@ -2254,7 +2434,8 @@ def _clean(out_dir, keep):
     except OSError:
         return
     for f in names:
-        if ((FILE_RE.match(f) or PACK_RE.match(f)) and f not in keep) or (f == ALL_FILE and ALL_FILE not in keep):
+        if ((FILE_RE.match(f) or PACK_RE.match(f) or CP_RE.match(f)) and f not in keep) or \
+                (f == ALL_FILE and ALL_FILE not in keep):
             try:
                 os.remove(os.path.join(out_dir, f))
             except OSError:

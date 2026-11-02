@@ -2477,6 +2477,16 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-why{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:var(--ink2);margin:0 0 12px;line-height:1.5}
 .roi-why b{color:#fff}
 .roi-cut{background:var(--bad-b);border:1px solid #6b2a2e;border-radius:10px;padding:9px 12px}
+.roi-cpctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 12px}
+.roi-cus{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2)}
+.roi-cus input{min-height:32px;padding:4px 8px;border:1px solid var(--line2);border-radius:8px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px;color-scheme:dark}
+.roi-few{opacity:.55}
+.roi-cpt th small.roi-thd{display:block;margin-top:2px;font-size:10.5px;font-weight:500;color:var(--faint);white-space:nowrap;text-transform:none;letter-spacing:0}
+.roi-cpt td.roi-nm{white-space:nowrap}
+.roi-cpt tr.roi-tot td{font-weight:700;background:var(--panel2)}
+.roi-cpt tr.roi-un td{color:var(--muted)}
+.roi-nowl{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--ink2);line-height:1.6;margin:0 0 4px}
+.roi-nowl sup{font-size:10px;color:var(--faint)}
 .roi-ks6{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:14px}
 .roi-spw{display:grid;grid-template-columns:1.15fr repeat(4,minmax(0,1fr));gap:8px;margin:2px 0 4px}.roi-spw .roi-spl{border-color:var(--cyan2)}
 @media (max-width:760px){.roi-spw{grid-template-columns:repeat(2,minmax(0,1fr))}.roi-spw .roi-spl{grid-column:1/-1}}
@@ -7168,9 +7178,9 @@ let VIEW='day', GRAIN='day', MET='roas', SHOW=60, LSHOW=60, LG='cohort', CTYO=''
 let F4H=null, F4X=false, FSORT={k:'gap',dir:1};             // ⚖️ the 4 forms: age picked (null = the payback target), help open, All-apps sort
 const ST_KEY={Worse:'bigda',Watch:'dhyan',Better:'behtar',Normal:'normal','Too early':'jaldi','N/A':'lagu'};
 const ST_RANK={Worse:0,Watch:1,Better:2,Normal:3,'Too early':4,'N/A':5};
-const DEC_CLS={Scale:'behtar',Keep:'normal',Watch:'dhyan',Cut:'bigda','Too little data':'lagu','Too early':'jaldi',Better:'behtar',Worse:'bigda',Normal:'normal'};
-const DEC_ICON={Scale:'🚀',Keep:'✅',Watch:'🟡',Cut:'✂️','Too little data':'—','Too early':'⏳',Better:'🟢',Worse:'🔴',Normal:'⚪'};
-const DEC_RANK={Cut:0,Watch:1,Scale:2,Keep:3,Worse:4,Better:5,Normal:6,'Too early':7,'Too little data':8};
+const DEC_CLS={Scale:'behtar',Keep:'normal',Watch:'dhyan',Cut:'bigda','Too little data':'lagu','Too early':'jaldi',Better:'behtar',Worse:'bigda',Normal:'normal','No ads':'normal'};
+const DEC_ICON={Scale:'🚀',Keep:'✅',Watch:'🟡',Cut:'✂️','Too little data':'—','Too early':'⏳',Better:'🟢',Worse:'🔴',Normal:'⚪','No ads':'⚪'};
+const DEC_RANK={Cut:0,Watch:1,Scale:2,Keep:3,Worse:4,Better:5,Normal:6,'Too early':7,'No ads':8,'Too little data':9};
 const E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ok=v=>v!=null&&isFinite(v);
 const MI='−';
@@ -7888,7 +7898,7 @@ function devView(d){ const D=d.dev;
     +`<p class="roi-note"><b>Installs</b> = ${E(span)} ke installs · <b>CPI ≈</b> = un install-dino ka us country ka Google Ads cost ÷ GA4 paid installs (Google model-wise cost nahi deta — average) · <b>Revenue</b> = in installs ki aaj tak ki kamai (GA4, AdMob se matched) · <b>Revenue / install</b> = Revenue ÷ installs (paid + organic) · <b>vs CPI</b> = Revenue / install ÷ CPI (100%+ = cost se zyada kama liya). Today / Yesterday ke installs abhi naye hain — unki kamai badhti rahegi.</p>`
     +`<p class="roi-note"><b>Status / Money back</b> = device ka overall faisla (purane, poore installs se — period se nahi): <b>Profit</b> = 90 din me paisa wapas · <b>Slow</b> = 90 din me nahi, app ke apne curve se saal bhar me wapas · <b>Loss</b> = saal me bhi wapas nahi · <b>No ads</b> = Google Ads cost nahi · <b>Too little data</b> = ${D.judge||300} se kam installs. ≈30 = 90 din ka data kam tha, 30 din se.</p></div>`; }
 // ---- 🌍 Countries: keep / cut ----
-function ctyView(d){ const c=d.cty||{}, rows=(c.rows||[]).slice(), cdc=cdOf(d); if(!rows.length) return `<div class="roi-card"><p class="roi-note">Is app ka country data abhi nahi.</p></div>`;
+function ctyOld(d){ const c=d.cty||{}, rows=(c.rows||[]).slice(), cdc=cdOf(d); if(!rows.length) return `<div class="roi-card"><p class="roi-note">Is app ka country data abhi nahi.</p></div>`;
   const cnt=k=>rows.filter(x=>x.dec===k).length, order=['Scale','Keep','Watch','Cut','Too early','Too little data','Better','Normal','Worse'];
   const chips=`<div class="roi-chips">${order.filter(k=>cnt(k)).map(k=>`<span class="roi-cc">${dchip(k)} <b>${cnt(k)}</b></span>`).join('')}</div>`;
   const w=c.win||{}, wk=w.weeks||w.size||4, cut=c.cut||{};
@@ -7900,16 +7910,148 @@ function ctyView(d){ const c=d.cty||{}, rows=(c.rows||[]).slice(), cdc=cdOf(d); 
   const th=(k,l)=>`<th aria-sort="${CSORT.k===k?(CSORT.dir>0?'ascending':'descending'):'none'}"><button type="button" data-roi-csort="${k}">${l}</button></th>`;
   const bk=(x,k)=>{ const v=(x.back||{})[k]; return ok(v)?`<span class="${roasCls(v/100)}">${(k==='90'&&(x.back_proj||x.back_est))?'≈':''}${Math.round(v)}%</span>`:'—'; };
   const pay=x=>{ const p=x.pay||{}; if(p.p!=null) return `${p.obs?'':'~'}${p.p} days${p.lo!=null&&p.hi!=null?` <small>(${p.lo}–${p.hi})</small>`:''}`; if(p.never) return '<small>1 saal me nahi</small>'; return '—'; };
-  const mt=cc=>{ const ms=((c.months||{})[cc]||[]).slice().reverse(); if(!ms.length) return '<p class="roi-note">Is country ki month-wise history abhi nahi.</p>';
-    const rr=v=>ok(v)?`<span class="${roasCls(v)}">${P(v)}</span>`:'—', part=(k,w)=>k<w&&k?` <small title="${k} of ${w} weeks complete">${k}/${w}w</small>`:'';
-    return `<table class="roi-t roi-sub"><thead><tr><th>Install month</th><th>Installs</th><th>Ads spend</th><th>Ads installs</th><th>CPI</th><th>ROAS 7d</th><th>ROAS 30d</th><th>ROAS 90d</th></tr></thead><tbody>`
-      +ms.map(m=>`<tr><td class="roi-nm">${E(fmtMon(m[0]))}</td><td>${N(m[1])}</td><td>${MS(m[2],m[11])}</td><td>${N(m[3])}</td><td>${m[1]?MPV(SV(m[2],m[11])/m[1]):'—'}</td><td>${rr(m[4])}${part(m[8],m[7])}</td><td>${rr(m[5])}${part(m[9],m[7])}</td><td>${rr(m[6])}${part(m[10],m[7])}</td></tr>`).join('')+`</tbody></table>`; };
+  const mt=cc=>ctyMt(c,cc);
   const go=cc=>cdc&&cdc.c.some(z=>z[0]===cc)?` <button type="button" class="roi-lnk roi-ccgo" data-roi-pick="${E(cc)}" title="Is country ki har install din ki table (📅 Day-wise ROI)">📅 Day-wise</button>`:'';
   const body=rows.map(x=>`<tr class="clk" data-roi-cty="${E(x.cc)}"><td class="roi-nm">${valFlag(x.cc)}&nbsp;${E(valCtyName(x.cc))}${go(x.cc)}</td><td>${dchip(x.dec)}</td><td>${N(x.n)}<small> ${ok(x.share)?P(x.share):''}</small></td><td>${MS(x.spend,x.spend_src)}</td><td>${MPV(SV(x.cpi,x.cpi_src))}</td><td>${bk(x,'7')}</td><td>${bk(x,'30')}</td><td>${bk(x,'90')}</td><td>${pay(x)}</td><td>${ok((x.ret||{}).d1)?Math.round(x.ret.d1)+'%':'—'}</td><td class="roi-cv">${CTYO===x.cc?'▾':'▸'}</td></tr>`
       +(CTYO===x.cc?`<tr class="roi-xr"><td colspan="11">${mt(x.cc)}</td></tr>`:'')).join('');
   return chips+bud+`<div class="roi-card"><div class="roi-ct"><h3>Countries · rakhna ya hatana</h3><span class="roi-note">installs ${E(fd(w.from||''))}–${E(fd(w.to||''))} · country pe tap = har mahine ka ROAS · column pe tap = sort</span></div>`
     +`<div class="roi-tw"><table class="roi-t"><thead><tr><th>Country</th>${th('dec','Decision')}${th('n','Installs')}${th('spend','Ads spend')}<th>CPI</th><th>ROAS 7d</th>${th('r30','ROAS 30d')}<th>ROAS 90d</th>${th('pay','Money back')}<th>Back next day</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`
     +`<p class="roi-note"><b>Scale</b> = paisa ${Math.round((c.H||90)/2)} din se pehle pakka wapas, budget badhao · <b>Keep</b> = ${c.H||90} din me wapas · <b>Watch</b> = dheere wapas (${c.H||90}–${2*(c.H||90)} din) · <b>Cut</b> = saal bhar me bhi wapas nahi / bahut mehenga · <b>Too little data</b> = installs kam, faisla nahi. <b>Better / Worse / Normal</b> = Google Ads ka cost is country me bahut kam (spend ka faisla nahi) — sirf kamai app ki baaki countries se zyada / kam / barabar. ROAS = Google Ads ke har ₹100 pe kitna wapas (us country ke installs ki kamai, AdMob matched). ≈ = andaza (app ki apni purani curve se).</p></div>`; }
+// a country's install months (tap on its row): the same table on both boards
+function ctyMt(c,cc){ const ms=((c.months||{})[cc]||[]).slice().reverse(); if(!ms.length) return '<p class="roi-note">Is country ki month-wise history abhi nahi.</p>';
+    const rr=v=>ok(v)?`<span class="${roasCls(v)}">${P(v)}</span>`:'—', part=(k,w)=>k<w&&k?` <small title="${k} of ${w} weeks complete">${k}/${w}w</small>`:'';
+    return `<table class="roi-t roi-sub"><thead><tr><th>Install month</th><th>Installs</th><th>Ads spend</th><th>Ads installs</th><th>CPI</th><th>ROAS 7d</th><th>ROAS 30d</th><th>ROAS 90d</th></tr></thead><tbody>`
+      +ms.map(m=>`<tr><td class="roi-nm">${E(fmtMon(m[0]))}</td><td>${N(m[1])}</td><td>${MS(m[2],m[11])}</td><td>${N(m[3])}</td><td>${m[1]?MPV(SV(m[2],m[11])/m[1]):'—'}</td><td>${rr(m[4])}${part(m[8],m[7])}</td><td>${rr(m[5])}${part(m[9],m[7])}</td><td>${rr(m[6])}${part(m[10],m[7])}</td></tr>`).join('')+`</tbody></table>`; }
+// ---- 🌍 Countries: the period board (owner, 2 Nov 2026: "period picker … default all time ka avg dikhayega … jo period select
+// kiya he uska data jo bhi ho available vo dikhega"). Every number of a period comes from that period's OWN installs: the
+// build's sums per button (roi_<key>_cp.json.gz) or, for Custom, the same sums over every install day (…_cpd.json.gz, read
+// only then). A ROAS age counts only the installs old enough for it (their dates under its header) — never a guess; money
+// back = where those measured points cross 100%. The engine's keep / cut at today's cost per install stays on top ("🎯 Aaj ka
+// faisla"). Without the board's files (an older build, no cube): the 4-week board as before.
+let CPER='all', CPF='', CPTO='', CALL=false, CPC={k:'',v:null};
+const CPK={};                                          // the board's files read: file?sha → {busy} | {j} | {err} | {stale}
+const CP_RE=/^roi_[0-9a-f]{12}_cpd?\.json\.gz$/;
+const CP_JUDGE=300, CP_SHARE=0.1, CP_TOP=25;           // an age counts (decision, money back) with ≥ 300 of its installs and ≥ 10% of the period's cost
+const CP_SHOW=[7,30,90,180,360];
+const CP_PERS=[['today','Today'],['yday','Yesterday'],['7','7 days'],['30','30 days'],['tm','This month'],['lm','Last month'],
+  ['3m','3 months'],['6m','6 months'],['all','All time'],['cus','Custom']];
+function cpMeta(d){ const c=cdOf(d), m=c&&c.cp; return m&&CP_RE.test(m.file||'')&&CP_RE.test(m.days||'')?m:null; }
+// one of the board's files (days: the Custom one): its state; a file of another build than the index in hand → stale
+function cpGet(d,days){ const c=cdOf(d), m=cpMeta(d); if(!m) return null; const f=days?m.days:m.file, v=days?m.dv:m.v, k=f+'?'+v;
+  if(CPK[k]) return CPK[k]; CPK[k]={busy:true};
+  fetchGzJson(f+'?v='+encodeURIComponent(v)).then(j=>{ if(!j||j.v!==1||!Array.isArray(j.A)||!j[days?'c':'P']) throw new Error('format');
+      CPK[k]=j.b===c.b?{j}:{stale:true}; })
+    .catch(()=>{ CPK[k]={err:true}; })
+    .then(()=>{ const r=root(); if(!r||VIEW!=='cty'||typeof window==='undefined') return;   // it lands: the board's own controls stay put
+      const sel=r.querySelector('.roi-cpctl')?'.roi-cpctl':'#roi-cpb', a=r.querySelector(sel); if(a) keepAt(r,a,sel,repaint); else repaint(); });
+  return CPK[k]; }
+// a country's days (sorted) over install days i0 … i1 → the build's sums (roi_build._cp_sum): [installs, installs of the days with
+// a known Ads cost, that cost USD, as billed | null, back on day 1, installs those are final for, then per age: revenue, cost,
+// installs of the days final at that age with a known cost]; ar: the first / last day used per age, widened
+function cpBis(rs,x,right){ let a=0,b=rs.length; while(a<b){ const m=(a+b)>>1; if(right?rs[m][0]<=x:rs[m][0]<x) a=m+1; else b=m; } return a; }
+function cpSum(rs,i0,i1,ar){ const lo=cpBis(rs,i0,false), hi=cpBis(rs,i1,true); if(lo>=hi) return null;
+  const na=ar.length, R=new Array(na).fill(0), S=new Array(na).fill(0), Nn=new Array(na).fill(0); let n=0,nk=0,u1=0,nu1=0,sp=0,spi=0,so=true;
+  for(let k=lo;k<hi;k++){ const r=rs[k], i=r[0], rn=r[1], rsp=r[2]; n+=rn; if(r[4]!=null){ u1+=r[4]; nu1+=rn; } if(rsp==null) continue;
+    nk+=rn; sp+=rsp; if(r[3]==null) so=false; else spi+=r[3];
+    for(let j=0;j<r.length-5&&j<na;j++){ const v=r[5+j]; if(v==null) continue; R[j]+=v; S[j]+=rsp; Nn[j]+=rn; const e=ar[j];
+      if(!e) ar[j]=[i,i]; else if(i<e[0]) e[0]=i; else if(i>e[1]) e[1]=i; } }
+  if(!n&&!sp&&!R.some(v=>v)) return null;
+  const out=[n,nk,sp,so?spi:null,u1,nu1]; let k=na; while(k&&!(Nn[k-1]||S[k-1]||R[k-1])) k--; for(let j=0;j<k;j++) out.push(R[j],S[j],Nn[j]); return out; }
+// the period on screen → {lo, hi, ar, c} (a button: the build's; Custom: summed here from the days file) or the days file's state
+function cpPer(d,cp){ if(CPER!=='cus') return cp.P[CPER]||cp.P.all;
+  const st=cpGet(d,true); if(!st||!st.j) return st||{err:true}; const D=st.j;
+  let lo=CPF, hi=CPTO; if(lo>hi) [lo,hi]=[hi,lo]; const key=(cpMeta(d)||{}).dv+'|'+lo+'|'+hi; if(CPC.k===key) return CPC.v;
+  const i0=dDiff(D.from,lo), i1=dDiff(D.from,hi), ar=new Array(D.A.length).fill(null), c={};
+  Object.keys(D.c).forEach(cc=>{ const s=cpSum(D.c[cc],i0,i1,ar); if(s) c[cc]=s; });
+  while(ar.length&&!ar[ar.length-1]) ar.pop();
+  const v={lo,hi,c,ar:ar.map(e=>e?[dAdd(D.from,e[0]),dAdd(D.from,e[1])]:null)}; CPC={k:key,v}; return v; }
+function cpRow(cc,s,A){ const g=[]; for(let j=0;8+3*j<s.length+0&&6+3*j<s.length;j++) g.push({a:A[j],R:+s[6+3*j]||0,S:+s[7+3*j]||0,N:+s[8+3*j]||0});
+  return {cc,n:+s[0]||0,nk:+s[1]||0,sp:+s[2]||0,spi:s[3]==null?null:+s[3],u1:+s[4]||0,nu1:+s[5]||0,g}; }
+function cpTot(list){ const t=[0,0,0,0,0,0]; let so=true;
+  list.forEach(s=>{ for(let j=0;j<s.length;j++){ if(j===3){ if(s[3]==null){ if(+s[2]) so=false; } else t[3]+=+s[3]; continue; } t[j]=(t[j]||0)+(+s[j]||0); } });
+  if(!so) t[3]=null; return t; }
+// a period row's own measured verdict: the money back day where its measured ROAS points (each with ≥ CP_JUDGE installs and
+// ≥ CP_SHARE of the period's cost) cross 100% (between two points: a straight line), else how far its oldest point got
+function cpJudge(x,H){ const el=x.g.filter(e=>e.N>=CP_JUDGE&&e.S>0&&e.S>=CP_SHARE*x.sp), pts=el.map(e=>[e.a,e.R/e.S]);
+  let pb=null, le=false; for(let i=0;i<pts.length;i++){ if(pts[i][1]>=1){ if(i===0){ pb=pts[0][0]; le=true; }
+      else { const [a0,r0]=pts[i-1], [a1,r1]=pts[i]; pb=Math.round(a0+(a1-a0)*(1-r0)/(r1-r0)); } break; } }
+  const top=pts.length?pts[pts.length-1]:null;
+  Object.assign(x,{pb,le,top,el:el.map(e=>e.a),cpi:x.nk>0&&x.sp>0?x.sp/x.nk:null,cpis:x.nk>0&&x.spi!=null&&x.sp>0?x.spi/x.nk:null,d1:x.nu1>0?x.u1/x.nu1:null});
+  x.dec=x.cc==='--'||x.cc==='XX'?'':x.n<CP_JUDGE?'Too little data':!(x.sp>0)?(x.nk>0?'No ads':'—')
+    :pb!=null?(pb<=H/2?'Scale':pb<=H?'Keep':pb<=2*H?'Watch':'Cut'):top&&top[0]>=2*H?'Cut':top&&top[0]>=H?'Watch':'Too early';
+  return x; }
+function cpCell(x,a){ const e=x.g.find(z=>z.a===a); if(!e||!(e.S>0)) return '—'; const v=e.R/e.S, few=!x.el.includes(a);
+  const tip=few?` data-tip="${E(`${N(e.N)} installs · period ke kharch ka ${P(x.sp?e.S/x.sp:null)} — faisle me nahi gina (${CP_JUDGE}+ installs aur ${Math.round(CP_SHARE*100)}%+ kharch chahiye)`)}"`:'';
+  return few?`<small class="roi-few"${tip}>${P(v)}</small>`:`<span class="${roasCls(v)}">${P(v)}</span>`; }
+function cpPay(x){ if(x.pb!=null) return x.le?`≤${x.pb} days`:`~${x.pb} days`; if(x.top) return `<small>${x.top[0]} din me ${P(x.top[1])}</small>`; return '—'; }
+// GA4's revenue without a country, per month above the limit (the current month left out: still filling)
+function cpUnp(cdc){ const k=(cdc&&cdc.kc)||{}, lim=k.unp_lim||0.02, now=String((cdc&&cdc.thru)||'').slice(0,7);
+  return Object.entries(k.unp||{}).filter(([m,v])=>v>lim&&m<now).sort().map(([m,v])=>`${E(fmtMon(m))} ${P(v)}`).join(', '); }
+// 🎯 the engine's keep / cut at today's cost per install (the 4-week board's rows), on top of every period
+function cpNow(c,cdc){ const rows=c.rows||[]; if(!rows.length) return '';
+  const w=c.win||{}, H=c.H||90, by=k=>rows.filter(x=>x.dec===k).sort((a,b)=>(b.spend||0)-(a.spend||0));
+  const nm=x=>`${valFlag(x.cc)}&nbsp;${E(valCtyName(x.cc))}${x.gap?'<sup>≈</sup>':''}`;
+  const list=k=>{ const xs=by(k); return xs.length?`<span>${dchip(k)} ${xs.slice(0,8).map(nm).join(', ')}${xs.length>8?` +${xs.length-8}`:''}</span>`:''; };
+  const cnt=k=>{ const n=by(k).length; return n?`<span>${dchip(k)} <b>${n}</b></span>`:''; };
+  const parts=[list('Cut'),list('Scale'),list('Keep'),cnt('Watch'),cnt('Too early'),cnt('Too little data'),cnt('Worse'),cnt('Better'),cnt('Normal')].filter(Boolean).join('');
+  const gp=rows.some(x=>x.gap), un=gp?cpUnp(cdc):'';
+  const cut=c.cut||{}, wk=w.weeks||w.size||4, cs=SV(cut.spend,cut.spend_src), cr=RV(cut.rev90);
+  const bud=cut.n?`<div class="roi-why roi-cut"><span>✂️ <b>${cut.n}</b> ${cut.n===1?'country':'countries'} Cut layak: pichhle ${wk} hafte me inpe <b>${MV(cs)}</b> kharch (kul spend ka ${P(cut.spend_all?cut.spend/cut.spend_all:null)}), aur inke installs 90 din me ~<b>${MV(cr)}</b> kamate hain. Hatane se har hafte ~<b>${MV((cs-cr)/wk)}</b> bachega.</span></div>`:'';
+  return `<div class="roi-card roi-now"><div class="roi-ct"><h3>🎯 Aaj ka faisla</h3><span class="roi-note">aaj ke CPI pe (${E(fd(w.from||''))}–${E(fd(w.to||''))} ke installs) · kamai sabse naye pake installs se · target ${H} din</span></div>`
+    +`<div class="roi-nowl">${parts}</div>`
+    +(gp?`<p class="roi-note">≈ = GA4 ne in hafton me 2% se zyada kamai / installs kisi country ke naam nahi diye${un?` (kamai bina country: ${un})`:''} — isliye engine ne faisla roka tha; ye uske apne rule ka faisla hai, thoda upar-neeche ho sakta hai.</p>`:'')
+    +`</div>`+bud; }
+function cpCtl(cp){ const f=cp.first||cp.from, t=cp.thru;
+  const btn=CP_PERS.filter(([k])=>k==='cus'||cp.P[k]).map(([k,l])=>`<button type="button" data-roi-cper="${k}" aria-pressed="${CPER===k}">${E(l)}</button>`).join('');
+  const cus=CPER==='cus'?`<span class="roi-cus"><input type="date" data-roi-cpf aria-label="From" min="${E(f)}" max="${E(t)}" value="${E(CPF)}"><span>–</span><input type="date" data-roi-cpto aria-label="To" min="${E(f)}" max="${E(t)}" value="${E(CPTO)}"></span>`:'';
+  return `<div class="roi-cpctl"><span class="roi-mini" role="group" aria-label="Period">${btn}</span>${cus}</div>`; }
+function cpCard(head,ctl,inner){ return `<div class="roi-card" id="roi-cpb"><div class="roi-ct"><h3>Countries · rakhna ya hatana</h3>${head||''}</div>${ctl||''}${inner}</div>`; }
+function ctyView(d){ const m=cpMeta(d); if(!m) return ctyOld(d);
+  const c=d.cty||{}, cdc=cdOf(d), H=c.H||90, top=cpNow(c,cdc), st=cpGet(d,false);
+  const msg=(t,retry)=>`<p class="roi-note">${retry?'⚠️ ':'⏳ '}${t}${retry?' <button type="button" class="roi-lnk" data-roi-cpretry="1">Try again</button>':''}</p>`;
+  if(!st||st.busy) return top+cpCard('','',msg('Countries ka period data load ho raha hai…'));
+  if(st.err) return top+cpCard('','',msg('Countries ka period data load nahi hua.',1));
+  if(st.stale) return top+cpCard('','',ccReload(d,cdc)?msg('Naya data aa raha hai…'):msg('Naya data abhi poora nahi pahuncha — thodi der me.',1));
+  const cp=st.j;
+  if(!CP_PERS.some(p=>p[0]===CPER)||(CPER!=='cus'&&!cp.P[CPER])) CPER='all';
+  if(CPER==='cus'&&(!CPF||!CPTO)){ const q=cp.P['30']||cp.P.all; CPF=CPF||q.lo; CPTO=CPTO||q.hi; }
+  const ctl=cpCtl(cp), p=cpPer(d,cp);
+  if(!p||p.busy) return top+cpCard('',ctl,msg('Custom ke liye har din ka data load ho raha hai…'));
+  if(p.err) return top+cpCard('',ctl,msg('Custom ka data load nahi hua.',1));
+  if(p.stale) return top+cpCard('',ctl,ccReload(d,cdc)?msg('Naya data aa raha hai…'):msg('Naya data abhi poora nahi pahuncha — thodi der me.',1));
+  const A=cp.A, all=Object.entries(p.c||{}).map(([cc,s])=>cpJudge(cpRow(cc,s,A),H));
+  const head=`<span class="roi-note">installs ${E(fd(p.lo))}${p.hi!==p.lo?'–'+E(fd(p.hi)):''} · country pe tap = har mahine ka ROAS · column pe tap = sort</span>`;
+  if(!all.length) return top+cpCard(head,ctl,msg('Is period me kisi country ka data nahi.'));
+  const tot=cpJudge(cpRow('ALL',cpTot(Object.values(p.c)),A),H);
+  const named=all.filter(x=>x.cc!=='--'&&x.cc!=='XX'), extra=all.filter(x=>x.cc==='--'||x.cc==='XX').sort((a,b)=>a.cc<b.cc?-1:1);
+  const SK={dec:x=>(DEC_RANK[x.dec]??9)*1e12-(x.sp||0), n:x=>-(x.n||0), spend:x=>-(x.sp||0), cpi:x=>-(x.cpi??-1),
+    pay:x=>x.pb!=null?x.pb:x.top?1e6-x.top[1]*1e3:1e9, d1:x=>-(x.d1??-1)};
+  CP_SHOW.forEach(a=>{ SK['r'+a]=x=>{ const e=x.g.find(z=>z.a===a); return e&&e.S>0?-(e.R/e.S):1e9; }; });
+  const key=SK[CSORT.k]||SK.dec;
+  const pick=(CALL?named.slice():named.slice().sort((a,b)=>b.n-a.n||(b.sp-a.sp)).slice(0,CP_TOP)).sort((a,b)=>CSORT.dir*(key(a)-key(b))||(b.n-a.n));
+  const shows=CP_SHOW.filter(a=>a<=90||all.concat([tot]).some(x=>x.el.includes(a)));   // 180 / 360: only when some row's counts
+  const th=(k,l,sub)=>`<th aria-sort="${CSORT.k===k?(CSORT.dir>0?'ascending':'descending'):'none'}"><button type="button" data-roi-csort="${k}">${l}</button>${sub!=null?`<small class="roi-thd">${sub}</small>`:''}</th>`;
+  const ard=a=>{ const e=(p.ar||[])[A.indexOf(a)]; return !e?'abhi nahi':e[0]<=p.lo?`≤ ${E(fd(e[1]))}`:`${E(fd(e[0]))}–${E(fd(e[1]))}`; };
+  const go=cc=>cdc&&cdc.c.some(z=>z[0]===cc)?` <button type="button" class="roi-lnk roi-ccgo" data-roi-pick="${E(cc)}" title="Is country ki har install din ki table (📅 Day-wise ROI)" aria-label="Day-wise">📅</button>`:'';
+  const cpiOf=x=>MPV(billed()&&x.cpis!=null?x.cpis:RV(x.cpi));
+  const d1Of=x=>ok(x.d1)?`<span${x.nu1<CP_JUDGE?' class="roi-few"':''}>${Math.round(x.d1*100)}%</span>`:'—';
+  const ncol=8+shows.length;
+  const tr=(x,cls,name,clk)=>`<tr class="${[clk?'clk':'',cls].filter(Boolean).join(' ')}"${clk?` data-roi-cty="${E(x.cc)}"`:''}><td class="roi-nm">${name}</td><td>${x.dec?(x.dec==='—'?'—':dchip(x.dec)):''}</td>`
+    +`<td>${N(x.n)}${x.cc!=='ALL'&&tot.n&&x.n?`<small> ${P(x.n/tot.n)}</small>`:''}</td><td>${x.nk||x.sp?MS(x.sp,x.spi):'—'}</td><td>${x.sp>0?cpiOf(x):'—'}</td>`
+    +shows.map(a=>`<td>${cpCell(x,a)}</td>`).join('')+`<td>${x.sp>0?cpPay(x):'—'}</td><td>${d1Of(x)}</td><td class="roi-cv">${clk?(CTYO===x.cc?'▾':'▸'):''}</td></tr>`;
+  const body=tr(tot,'roi-tot','🌍 All countries',false)
+    +pick.map(x=>tr(x,'',`${valFlag(x.cc)}&nbsp;${E(valCtyName(x.cc))}${go(x.cc)}`,true)+(CTYO===x.cc?`<tr class="roi-xr"><td colspan="${ncol}">${ctyMt(c,x.cc)}</td></tr>`:'')).join('')
+    +extra.map(x=>tr(x,'roi-un',ccLab(x.cc),false)).join('');
+  const cnt=k=>named.filter(x=>x.dec===k).length, order=['Scale','Keep','Watch','Cut','Too early','No ads','Too little data'];
+  const chips=`<div class="roi-chips">${order.filter(k=>cnt(k)).map(k=>`<span class="roi-cc">${dchip(k)} <b>${cnt(k)}</b></span>`).join('')}</div>`;
+  const more=named.length>CP_TOP?`<p class="roi-more"><button type="button" class="roi-lnk" data-roi-call="1">${CALL?`Sirf top ${CP_TOP} dikhao`:`Sab ${named.length} countries dikhao`}</button></p>`:'';
+  const nu=named.reduce((s,x)=>s+Math.max(0,x.n-x.nk),0);
+  return top+cpCard(head,ctl,chips+`<div class="roi-tw"><table class="roi-t roi-cpt"><thead><tr><th>Country</th>${th('dec','Decision')}${th('n','Installs')}${th('spend','Ads spend')}${th('cpi','CPI')}`
+    +shows.map(a=>th('r'+a,`ROAS ${a}d`,ard(a))).join('')+`${th('pay','Money back')}${th('d1','Back next day')}<th></th></tr></thead><tbody>${body}</tbody></table></div>`+more
+    +(nu?`<p class="roi-note">${N(nu)} installs ke din ka Google Ads kharch country-wise nahi mila — CPI / ROAS me sirf jin dino ka kharch pata hai.</p>`:'')
+    +`<p class="roi-note"><b>Decision</b> = isi period ke installs ka paisa kitne din me wapas aaya (measured): <b>Scale</b> ${Math.round(H/2)} din tak · <b>Keep</b> ${H} din tak · <b>Watch</b> ${H}–${2*H} din (ya ${H} din me wapas nahi aur ${2*H} din ka data abhi nahi) · <b>Cut</b> ${2*H} din me bhi wapas nahi · <b>Too early</b> = ${H} din purane installs abhi kam · <b>Too little data</b> = ${CP_JUDGE} se kam installs · <b>No ads</b> = Google Ads kharch nahi. `
+    +`<b>ROAS Nd</b> = period ke sirf woh installs jo N din ke ho chuke (unki dates header me): unki N din ki kamai ÷ unka Ads kharch (AdMob matched). Halka ROAS = ${CP_JUDGE} se kam installs ya period ke kharch ka ${Math.round(CP_SHARE*100)}% se kam — faisle me nahi gina. `
+    +`<b>Money back</b> = ROAS 100% kab paar hua (do measured umar ke beech seedhi line: ~); wapas nahi hua to sabse purani gini umar pe kitna. <b>Back next day</b> = installs me se kitne agle din wapas aaye. <b>All countries</b> = sab countries ka jod.</p>`); }
 // ---- 💰 Lifetime P/L ----
 // install-month P/L (owner, 13 Oct: "december 2025 se april 2026 tak ka month ab profit me aa chuke he"): each install month's
 // Google Ads spend vs what ITS users earned so far (AdMob-matched, to day 365) — ROAS and profit in the view currency, so
@@ -8654,6 +8796,9 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
   document.addEventListener('input',ev=>{ const t=ev.target; if(!t||t.id!=='roi-fc-m') return; FCM=(+t.value||0)/100;
     const l=document.getElementById('roi-fc-ml'); if(l) l.textContent=(FCM>=0?'+':'−')+Math.abs(Math.round(FCM*100))+'%';
     const r=root(), o=document.getElementById('roi-fc-out'); if(r&&o){ const a=appPtr(r.dataset.aid), d=a?AF[a.file]:null; if(d) o.innerHTML=fcOut(d); } });
+  document.addEventListener('change',ev=>{ const t=ev.target; if(!t||!t.closest||!(t.closest('[data-roi-cpf]')||t.closest('[data-roi-cpto]'))) return;   // 🌍 the board's Custom dates
+    const r=t.closest('#roi-root'), v=String(t.value||''); if(!r||!/^\d{4}-\d{2}-\d{2}$/.test(v)) return; const f=!!t.closest('[data-roi-cpf]');
+    keepAt(r,t,f?'[data-roi-cpf]':'[data-roi-cpto]',()=>{ if(f) CPF=v; else CPTO=v; CALL=false; repaint(); }); });
   document.addEventListener('change',ev=>{ const t=ev.target; if(!t||!t.closest||!t.closest('[data-roi-dvcc]')) return; const r=t.closest('#roi-root'); if(!r) return;   // 📱 the Devices' country
     keepAt(r,t,'[data-roi-dvcc]',()=>{ DVCC=String(t.value||''); repaint(); }); });
   document.addEventListener('change',ev=>{ const t=ev.target; if(!t||!t.closest||!t.closest('[data-roi-ccs]')) return; const r=t.closest('#roi-root'); if(!r) return;
@@ -8676,6 +8821,9 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     if((b=at('[data-roi-lmore]'))){ const v=b.dataset.roiLmore; keepRows(r,b,()=>{ LSHOW=v==='all'?1e9:LSHOW+60; repaint(); }); return; }
     if((b=at('[data-roi-dvper]'))){ const k=b.dataset.roiDvper; b.setAttribute('data-roi-sel',`[data-roi-dvper="${k}"]`); keep(b,()=>{ DVPER=k; repaint(); }); return; }
     if((b=at('[data-roi-dvsort]'))){ const k=b.dataset.roiDvsort; b.setAttribute('data-roi-sel',`[data-roi-dvsort="${k}"]`); keep(b,()=>{ DVSORT={k,dir:DVSORT.k===k?-DVSORT.dir:1}; repaint(); }); return; }
+    if((b=at('[data-roi-cper]'))){ const k=b.dataset.roiCper; b.setAttribute('data-roi-sel',`[data-roi-cper="${k}"]`); keep(b,()=>{ CPER=k; CALL=false; repaint(); }); return; }   // 🌍 the board's period
+    if((b=at('[data-roi-call]'))){ b.setAttribute('data-roi-sel','[data-roi-call]'); keep(b,()=>{ CALL=!CALL; repaint(); }); return; }
+    if((b=at('[data-roi-cpretry]'))){ const L=RLD; Object.keys(CPK).forEach(k=>{ if(CPK[k].err||CPK[k].stale) delete CPK[k]; }); Object.keys(L).forEach(k=>{ delete L[k]; }); repaint(); return; }
     if((b=at('[data-roi-csort]'))){ const k=b.dataset.roiCsort; b.setAttribute('data-roi-sel',`[data-roi-csort="${k}"]`); keep(b,()=>{ CSORT={k,dir:CSORT.k===k?-CSORT.dir:1}; repaint(); }); return; }
     if((b=at('[data-roi-asort]'))){ const k=b.dataset.roiAsort; b.setAttribute('data-roi-sel',`[data-roi-asort="${k}"]`); keep(b,()=>{ ASORT={k,dir:ASORT.k===k?-ASORT.dir:1}; repaint(); }); return; }
     if((b=at('[data-roi-cc]'))){ const cc=b.dataset.roiCc; keepAt(r,b,`${sc}[data-roi-cc="${cc}"]`,()=>{ setK(K,{cty:cc,show:60}); paint(K); }); return; }
@@ -8710,7 +8858,7 @@ function cardLine(aid){ const a=appPtr(aid); if(!a||a.r7==null&&a.pb==null&&!a.n
   if(a.pb!=null) parts.push(`paisa wapas ${PBT(a.pb)}`); else if(a.nb) parts.push(`${a.nb[0]} din me sirf ${P(a.nb[1])} wapas`);
   if(ok(lp)) parts.push(`lifetime <b class="${lp>=0?'roi-up':'roi-dn'}">${MC(lp,true)}</b>`);
   return {st:ST_KEY[a.st]||'lagu', line:'📈 '+parts.join(' · ')}; }
-return {ptr, appPtr, block, repaint, cardLine, _:{devView, dvSet:(cc,k,dir,per)=>{ DVCC=cc||''; if(k) DVSORT={k,dir:dir||1}; if(per) DVPER=per; }, setView:v=>{ VIEW=v; }, cols, cum, groupRows, agg, cell, beGrp, beDay, beTd, cohortTable, beAvg, lateNote, zx, ccSrc, ccPick, cohCard, benchCard, lzNext, BN, LZ_STEP, st:()=>({GRAIN,MET,SHOW,CTY}), ccNote, ccQ, cdOf, keepAt, PK, CR, PKL, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, ctyView, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
+return {ptr, appPtr, block, repaint, cardLine, _:{devView, dvSet:(cc,k,dir,per)=>{ DVCC=cc||''; if(k) DVSORT={k,dir:dir||1}; if(per) DVPER=per; }, setView:v=>{ VIEW=v; }, cols, cum, groupRows, agg, cell, beGrp, beDay, beTd, cohortTable, beAvg, lateNote, zx, ccSrc, ccPick, cohCard, benchCard, lzNext, BN, LZ_STEP, st:()=>({GRAIN,MET,SHOW,CTY}), ccNote, ccQ, cdOf, keepAt, PK, CR, PKL, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, ctyView, ctyOld, cpSum, cpRow, cpTot, cpJudge, cpNow, cpUnp, CPK, cpSet:(per,f,t,all)=>{ CPER=per; CPF=f||''; CPTO=t||''; CALL=!!all; CPC={k:'',v:null}; }, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
 })();
 // ---- 💰 Revenue by source — a section of the 💸 Install value tab (owner, 31 Oct 2026: notification revenue = GA4 Traffic
 // acquisition → Session primary channel group "Mobile Push Notifications", exactly as his GA4 screen; Paid = Cross-network +

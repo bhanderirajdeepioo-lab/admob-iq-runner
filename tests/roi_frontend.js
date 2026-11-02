@@ -861,6 +861,92 @@ async function benchReload(VW, file, packs) {
     out.cty_cut = hc.includes('Hatane se har hafte ~<b>$75</b>');
     out.cty_order = [...hc.matchAll(/data-roi-cty="([A-Z]+)"/g)].map(m => m[1]);   // Cut, then Scale, then Keep
     out.cty_chips = (hc.match(/class="roi-cc"/g) || []).length;
+    // 🌍 the period board (2 Nov 2026): made-up countries and money only. Its verdict per row (cpJudge), the board on its
+    // build sums (a button) and on Custom (summed here from the days file), the engine's "Aaj ka faisla" on top
+    {
+      const A = [7, 14, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360];
+      const sums = (n, nk, sp, pts) => { const s = [n, nk, sp, sp * 90, Math.round(n * 0.2), n];   // pts: [[age, ROAS, installs, share of cost]]
+        for (const a of A) { const p = pts.find(x => x[0] === a); if (!p) { if (pts.some(x => x[0] > a)) s.push(0, 0, 0); continue; }
+          const S = sp * (p[3] == null ? 1 : p[3]); s.push(p[1] * S, S, p[2] == null ? n : p[2]); }
+        let k = s.length; while (k > 6 && !s[k - 1] && !s[k - 2] && !s[k - 3]) k -= 3; return s.slice(0, k); };
+      const J = (cc, s) => U.cpJudge(U.cpRow(cc, s, A), 90);
+      const cases = {
+        scale: J('AA', sums(1000, 1000, 100, [[7, 1.2]])),
+        keep: J('AA', sums(1000, 1000, 100, [[7, 0.5], [30, 0.8], [60, 1.1]])),
+        watch: J('AA', sums(1000, 1000, 100, [[7, 0.5], [30, 0.7], [60, 0.8], [90, 0.9], [120, 1.05]])),
+        watch90: J('AA', sums(1000, 1000, 100, [[7, 0.5], [30, 0.7], [90, 0.8]])),
+        cut: J('AA', sums(1000, 1000, 100, [[7, 0.4], [30, 0.6], [90, 0.8], [180, 0.95]])),
+        late: J('AA', sums(1000, 1000, 100, [[7, 0.4], [90, 0.8], [180, 0.95], [210, 1.1]])),
+        early: J('AA', sums(1000, 1000, 100, [[7, 0.5], [14, 0.6], [30, 0.7]])),
+        thin: J('AA', sums(1000, 1000, 100, [[7, 0.5], [30, 0.7], [90, 0.9], [180, 3, 1000, 0.05], [360, 9, 100, 0.5]])),
+        few: J('AA', sums(200, 200, 100, [[7, 2]])),
+        noads: J('AA', sums(1000, 1000, 0, [])),
+        nocost: J('AA', sums(1000, 0, 0, [])) };
+      out.cp_judge = Object.fromEntries(Object.entries(cases).map(([k, x]) => [k, [x.dec, x.pb, x.le, x.top && [x.top[0], +x.top[1].toFixed(3)], x.el.join(',')]]));
+      // the board: 27 named countries (25 shown), "--" and "XX" last; a days file; the build's sums made from it
+      const from = '2026-01-01', thru = '2026-10-13', rows = {}, CCS = [];
+      for (let i = 0; i < 27; i++) { const cc = String.fromCharCode(65 + Math.floor(i / 26)) + String.fromCharCode(65 + (i % 26)); CCS.push(cc);
+        rows[cc] = []; for (let x = 0; x < 286; x += 5) { const age = 285 - x, rev = []; for (const a of A) { if (a > age - 2) break; rev.push(+(4 * (1 + (i % 4) / 4) * Math.log(1 + a / 7)).toFixed(2)); }
+          rows[cc].push([x, 400 + i * 10, 10, 900, Math.round((400 + i * 10) * 0.2)].concat(rev)); } }
+      rows['--'] = [[10, 50, null, null, null, 1.5, 2]];
+      rows.XX = [[10, 0, 3, 270, null]];
+      const D = { v: 1, b: 'bbbbbbbbbbbb', key: 'aaaaaaaaaaaa', from, A, c: rows };
+      const per = (lo, hi) => { const ar = new Array(A.length).fill(null), c = {}, i0 = U.cpSum ? Math.round((Date.parse(lo) - Date.parse(from)) / 864e5) : 0,
+        i1 = Math.round((Date.parse(hi) - Date.parse(from)) / 864e5);
+        Object.keys(rows).forEach(cc => { const s = U.cpSum(rows[cc], i0, i1, ar); if (s) c[cc] = s; }); while (ar.length && !ar[ar.length - 1]) ar.pop();
+        return { lo, hi, c, ar: ar.map(e => e ? [day(from, e[0]), day(from, e[1])] : null) }; };
+      const CP = { v: 1, b: 'bbbbbbbbbbbb', key: 'aaaaaaaaaaaa', from, thru, fthru: '2026-10-11', first: from, A,
+        P: { all: per(from, thru), '30': per('2026-09-14', thru), lm: per('2026-09-01', '2026-09-30') } };
+      const FILES = { 'roi_aaaaaaaaaaaa_cp.json.gz': CP, 'roi_aaaaaaaaaaaa_cpd.json.gz': D };
+      const asked = [];
+      ctx.fetchGzJson = u => { asked.push(u); const f = FILES[u.split('?')[0]]; return f ? Promise.resolve(JSON.parse(JSON.stringify(f))) : Promise.reject(new Error('http 404')); };
+      const dB = Object.assign(appFile(), { cd: { v: 1, b: 'bbbbbbbbbbbb', c: CCS.map(cc => [cc, 1, 1, 1, 0, 0, 0]), packs: [], from, thru, fthru: '2026-10-11',
+        kc: { unp: { '2026-06': 0.08, '2026-07': 0.15, '2026-08': 0.01, '2026-10': 0.3 }, unp_lim: 0.02 }, geo: {},
+        cp: { file: 'roi_aaaaaaaaaaaa_cp.json.gz', v: 'cpv000000000', days: 'roi_aaaaaaaaaaaa_cpd.json.gz', dv: 'cpd000000000' } } });
+      dB.cty = Object.assign({}, dB.cty, { H: 90, win: { weeks: 4, from: '2026-09-07', to: '2026-10-04' },
+        rows: [{ cc: 'AB', dec: 'Cut', spend: 50, gap: true }, { cc: 'AC', dec: 'Cut', spend: 90 }, { cc: 'AD', dec: 'Keep', spend: 5, gap: true },
+               { cc: 'AE', dec: 'Watch', spend: 9 }, { cc: 'AF', dec: 'Watch', spend: 8 }], cut: { n: 2, spend: 140, rev90: 40, spend_all: 200 } });
+      U.cpSet('all', '', '', false); U.set('VIEW', 'cty');
+      const h0 = U.ctyView(dB);
+      await new Promise(r => setTimeout(r, 0)); await new Promise(r => setTimeout(r, 0));
+      const h1 = U.ctyView(dB);
+      const tb = h1.slice(h1.indexOf('<tbody>'), h1.indexOf('</tbody>'));
+      out.cp_board = {
+        loading: h0.includes('Countries ka period data load ho raha hai') && h0.includes('🎯 Aaj ka faisla'),
+        asked: asked.slice(),
+        buttons: [...h1.matchAll(/data-roi-cper="([^"]+)" aria-pressed="(true|false)"/g)].map(m => m[1] + (m[2] === 'true' ? '*' : '')),
+        head: (h1.slice(h1.indexOf('id="roi-cpb"')).match(/installs [^·<]+·/) || [''])[0],
+        rows: [...tb.matchAll(/<tr class="([^"]*)"(?: data-roi-cty="([^"]+)")?><td class="roi-nm">/g)].map(m => (m[2] || m[1])),
+        more: (h1.match(/data-roi-call="1">([^<]+)</) || [])[1],
+        cols: [...h1.matchAll(/data-roi-csort="(r\d+)">ROAS (\d+)d<\/button><small class="roi-thd">([^<]+)</g)].map(m => m[2] + ':' + m[3]),
+        now: (h1.match(/<div class="roi-nowl">([\s\S]*?)<\/div>/) || [])[1],
+        unp: (h1.match(/kamai bina country: ([^)]+)\)/) || [])[1],
+        bud: h1.includes('Hatane se har hafte'),
+        legend: h1.includes('<b>Decision</b> = isi period ke installs') && h1.includes('Halka ROAS'),
+        nocost: h1.includes('installs ke din ka Google Ads kharch country-wise nahi mila') };
+      U.cpSet('all', '', '', true);
+      const h2 = U.ctyView(dB);
+      out.cp_board.all_rows = (h2.match(/data-roi-cty="/g) || []).length;
+      out.cp_board.less = (h2.match(/data-roi-call="1">([^<]+)</) || [])[1];
+      // a button whose sums the build did not write (Today here): All time instead; then Custom over the days file
+      U.cpSet('today', '', '', false);
+      out.cp_board.missing = ((U.ctyView(dB).match(/data-roi-cper="([^"]+)" aria-pressed="true"/) || [])[1]);
+      U.cpSet('cus', '2026-09-01', '2026-09-30', false);
+      const hc0 = U.ctyView(dB);
+      await new Promise(r => setTimeout(r, 0)); await new Promise(r => setTimeout(r, 0));
+      const hc1 = U.ctyView(dB), hm = U.ctyView(Object.assign({}, dB));
+      U.cpSet('lm', '', '', false);
+      const hl = U.ctyView(dB);
+      const tot = h => (h.match(/<tr class="roi-tot">([\s\S]*?)<\/tr>/) || [])[1];
+      out.cp_custom = { loading: hc0.includes('Custom ke liye har din ka data load ho raha hai'), inputs: hc1.includes('data-roi-cpf') && hc1.includes('value="2026-09-01"'),
+        asked: asked.slice(-1), same: tot(hc1) === tot(hl) && !!tot(hl), again: tot(hm) === tot(hc1) };
+      // a file of another build than the index: never read as this one's
+      U.CPK['roi_aaaaaaaaaaaa_cp.json.gz?cpv000000000'] = { stale: true };
+      U.cpSet('all', '', '', false);
+      out.cp_stale = U.ctyView(dB).includes('Naya data');
+      ctx.fetchGzJson = () => Promise.reject(new Error('no file in this test'));
+      U.set('VIEW', 'day');
+    }
     // lifetime: totals to 1 Oct (2 Oct is live)
     const hl = U.lifeView(d.life, d.life_till, d);
     out.life_total = hl.includes('$45') && hl.includes('$30') && hl.includes('+$15');

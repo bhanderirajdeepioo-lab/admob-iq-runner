@@ -137,6 +137,34 @@ def test_countries_life_all(out):
     assert out["card"] == "📈 D7 ROAS <b>40%</b> (usual 50%) · paisa wapas ~12 days"   # ROI's own numbers replace the card's
 
 
+def test_countries_period_board(out):
+    """🌍 the period board (owner, 2 Nov 2026): every button's own measured numbers, All time by default, Custom summed on
+    the page from the days file (= the build's sums), the engine's keep / cut at today's cost on top."""
+    j = out["cp_judge"]
+    assert j["scale"][:3] == ["Scale", 7, True]                       # paid back by the first point: "≤7 days"
+    assert j["keep"][:2] == ["Keep", 50]                              # between 30 (80%) and 60 (110%): a straight line
+    assert j["watch"][:2] == ["Watch", 110] and j["watch90"][0] == "Watch"   # 90–180, or not by 90 with no 180 yet
+    assert j["cut"][0] == "Cut" and j["cut"][3] == [180, 0.95]        # not back by day 180
+    assert j["late"][:2] == ["Cut", 190]                              # back only after day 180
+    assert j["early"][0] == "Too early" and j["few"][0] == "Too little data"
+    assert j["noads"][0] == "No ads" and j["nocost"][0] == "—"
+    assert j["thin"][0] == "Watch" and j["thin"][4] == "7,30,90"      # 180 / 360 too thin to count: never the decision
+    b = out["cp_board"]
+    assert b["loading"] and b["asked"] == ["roi_aaaaaaaaaaaa_cp.json.gz?v=cpv000000000"]   # only the small file first
+    assert b["buttons"] == ["30", "lm", "all*", "cus"]                # the build's buttons + Custom; All time by default
+    assert b["head"] == "installs 1 Jan 26–13 Oct 26 ·"
+    assert b["rows"][0] == "roi-tot" and b["rows"][-2:] == ["roi-un", "roi-un"] and len(b["rows"]) == 28   # 25 + All + 2
+    assert b["more"] == "Sab 27 countries dikhao" and b["all_rows"] == 27 and b["less"] == "Sirf top 25 dikhao"
+    assert b["cols"] == ["7:≤ 3 Oct 26", "30:≤ 8 Sep 26", "90:≤ 10 Jul 26", "180:≤ 11 Apr 26"]   # 360: no row counts it
+    assert "Country AC, [AB]&nbsp;Country AB<sup>≈</sup>" in b["now"] and "<b>2</b>" in b["now"]   # Cut by spend, ≈ marked
+    assert b["unp"] == "Jun 2026 8%, Jul 2026 15%"                    # over the limit only, the current month left out
+    assert b["bud"] and b["legend"] and not b["nocost"] and b["missing"] == "all"
+    c = out["cp_custom"]
+    assert c["loading"] and c["inputs"] and c["asked"] == ["roi_aaaaaaaaaaaa_cpd.json.gz?v=cpd000000000"]
+    assert c["same"] and c["again"]                                   # Custom over Sep = the build's Last month, to the cell
+    assert out["cp_stale"]                                            # another build's file: never read as this one's
+
+
 def test_four_forms(out):
     # the app's hero: the payback-target age when complete, else its longest; every range from the file's own consts
     assert out["f4_hero"] == [] and out["f4_hero_help_closed"] and out["f4_hero7"] and out["f4_hero90"]

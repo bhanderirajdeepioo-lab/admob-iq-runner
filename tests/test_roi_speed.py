@@ -103,7 +103,9 @@ def test_country_packs_byte_identical_to_the_cell_by_cell_path(tmp_path, monkeyp
         cd2, od2, rows2 = _cc_run(tmp_path, data, P, pre, spend, acc2, out="slow")
     assert cd is not None and cd == cd2 and rows == rows2
     a, b = _files(od), _files(od2)
-    assert a == b and len(a) == len(cd["packs"]) and (len(a) > 1 or pack_max == rb.PACK_MAX)
+    pk = [n for n in a if rb.PACK_RE.match(n)]                       # (+ the countries board's two files: the same)
+    assert a == b and len(pk) == len(cd["packs"]) and (len(pk) > 1 or pack_max == rb.PACK_MAX)
+    assert sorted(set(a) - set(pk)) == sorted([cd["cp"]["file"], cd["cp"]["days"]])
     assert acc.packs == acc2.packs and dict(acc.cdn) == dict(acc2.cdn)
     _pack_rows(od, cd)                                                # every pack well-formed (the page's checks)
     # the speed path really ran: one walk per install day (not per country × day), one zero row per kind of day
