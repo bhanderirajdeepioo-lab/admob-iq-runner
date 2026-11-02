@@ -241,15 +241,16 @@ async function byCountry() {
   R.in_arrived = !!ctl && ['fo-cc-m', 'fo-cc-d'].every(id => IDS[id] && IDS[id]._html === ctl);
   const board = IDS['fo-ccbx'] ? IDS['fo-ccbx']._html : '';
   R.board_rows = rowsOf(board);
-  // (the board over its period — the default 7 days up to yesterday, 22 – 28 Sep: no ads file here, so its three columns "—")
-  R.board_unnamed_last = /data-fo-ccr="XI"[\s\S]*<tr class="fo-un"><td class="fo-nm"><span class="fo-an"><span class="fo-fl">❔<\/span><span>Not named<\/span><\/span><\/td><td class="fo-stc"><small>no status<\/small><\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>63<\/td><td><b>88%<\/b><\/td><td>89%<\/td><td>0.8%<\/td><\/tr><\/tbody>/.test(board);
-  R.board_total_first = /<tbody><tr class="fo-tot"><td class="fo-nm">🌍 All countries<\/td><td class="fo-stc"><small>period ka total<\/small><\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>8,360<\/td><td><b>61%<\/b><\/td><td>80%<\/td><td>100%<\/td><\/tr><tr class="clk" data-fo-ccr="XA">/.test(board);
-  R.board_period = board.includes('<h3>By country · 22 Sep 2026 – 28 Sep 2026</h3>') && board.includes('data-fo-per="7" aria-pressed="true">7 days</button>')
+  // (the board over its period — the default 7 days = the last 7 final days, 21 – 27 Sep: no ads file here, so its four
+  // columns "—")
+  R.board_unnamed_last = /data-fo-ccr="XI"[\s\S]*<tr class="fo-un"><td class="fo-nm"><span class="fo-an"><span class="fo-fl">❔<\/span><span>Not named<\/span><\/span><\/td><td class="fo-stc"><small>no status<\/small><\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>63<\/td><td><b>88%<\/b><\/td><td>89%<\/td><td>0.8%<\/td><\/tr><\/tbody>/.test(board);
+  R.board_total_first = /<tbody><tr class="fo-tot"><td class="fo-nm">🌍 All countries<\/td><td class="fo-stc"><small>period ka total<\/small><\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>8,361<\/td><td><b>61%<\/b><\/td><td>80%<\/td><td>100%<\/td><\/tr><tr class="clk" data-fo-ccr="XA">/.test(board);
+  R.board_period = board.includes('<h3>By country · 21 Sep 2026 – 27 Sep 2026</h3>') && board.includes('data-fo-per="7" aria-pressed="true">7 days</button>')
     && ['today', 'yday', '30', 'tm', 'lm', 'all', 'cus'].every(k => board.includes(`data-fo-per="${k}" aria-pressed="false"`))
     && board.includes('Google Ads installs ka data abhi nahi bana');
   R.board_chips = [...board.matchAll(/data-fo-ccfilt="([^"]+)"[^>]*><span>[^<]*<\/span> <b>(\d+)<\/b>/g)].map(m => [m[1], +m[2]]);
-  R.board_cells_xa = board.includes('<small>7 din 50% · usual 60% · −10 pts</small></td><td>—</td><td>—</td><td>—</td><td>3,500</td><td><b>50%</b></td><td>80%</td><td>42%</td></tr>');
-  R.board_cells_xi = board.includes('<small>7 din 0% · usual 0% · 0 pts</small></td><td>—</td><td>—</td><td>—</td><td>2</td><td><b>0%</b></td><td>100%</td><td>&lt;0.1%</td></tr>');
+  R.board_cells_xa = board.includes('<small>7 din 50% · usual 60% · −10 pts</small></td><td>—</td><td>—</td><td>—</td><td>—</td><td>3,500</td><td><b>50%</b></td><td>80%</td><td>42%</td></tr>');
+  R.board_cells_xi = board.includes('<small>7 din 0% · usual 0% · 0 pts</small></td><td>—</td><td>—</td><td>—</td><td>—</td><td>3</td><td><b>0%</b></td><td>100%</td><td>&lt;0.1%</td></tr>');
   R.board_note = board.includes('Country funnel <b>1 Aug 2026 – 29 Sep 2026</b> ka hai, sirf First open → Splash → Home.');
   R.board_no_gap_note = !board.includes('fo-ccgap');
   // the board: a column sort, the status filter (no jump), back
@@ -614,37 +615,43 @@ async function byAds() {
   const rowOf = (h, cc) => (h.match(new RegExp(`<tr class="clk[^"]*" data-fo-ccr="${cc}"[\\s\\S]*?</tr>`)) || [''])[0];
   FO.render(); FO.paint(); await tick(); await tick(); await tick();
   // the ads file still loading: its three columns wait (⏳) on the board and in both tables, nothing else waits
-  R.wait_board = rowOf(board(), 'XA').includes('<td>⏳</td><td>⏳</td><td>⏳</td><td>1,400</td>');   // (First opens: the funnel's, 7 × 200)
-  R.wait_tables = (live().match(/<td>⏳<\/td><td>⏳<\/td><td>⏳<\/td>/g) || []).length > 60 && live().includes('<th>First opens</th><th>Ads installs</th><th>Opened · Firebase</th><th>Not opened</th><th>Splash</th>');
+  R.wait_board = rowOf(board(), 'XA').includes('<td>⏳</td><td>⏳</td><td>⏳</td><td>⏳</td><td>1,400</td>');   // (First opens: the funnel's, 7 × 200)
+  R.wait_tables = (live().match(/<td>⏳<\/td><td>⏳<\/td><td>⏳<\/td>/g) || []).length > 60 && live().includes('<th>First opens</th><th>Ads installs</th><th>Not opened</th><th>Opened · Ads</th><th>Opened · Firebase</th><th>Splash</th>');
   R.loads_ads = LD['firstopen_ads_0123456789ab.json.gz'];
   hold(); await tick(); await tick();
-  // arrived: the board over the default 7 days (22 – 28 Sep)
+  // arrived: the board over the default 7 days = the last 7 FINAL days (21 – 27 Sep). Not opened = Google Ads' installs − its
+  // own first opens (final days); the tooltip = the same by GA4's (Firebase) first opens
   const b7 = board();
-  R.b7_title = b7.includes('<h3>By country · 22 Sep 2026 – 28 Sep 2026</h3>');
-  R.b7_total = b7.includes('<tr class="fo-tot"><td class="fo-nm">🌍 All countries</td><td class="fo-stc"><small>period ka total</small></td><td>1,064</td><td>875</td><td class="down" title="Google Ads ke apne first opens: 980 → not opened 7.9%">189<small class="fo-np">18%</small></td><td>2,156</td><td><b>50%</b></td><td>80%</td><td>100%</td></tr>');
-  R.b7_xa = rowOf(b7, 'XA').endsWith('<td>700</td><td>595</td><td class="down" title="Google Ads ke apne first opens: 630 → not opened 10.0%">105<small class="fo-np">15%</small></td><td>1,470</td><td><b>50%</b></td><td>80%</td><td>68%</td></tr>');
-  R.b7_xb = rowOf(b7, 'XB').includes('<td>350</td><td>280</td><td class="down" title="Google Ads ke apne first opens: 343 → not opened 2.0%">70<small class="fo-np">20%</small></td><td>665</td>');
-  R.b7_unnamed = /<tr class="fo-un">[\s\S]*<td>14<\/td><td>0<\/td><td class="down"[^>]*>14<small class="fo-np">100%<\/small><\/td><td>21<\/td><td><b>50%<\/b><\/td><td>80%<\/td><td>1.0%<\/td><\/tr><\/tbody>/.test(b7);
+  R.b7_title = b7.includes('<h3>By country · 21 Sep 2026 – 27 Sep 2026</h3>');
+  R.b7_total = b7.includes('<tr class="fo-tot"><td class="fo-nm">🌍 All countries</td><td class="fo-stc"><small>period ka total</small></td><td>1,064</td><td class="" title="Firebase (GA4) ke first opens se: not opened 18%">84<small class="fo-np">7.9%</small></td><td>980</td><td>875</td><td>2,156</td><td><b>50%</b></td><td>80%</td><td>100%</td></tr>');
+  R.b7_xa = rowOf(b7, 'XA').endsWith('<td>700</td><td class="down" title="Firebase (GA4) ke first opens se: not opened 15%">70<small class="fo-np">10%</small></td><td>630</td><td>595</td><td>1,470</td><td><b>50%</b></td><td>80%</td><td>68%</td></tr>');
+  R.b7_xb = rowOf(b7, 'XB').includes('<td>350</td><td class="" title="Firebase (GA4) ke first opens se: not opened 20%">7<small class="fo-np">2.0%</small></td><td>343</td><td>280</td><td>665</td>');
+  R.b7_unnamed = /<tr class="fo-un">[\s\S]*<td>14<\/td><td class="down"[^>]*>7<small class="fo-np">50%<\/small><\/td><td>7<\/td><td>0<\/td><td>21<\/td><td><b>50%<\/b><\/td><td>80%<\/td><td>1.0%<\/td><\/tr><\/tbody>/.test(b7);
   R.b7_order = [...b7.matchAll(/data-fo-ccr="([^"]+)"/g)].map(m => m[1]);
-  R.b7_no_retry = !b7.includes('data-fo-adsretry') && !b7.includes('abhi nahi bana');
-  // Every month / Every day: the three columns beside First opens; July only Google Ads has (no GA4: Opened / Not opened "—")
+  R.b7_no_retry = !b7.includes('data-fo-adsretry') && !b7.includes('abhi nahi bana') && !b7.includes('fo-plim');
+  // Every month / Every day: the four columns beside First opens; July only Google Ads has (no GA4: Opened · Firebase "—",
+  // Not opened by Google Ads' own count still there); a month's Not opened = its final days
   const all = live();
-  R.m_jul = all.includes('<tr class="fo-old"><td class="fo-nm">Jul 2026 <small class="fo-mx">· funnel se pehle</small></td><td>—</td><td>3,040</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>');
-  R.m_aug = /<tr><td class="fo-nm">Aug 2026 <small>· 31d<\/small><\/td><td>[\d,]+<\/td><td>4,712<\/td><td>3,875<\/td><td class="down"[^>]*>837<small class="fo-np">18%<\/small><\/td>/.test(all);
-  R.d_old = all.includes('<tr class="fo-old"><td class="fo-nm">31 Jul 2026 <small class="fo-mx">· funnel se pehle</small></td><td>—</td><td>152</td><td>—</td><td>—</td>')
-    && all.includes('12 Jul 2026 <small class="fo-mx">· funnel se pehle</small>') && !all.includes('11 Jul 2026');
+  R.m_jul = all.includes('<tr class="fo-old"><td class="fo-nm">Jul 2026 <small class="fo-mx">· funnel se pehle</small></td><td>—</td><td>3,040</td><td class="">240<small class="fo-np">7.9%</small></td><td>2,800</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>');
+  R.m_aug = /<tr><td class="fo-nm">Aug 2026 <small>· 31d<\/small><\/td><td>[\d,]+<\/td><td>4,712<\/td><td class="" title="Firebase \(GA4\) ke first opens se: not opened 18%">372<small class="fo-np">7.9%<\/small><\/td><td>4,340<\/td><td>3,875<\/td>/.test(all)
+    && /<tr><td class="fo-nm">Sep 2026 <small>· 29d<\/small><\/td><td>[\d,]+<\/td><td>4,408<\/td><td class="" title="[^"]*">324<small class="fo-np">7.9%<\/small><\/td><td>4,060<\/td><td>3,625<\/td>/.test(all);   // (Not opened: 1 – 27 Sep)
+  R.d_old = all.includes('<tr class="fo-old"><td class="fo-nm">31 Jul 2026 <small class="fo-mx">· funnel se pehle</small></td><td>—</td><td>152</td><td class="">12<small class="fo-np">7.9%</small></td><td>140</td><td>—</td>')
+    && all.includes('12 Jul 2026 <small class="fo-mx">· funnel se pehle</small>') && !all.includes('11 Jul 2026')
+    && /29 Sep 2026 · not final<\/td><td>[\d,]+<\/td><td>152<\/td><td>⏳<\/td><td>140<\/td><td>125<\/td>/.test(all);   // a day not final: Not opened waits
   R.d_order = all.indexOf('>29 Sep 2026') < all.indexOf('>1 Aug 2026') && all.indexOf('>1 Aug 2026') < all.indexOf('>31 Jul 2026');
-  // All time: from Google Ads' first day; Not opened only over the days both sources have (Aug – Sep: 60 × (152 − 125))
+  // All time: from Google Ads' first day; Not opened over its final days (12 Jul – 27 Sep), the tooltip over the final days
+  // GA4 has too (1 Aug – 27 Sep); one line naming each part's first day and the days not final
   click('[data-fo-per]', { foPer: 'all' });
   const ba = board();
   R.all_title = ba.includes('<h3>By country · 12 Jul 2026 – 29 Sep 2026</h3>') && ba.includes('data-fo-per="all" aria-pressed="true"');
-  R.all_total = ba.includes('<td>12,160</td><td>7,500</td><td class="down" title="Google Ads ke apne first opens: 11,200 → not opened 7.9%">1,620<small class="fo-np">18%</small></td><td>18,480</td>');
-  R.all_lim = ba.includes('<p class="fo-note fo-plim" style="margin-top:10px">⏳ GA4 first opens 1 Aug 2026 se · Splash → Home / Opened app country-wise 1 Aug 2026 se');
-  // Today, Last month, This month (29 Sep: the funnel's last day)
+  R.all_total = ba.includes('<td>12,160</td><td class="" title="Firebase (GA4) ke first opens se: not opened 18%">936<small class="fo-np">7.9%</small></td><td>11,200</td><td>7,500</td><td>18,480</td>');
+  R.all_lim = ba.includes('<p class="fo-note fo-plim" style="margin-top:10px">⏳ GA4 first opens 1 Aug 2026 se · Splash → Home / Opened app country-wise 1 Aug 2026 se (GA4 sirf ~2 mahine ka funnel rakhta hai) · 28 Sep 2026 – 29 Sep 2026 abhi final nahi (GA4 aur Google Ads dono baad me bhi jodte hain): Not opened sirf 27 Sep 2026 tak ke dino ka.</p>');
+  // Today (not final: Not opened waits), Last month, This month (29 Sep: the funnel's last day)
   click('[data-fo-per]', { foPer: 'today' });
-  R.today = board().includes('<h3>By country · 29 Sep 2026</h3>') && board().includes('<td>152</td><td>125</td>');
+  R.today = board().includes('<h3>By country · 29 Sep 2026</h3>') && board().includes('<td>152</td><td>⏳</td><td>140</td><td>125</td>')
+    && board().includes('⏳ 29 Sep 2026 abhi final nahi (GA4 aur Google Ads dono baad me bhi jodte hain): Not opened final hone ke baad (2 din).');
   click('[data-fo-per]', { foPer: 'lm' });
-  R.lm = board().includes('<h3>By country · 1 Aug 2026 – 31 Aug 2026</h3>') && board().includes('<td>4,712</td><td>3,875</td>');
+  R.lm = board().includes('<h3>By country · 1 Aug 2026 – 31 Aug 2026</h3>') && /<td>4,712<\/td><td class="[^"]*"[^>]*>372<small class="fo-np">7.9%<\/small><\/td><td>4,340<\/td><td>3,875<\/td>/.test(board());
   click('[data-fo-per]', { foPer: 'tm' });
   R.tm = board().includes('<h3>By country · 1 Sep 2026 – 29 Sep 2026</h3>');
   // Custom: the from / to dates (reversed → swapped), bounded by All time's ends
@@ -653,22 +660,23 @@ async function byAds() {
   const bc = board();
   R.custom = bc.includes('<h3>By country · 6 Aug 2026 – 11 Aug 2026</h3>') && bc.includes('data-fo-per="cus" aria-pressed="true"')
     && bc.includes('<input type="date" data-fo-pf="1" value="2026-08-06" min="2026-07-12" max="2026-09-29">')
-    && bc.includes('<input type="date" data-fo-pto="1" value="2026-08-11" min="2026-07-12" max="2026-09-29">') && bc.includes('<td>912</td><td>750</td>');
+    && bc.includes('<input type="date" data-fo-pto="1" value="2026-08-11" min="2026-07-12" max="2026-09-29">') && /<td>912<\/td><td class="[^"]*"[^>]*>72<small class="fo-np">7.9%<\/small><\/td><td>840<\/td><td>750<\/td>/.test(bc);
   // only the board's slot is drawn again by a period: the rest of the page as it was
   R.slot_only = html3 === all.slice(0, html3.length) || html3.length > 0;
-  const before = html3; click('[data-fo-per]', { foPer: '30' }); R.slot_only = html3 === before && board().includes('<h3>By country · 30 Aug 2026 – 28 Sep 2026</h3>');
+  const before = html3; click('[data-fo-per]', { foPer: '30' }); R.slot_only = html3 === before && board().includes('<h3>By country · 29 Aug 2026 – 27 Sep 2026</h3>');
   // a picked country: its Every day carries its own three columns (XA on 28 Sep)
   click('[data-fo-per]', { foPer: '7' });
   FO._.pick('XA');
-  R.cc_day = live().includes('28 Sep 2026 · not final</td><td>200</td><td>100</td><td>85</td><td class="down" title="Google Ads ke apne first opens: 90 → not opened 10.0%">15<small class="fo-np">15%</small></td>');
-  R.cc_old = live().includes('31 Jul 2026 <small class="fo-mx">· funnel se pehle</small></td><td>—</td><td>100</td><td>—</td><td>—</td>');
-  R.cc_month_cols = live().includes('<th>Month</th><th>First opens</th><th>Ads installs</th><th>Opened · Firebase</th><th>Not opened</th><th>Splash</th><th>Home</th>');
+  R.cc_day = live().includes('27 Sep 2026</td><td>200</td><td>100</td><td class="down" title="Firebase (GA4) ke first opens se: not opened 15%">10<small class="fo-np">10%</small></td><td>90</td><td>85</td>')
+    && live().includes('28 Sep 2026 · not final</td><td>200</td><td>100</td><td>⏳</td><td>90</td><td>85</td>');
+  R.cc_old = live().includes('31 Jul 2026 <small class="fo-mx">· funnel se pehle</small></td><td>—</td><td>100</td><td class="down">10<small class="fo-np">10%</small></td><td>90</td><td>—</td>');
+  R.cc_month_cols = live().includes('<th>Month</th><th>First opens</th><th>Ads installs</th><th>Not opened</th><th>Opened · Ads</th><th>Opened · Firebase</th><th>Splash</th><th>Home</th>');
   FO._.pick('');
   // the ads file failing: one line with Try again on the board, the columns "—"; Try again loads it
   for (const k of Object.keys(FO._.ADS)) delete FO._.ADS[k];
   failNext = true; FO.paint(); await tick(); await tick();
   R.fail_line = board().includes('⚠️ Google Ads installs load nahi hue. <button type="button" class="fo-lnkb" data-fo-adsretry="1">Try again</button>') && rowOf(board(), 'XA').includes('<td>—</td><td>—</td><td>—</td>');
   click('[data-fo-adsretry]', {}); await tick(); hold(); await tick(); await tick();
-  R.retry_ok = rowOf(board(), 'XA').includes('<td>700</td><td>595</td>') && !board().includes('data-fo-adsretry');
+  R.retry_ok = /<td>700<\/td><td class="down"[^>]*>70<small class="fo-np">10%<\/small><\/td><td>630<\/td><td>595<\/td>/.test(rowOf(board(), 'XA')) && !board().includes('data-fo-adsretry');
   return R;
 }
