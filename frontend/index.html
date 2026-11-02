@@ -2715,6 +2715,24 @@ body[data-screen="firstopen"] #rangectl,body[data-screen="firstopen"] #rangecust
 .fo-t tbody tr.on td{background:var(--raise)}.fo-t tbody tr.on td:first-child{box-shadow:inset 3px 0 0 var(--cyan),1px 0 0 var(--line)}
 .fo-t tr.fo-un td{color:var(--faint)}.fo-t tr.fo-un td.fo-nm{color:var(--muted);font-weight:600}
 .fo-ccm{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}.fo-ccm .fo-note{margin:0}
+/* 📈 eCPM · first session vs returning (the eCPM tab's app page, #nvr-root): the period strip one row (sideways on a phone),
+   the custom dates, the chart's two lines (first session = cyan, returning = amber) with their values printed */
+#nvr-root{margin-top:16px}
+#nvr-root .nvr-per{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;max-width:100%}#nvr-root .nvr-per::-webkit-scrollbar{display:none}
+#nvr-root .nvr-cus{display:flex;flex-wrap:wrap;gap:8px 14px;margin:0 0 10px;font-size:12px;color:var(--muted)}#nvr-root .nvr-cus label{display:inline-flex;align-items:center;gap:6px}
+#nvr-root .nvr-cus input[type=date]{min-height:34px;padding:4px 8px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px;color-scheme:dark}
+#nvr-root .nvr-k1 .roi-kv{color:#3dd0f0}#nvr-root .nvr-k2 .roi-kv{color:#f3c15a}
+#nvr-root .nvr-ch{position:relative;margin:6px 0 2px}#nvr-root .nvr-ch svg{display:block;overflow:visible;touch-action:pan-y}
+#nvr-root .nvr-ch text{fill:var(--faint);font-size:10.5px}#nvr-root .nvr-ch line.g{stroke:var(--line);stroke-width:1}
+#nvr-root .nvr-ch path{fill:none;stroke-width:2;stroke-linejoin:round}#nvr-root .nvr-ch path.n{stroke:#3dd0f0}#nvr-root .nvr-ch path.r{stroke:#f3c15a}
+#nvr-root .nvr-ch circle.n{fill:#3dd0f0}#nvr-root .nvr-ch circle.r{fill:#f3c15a}#nvr-root .nvr-ch text.n{fill:#3dd0f0;font-weight:800;font-size:11.5px}#nvr-root .nvr-ch text.r{fill:#f3c15a;font-weight:800;font-size:11.5px}
+#nvr-root .nvr-ch line.rule{stroke:var(--muted);stroke-dasharray:3 3}
+#nvr-root .nvr-tip{position:absolute;top:0;z-index:6;min-width:170px;max-width:260px;background:#0b1220;border:1px solid #38507a;border-radius:9px;padding:7px 10px;font-size:12px;color:var(--ink2);box-shadow:0 8px 24px rgba(0,0,0,.5);line-height:1.5;pointer-events:none}
+#nvr-root .nvr-tip b{color:#fff}
+#nvr-root .nvr-lg span.n::before,#nvr-root .nvr-lg span.r::before{content:"";display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+#nvr-root .nvr-lg span.n::before{background:#3dd0f0}#nvr-root .nvr-lg span.r::before{background:#f3c15a}
+#nvr-root .nvr-fl{font-size:15px}
+@media (max-width:760px){#nvr-root .nvr-cus input[type=date]{font-size:16px}}
 /* the By country board's period (owner, 2 Nov 2026: "jo time period select kru uska data aaye", All time + Custom): one row
    of buttons (a strip that scrolls sideways on a phone), the custom dates under it; the board's All countries row */
 .fo-per{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:0 0 10px;padding:2px}.fo-per::-webkit-scrollbar{display:none}
@@ -5991,7 +6009,7 @@ function ecPaint(){ const s=(EC.el&&EC.el.isConnected!==false)?EC.el:document.qu
           <div id="ec-tb-u">${ecTableHtml('u')}</div><div class="ec-note" style="padding:0 16px 14px">${ecStatusNote(C)}</div></div>
         ${EC.rows.c.length?`<div class="card ec-tc"><div class="ct"><h3>Countries · ${Cc.title}</h3><span class="faint" style="font-size:11.5px">kis desh me eCPM gira</span></div>${ctl}
           <div class="ec-note">AdMob country report se (top 50 desh, history ${cfirst?ecYear(cfirst):'—'} se) — totals upar wale app number se thode alag ho sakte hain.${ecCmpWhat(Cc,W)}</div>${cw?`<div class="ec-note ec-cw">${cw}</div>`:''}
-          <div id="ec-tb-c">${ecTableHtml('c')}</div></div>`:''}`;
+          <div id="ec-tb-c">${ecTableHtml('c')}</div></div>`:''}${typeof NVR!=='undefined'&&L.id?NVR.block(L.id):''}`;
     }
   }
   s.innerHTML=`<div id="ec-root">${h}</div>`;
@@ -8814,6 +8832,143 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     if((b=t.closest('[data-src-retry]'))){ ALLERR=false; Object.keys(AERR).forEach(k=>AERR[k]=false); repaint(); return; }
     if((b=t.closest('[data-src-app]'))){ const a=appOf(b.dataset.srcApp); if(a&&typeof setApp==='function') setApp(nameOf(a)); return; } }); }
 return {ptr, block, repaint, _:{rng, sum, monthRows, allView, appView, set:(k,v)=>{ if(k==='PER') PER=v; if(k==='ALL'){ ALL=v; ALLV=(ptr()||{}).v||''; } if(k==='AF') Object.assign(AF,v); }}};
+})();
+// ---- 📈 eCPM · first session vs returning — a section of the eCPM tab's app page (owner, 2 Nov 2026: "user ke first
+// session ka ecpm and second session ka ecpm dono ka difference chahiye taki pata chale ki first session me new user me ecpm
+// dikkat he ya old user me"; "ecpm first and returning session ke liye ad unit wise mil sakta he?" — yes). GA4's
+// newVsReturning: First session = the user's first session, Returning = session 2 on. nvr_<key>.json.gz (nvr_build): per
+// day the two groups' ad revenue (USD) + impressions, sessions + users, every ad unit and every country. The period picker
+// as every one (Today … Last month, All time, Custom). Everything under #nvr-root, classes nvr-* (+ the ROI card / table look).
+const NVR=(()=>{
+let PER='30', PF='', PTO='', WIRED=false, US={k:'rev',d:-1}, CS={k:'rev',d:-1}, UALL=false, CALL=false, CHP=[];   // CHP: the chart's days (its tooltip)
+const AF={}, ABUSY={}, AERR={};
+const PERS=[['today','Today'],['yday','Yesterday'],['7','7 days'],['30','30 days'],['tm','This month'],['lm','Last month'],['all','All time'],['cus','Custom']];
+const E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ok=v=>v!=null&&isFinite(v);
+const DAY=864e5, t0=s=>Date.parse(s+'T00:00:00Z'), iso=t=>new Date(t).toISOString().slice(0,10), addD=(s,k)=>iso(t0(s)+k*DAY);
+const fdy=s=>{ try{ return fmtD(s)+' '+String(s).slice(0,4); }catch(e){ return s; } };
+const N=v=>ok(v)?Math.round(v).toLocaleString('en-US'):'—';
+function MV(usd){ if(!ok(usd)) return '—'; const x=usd*cfx(), a=Math.abs(x), inr=curView()==='INR'; if(a===0) return csym()+'0';
+  const s=a>=100?Math.round(a).toLocaleString(inr?'en-IN':'en-US'):a>=10?a.toFixed(0):a.toFixed(a>=1?1:2); return (x<0?'−':'')+csym()+s; }
+const EC=(rv,im)=>im>0?rv/im*1000:null;                                   // eCPM (USD per 1,000 impressions)
+const EM=v=>ok(v)?cm(v,v*cfx()>=100?0:2):'—';
+const XF=(a,b)=>ok(a)&&ok(b)&&b>0?(a/b>=10?Math.round(a/b):(a/b).toFixed(1))+'×':'—';   // first ÷ returning
+const FL=cc=>{ try{ return valFlag(cc); }catch(e){ return ''; } }, CN=cc=>{ try{ return valCtyName(cc); }catch(e){ return String(cc||''); } };
+function ptr(){ const p=(typeof DATA!=='undefined'&&DATA&&DATA.nvr)||null; return (p&&p.apps&&typeof p.apps==='object')?p:null; }
+function apOf(aid){ const p=ptr(), a=p&&p.apps[aid]; return (a&&typeof a.file==='string'&&/^nvr_[0-9a-f]{12}\.json\.gz$/.test(a.file))?a:null; }
+function dataOf(aid){ const a=apOf(aid), d=a&&AF[a.file]; return d&&d._v===a.v?d:null; }
+function ensure(aid,cb){ const a=apOf(aid); if(!a||ABUSY[a.file]||dataOf(aid)) return; const f=a.file; ABUSY[f]=true;
+  fetchGzJson(f+'?v='+encodeURIComponent(a.v||'')).then(j=>{ if(!j||j.v!==1||!Array.isArray(j.days)||!Array.isArray(j.units)) throw new Error('format');
+      j._v=a.v; AF[f]=j; AERR[f]=false; })
+    .catch(()=>{ AERR[f]=true; }).then(()=>{ ABUSY[f]=false; cb&&cb(); }); }
+// the period → [lo, hi] on the file's calendar: today = its final till + 2 (the property's today); 7 / 30 days = the last
+// 7 / 30 FINAL days (GA4 still adds to the newest 2); This month = its 1st … today; Last month = the whole month before;
+// All time = the file's first day … today; Custom = the picked from / to (swapped when reversed)
+function rng(d){ const ft=d.final_till, T=addD(ft,2), m0=T.slice(0,8)+'01';
+  if(PER==='today') return [T,T]; if(PER==='yday') return [addD(T,-1),addD(T,-1)];
+  if(PER==='7') return [addD(ft,-6),ft]; if(PER==='30') return [addD(ft,-29),ft];
+  if(PER==='tm') return [m0,T]; if(PER==='lm'){ const l=addD(m0,-1); return [l.slice(0,8)+'01',l]; }
+  if(PER==='all') return [d.first_day,T];
+  let f=PF||d.first_day, t=PTO||T; if(f>t) [f,t]=[t,f]; return [f,t]; }
+// the period's sums: t = [first rev, first impr, returning rev, returning impr, not set rev, not set impr], s = [first
+// sessions, first users, returning sessions, returning users], u / c = per ad unit index / country [first rev, first impr,
+// returning rev, returning impr], n = days read, miss = days not read yet, nf = days not final
+function sums(d,lo,hi){ const t=[0,0,0,0,0,0], s=[0,0,0,0], u={}, c={}; let n=0, miss=0, nf=0;
+  const i0=Math.round((t0(lo)-t0(d.first_day))/DAY), i1=Math.round((t0(hi)-t0(d.first_day))/DAY);
+  for(let i=Math.max(0,i0);i<=Math.min(d.days.length-1,i1);i++){ const r=d.days[i]; if(!r){ miss++; continue; } n++; if(r[0]>d.final_till) nf++;
+    for(let j=0;j<6;j++) t[j]+=+r[1][j]||0; for(let j=0;j<4;j++) s[j]+=+r[2][j]||0;
+    for(const k in r[3]){ const e=u[k]||(u[k]=[0,0,0,0]); for(let j=0;j<4;j++) e[j]+=+r[3][k][j]||0; }
+    for(const k in r[4]){ const e=c[k]||(c[k]=[0,0,0,0]); for(let j=0;j<4;j++) e[j]+=+r[4][k][j]||0; } }
+  return {t,s,u,c,n,miss,nf}; }
+function perCtl(d){ const [lo,hi]=rng(d), T=addD(d.final_till,2);
+  return `<div class="roi-ctl"><span class="roi-mini nvr-per" role="group" aria-label="Period">${PERS.map(([k,l])=>`<button type="button" data-nvr-per="${k}" aria-pressed="${PER===k}">${l}</button>`).join('')}</span></div>`
+    +(PER==='cus'?`<div class="nvr-cus"><label>From <input type="date" data-nvr-pf="1" value="${lo}" min="${d.first_day}" max="${T}"></label><label>To <input type="date" data-nvr-pto="1" value="${hi}" min="${d.first_day}" max="${T}"></label></div>`:''); }
+function tiles(x){ const t=x.t, en=EC(t[0],t[1]), er=EC(t[2],t[3]), rv=t[0]+t[2];
+  const tile=(l,v,sub,cls)=>`<div class="roi-k${cls?' '+cls:''}"><div class="roi-kl">${l}</div><div class="roi-kv">${v}</div><div class="roi-ks">${sub}</div></div>`;
+  return `<div class="roi-ks6">`
+    +tile('First session eCPM',EM(en),`${N(t[1])} impressions · ${MV(t[0])}`,'nvr-k1')
+    +tile('Returning eCPM',EM(er),`${N(t[3])} impressions · ${MV(t[2])}`,'nvr-k2')
+    +tile('First ÷ Returning',XF(en,er),ok(en)&&ok(er)?(en>=er?'first session ka eCPM zyada':'returning ka eCPM zyada'):'—')
+    +tile('Impressions / session',`${x.s[0]>0?(t[1]/x.s[0]).toFixed(1):'—'} · ${x.s[2]>0?(t[3]/x.s[2]).toFixed(1):'—'}`,'first session · returning')
+    +tile('Kamai ka hissa',rv>0?Math.round(t[0]/rv*100)+'% · '+Math.round(t[2]/rv*100)+'%':'—','first session · returning')
+    +`</div>`; }
+// the daily chart: both eCPMs on every day of the period (a day under 100 impressions in a group: no point there), the
+// latest value and the period's eCPM printed at each line's end; hover / tap = that day
+function chart(d,lo,hi){ const pts=[]; for(let k=lo;k<=hi;k=addD(k,1)){ const i=Math.round((t0(k)-t0(d.first_day))/DAY), r=d.days[i];
+    pts.push(r?{k,n:r[1][1]>=100?EC(r[1][0],r[1][1]):null,r:r[1][3]>=100?EC(r[1][2],r[1][3]):null,ni:r[1][1],ri:r[1][3],nf:k>d.final_till}:{k,n:null,r:null}); }
+  CHP=pts.map(p=>[p.k,p.n,p.r,p.ni||0,p.ri||0,p.nf?1:0]);
+  if(pts.filter(p=>p.n!=null||p.r!=null).length<2) return '';
+  const W=720, H=220, m={t:14,r:92,b:24,l:44}, ys=pts.flatMap(p=>[p.n,p.r]).filter(ok), mx=Math.max(...ys)*1.08||1, n=pts.length;
+  const X=i=>m.l+(W-m.l-m.r)*(n>1?i/(n-1):0.5), Y=v=>m.t+(H-m.t-m.b)*(1-v/mx);
+  const path=key=>{ let s='', up=false; pts.forEach((p,i)=>{ const v=p[key]; if(v==null){ up=false; return; } s+=(up?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '; up=true; }); return s; };
+  const last=key=>{ for(let i=n-1;i>=0;i--) if(pts[i][key]!=null) return [i,pts[i][key]]; return null; };
+  const grid=[0,0.5,1].map(f=>`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(mx*f).toFixed(1)}" y2="${Y(mx*f).toFixed(1)}" class="g"/><text x="${m.l-6}" y="${(Y(mx*f)+4).toFixed(1)}" text-anchor="end">${E(EM(mx*f))}</text>`).join('');
+  const ticks=[0,Math.floor((n-1)/2),n-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=>`<text x="${X(i).toFixed(1)}" y="${H-6}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${E(fmtD(pts[i].k))}</text>`).join('');
+  const lab=(key,cls)=>{ const l=last(key); return l?`<circle cx="${X(l[0]).toFixed(1)}" cy="${Y(l[1]).toFixed(1)}" r="3" class="${cls}"/><text x="${(X(l[0])+6).toFixed(1)}" y="${(Y(l[1])+4).toFixed(1)}" class="${cls}">${E(EM(l[1]))}</text>`:''; };
+  return `<div class="nvr-ch" data-nvr-ch="1"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Daily eCPM, first session and returning">${grid}${ticks}<path d="${path('n')}" class="n"/><path d="${path('r')}" class="r"/>${lab('n','n')}${lab('r','r')}<line class="rule" y1="${m.t}" y2="${H-m.b}" x1="0" x2="0" visibility="hidden"/></svg><div class="nvr-tip" hidden></div></div>`
+    +`<div class="roi-lg nvr-lg"><span class="n">First session</span><span class="r">Returning</span><span class="faint">din jinme 100 se kam impressions: point nahi</span></div>`; }
+// a table of rows {key, label, sub, v:[first rev, first impr, returning rev, returning impr]}: eCPM both + their ratio,
+// impressions and revenue both; sortable; the top 15 first, "Show all" for the rest
+function table(rows,S,kind,all){ const ex=r=>({en:EC(r.v[0],r.v[1]),er:EC(r.v[2],r.v[3])});
+  const val=(r,k)=>{ const x=ex(r); return k==='lab'?r.label:k==='en'?x.en:k==='er'?x.er:k==='x'?(ok(x.en)&&ok(x.er)&&x.er>0?x.en/x.er:null):k==='ni'?r.v[1]:k==='ri'?r.v[3]:k==='nr'?r.v[0]:k==='rr'?r.v[2]:r.v[0]+r.v[2]; };
+  const rs=rows.slice().sort((a,b)=>{ const va=val(a,S.k), vb=val(b,S.k); if(va==null&&vb==null) return 0; if(va==null) return 1; if(vb==null) return -1;
+    return typeof va==='string'?S.d*va.localeCompare(vb):S.d*(va-vb); });
+  const cols=[['lab',kind==='c'?'Country':kind==='f'?'Format':'Ad unit'],['en','eCPM · first session'],['er','eCPM · returning'],['x','First ÷ Ret.'],['ni','Impr. · first'],['ri','Impr. · returning'],['nr','Kamai · first'],['rr','Kamai · returning']];
+  const head=cols.map(([k,l])=>`<th aria-sort="${S.k===k?(S.d>0?'ascending':'descending'):'none'}"><button type="button" data-nvr-sort="${kind}:${k}">${l}</button></th>`).join('');
+  const shown=all||rs.length<=15?rs:rs.slice(0,15);
+  const body=shown.map(r=>{ const x=ex(r); return `<tr><td class="roi-nm">${r.label}${r.sub?` <small>${E(r.sub)}</small>`:''}</td><td><b>${EM(x.en)}</b></td><td>${EM(x.er)}</td><td>${XF(x.en,x.er)}</td><td>${N(r.v[1])}</td><td>${N(r.v[3])}</td><td>${MV(r.v[0])}</td><td>${MV(r.v[2])}</td></tr>`; }).join('')
+    ||`<tr><td colspan="8" class="roi-note" style="text-align:left">Is period me data nahi.</td></tr>`;
+  const more=rs.length>15&&kind!=='f'?`<p class="roi-note"><button type="button" class="roi-lnk" data-nvr-all="${kind}">${all?'Sirf top 15 dikhao':`Sab ${rs.length} dikhao`}</button></p>`:'';
+  return `<div class="roi-tw"><table class="roi-t nvr-t"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>${more}`; }
+function view(aid,d){ const [lo,hi]=rng(d), x=sums(d,lo,hi), t=x.t, nt=t[0]+t[2]+t[4];
+  const lim=[];
+  if(lo<d.first_day) lim.push(`data ${fdy(d.first_day)} se`);
+  if(x.miss) lim.push(`${x.miss} din ka data abhi aa raha hai (purani history har build me thodi aur)`);
+  if(x.nf) lim.push('aakhri 2 din GA4 me abhi badal rahe hain (final nahi)');
+  const units=d.units.map((u,i)=>({key:String(i),label:E(u[0]),sub:u[1],v:x.u[String(i)]||[0,0,0,0]})).filter(r=>r.v[1]||r.v[3]);
+  const fm={}; units.forEach(r=>{ const e=fm[r.sub]||(fm[r.sub]=[0,0,0,0]); for(let j=0;j<4;j++) e[j]+=r.v[j]; });
+  const fmts=Object.keys(fm).map(k=>({key:k,label:E(k||'(not set)'),v:fm[k]}));
+  const ccs=Object.keys(x.c).map(k=>({key:k,label:`<span class="nvr-fl">${FL(k)}</span> ${E(k==='--'?'Not named':CN(k))}`,v:x.c[k]})).filter(r=>r.v[1]||r.v[3]);
+  return `<div class="roi-card"><div class="roi-ct"><h3>👥 First session vs Returning · eCPM</h3><span class="roi-note">${fdy(lo)}${lo!==hi?' – '+fdy(hi):''} · GA4</span></div>`
+    +perCtl(d)
+    +(x.n&&(t[1]||t[3])?tiles(x)+chart(d,lo,hi):`<p class="roi-note">Is period me ad impressions nahi.</p>`)
+    +(lim.length?`<p class="roi-note nvr-lim">⏳ ${lim.join(' · ')}.</p>`:'')
+    +`<p class="roi-note"><b>First session</b> = user ka pehla session (GA4 "new"), <b>Returning</b> = 2nd session aur uske baad (GA4 "returning"). eCPM = GA4 ad revenue ÷ impressions × 1000 (AdMob se GA4 me aaye <code>ad_impression</code>, AdMob tab se thoda farak ho sakta hai).${nt>0&&t[4]>0?` GA4 ne ${Math.max(0.1,Math.round(t[4]/nt*1000)/10)}% kamai kisi session group me nahi daali — wo tiles me nahi.`:''}</p></div>`
+    +`<div class="roi-card"><div class="roi-ct"><h3>Ad units</h3><span class="roi-note">har ad unit ka first session vs returning eCPM · column pe tap = sort</span></div>${table(units,US,'u',UALL)}</div>`
+    +`<div class="roi-card"><div class="roi-ct"><h3>Ad formats</h3><span class="roi-note">same format me bhi fark — ya sirf format mix ka?</span></div>${table(fmts,US,'f',true)}</div>`
+    +`<div class="roi-card"><div class="roi-ct"><h3>Countries</h3><span class="roi-note">same country me bhi fark — ya sirf country mix ka?</span></div>${table(ccs,CS,'c',CALL)}</div>`; }
+function inner(aid){ const a=apOf(aid);
+  if(!a) return `<div class="roi-card"><div class="roi-ct"><h3>👥 First session vs Returning · eCPM</h3></div><p class="roi-note">Is app ka GA4 data abhi nahi aaya — agle robot run me.</p></div>`;
+  const d=dataOf(aid);
+  if(!d){ if(AERR[a.file]) return `<div class="roi-card"><p class="roi-note">⚠️ First session vs Returning load nahi hua. <button type="button" class="roi-lnk" data-nvr-retry="1">Try again</button></p></div>`;
+    ensure(aid,repaint); return `<div class="roi-card"><p class="roi-note">⏳ First session vs Returning load ho raha hai…</p></div>`; }
+  return view(aid,d); }
+function block(aid){ if(!ptr()||!aid) return ''; wire();
+  return `<section class="roi nvr" id="nvr-root" data-aid="${E(aid)}" aria-label="First session vs returning eCPM">${inner(aid)}</section>`; }
+function root(){ return (typeof document!=='undefined'&&document.getElementById)?document.getElementById('nvr-root'):null; }
+function repaint(){ const r=root(); if(r) r.innerHTML=inner(r.dataset.aid); }
+// the chart's tooltip: the day nearest the pointer, both eCPMs and impressions
+function tip(ev){ const w=ev.target&&ev.target.closest&&ev.target.closest('[data-nvr-ch]'); if(!w) return; const sv=w.querySelector('svg'), t=w.querySelector('.nvr-tip'), pts=CHP;
+  if(!sv||!t) return; const r=sv.getBoundingClientRect(); if(!r.width||!pts.length) return;
+  const x=(ev.clientX-r.left)*720/r.width, i=Math.max(0,Math.min(pts.length-1,Math.round((x-44)/(720-44-92)*(pts.length-1)))), p=pts[i];
+  t.innerHTML=`<b>${E(fdy(p[0]))}</b>${p[5]?' · not final':''}<br>First session <b>${EM(p[1])}</b> (${N(p[3])} impr.)<br>Returning <b>${EM(p[2])}</b> (${N(p[4])} impr.)`;
+  t.hidden=false; const px=(44+(720-44-92)*(pts.length>1?i/(pts.length-1):0.5))*r.width/720; t.style.left=Math.max(0,Math.min(r.width-t.offsetWidth,px-t.offsetWidth/2))+'px';
+  const rl=sv.querySelector('.rule'); if(rl){ const xx=(44+(720-44-92)*(pts.length>1?i/(pts.length-1):0.5)).toFixed(1); rl.setAttribute('x1',xx); rl.setAttribute('x2',xx); rl.setAttribute('visibility','visible'); } }
+function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventListener) return; WIRED=true;
+  const keep=(r,sel,fn)=>{ const b0=r.querySelector(sel), y0=b0&&b0.getBoundingClientRect?b0.getBoundingClientRect().top:null; fn();
+    const b=y0==null?null:r.querySelector(sel); if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } };   // the tapped control stays where it was
+  document.addEventListener('click',ev=>{ const t=ev.target, r=t&&t.closest&&t.closest('#nvr-root'); if(!r) return; let b;
+    if((b=t.closest('[data-nvr-per]'))){ const k=b.dataset.nvrPer; keep(r,`[data-nvr-per="${k}"]`,()=>{ PER=k; repaint(); }); return; }
+    if((b=t.closest('[data-nvr-sort]'))){ const [kind,k]=String(b.dataset.nvrSort).split(':'), S=kind==='c'?CS:US;
+      keep(r,`[data-nvr-sort="${kind}:${k}"]`,()=>{ if(S.k===k) S.d=-S.d; else { S.k=k; S.d=k==='lab'?1:-1; } repaint(); }); return; }
+    if((b=t.closest('[data-nvr-all]'))){ const kind=b.dataset.nvrAll; keep(r,`[data-nvr-all="${kind}"]`,()=>{ if(kind==='c') CALL=!CALL; else UALL=!UALL; repaint(); }); return; }
+    if((b=t.closest('[data-nvr-retry]'))){ Object.keys(AERR).forEach(k=>AERR[k]=false); repaint(); return; }
+    if(t.closest('[data-nvr-ch]')) tip(ev); });
+  document.addEventListener('change',ev=>{ const t=ev.target, r=t&&t.closest&&t.closest('#nvr-root'); if(!r) return;
+    const f=t.closest('[data-nvr-pf]'), to=t.closest('[data-nvr-pto]'); if(!f&&!to) return;
+    keep(r,f?'[data-nvr-pf]':'[data-nvr-pto]',()=>{ if(f) PF=String(t.value||''); else PTO=String(t.value||''); PER='cus'; repaint(); }); });
+  document.addEventListener('pointermove',ev=>{ const t=ev.target; if(t&&t.closest&&t.closest('#nvr-root [data-nvr-ch]')) tip(ev); },{passive:true}); }
+return {ptr, block, repaint, _:{rng, sums, view, set:(k,v)=>{ if(k==='PER') PER=v; if(k==='PF') PF=v; if(k==='PTO') PTO=v; if(k==='AF') Object.assign(AF,v); }, AF}};
 })();
 // the Install value page: 📈 ROI first, the Value Studio + the older views folded under "📊 More details" (a jump into one
 // of their sections from another tab opens it)
