@@ -16,6 +16,10 @@ with the most ad revenue in W (from C). Reads (USD; AD = totalAdRevenue, publish
 A record: accepted or the HTTP class, rows, the "(other)" / "(not set)" shares, GA4's flags, "tie" to its truth (C for
 UC / FCD; C restricted to TOP for UCT / UCTD; U for UC's ad units) and "keys": per country (device probe tie_by:
 overall, p10 / p90, keys off by > 2 %) with "w2" = the truth's share held by countries within 2 %.
+"ecpm": whether what GA4 KEEPS of a folded split still has the true eCPMs — UC summed over countries per ad unit ×
+group vs U, and summed over ad units per country × group vs C (groups: new / returning): per side, the impressions-
+weighted share of keys whose kept eCPM is within 2 / 5 / 10 % of the truth, and the median / p90 of |kept ÷ true − 1|
+(keys with ≥ ECPM_MIN impressions in the truth).
 
 PUBLIC LOG: counts only (per read kind: n, ok, refused, ties under 0.98, with "(other)"); stderr hidden by the workflow.
 """
@@ -44,6 +48,7 @@ NVR, CTY = "newVsReturning", "countryId"
 AD = ("totalAdRevenue", "publisherAdImpressions")
 UNIT = ("adFormat", "adUnitName")
 TIE_OK = 0.98
+ECPM_MIN = 10000                    # impressions a key needs in the truth for the eCPM check
 MAX_CALLS = 1200
 APP_CALLS = 40
 WORKERS = 4
@@ -85,6 +90,36 @@ def keys_tie(got, want, key):
         t["w2"] = pr._ratio(sum(v for k, v in w.items() if v > 0 and abs(g.get(k, 0) / v - 1) <= 0.02), tot)
         out[m] = t
     return out
+
+
+def _by2(rows, keys):
+    """rows → {(key values…, nvr): [revenue, impressions]}."""
+    out = {}
+    for r in rows or []:
+        k = tuple(str(r.get(x) or "") for x in keys) + (str(r.get(NVR) or ""),)
+        e = out.setdefault(k, [0.0, 0.0])
+        e[0] += dp._num(r.get(AD[0]))
+        e[1] += dp._num(r.get(AD[1]))
+    return out
+
+
+def ecpm_check(kept, true):
+    """{key: [rev, imps]} kept vs true → the impressions-weighted shares of keys within 2 / 5 / 10 % on eCPM, and the
+    median / p90 of |kept eCPM ÷ true eCPM − 1| (keys with ≥ ECPM_MIN true impressions and kept impressions)."""
+    devs = []
+    for k, (tr, ti) in true.items():
+        kr, ki = kept.get(k, (0.0, 0.0))
+        if ti < ECPM_MIN or ki <= 0 or tr <= 0:
+            continue
+        devs.append((abs((kr / ki) / (tr / ti) - 1), ti))
+    if not devs:
+        return {"keys": 0}
+    tot = sum(w for _, w in devs)
+    ds = sorted(d for d, _ in devs)
+    return {"keys": len(devs), "w2": pr._ratio(sum(w for d, w in devs if d <= 0.02), tot),
+            "w5": pr._ratio(sum(w for d, w in devs if d <= 0.05), tot),
+            "w10": pr._ratio(sum(w for d, w in devs if d <= 0.10), tot),
+            "med": round(ds[len(ds) // 2], 4), "p90": round(ds[min(len(ds) - 1, int(len(ds) * 0.9))], 4)}
 
 
 def probe_app(run, u, token, now, prop, opts):
@@ -132,6 +167,10 @@ def probe_app(run, u, token, now, prop, opts):
                 if rec.get("ok"):
                     rec["tie"] = {m: dp.tie(dp._tot(got[kind], m), dp._tot(ctop, m)) for m in AD}
                     rec["keys"] = pr._safely(keys_tie, got[kind], ctop, CTY, fallback=None)
+        if "UC" in got and "U" in got and "C" in got:
+            res["ecpm"] = pr._safely(lambda: {
+                "unit": ecpm_check(_by2(got["UC"], ("adUnitName",)), _by2(got["U"], ("adUnitName",))),
+                "country": ecpm_check(_by2(got["UC"], (CTY,)), _by2(got["C"], (CTY,)))}, fallback=None)
         rec = read("FCD", (NVR, "adFormat", CTY, "date"))
         if rec.get("ok") and "C" in got:
             rec["tie"] = {m: dp.tie(dp._tot(got["FCD"], m), dp._tot(got["C"], m)) for m in AD}

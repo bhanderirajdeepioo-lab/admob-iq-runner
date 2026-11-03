@@ -26,6 +26,8 @@ def test_reads_tie_whole_and_country_by_country(monkeypatch, capsys):
         assert all(abs(v - 1.0) < 1e-9 for v in r["tie"].values()), (k, r["tie"])
         assert all(t["w2"] == 1.0 and t["off2"] == 0 for t in r["keys"].values()), (k, r["keys"])
     assert a["reads"]["UC"]["ukeys"]["totalAdRevenue"]["keys"] == len(UNITS)
+    e = a["ecpm"]                                          # nothing folded: what GA4 keeps has the true eCPMs
+    assert e["unit"]["keys"] == len(UNITS) and e["unit"]["w2"] == 1.0 and e["country"]["med"] == 0
     lines = nc.public_lines(rep["counts"])
     out = capsys.readouterr().out + "\n".join(lines)
     for s in SECRETS + list(CC) + [u for _, u in UNITS]:
@@ -39,3 +41,11 @@ def test_top_countries_skip_the_unknown_rows():
             {"countryId": "(not set)", "totalAdRevenue": 40}, {"countryId": "XB", "totalAdRevenue": 7},
             {"countryId": "XC", "totalAdRevenue": 0}]
     assert nc.top_countries(rows, 5) == ["XB", "XA"]
+
+
+def test_ecpm_check_counts_only_big_keys_and_weights_by_impressions():
+    true = {("u1", "new"): [20.0, 10000.0], ("u2", "new"): [30.0, 30000.0], ("u3", "new"): [1.0, 500.0]}
+    kept = {("u1", "new"): [10.0, 5000.0], ("u2", "new"): [32.4, 30000.0], ("u3", "new"): [9.0, 100.0]}
+    c = nc.ecpm_check(kept, true)                          # u1 exact (half kept), u2 8 % off, u3 too small to count
+    assert c["keys"] == 2 and c["w2"] == 0.25 and c["w5"] == 0.25 and c["w10"] == 1.0 and c["med"] == 0.08
+
