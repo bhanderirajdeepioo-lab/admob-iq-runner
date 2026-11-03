@@ -6,9 +6,12 @@ country. Measured (ga4_nvr_probe, 2 Nov 2026, 28 days): accepted on all 28 apps,
 (revenue 1.00; the biggest app's ad-unit split 0.95 of the impressions).
 
 THREE reads a range [a, b], pinned to the app's Android stream (ga4.Ga4App), every row paged (USD):
-  u   date × newVsReturning × adFormat × adUnitName → totalAdRevenue, publisherAdImpressions
-  c   date × newVsReturning × countryId             → totalAdRevenue, publisherAdImpressions
+  u   date × newVsReturning × adFormat × adUnitName → totalAdRevenue, eventCount   (eventName == ad_impression)
+  c   date × newVsReturning × countryId             → totalAdRevenue, eventCount   (eventName == ad_impression)
   s   date × newVsReturning                         → sessions, activeUsers
+The impressions are the ad_impression EVENTS (eventCount): measured 3 Nov 2026 (ga4_nvrcc_probe), equal to
+publisherAdImpressions on the country read, but whole on the ad unit reads where publisherAdImpressions is not (the
+biggest app's ad unit read lost a part of its impressions — and its eCPMs read high).
 GA4's standard reports keep these aggregates for the property's whole life.
 
 Store, kept for good: data/ga4_nvr/<key>.json.gz (private repo)
@@ -37,9 +40,11 @@ from . import ga4_firstopen as gf
 from . import ga4_uninstall as gu
 
 DIR = "ga4_nvr"
-STORE_V = 1
+STORE_V = 2                         # 2: impressions = ad_impression events (3 Nov 2026) — a v1 store is read again
 NVR = "newVsReturning"
 AD = ("totalAdRevenue", "publisherAdImpressions")
+EVENT = "ad_impression"
+EV = ("totalAdRevenue", "eventCount")                # the ad reads: impressions = ad_impression events (EVENT)
 RECENT_DAYS = 5                     # today … 4 days back: refreshed every REFRESH_HOURS (older days are final in GA4)
 REFRESH_HOURS = 1.0
 CHUNK_DAYS = 90                     # one backfill read (3 calls): ≤ 90 days × 2 × ~230 countries of rows
@@ -78,9 +83,9 @@ def read(ga, a, b):
     of any read was sampled / thresholded)."""
     days = {(a + timedelta(days=i)).isoformat(): {"u": [], "c": [], "s": []} for i in range((b - a).days + 1)}
     mark = None
-    for part, dims, mets in (("u", (NVR, "adFormat", "adUnitName"), AD), ("c", (NVR, "countryId"), AD),
-                             ("s", (NVR,), ("sessions", "activeUsers"))):
-        rows = ga.report_all(body(a, b, dims, mets), page_rows=PAGE_ROWS)
+    for part, dims, mets, ev in (("u", (NVR, "adFormat", "adUnitName"), EV, EVENT), ("c", (NVR, "countryId"), EV, EVENT),
+                                 ("s", (NVR,), ("sessions", "activeUsers"), None)):
+        rows = ga.report_all(body(a, b, dims, mets), event=ev, page_rows=PAGE_ROWS)
         for r in rows:
             d = ga4._d(r.get("date"))
             if d is None or not (a <= d <= b):
@@ -88,11 +93,11 @@ def read(ga, a, b):
             k = _nvr(r.get(NVR))
             if part == "u":
                 rec = [k, str(r.get("adFormat") or ""), str(r.get("adUnitName") or ""), _r4(r.get("totalAdRevenue")),
-                       int(float(r.get("publisherAdImpressions") or 0))]
+                       int(float(r.get("eventCount") or 0))]
             elif part == "c":
                 cc = str(r.get("countryId") or "")
                 rec = [k, cc if len(cc) == 2 and cc.isalpha() else "--", _r4(r.get("totalAdRevenue")),
-                       int(float(r.get("publisherAdImpressions") or 0))]
+                       int(float(r.get("eventCount") or 0))]
             else:
                 rec = [k, int(float(r.get("sessions") or 0)), int(float(r.get("activeUsers") or 0))]
             days[d.isoformat()][part].append(rec)

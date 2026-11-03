@@ -16,6 +16,7 @@ NV = {"new": (2.0, 100, 10, 9), "returning": (3.0, 1000, 40, 30), "(not set)": (
 class FakeGA:
     def __init__(self, first=None, stop_after=None, sampled=False):
         self.calls, self.asked, self.first, self.stop_after, self.sampled = 0, [], first, stop_after, sampled
+        self.events = []                                    # each call's eventName filter
         self.last_metas, self.tok = [], 0
 
     def report_all(self, body, event=None, events=None, extra=None, page_rows=None):
@@ -23,6 +24,7 @@ class FakeGA:
             raise gf.Stop("calls")
         self.calls += 1
         self.asked.append(body)
+        self.events.append(event)
         dims = [x["name"] for x in body["dimensions"]]
         a = date.fromisoformat(body["dateRanges"][0]["startDate"])
         b = date.fromisoformat(body["dateRanges"][0]["endDate"])
@@ -33,10 +35,10 @@ class FakeGA:
                     base = {"date": d.strftime("%Y%m%d"), "newVsReturning": nv}
                     if "adUnitName" in dims:
                         for fm, un in UNITS:
-                            rows.append(dict(base, adFormat=fm, adUnitName=un, totalAdRevenue=rev / 2, publisherAdImpressions=imps // 2))
+                            rows.append(dict(base, adFormat=fm, adUnitName=un, totalAdRevenue=rev / 2, eventCount=imps // 2))
                     elif "countryId" in dims:
-                        rows.append(dict(base, countryId="XA", totalAdRevenue=rev * 0.6, publisherAdImpressions=int(imps * 0.6)))
-                        rows.append(dict(base, countryId="(not set)", totalAdRevenue=rev * 0.4, publisherAdImpressions=int(imps * 0.4)))
+                        rows.append(dict(base, countryId="XA", totalAdRevenue=rev * 0.6, eventCount=int(imps * 0.6)))
+                        rows.append(dict(base, countryId="(not set)", totalAdRevenue=rev * 0.4, eventCount=int(imps * 0.4)))
                     else:
                         rows.append(dict(base, sessions=ses, activeUsers=us))
             d += timedelta(days=1)
@@ -51,6 +53,9 @@ def test_three_reads_recent_then_history_newest_first():
     assert shapes == [["date", "newVsReturning", "adFormat", "adUnitName"], ["date", "newVsReturning", "countryId"],
                       ["date", "newVsReturning"]]
     assert [x["name"] for x in ga.asked[2]["metrics"]] == ["sessions", "activeUsers"] and ga.asked[0]["currencyCode"] == "USD"
+    # the ad reads count impressions as ad_impression events; sessions are every event's
+    assert [x["name"] for x in ga.asked[0]["metrics"]] == ["totalAdRevenue", "eventCount"]
+    assert ga.events[:3] == ["ad_impression", "ad_impression", None]
     ranges = [(x["dateRanges"][0]["startDate"], x["dateRanges"][0]["endDate"]) for x in ga.asked[::3]]
     assert ranges[0] == ("2026-10-29", "2026-11-02") and ranges[1] == ("2026-07-31", "2026-10-28")
     assert ranges[-1][0] == "2026-01-01" and store["backfill"] == {"oldest": "2026-01-01", "done": True}

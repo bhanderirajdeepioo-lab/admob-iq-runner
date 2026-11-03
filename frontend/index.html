@@ -9288,12 +9288,14 @@ function view(aid,d){ const [lo,hi]=rng(d), x=sums(d,lo,hi), t=x.t, nt=t[0]+t[2]
       units=sh.j.units.map((u,i)=>({key:String(i),label:E(u[0]),sub:u[1],v:r.u[i]||[0,0,0,0]})).filter(z=>z.v[1]||z.v[3]);
       const tr=r.truth[0]+r.truth[2], ti=r.truth[1]+r.truth[3], share=r.nMeas&&tr>0?(r.kept[0]+r.kept[2])/tr:null, shI=r.nMeas&&ti>0?(r.kept[1]+r.kept[3])/ti:null;
       const gap=(a,b,c,e)=>{ const p=EC(a,b), q=EC(c,e); return ok(p)&&ok(q)&&q>0?p/q-1:null; }, gn=gap(r.kept[0],r.kept[1],r.truth[0],r.truth[1]), gr=gap(r.kept[2],r.kept[3],r.truth[2],r.truth[3]);
-      // ✓ only when GA4 gave the country whole on BOTH revenue and impressions and the eCPMs agree (a share near 100 % with
-      // impressions missing would still be wrong eCPMs — measured 3 Nov 2026 on GA4's one-day reads of this split)
-      const off=v=>v!=null&&Math.abs(v-1)>=0.005, offG=v=>v!=null&&Math.abs(v)>0.02, bad=off(share)||off(shI)||offG(gn)||offG(gr);
+      // the tables are GA4's ad unit split (impressions as ad_impression events: whole, no "(other)"); GA4 spreads a country
+      // a little differently there than in its own country read (measured 3 Nov 2026) — said with the numbers, over the
+      // measured days: ✓ within 2 % on revenue, impressions and both eCPMs, else ⓘ with each
+      const off=v=>v!=null&&Math.abs(v-1)>0.02, offG=v=>v!=null&&Math.abs(v)>0.02, bad=off(share)||off(shI)||offG(gn)||offG(gr);
+      const P0=v=>v==null?'—':Math.round(v*100)+'%';
       if(r.nd&&r.miss>=r.nd) uNote=`<p class="roi-note">⏳ Is period ke din ka <b>${cn}</b> ka ad-unit data abhi aa raha hai — tab tak neeche ki tables khaali hain.</p>`;
-      else uNote=(bad?`<p class="roi-note">⚠️ Is period me GA4 ne <b>${cn}</b> ki <b>${share==null?'—':Math.round(share*100)+'%'}</b> ad kamai aur <b>${shI==null?'—':Math.round(shI*100)+'%'}</b> impressions hi ad unit ke saath diye — baaki GA4 ki apni country report se nahi milta (GA4 ki limit, bade app pe hoti hai). In tables ka eCPM ${cn} ke poore eCPM se: first session <b>${gn==null?'—':PCT(gn)}</b>, returning <b>${gr==null?'—':PCT(gr)}</b> <small>(pakke dino pe naapa)</small>.</p>`
-          :`<p class="roi-note">✓ Neeche Ad units / Ad formats ki tables sirf <b>${cn}</b> ki hain${share!=null?' — GA4 ne is country ka poora diya (pakke dino pe naapa)':''}.${share==null&&r.nd?' <small>(Haal ke din GA4 abhi badal raha hai — GA4 ne kitna diya, ye pakke dino pe hi naapa jaata hai.)</small>':''}</p>`)
+      else uNote=(bad?`<p class="roi-note">ⓘ Neeche ki tables sirf <b>${cn}</b> ki hain. GA4 ka ad-unit hisaab GA4 ki apni country report se thoda alag aata hai — is period me kamai <b>${P0(share)}</b>, impressions <b>${P0(shI)}</b>, eCPM first session <b>${gn==null?'—':PCT(gn)}</b> / returning <b>${gr==null?'—':PCT(gr)}</b> <small>(pakke dino pe naapa; GA4 country ko in dono reports me alag ginta hai)</small>.</p>`
+          :`<p class="roi-note">✓ Neeche Ad units / Ad formats ki tables sirf <b>${cn}</b> ki hain${share!=null?' — GA4 ki country report se milti hain (pakke dino pe naapa)':''}.${share==null&&r.nd?' <small>(Haal ke din GA4 abhi badal raha hai — milaan pakke dino pe hi hota hai.)</small>':''}</p>`)
         +(r.miss?`<p class="roi-note">⏳ Is period ke ${r.miss} din ka ${cn} ka ad-unit data abhi aa raha hai.</p>`:''); } }
   const fm={}; units.forEach(r=>{ const e=fm[r.sub]||(fm[r.sub]=[0,0,0,0]); for(let j=0;j<4;j++) e[j]+=r.v[j]; });
   const fmts=Object.keys(fm).map(k=>({key:k,label:E(k||'(not set)'),v:fm[k]}));

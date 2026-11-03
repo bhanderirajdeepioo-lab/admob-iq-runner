@@ -26,7 +26,7 @@ ROWS = [("new", "App open", "u_open", "XA", 1.0, 500), ("returning", "App open",
 
 class FakeGA:
     def __init__(self, fold=False, stop_after=None):
-        self.calls, self.asked, self.fold, self.stop_after = 0, [], fold, stop_after
+        self.calls, self.asked, self.fold, self.stop_after, self.events = 0, [], fold, stop_after, []
         self.last_metas, self.tok = [{}], 0
 
     def report_all(self, body, event=None, events=None, extra=None, page_rows=None):
@@ -34,25 +34,28 @@ class FakeGA:
             raise gf.Stop("calls")
         self.calls += 1
         self.asked.append(body)
+        self.events.append(event)
         assert [x["name"] for x in body["dimensions"]] == ["date", "newVsReturning", "adFormat", "adUnitName", "countryId"]
+        assert [x["name"] for x in body["metrics"]] == ["totalAdRevenue", "eventCount"]
         a = date.fromisoformat(body["dateRanges"][0]["startDate"])
         b = date.fromisoformat(body["dateRanges"][0]["endDate"])
         out, d = [], a
         while d <= b:
             for k, fm, un, cc, rv, im in ROWS:
                 out.append({"date": d.strftime("%Y%m%d"), "newVsReturning": k, "adFormat": fm, "adUnitName": un,
-                            "countryId": cc, "totalAdRevenue": rv, "publisherAdImpressions": im})
+                            "countryId": cc, "totalAdRevenue": rv, "eventCount": im})
             d += timedelta(days=1)
         if self.fold:
             out.append({"date": "(other)", "newVsReturning": "(other)", "adFormat": "(other)", "adUnitName": "(other)",
-                        "countryId": "(other)", "totalAdRevenue": 0.3, "publisherAdImpressions": 30})
+                        "countryId": "(other)", "totalAdRevenue": 0.3, "eventCount": 30})
         return out
 
 
 def test_one_read_shape_month_files_and_the_folded_row(tmp_path):
     data = str(tmp_path)
-    meta = {"v": gnc.STORE_V}
-    assert gnc.step_app(FakeGA(), meta, data, AID, TODAY, date(2026, 10, 1), NOW) == "fetched"
+    meta, ga0 = {"v": gnc.STORE_V}, FakeGA()
+    assert gnc.step_app(ga0, meta, data, AID, TODAY, date(2026, 10, 1), NOW) == "fetched"
+    assert set(ga0.events) == {"ad_impression"}                                   # impressions = ad_impression events
     days = gnc.load_days(data, AID, meta["months"])
     assert len(days) == 31 and meta["months"] == ["2026-10"] and meta["backfill"]["done"]
     assert days["2026-10-05"] == sorted([["n", "App open", "u_open", "XA", 1, 500], ["r", "App open", "u_open", "XA", 2, 2000],

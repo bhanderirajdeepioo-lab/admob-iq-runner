@@ -5,8 +5,12 @@ per day. Measured first (ga4_nvrcc_probe, 3 Nov 2026): whole on most apps; on th
 "(other)" row before any read (a country filter does not help) — kept as GA4 names it, and the page says, per country
 and period, how much GA4 gave against the country's own whole total (fetch.ga4_nvr's country read).
 
-ONE read shape: runReport [a, b] date × newVsReturning × adFormat × adUnitName × countryId → totalAdRevenue,
-publisherAdImpressions (USD), pinned to the app's Android stream (ga4.Ga4App), every row paged (nothing cut).
+ONE read shape: runReport [a, b] date × newVsReturning × adFormat × adUnitName × countryId → totalAdRevenue, eventCount
+(eventName == ad_impression: the impressions as events), pinned to the app's Android stream (ga4.Ga4App), every row
+paged (nothing cut). Measured 3 Nov 2026 (ga4_nvrcc_probe) on the biggest apps: with eventCount the split comes whole
+(no "(other)" row; revenue and impressions tie the country read over 1, 7 and 14 days), where publisherAdImpressions
+folded a large part or lost most impressions. GA4 spreads a country a little differently here than in its country read
+(the page shows how much, country by country).
 
 Store, kept for good, one file a month (a month GA4 no longer changes is written once and then left alone):
     data/ga4_nvr_uc/<key>.json.gz          {"v", "app_id", "package", "property_id", "stream_id", "time_zone",
@@ -41,9 +45,9 @@ from . import ga4_source as gs
 from . import ga4_uninstall as gu
 
 DIR = "ga4_nvr_uc"
-STORE_V = 2                         # 2: no day-by-day re-reads (3 Nov 2026) — a v1 store is read again from scratch
+STORE_V = 3                         # 3: impressions = ad_impression events (3 Nov 2026) — older stores are read again
 DIMS = ("date", gv.NVR, "adFormat", "adUnitName", "countryId")
-METS = gv.AD
+METS = gv.EV
 RECENT_DAYS = 5                     # today … 4 days back: refreshed every REFRESH_HOURS (older days are final in GA4)
 REFRESH_HOURS = 6.0
 CHUNK_DAYS = 14                     # one backfill call: ≤ 14 days × ad units × countries × 3 of rows
@@ -62,7 +66,7 @@ def read(ga, a, b):
     """[a, b] → ({YYYY-MM-DD: [[nvr, format, ad unit, country, revenue, impressions], …]} with [] for every day GA4 named
     nothing, folded): folded = a row with no real day (GA4's "(other)") in a read of more than one day — left out; the
     caller reads the range again day by day. In a one-day read such a row is that day's."""
-    rows = ga.report_all(body(a, b), page_rows=PAGE_ROWS)
+    rows = ga.report_all(body(a, b), event=gv.EVENT, page_rows=PAGE_ROWS)
     days, n, folded = {}, (b - a).days + 1, False
     for i in range(n):
         days[(a + timedelta(days=i)).isoformat()] = []
