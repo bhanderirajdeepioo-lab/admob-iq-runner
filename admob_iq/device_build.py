@@ -181,20 +181,24 @@ def status(e30, e90, r30, r90, curve):
     return ("Slow" if r * m >= 1 else "Loss"), on
 
 
-PERIODS = (("today", "Today"), ("yday", "Yesterday"), ("7", "7 days"), ("30", "30 days"), ("tm", "This month"),
-           ("lm", "Last month"), ("90", "90 days"))
+# the owner's standard picker (3 Nov 2026), in his order — Custom is not offered here: a period's model × country sums are
+# built per button (a free range would need every install day's model × country rows on the page)
+PERIODS = (("today", "Today"), ("yday", "Yesterday"), ("7", "7 days"), ("tm", "This month"), ("lm", "Last month"),
+           ("30", "30 days"), ("60", "60 days"), ("90", "90 days"), ("all", "All time"))
 ROW_MIN = {"today": 5, "yday": 5, "7": 20}          # installs for a model's own row in a period (else MIN_ROW)
 MAX_ROWS, MAX_ROWS_CC = 800, 150                    # rows a period's list keeps (the rest summed in "rest")
 
 
-def periods(today):
-    """{period: (first install day, last install day)} — 7 / 30 / 90 days end yesterday (whole days)."""
+def periods(today, first=None):
+    """{period: (first install day, last install day)} — 7 / 30 / 60 / 90 days end yesterday (whole days); All time = the
+    store's first install day (first; else 90 days back) … today."""
     m1 = today.replace(day=1)
     lm_end = m1 - timedelta(days=1)
     one = timedelta(days=1)
     return {"today": (today, today), "yday": (today - one, today - one), "7": (today - 7 * one, today - one),
-            "30": (today - 30 * one, today - one), "tm": (m1, today), "lm": (lm_end.replace(day=1), lm_end),
-            "90": (today - 90 * one, today - one)}
+            "30": (today - 30 * one, today - one), "60": (today - 60 * one, today - one), "tm": (m1, today),
+            "lm": (lm_end.replace(day=1), lm_end), "90": (today - 90 * one, today - one),
+            "all": (min(first, today) if first else today - 90 * one, today)}
 
 
 def _plist(acc, keep, min_row, cap, d1n):
@@ -256,7 +260,8 @@ def dev_block(store, cost, unk, kmon, curve):
     for age, (a, b) in win.items():
         acc, days, known = _window(store, age, a, b, cost, unk, kmon, with_d1=(age == 7))
         W[age] = (acc, days, known, bool(_xs(store, "D1", a, b)))
-    pr = periods(today)
+    xd = [gu._d(k) for k in (store.get("x") or {})]
+    pr = periods(today, min(xd) if xd else None)
     Pacc = {}
     for pid, (a, b) in pr.items():
         acc, days, known = _window(store, None, a, b, cost, unk, kmon, with_d1=True, rkind="S")

@@ -146,7 +146,11 @@ def test_dev_block_periods_rows_kpis_verdicts():
     store = _full_store()
     curve = {"90_180": 1.5, "90_365": 2.0, "30_180": 3.0, "30_365": 4.0}
     blk = dvb.dev_block(store, _cost(store), set(), lambda X: 1.0, curve)
-    assert blk["v"] == 2 and [p for p, _ in blk["periods"]] == ["today", "yday", "7", "30", "tm", "lm", "90"]
+    # the owner's standard picker (3 Nov 2026), in his order — no Custom here (sums per button)
+    assert blk["v"] == 2 and [p for p, _ in blk["periods"]] == ["today", "yday", "7", "tm", "lm", "30", "60", "90", "all"]
+    xd = sorted(store["x"])
+    assert blk["P"]["all"]["from"] == xd[0] and blk["P"]["all"]["to"] == TODAY.isoformat()      # All time: the store's first day
+    assert blk["P"]["60"]["from"] == (TODAY - timedelta(days=60)).isoformat() and blk["P"]["60"]["days"] <= 60
     p30 = blk["P"]["30"]
     assert p30["days"] == 30 and p30["from"] == (TODAY - timedelta(days=30)).isoformat()
     t = p30["tot"]
