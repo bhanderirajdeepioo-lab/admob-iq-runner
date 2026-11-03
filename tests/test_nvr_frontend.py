@@ -51,6 +51,12 @@ def test_periods_custom_and_currency(out):
     assert out["periods"] == {"today": "2 Nov 2026 · GA4", "yday": "1 Nov 2026 · GA4", "7": "25 Oct 2026 – 31 Oct 2026 · GA4",
                               "tm": "1 Nov 2026 – 2 Nov 2026 · GA4", "lm": "1 Oct 2026 – 31 Oct 2026 · GA4",
                               "all": "1 Sep 2026 – 2 Nov 2026 · GA4"}
+    assert out["periods_more"] == {"60": "2 Sep 2026 – 31 Oct 2026 · GA4", "90": "3 Aug 2026 – 31 Oct 2026 · GA4",
+                                   "from90": True}
+    # the owner's standard picker, in his order (3 Nov 2026)
+    assert out["chips"] == ["today:Today", "yday:Yesterday", "7:7 days", "tm:This month", "lm:Last month", "30:30 days",
+                            "60:60 days", "90:90 days", "all:All time", "cus:Custom"]
+    assert out["row_kept"] == 140                                                  # the chip row did not slide back
     assert out["all_miss"] and out["scroll"] == 0
     assert out["custom"] == ["11 Oct 2026 – 20 Oct 2026 · GA4", True, "$2.00"]
     assert out["inr"] == ["₹176", "30,000 impressions · ₹5,280"]

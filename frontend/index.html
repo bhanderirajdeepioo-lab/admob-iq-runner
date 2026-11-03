@@ -9162,7 +9162,9 @@ const NVR=(()=>{
 let PER='30', PF='', PTO='', WIRED=false, US={k:'rev',d:-1}, CS={k:'rev',d:-1}, UALL=false, CALL=false, CHP=[];   // CHP: the chart's days (its tooltip)
 let CC='';   // the picked country ('' = All countries; owner, 2 Nov 2026: "isme country ka option add karo … top 5 country revenue wise") — kept across apps and periods
 const AF={}, ABUSY={}, AERR={};
-const PERS=[['today','Today'],['yday','Yesterday'],['7','7 days'],['30','30 days'],['tm','This month'],['lm','Last month'],['all','All time'],['cus','Custom']];
+// the owner's standard picker (3 Nov 2026), in his order: Today · Yesterday · 7 days · This month · Last month · 30 · 60 ·
+// 90 days · All time · Custom
+const PERS=[['today','Today'],['yday','Yesterday'],['7','7 days'],['tm','This month'],['lm','Last month'],['30','30 days'],['60','60 days'],['90','90 days'],['all','All time'],['cus','Custom']];
 const E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ok=v=>v!=null&&isFinite(v);
 const DAY=864e5, t0=s=>Date.parse(s+'T00:00:00Z'), iso=t=>new Date(t).toISOString().slice(0,10), addD=(s,k)=>iso(t0(s)+k*DAY);
@@ -9181,12 +9183,14 @@ function ensure(aid,cb){ const a=apOf(aid); if(!a||ABUSY[a.file]||dataOf(aid)) r
   fetchGzJson(f+'?v='+encodeURIComponent(a.v||'')).then(j=>{ if(!j||j.v!==1||!Array.isArray(j.days)||!Array.isArray(j.units)) throw new Error('format');
       j._v=a.v; AF[f]=j; AERR[f]=false; })
     .catch(()=>{ AERR[f]=true; }).then(()=>{ ABUSY[f]=false; cb&&cb(); }); }
-// the period → [lo, hi] on the file's calendar: today = its final till + 2 (the property's today); 7 / 30 days = the last
-// 7 / 30 FINAL days (GA4 still adds to the newest 2); This month = its 1st … today; Last month = the whole month before;
-// All time = the file's first day … today; Custom = the picked from / to (swapped when reversed)
+// the period → [lo, hi] on the file's calendar: today = its final till + 2 (the property's today); 7 / 30 / 60 / 90 days =
+// the last 7 / 30 / 60 / 90 FINAL days (GA4 still adds to the newest 2; a file younger than that: "data … se" says where it
+// starts); This month = its 1st … today; Last month = the whole month before; All time = the file's first day … today;
+// Custom = the picked from / to (swapped when reversed)
 function rng(d){ const ft=d.final_till, T=addD(ft,2), m0=T.slice(0,8)+'01';
   if(PER==='today') return [T,T]; if(PER==='yday') return [addD(T,-1),addD(T,-1)];
   if(PER==='7') return [addD(ft,-6),ft]; if(PER==='30') return [addD(ft,-29),ft];
+  if(PER==='60') return [addD(ft,-59),ft]; if(PER==='90') return [addD(ft,-89),ft];
   if(PER==='tm') return [m0,T]; if(PER==='lm'){ const l=addD(m0,-1); return [l.slice(0,8)+'01',l]; }
   if(PER==='all') return [d.first_day,T];
   let f=PF||d.first_day, t=PTO||T; if(f>t) [f,t]=[t,f]; return [f,t]; }
@@ -9334,8 +9338,13 @@ function tip(ev){ const w=ev.target&&ev.target.closest&&ev.target.closest('[data
   const rl=sv.querySelector('.rule'); if(rl){ const xx=(44+(720-44-92)*(pts.length>1?i/(pts.length-1):0.5)).toFixed(1); rl.setAttribute('x1',xx); rl.setAttribute('x2',xx); rl.setAttribute('visibility','visible'); } }
 function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventListener) return; WIRED=true;
   let rz=0; if(typeof addEventListener==='function') addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(stick,150); });
-  const keep=(r,sel,fn)=>{ const b0=r.querySelector(sel), y0=b0&&b0.getBoundingClientRect?b0.getBoundingClientRect().top:null; fn();
-    const b=y0==null?null:r.querySelector(sel); if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } };   // the tapped control stays where it was
+  // the tapped control stays where it was — down the page, and inside its row when the row scrolls sideways (the period
+  // chips on a phone: a repaint draws the row at its left end again, and "90 days" / "All time" would slide out of sight)
+  const rowOf=b=>b&&b.closest?b.closest('.nvr-per'):null;
+  const keep=(r,sel,fn)=>{ const b0=r.querySelector(sel), y0=b0&&b0.getBoundingClientRect?b0.getBoundingClientRect().top:null,
+      row0=rowOf(b0), sx=row0?+row0.scrollLeft||0:0; fn();
+    const b=y0==null?null:r.querySelector(sel); if(b){ const row=rowOf(b); if(row&&sx) row.scrollLeft=sx;
+      const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } };
   document.addEventListener('click',ev=>{ const t=ev.target, r=t&&t.closest&&t.closest('#nvr-root'); if(!r) return; let b;
     if((b=t.closest('[data-nvr-per]'))){ const k=b.dataset.nvrPer; keep(r,`[data-nvr-per="${k}"]`,()=>{ PER=k; repaint(); }); return; }
     if((b=t.closest('[data-nvr-sort]'))){ const [kind,k]=String(b.dataset.nvrSort).split(':'), S=kind==='c'?CS:US;

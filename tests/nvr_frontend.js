@@ -12,8 +12,11 @@ const a = html.indexOf('const NVR=(()=>{'), b = html.indexOf('// the Install val
 if (a < 0 || b < 0 || b < a) { console.log(JSON.stringify({ errors: ['NVR module not found'] })); process.exit(0); }
 const src = html.slice(a, b) + '\nthis.NVR=NVR;';
 const out = {}, errors = [];
-const ROOT = { dataset: { aid: '' }, _html: '', get innerHTML() { return this._html; }, set innerHTML(v) { this._html = String(v); },
-  querySelector: () => ({ getBoundingClientRect: () => ({ top: 100 }) }) };
+// ROW: the period chips' row (it scrolls sideways on a phone); a repaint draws it at its left end again (scrollLeft 0)
+const ROW = { scrollLeft: 0 };
+const ROOT = { dataset: { aid: '' }, _html: '', get innerHTML() { return this._html; },
+  set innerHTML(v) { this._html = String(v); ROW.scrollLeft = 0; },
+  querySelector: () => ({ getBoundingClientRect: () => ({ top: 100 }), closest: s => (s === '.nvr-per' ? ROW : null) }) };
 const handlers = {};
 let CUR = 'USD', SCROLL = 0, FAIL = false, LOADS = 0;
 const iso = t => new Date(t).toISOString().slice(0, 10), DAY = 864e5, D0 = '2026-09-01';
@@ -84,6 +87,12 @@ const tbl = (title) => { const i = h().indexOf(`<h3>${title}</h3>`); return i < 
     const per = k => { tap('[data-nvr-per]', { nvrPer: k }); return (h().match(/<h3>👥 First session vs Returning · eCPM<\/h3><span class="roi-note">([^<]*)<\/span>/) || [])[1]; };
     out.periods = { today: per('today'), yday: per('yday'), '7': per('7'), tm: per('tm'), lm: per('lm'), all: per('all') };
     out.all_miss = h().includes('⏳ 1 din ka data abhi aa raha hai (purani history har build me thodi aur) · aakhri 2 din GA4 me abhi badal rahe hain (final nahi).');
+    // 60 / 90 days (the owner's standard picker, 3 Nov 2026): the last 60 / 90 final days; 90 reaches before the file's
+    // first day → the note says where the data starts
+    out.periods_more = { '60': per('60'), '90': per('90'), from90: h().includes('data 1 Sep 2026 se') };
+    out.chips = [...h().matchAll(/data-nvr-per="([^"]+)"[^>]*>([^<]*)</g)].map(m => m[1] + ':' + m[2]);
+    // a chip tapped far right in the scrolled row (a phone): the row keeps its sideways place, the chip stays in sight
+    ROW.scrollLeft = 140; per('90'); out.row_kept = ROW.scrollLeft;
     out.scroll = SCROLL;
     // Custom: from / to (reversed → swapped)
     change('[data-nvr-pf]', '2026-10-20'); change('[data-nvr-pto]', '2026-10-11');
