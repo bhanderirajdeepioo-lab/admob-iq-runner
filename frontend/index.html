@@ -2549,6 +2549,12 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 #src-root .src-cus input[type=date]{min-height:34px;padding:4px 8px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px;color-scheme:dark}
 @media (max-width:760px){#src-root .src-cus input[type=date]{font-size:16px}}
 #src-root .src-admx{color:var(--watch);font-weight:700;white-space:nowrap}
+#srcx-root .src-cus{display:flex;flex-wrap:wrap;gap:8px 14px;margin:0 0 10px;font-size:12px;color:var(--muted)}#srcx-root .src-cus label{display:inline-flex;align-items:center;gap:6px}
+#srcx-root .src-cus input[type=date]{min-height:34px;padding:4px 8px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px;color-scheme:dark}
+@media (max-width:760px){#srcx-root .src-cus input[type=date]{font-size:16px}}
+#srcx-root .src-xt td.roi-nm{white-space:nowrap}#srcx-root .src-xt td.roi-nm small{color:var(--muted);margin-left:4px}
+#srcx-root tr.roi-un td{color:var(--muted)}
+.roi-msw{margin:0 0 10px}
 #src-root .src-z td{color:var(--muted);font-size:12px;text-align:left;white-space:normal}
 .roi-t{min-width:640px;font-size:12.5px}
 .roi-t th{white-space:nowrap;text-align:right;padding:8px 10px;position:sticky;top:0;z-index:2;background:var(--panel2)}
@@ -7273,7 +7279,16 @@ function body(aid){
   if(!aid){ if(!ALL){ if(ALLERR) return wait('ROI data load nahi hua.',1); ensureAll(repaint); return wait('ROI load ho raha hai…'); } CCY=ALL.ccy||null; return allView(); }
   const a=appPtr(aid); if(!a) return `<div class="roi-card"><p class="roi-note">Is app ka ROI data abhi nahi (GA4 install-day data ya Google Ads spend chahiye).</p></div>`;
   const d=AF[a.file]; if(!d){ if(AERR[a.file]) return wait('Is app ka ROI data load nahi hua.',1); ensureApp(aid,repaint); return wait('ROI load ho raha hai…'); }
-  CCY=d.ccy||null; return VIEW==='cty'?ctyView(d):VIEW==='dev'?devView(d):VIEW==='life'?lifeView(d.life,d.life_till,d,coOf(d)):VIEW==='fc'?fcView(d):dayView(d); }
+  CCY=d.ccy||null; return VIEW==='cty'?xMode('cmode',CMODE,d,ctyView):VIEW==='dev'?xMode('dmode',DMODE,d,devView):VIEW==='life'?lifeView(d.life,d.life_till,d,coOf(d)):VIEW==='fc'?fcView(d):dayView(d); }
+// 🌍 Countries / 📱 Devices of one app with their 💰 Source view (owner, 3 Nov 2026: "Countries + Devices"): a switch on
+// top — 🎯 Decision = the tab as it was; 💰 Source = the period's GA4 revenue per country / phone by session channel group
+// (Paid / Notification / Organic / Other), drawn by the SRC module (its files, its period buttons)
+let CMODE='dec', DMODE='dec';
+function xMode(kind,cur,d,dec){
+  const sw=`<div class="roi-ctl roi-msw"><span class="roi-mini" role="group" aria-label="View">${[['dec','🎯 Decision'],['src','💰 Source']].map(([k,l])=>`<button type="button" data-roi-${kind}="${k}" aria-pressed="${cur===k}">${l}</button>`).join('')}</span></div>`;
+  if(cur!=='src') return sw+dec(d);
+  const S=typeof SRC!=='undefined'?SRC:null;
+  return sw+(S&&S.xCty&&d.app_id?(kind==='dmode'?S.xDev(d.app_id):S.xCty(d.app_id)):`<div class="roi-card"><p class="roi-note">💰 Source view abhi load nahi hua.</p></div>`); }
 // install days for the install-month P/L: [day, installs, spend USD, spend as billed, revenue so far USD] + month curves
 function coOf(d){ return {T:d.T, rows:(d.rows||[]).map(r=>[r[R.X],r[R.n],r[R.sp],r[R.spi],r[R.s]]), months:(d.months||[]).map(m=>[m[0],m[2],m[3],m[6]])}; }
 function coAll(A){ return {T:A.T, rows:(A.rows||[]).map(r=>[r[0],r[1],r[2],r[5],r[6]]), months:(A.months||[]).map(m=>[m[0],m[2],m[3],m[6]])}; }
@@ -8817,6 +8832,8 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     const keep=(el,fn)=>{ const y0=el.getBoundingClientRect().top; hold(r); fn(); const sel=el.getAttribute('data-roi-sel'); const b=sel?r.querySelector(sel):null; if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } unholdLater(r); };
     const K=cardOf(t), sc=K?'#'+K.id+' ':'';                                     // 🧪 the card tapped: the Benchmark (its state, only it painted) or the cohort card
     let b;
+    if((b=at('[data-roi-cmode]'))||(b=at('[data-roi-dmode]'))){ const c=b.hasAttribute('data-roi-cmode'), k=c?b.dataset.roiCmode:b.dataset.roiDmode;
+      b.setAttribute('data-roi-sel',`[data-roi-${c?'cmode':'dmode'}="${k}"]`); keep(b,()=>{ if(c) CMODE=k; else DMODE=k; repaint(); }); return; }
     if((b=at('[data-roi-view]'))){ b.setAttribute('data-roi-sel',`[data-roi-view="${b.dataset.roiView}"]`); keep(b,()=>{ VIEW=b.dataset.roiView; r.querySelectorAll('[data-roi-view]').forEach(x=>x.setAttribute('aria-selected',String(x.dataset.roiView===VIEW))); repaint(); }); return; }
     if((b=at('[data-roi-grain]'))){ b.setAttribute('data-roi-sel',`${sc}[data-roi-grain="${b.dataset.roiGrain}"]`); keep(b,()=>{ setK(K,{grain:b.dataset.roiGrain,show:60}); paint(K); }); return; }
     if((b=at('[data-roi-met]'))){ b.setAttribute('data-roi-sel',`${sc}[data-roi-met="${b.dataset.roiMet}"]`); const w=metBox(b), p=w?boxAt(w):null, n=K?benchRows(benchEl(),p):0;
@@ -8863,7 +8880,7 @@ function cardLine(aid){ const a=appPtr(aid); if(!a||a.r7==null&&a.pb==null&&!a.n
   if(a.pb!=null) parts.push(`paisa wapas ${PBT(a.pb)}`); else if(a.nb) parts.push(`${a.nb[0]} din me sirf ${P(a.nb[1])} wapas`);
   if(ok(lp)) parts.push(`lifetime <b class="${lp>=0?'roi-up':'roi-dn'}">${MC(lp,true)}</b>`);
   return {st:ST_KEY[a.st]||'lagu', line:'📈 '+parts.join(' · ')}; }
-return {ptr, appPtr, block, repaint, cardLine, _:{devView, dvSet:(cc,k,dir,per)=>{ DVCC=cc||''; if(k) DVSORT={k,dir:dir||1}; if(per) DVPER=per; }, setView:v=>{ VIEW=v; }, cols, cum, groupRows, agg, cell, beGrp, beDay, beTd, cohortTable, beAvg, lateNote, zx, ccSrc, ccPick, cohCard, benchCard, lzNext, BN, LZ_STEP, st:()=>({GRAIN,MET,SHOW,CTY}), ccNote, ccQ, cdOf, keepAt, PK, CR, PKL, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, ctyView, ctyOld, cpSum, cpRow, cpTot, cpJudge, cpNow, cpUnp, CPK, cpSet:(per,f,t,all)=>{ CPER=per; CPF=f||''; CPTO=t||''; CALL=!!all; CPC={k:'',v:null}; }, dayView, allView, hero, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
+return {ptr, appPtr, block, repaint, cardLine, _:{devView, dvSet:(cc,k,dir,per)=>{ DVCC=cc||''; if(k) DVSORT={k,dir:dir||1}; if(per) DVPER=per; }, setView:v=>{ VIEW=v; }, cols, cum, groupRows, agg, cell, beGrp, beDay, beTd, cohortTable, beAvg, lateNote, zx, ccSrc, ccPick, cohCard, benchCard, lzNext, BN, LZ_STEP, st:()=>({GRAIN,MET,SHOW,CTY}), ccNote, ccQ, cdOf, keepAt, PK, CR, PKL, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, ctyView, ctyOld, cpSum, cpRow, cpTot, cpJudge, cpNow, cpUnp, CPK, cpSet:(per,f,t,all)=>{ CPER=per; CPF=f||''; CPTO=t||''; CALL=!!all; CPC={k:'',v:null}; }, dayView, allView, hero, xMode, setMode:(c,dv)=>{ if(c) CMODE=c; if(dv) DMODE=dv; }, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; }, data:()=>({ALL,AF})}};
 })();
 // ---- 💰 Revenue by source — a section of the 💸 Install value tab (owner, 31 Oct 2026: notification revenue = GA4 Traffic
 // acquisition → Session primary channel group "Mobile Push Notifications", exactly as his GA4 screen; Paid = Cross-network +
@@ -9005,17 +9022,107 @@ function chCard(a,i0,i1){ const d=chOf(a), hd=`<div class="roi-ct"><h3>GA4 chann
   const rows=ch.map((c,i)=>({c,ses:S[i][0],rev:S[i][1],g:grp(c)})).filter(o=>o.ses||o.rev).sort((p,q)=>q.rev-p.rev||q.ses-p.ses)
     .map(o=>`<tr><td class="roi-nm">${E(o.c)}</td><td style="text-align:left"><span class="src-dot ${G[o.g][1]}"></span>${G[o.g][0]}</td><td>${N(o.ses)}<small> ${P(o.ses,ts)}</small></td><td>${MV(o.rev)}<small> ${P(o.rev,tr)}</small></td></tr>`).join('');
   return `<div class="roi-card">${hd}<div class="roi-tw"><table class="roi-t"><thead><tr><th>Channel</th><th style="text-align:left">Group</th><th>Sessions</th><th>Total revenue</th></tr></thead><tbody><tr class="src-tot"><td class="roi-nm"><b>Total</b></td><td></td><td><b>${N(ts)}</b></td><td><b>${MV(tr)}</b></td></tr>${rows}</tbody></table></div></div>`; }
+// ---- 💰 Source inside 🌍 Countries / 📱 Devices (the ROI tab's switch → xCty / xDev): one app's GA4 revenue per country
+// (source_cc_<key>: the period sums; source_ccd_<key>: the days, for Custom only) or per phone (source_dv_<key>: whole
+// windows — GA4 folds much of a short window's phones into "(other)") by the four groups; under #srcx-root
+let XPER='30', XPF='', XPTO='', XCALL=false, XWIN='30', XDALL=false;
+const XF={}, XBUSY={}, XERR={}, XTOP=25;
+const XWINS=[['30','30 days'],['lm','Last month'],['90','90 days'],['all','All time']];
+function xGet(file,v){ if(!file) return null; const j=XF[file]; if(j&&j._v===v) return j; if(XBUSY[file]||XERR[file]) return null; XBUSY[file]=true;
+  fetchGzJson(file+'?v='+encodeURIComponent(v||'')).then(x=>{ if(!x||x.v!==1) throw new Error('format'); x._v=v; XF[file]=x; XERR[file]=false; })
+    .catch(()=>{ XERR[file]=true; }).then(()=>{ XBUSY[file]=false; xRepaint(); }); return null; }
+const xMsg=(t,retry)=>`<p class="roi-note">${retry?'⚠️ ':'⏳ '}${t}${retry?' <button type="button" class="roi-lnk" data-srcx-retry="1">Try again</button>':''}</p>`;
+function xHead(t,sub){ return `<div class="roi-ct"><h3>${t}</h3><span class="roi-note">${sub||''}</span></div>`; }
+function cusX(mn,mx){ let f=XPF||mn, t=XPTO||mx; if(f>t) [f,t]=[t,f]; return [f,t]; }
+// the days file's sums over [lo, hi] → {c: {country: [the five]}, miss: days of it not read yet}
+function xSumDays(D,lo,hi){ const at=s=>Math.round((t0(s)-t0(D.d0))/DAY), i0=at(lo), i1=at(hi), c={};
+  for(const cc in D.c){ const t=[0,0,0,0,0]; let any=false; for(const r of D.c[cc]){ if(r[0]<i0||r[0]>i1) continue; any=true; for(let j=0;j<5;j++) t[j]+=+r[j+1]||0; } if(any) c[cc]=t; }
+  let rd=0; for(const [a,b] of D.rd||[]) rd+=Math.max(0,Math.min(b,i1)-Math.max(a,i0)+1);
+  return {c, miss:Math.max(0,i1-i0+1-rd)}; }
+// rows → the table: All first, named biggest first (top XTOP unless all), GA4's unknown rows last
+function xTable(rows,lab,unk,all,allAttr){ const T=[0,0,0,0], tt=()=>T[0]+T[1]+T[2]+T[3]; let ses=0;
+  rows.forEach(o=>{ for(let g=0;g<4;g++) T[g]+=o.s[g]; ses+=o.ses; });
+  const named=rows.filter(o=>!unk(o.k)).sort((p,q)=>q.t-p.t||q.ses-p.ses||(p.k<q.k?-1:1)), un=rows.filter(o=>unk(o.k)).sort((p,q)=>q.t-p.t);
+  const show=all?named:named.slice(0,XTOP), tot=tt();
+  const tr=(o,cls)=>`<tr${cls?` class="${cls}"`:''}><td class="roi-nm">${lab(o)}</td>${tcell(o.t)}${o.s.map(v=>cell(v,o.t)).join('')}</tr>`;
+  return {T, tot, ses, oth:un.reduce((p,o)=>p+o.t,0), n:named.length,
+    html:bar(T,tot)+`<div class="roi-tw"><table class="roi-t src-xt"><thead><tr><th></th><th>Total</th>${G.map(g=>`<th>${g[0]}</th>`).join('')}</tr></thead><tbody>`
+      +`<tr class="src-tot"><td class="roi-nm"><b>${allAttr}</b></td>${tcell(tot)}${T.map(v=>cell(v,tot,1)).join('')}</tr>`
+      +show.map(o=>tr(o)).join('')+un.map(o=>tr(o,'roi-un')).join('')+`</tbody></table></div>`
+      +(named.length>XTOP?`<p class="roi-note"><button type="button" class="roi-lnk" data-srcx-all="1">${all?`Sirf top ${XTOP} dikhao`:`Sab ${named.length} dikhao`}</button></p>`:'')}; }
+const xRows=c=>Object.keys(c||{}).map(k=>{ const v=c[k]; const s=[+v[0]||0,+v[1]||0,+v[2]||0,+v[3]||0]; return {k, s, t:s[0]+s[1]+s[2]+s[3], ses:+v[4]||0}; }).filter(o=>o.t>0||o.ses>0);
+const X_OFF='<p class="roi-note">💰 Source data abhi nahi bana (is build me Revenue by source band hai ya bana nahi).</p>';
+function xCtyIn(aid){
+  if(!ptr()) return X_OFF; ensureAll(repaint);
+  if(!ALL){ if(ALLERR) return xMsg('Source data load nahi hua.',1); return xMsg('Source data load ho raha hai…'); }
+  const a=appOf(aid), cc=a&&a.cc, hd=xHead('💰 Revenue by source · countries', '');
+  if(!cc) return hd+`<p class="roi-note">💰 Is app ka country-wise source data abhi aa raha hai — GA4 se har build me thoda thoda (pehli baar kuch ghante lagenge).</p>`;
+  const PZ=xGet(cc.file,cc.v); if(!PZ) return hd+(XERR[cc.file]?xMsg('Countries ka source data load nahi hua.',1):xMsg('Countries ka source data load ho raha hai…'));
+  const ctl=chipsX(PZ.d0,PZ.today);
+  let c, lo, hi, miss;
+  if(XPER==='cus'){ const D=xGet(cc.days,cc.dv); if(!D) return hd+ctl+(XERR[cc.days]?xMsg('Custom ke din load nahi hue.',1):xMsg('Custom ke liye har din ka data load ho raha hai…'));
+    [lo,hi]=cusX(PZ.d0,PZ.today); if(lo<PZ.d0) lo=PZ.d0; if(hi>PZ.today) hi=PZ.today;   // only the app's own days
+    if(lo>hi) return hd+ctl+`<p class="roi-note">Is period me data nahi.</p>`;
+    const r=xSumDays(D,lo,hi); c=r.c; miss=r.miss; }
+  else { const x=(PZ.P||{})[XPER]; if(!x) return hd+ctl+`<p class="roi-note">Is period me data nahi.</p>`; c=x.c; lo=x.lo; hi=x.hi; miss=x.miss; }
+  const unk=k=>k==='(other)'||k==='--';
+  const lab=o=>o.k==='(other)'?'🌐 GA4 ne country nahi batayi':o.k==='--'?'❔ Country pata nahi':`${typeof valFlag==='function'?valFlag(o.k):''} ${E(typeof valCtyName==='function'?valCtyName(o.k):o.k)}`;
+  const tb=xTable(xRows(c),lab,unk,XCALL,'🌍 All countries');
+  const sub=lo===hi?fdy(lo):fdy(lo)+' – '+fdy(hi);
+  return xHead('💰 Revenue by source · countries',sub)+ctl
+    +(tb.tot>0?tb.html:`<p class="roi-note">Is period me revenue nahi.</p>`)
+    +(tb.tot>0&&tb.oth/tb.tot>=0.005?`<p class="roi-note">⚠️ Is period ki <b>${P(tb.oth,tb.tot)}</b> kamai GA4 ne "(other)" / bina country ke di — wo upar ki countries me nahi, apni alag row me hai (GA4 ki limit; bade app pe hoti hai).</p>`:'')
+    +(miss?`<p class="roi-note">⏳ Is period ke ${miss} din ka data abhi aa raha hai.</p>`:'')
+    +(cc.bf?'':`<p class="roi-note">⏳ Purani history abhi aa rahi hai — har build me thodi aur.</p>`)
+    +(XPER==='today'||XPER==='yday'?FRESH:'')
+    +`<p class="roi-note">Har country me <b>us period me hui</b> GA4 kamai (Total revenue), session ke channel ke hisaab se — Revenue by source jaisa. 🎯 Decision wale table me us period ke <i>installs</i> ki kamai thi; ye usse alag hai.</p>`; }
+function xDevIn(aid){
+  if(!ptr()) return X_OFF; ensureAll(repaint);
+  if(!ALL){ if(ALLERR) return xMsg('Source data load nahi hua.',1); return xMsg('Source data load ho raha hai…'); }
+  const a=appOf(aid), dv=a&&a.dv, hd=xHead('💰 Revenue by source · phones','');
+  if(!dv) return hd+`<p class="roi-note">💰 Is app ka phone-wise source data abhi aa raha hai — GA4 se har build me (pehli baar kuch ghante lagenge).</p>`;
+  const D=xGet(dv.file,dv.v); if(!D) return hd+(XERR[dv.file]?xMsg('Phones ka source data load nahi hua.',1):xMsg('Phones ka source data load ho raha hai…'));
+  if(!(D.w||{})[XWIN]) XWIN=(XWINS.find(([k])=>(D.w||{})[k])||['30'])[0];
+  const w=(D.w||{})[XWIN];
+  const ctl=`<div class="roi-ctl"><span class="roi-mini" role="group" aria-label="Period">${XWINS.filter(([k])=>(D.w||{})[k]).map(([k,l])=>`<button type="button" data-srcx-win="${k}" aria-pressed="${XWIN===k}">${l}</button>`).join('')}</span></div>`;
+  if(!w) return hd+`<p class="roi-note">Abhi koi period nahi.</p>`;
+  const nm=m=>{ const n=(D.names||{})[m]||[], b=n[0]&&n[0]!=='(not set)'?n[0]:'', k=n[1]&&n[1]!=='(not set)'?n[1]:''; return b&&k?b+' '+k:b?b+' '+m:k||m; };
+  const unk=k=>k==='(other)'||k==='(not set)';
+  const lab=o=>o.k==='(other)'?'📱 GA4 ne phone nahi bataya':o.k==='(not set)'?'❔ Phone pata nahi':`${E(nm(o.k))}${nm(o.k)!==o.k?` <small>${E(o.k)}</small>`:''}`;
+  const c={}; (w.rows||[]).forEach(r=>{ c[r[0]]=r.slice(1); });
+  const tb=xTable(xRows(c),lab,unk,XDALL,'📱 All phones');
+  return xHead('💰 Revenue by source · phones',w.lo===w.hi?fdy(w.lo):fdy(w.lo)+' – '+fdy(w.hi))+ctl
+    +(tb.tot>0?tb.html:`<p class="roi-note">Is period me revenue nahi.</p>`)
+    +(tb.tot>0&&tb.oth/tb.tot>=0.005?`<p class="roi-note">⚠️ Is period ki <b>${P(tb.oth,tb.tot)}</b> kamai GA4 ne "(other)" / bina phone ke di — wo upar ke phones me nahi, apni alag row me hai (GA4 ki limit; bade app pe hoti hai).</p>`:'')
+    +`<p class="roi-note">Har phone ki <b>us period me hui</b> GA4 kamai (Total revenue), session ke channel ke hisaab se. Sirf 30 din / pichhla mahina / 90 din / All time: chhote period (Today, 7 din, Custom) pe GA4 bade app ke phones ka bada hissa "(other)" me daal deta hai, isliye wo yahan nahi.</p>`; }
+function chipsX(mn,mx){ const [f,t]=cusX(mn,mx);
+  return `<div class="roi-ctl"><span class="roi-mini" role="group" aria-label="Period">${PERS.map(([k,l])=>`<button type="button" data-srcx-per="${k}" aria-pressed="${XPER===k}">${l}</button>`).join('')}</span></div>`
+    +(XPER==='cus'?`<div class="src-cus"><label>From <input type="date" data-srcx-pf="1" value="${E(f)}" min="${E(mn)}" max="${E(mx)}"></label><label>To <input type="date" data-srcx-pto="1" value="${E(t)}" min="${E(mn)}" max="${E(mx)}"></label></div>`:''); }
+function xCty(aid){ wire(); return `<div class="roi-card" id="srcx-root" data-kind="cty" data-aid="${E(aid||'')}">${xCtyIn(aid)}</div>`; }
+function xDev(aid){ wire(); return `<div class="roi-card" id="srcx-root" data-kind="dev" data-aid="${E(aid||'')}">${xDevIn(aid)}</div>`; }
+function xRoot(){ return (typeof document!=='undefined'&&document.getElementById)?document.getElementById('srcx-root'):null; }
+function xRepaint(){ const r=xRoot(); if(r) r.innerHTML=(r.dataset.kind==='dev'?xDevIn:xCtyIn)(r.dataset.aid); }
 // ---- the block, its paint and its taps ----
 function inner(aid){
-  if(!ALL){ if(ALLERR) return wait('Revenue by source load nahi hua.',1); ensureAll(repaint); return wait('Revenue by source load ho raha hai…'); }
+  ensureAll(repaint);                                   // a new build's source.json.gz (it checks the version itself)
+  if(!ALL){ if(ALLERR) return wait('Revenue by source load nahi hua.',1); return wait('Revenue by source load ho raha hai…'); }
   if(!aid) return allView();
   const a=appOf(aid); if(!a) return `<div class="roi-card">${head('')}<p class="roi-note">Is app ka GA4 source data abhi nahi aaya.</p></div>`;
   return appView(a); }
 function block(aid){ if(!ptr()) return ''; wire();
   return `<section class="roi src" id="src-root" data-aid="${E(aid||'')}" aria-label="Revenue by source">${inner(aid)}</section>`; }
 function root(){ return (typeof document!=='undefined'&&document.getElementById)?document.getElementById('src-root'):null; }
-function repaint(){ const r=root(); if(r) r.innerHTML=inner(r.dataset.aid); }
+function repaint(){ const r=root(); if(r) r.innerHTML=inner(r.dataset.aid); xRepaint(); }
 function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventListener) return; WIRED=true;
+  const keepX=(r,el,sel,fn)=>{ const y0=el.getBoundingClientRect().top; fn(); const b=r.querySelector(sel); if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } };   // the tapped control stays where it was
+  document.addEventListener('click',ev=>{ const t=ev.target, r=t&&t.closest&&t.closest('#srcx-root'); if(!r) return; let b;
+    if((b=t.closest('[data-srcx-per]'))){ const k=b.dataset.srcxPer; keepX(r,b,`[data-srcx-per="${k}"]`,()=>{ XPER=k; xRepaint(); }); return; }
+    if((b=t.closest('[data-srcx-win]'))){ const k=b.dataset.srcxWin; keepX(r,b,`[data-srcx-win="${k}"]`,()=>{ XWIN=k; xRepaint(); }); return; }
+    if((b=t.closest('[data-srcx-all]'))){ keepX(r,b,'[data-srcx-all]',()=>{ if(r.dataset.kind==='dev') XDALL=!XDALL; else XCALL=!XCALL; xRepaint(); }); return; }
+    if((b=t.closest('[data-srcx-retry]'))){ ALLERR=false; Object.keys(XERR).forEach(k=>XERR[k]=false); xRepaint(); return; } });
+  document.addEventListener('change',ev=>{ const t=ev.target, r=t&&t.closest&&t.closest('#srcx-root'); if(!r) return;
+    const f=t.closest('[data-srcx-pf]'), to=t.closest('[data-srcx-pto]'); if(!f&&!to) return;
+    keepX(r,t,f?'[data-srcx-pf]':'[data-srcx-pto]',()=>{ if(f) XPF=String(t.value||''); else XPTO=String(t.value||''); XPER='cus'; xRepaint(); }); });
   document.addEventListener('click',ev=>{ const t=ev.target, r=t&&t.closest&&t.closest('#src-root'); if(!r) return;
     const keep=(el,sel,fn)=>{ const y0=el.getBoundingClientRect().top; fn(); const b=r.querySelector(sel); if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } };   // the tapped control stays where it was
     let b;
@@ -9028,7 +9135,7 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     const sel=f?'[data-src-pf]':'[data-src-pto]', y0=t.getBoundingClientRect().top;
     if(f) PF=String(t.value||''); else PTO=String(t.value||''); PER='cus'; repaint();
     const b=r.querySelector(sel); if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } }); }
-return {ptr, block, repaint, _:{rng, sum, monthRows, allView, appView, admChk, admOff, set:(k,v)=>{ if(k==='PER') PER=v; if(k==='PF') PF=v; if(k==='PTO') PTO=v; if(k==='ALL'){ ALL=v; ALLV=(ptr()||{}).v||''; } if(k==='AF') Object.assign(AF,v); }}};
+return {ptr, block, repaint, xCty, xDev, _:{rng, sum, monthRows, allView, appView, admChk, admOff, xSumDays, xCtyIn, xDevIn, xset:(k,v)=>{ if(k==='XPER') XPER=v; if(k==='XPF') XPF=v; if(k==='XPTO') XPTO=v; if(k==='XWIN') XWIN=v; if(k==='XCALL') XCALL=v; }, set:(k,v)=>{ if(k==='PER') PER=v; if(k==='PF') PF=v; if(k==='PTO') PTO=v; if(k==='ALL'){ ALL=v; ALLV=(ptr()||{}).v||''; } if(k==='AF') Object.assign(AF,v); }}};
 })();
 // ---- 📈 eCPM · first session vs returning — a section of the eCPM tab's app page (owner, 2 Nov 2026: "user ke first
 // session ka ecpm and second session ka ecpm dono ka difference chahiye taki pata chale ki first session me new user me ecpm

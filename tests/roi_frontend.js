@@ -944,6 +944,12 @@ async function benchReload(VW, file, packs) {
       U.CPK['roi_aaaaaaaaaaaa_cp.json.gz?cpv000000000'] = { stale: true };
       U.cpSet('all', '', '', false);
       out.cp_stale = U.ctyView(dB).includes('Naya data');
+      // 🌍 / 📱 the 🎯 Decision | 💰 Source switch: Decision = the tab as it was; Source = the SRC module's view of the app
+      const dec = U.xMode('cmode', 'dec', { app_id: 'X1' }, () => '<p>DEC</p>');
+      const sc = U.xMode('cmode', 'src', { app_id: 'X1' }, () => '<p>DEC</p>'), sd = U.xMode('dmode', 'src', { app_id: 'X1' }, () => '<p>DEC</p>');
+      out.xmode = { dec: dec.includes('data-roi-cmode="dec" aria-pressed="true"') && dec.includes('data-roi-cmode="src" aria-pressed="false"') && dec.includes('<p>DEC</p>'),
+        cty: sc.includes('id="srcx-root" data-kind="cty" data-aid="X1"') && !sc.includes('<p>DEC</p>') && sc.includes('data-roi-cmode="src" aria-pressed="true"'),
+        dev: sd.includes('id="srcx-root" data-kind="dev" data-aid="X1"') && sd.includes('data-roi-dmode="src" aria-pressed="true"') };
       ctx.fetchGzJson = () => Promise.reject(new Error('no file in this test'));
       U.set('VIEW', 'day');
     }

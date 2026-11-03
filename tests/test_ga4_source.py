@@ -130,7 +130,7 @@ def test_run_writes_files_pointer_and_removes_stale(tmp_path):
     assert j["groups"][1][2] == ["Mobile Push Notifications"] and j["groups"][3][2] == ["(other)", "Unassigned"]
     assert (out / p["apps"][AID]["file"]).exists()
     line = sb.pop_line()
-    assert line.startswith("source: apps 1, days 61, history done 1, channels 7, admob 0, kb ") and AID not in line
+    assert line.startswith("source: apps 1, days 61, history done 1, channels 7, admob 0, by country 0, by phone 0, kb ") and AID not in line
     assert "adm" not in j["apps"][0]                          # no 📈 ROI file: no AdMob months
     # no store: no files, no pointer
     dash2 = {}
@@ -156,7 +156,7 @@ def test_admob_months_from_the_roi_file(tmp_path):
     with gzip.open(out / "source.json.gz", "rt", encoding="utf-8") as f:
         j = json.load(f)
     assert j["apps"][0]["adm"] == [["2026-09", 45], ["2026-10", 62]]
-    assert ", admob 1, kb " in sb.pop_line()
+    assert ", admob 1, by country 0, by phone 0, kb " in sb.pop_line()
     (out / roi).unlink()
     assert sb.run(dash, str(data), str(out), {}, NOW) == ["/source*"]
     with gzip.open(out / "source.json.gz", "rt", encoding="utf-8") as f:

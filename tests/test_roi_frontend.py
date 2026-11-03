@@ -137,6 +137,11 @@ def test_countries_life_all(out):
     assert out["card"] == "📈 D7 ROAS <b>40%</b> (usual 50%) · paisa wapas ~12 days"   # ROI's own numbers replace the card's
 
 
+def test_countries_and_devices_source_switch(out):
+    """🌍 / 📱 (owner, 3 Nov 2026: "Countries + Devices"): 🎯 Decision is the tab as it was, 💰 Source the SRC module's view."""
+    assert out["xmode"] == {"dec": True, "cty": True, "dev": True}
+
+
 def test_countries_period_board(out):
     """🌍 the period board (owner, 2 Nov 2026): every button's own measured numbers, All time by default, Custom summed on
     the page from the days file (= the build's sums), the engine's keep / cut at today's cost on top."""

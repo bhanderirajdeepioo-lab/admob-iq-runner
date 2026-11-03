@@ -284,6 +284,24 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                       file=sys.stderr)
         except Exception as e:
             print("ga4 source skipped: %s" % type(e).__name__, file=sys.stderr)
+    if s.get("ga4_source_cty"):                         # 💰 Revenue by source × country (GA4_SOURCE_CTY): the session
+        try:                                            # channel per app per day per country — own store, a failure
+            from .fetch import ga4_source_cty as gsc    # costs that step only
+            with _sc.stage("ga4_source_cty"):
+                print(gsc.log_line(gsc.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                                   budget=s.get("ga4_source_cty_budget_sec") or gsc.BUDGET_SEC)),
+                      file=sys.stderr)
+        except Exception as e:
+            print("ga4 source by country skipped: %s" % type(e).__name__, file=sys.stderr)
+    if s.get("ga4_source_dev"):                         # 💰 Revenue by source × phone model (GA4_SOURCE_DEV): the session
+        try:                                            # channel per model over whole windows — own store, a failure
+            from .fetch import ga4_source_dev as gsd    # costs that step only
+            with _sc.stage("ga4_source_dev"):
+                print(gsd.log_line(gsd.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                                   budget=s.get("ga4_source_dev_budget_sec") or gsd.BUDGET_SEC)),
+                      file=sys.stderr)
+        except Exception as e:
+            print("ga4 source by phone skipped: %s" % type(e).__name__, file=sys.stderr)
     if s.get("ga4_newusers"):                           # 🆕 First open (GA4_NEWUSERS): first opens by country × day,
         try:                                            # every user and Google Ads users — own store, a failure costs
             from .fetch import ga4_newusers as gnu      # that step only

@@ -138,6 +138,15 @@ def settings() -> dict:
         # GA4_SOURCE_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
         "ga4_source": _env("GA4_SOURCE", "false").lower() == "true",
         "ga4_source_budget_sec": _int_env(("GA4_SOURCE_BUDGET_SEC",), 0),
+        # 💰 Revenue by source × country / × phone model (the 🌍 Countries and 📱 Devices tabs' Source view):
+        # fetch.ga4_source_cty (date × country × channel, one file a month, the last 5 days every 3 hours, the history
+        # newest first) and fetch.ga4_source_dev (model × channel over whole windows: 30 days, last month, 90 days, all
+        # time). Off: nothing of it is read, written or printed; *_BUDGET_SEC = its own seconds per build (unset: 0 →
+        # the module's BUDGET_SEC)
+        "ga4_source_cty": _env("GA4_SOURCE_CTY", "false").lower() == "true",
+        "ga4_source_cty_budget_sec": _int_env(("GA4_SOURCE_CTY_BUDGET_SEC",), 0),
+        "ga4_source_dev": _env("GA4_SOURCE_DEV", "false").lower() == "true",
+        "ga4_source_dev_budget_sec": _int_env(("GA4_SOURCE_DEV_BUDGET_SEC",), 0),
         # 🆕 First open: GA4 first opens by country × day, every user and Google Ads users (fetch.ga4_newusers: the last 5
         # days every hour, the history newest first). Off: nothing of it is read, written or printed;
         # GA4_NEWUSERS_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)

@@ -145,6 +145,13 @@ jobs:
           # Traffic acquisition by session channel per app per day. GA4_SOURCE=false stops the reads without a code push
           GA4_SOURCE:           ${{ vars.GA4_SOURCE || 'true' }}
           GA4_SOURCE_BUDGET_SEC: ${{ vars.GA4_SOURCE_BUDGET_SEC }}
+          # 💰 Revenue by source × country / × phone model for the Countries and Devices tabs' Source view
+          # (admob_iq/fetch/ga4_source_cty.py, ga4_source_dev.py; data/ga4_source_cty/, data/ga4_source_dev/ in the private
+          # repo, kept for good). GA4_SOURCE_CTY / GA4_SOURCE_DEV = false stops the reads without a code push
+          GA4_SOURCE_CTY:       ${{ vars.GA4_SOURCE_CTY || 'true' }}
+          GA4_SOURCE_CTY_BUDGET_SEC: ${{ vars.GA4_SOURCE_CTY_BUDGET_SEC }}
+          GA4_SOURCE_DEV:       ${{ vars.GA4_SOURCE_DEV || 'true' }}
+          GA4_SOURCE_DEV_BUDGET_SEC: ${{ vars.GA4_SOURCE_DEV_BUDGET_SEC }}
           # 🆕 First open by country, every user + Google Ads users (admob_iq/fetch/ga4_newusers.py; data/ga4_newusers/ in
           # the private repo, kept for good). GA4_NEWUSERS=false stops the reads without a code push
           GA4_NEWUSERS:         ${{ vars.GA4_NEWUSERS || 'true' }}

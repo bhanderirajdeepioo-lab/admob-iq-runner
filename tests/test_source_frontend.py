@@ -93,3 +93,40 @@ def test_ga4_vs_admob_and_the_first_zero_months(out):
     # Mar–May 2026 earned $0 in GA4: one line under the months, not three rows
     assert "Mar 2026 – May 2026 · 3 mahine GA4 me kamai $0 (kamai Jun 2026 se shuru)" in c
     assert "Apr 2026 $0" not in c and "Jun 2026 $120" in c
+
+
+def test_countries_source_view(out):
+    """🌍 💰 Source (owner, 3 Nov 2026): the period's GA4 revenue per country by group, All countries first, the named
+    countries biggest first, GA4's "(other)" and unknown rows last with the "(other)" share said; Custom summed from the
+    days file (loaded only then), reversed dates swapped, days not read counted, the inputs kept in place."""
+    assert "load ho raha hai" in out["x_loading"]
+    s = out["x_cty"]
+    assert "Revenue by source · countries 1 Oct 26 – 30 Oct 26" in s
+    assert "🌍 All countries $69 $36 52% $15 22% $7.8 11%" in s
+    assert s.index("[XA] Name-XA $53") < s.index("[XB] Name-XB $7.5") < s.index("GA4 ne country nahi batayi $9.0") \
+        < s.index("Country pata nahi $0.30")
+    assert "13% kamai GA4 ne \"(other)\" / bina country ke di" in s and "Purani history abhi aa rahi hai" in s
+    assert "🌍 All countries $70 $40 57%" in out["x_all"] and "Is period ke 2 din ka data abhi aa raha hai" in out["x_all"]
+    assert "Custom ke liye har din ka data load ho raha hai" in out["x_cus_loading"]
+    c = out["x_cus"]
+    assert "30 Sep 26 – 10 Oct 26" in c and "🌍 All countries $22 $13 60%" in c         # 30 Sep … 10 Oct: XA + XB, 11 days
+    assert "Is period ke" not in c                                                          # every day of it read
+    assert out["x_scroll"] == 0
+    w = out["x_cus_wide"]                                  # 1 Jan … 31 Dec picked: the app's own 22 Sep … 31 Oct
+    assert "22 Sep 26 – 31 Oct 26" in w and "Is period ke 2 din ka data abhi aa raha hai" in w     # 28, 29 Oct not read
+    assert "Source data abhi nahi bana" in out["x_off"] and "load ho raha hai" not in out["x_off"]
+    assert out["loads_x"][:2] == ["source_cc_000000000001.json.gz?v=c1", "source_ccd_000000000001.json.gz?v=d1"]
+
+
+def test_devices_source_view(out):
+    """📱 💰 Source: whole windows only (the file's own: 30 days, All time here), the phone's brand + marketing name with
+    its model code, GA4's "(other)" row last with its share."""
+    s = out["x_dev"]
+    assert "Revenue by source · phones 1 Oct 26 – 30 Oct 26" in s
+    assert 'data-srcx-win="30"' in out["x_dev_html"] and 'data-srcx-win="all"' in out["x_dev_html"]
+    assert 'data-srcx-win="lm"' not in out["x_dev_html"]
+    assert "📱 All phones $7.5" in s
+    assert s.index("XBrand Phone One XP-1 $5.0") < s.index("XP-2 $2.0") < s.index("GA4 ne phone nahi bataya $0.50")
+    assert "6.7% kamai GA4 ne \"(other)\" / bina phone ke di" in s
+    a = out["x_dev_all"]
+    assert "1 Jan 26 – 30 Oct 26" in a and a.index("XP-2 $20") < a.index("XBrand Phone One XP-1 $12")
