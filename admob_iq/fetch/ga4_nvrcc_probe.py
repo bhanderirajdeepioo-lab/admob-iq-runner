@@ -234,6 +234,17 @@ def probe_app(run, u, token, now, prop, opts):
                 w = got["EC" + sfx]
                 rec["tie"] = {m: dp.tie(dp._tot(got["EU" + sfx], m), dp._tot(w, m)) for m in EM}
                 rec["keys"] = pr._safely(ev_keys, got["EU" + sfx], w, fallback=None)
+        def top_ties(g, w, n=12):
+            """The n biggest countries of the truth w: [country, Σ g ÷ Σ w on revenue, on eventCount, revenue share]."""
+            wr, we = dp._by(w, CTY, EM[0]), dp._by(w, CTY, EM[1])
+            gr_, ge = dp._by(g, CTY, EM[0]), dp._by(g, CTY, EM[1])
+            tot = sum(v for v in wr.values() if v > 0) or 1
+            out3 = []
+            for k3, v in sorted(wr.items(), key=lambda kv: -kv[1])[:n]:
+                out3.append([str(k3), dp.tie(gr_.get(k3, 0), v), dp.tie(ge.get(k3, 0), we.get(k3, 0)), pr._ratio(v, tot)])
+            return out3
+        res["top_ties"] = {sfx: pr._safely(top_ties, got["EU" + sfx], got["EC" + sfx], fallback=None)
+                           for sfx in ("1", "7D", "14D") if ("EU" + sfx) in got and ("EC" + sfx) in got}
         if "EC1" in got and "C1" in got:          # eventCount vs publisherAdImpressions, the country read of F
             res["ev_vs_imps"] = dp.tie(dp._tot(got["EC1"], "eventCount"), dp._tot(got["C1"], "publisherAdImpressions"))
         rec = read("FCD", (NVR, "adFormat", CTY, "date"))
