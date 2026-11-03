@@ -2762,7 +2762,20 @@ body[data-screen="firstopen"] #rangectl,body[data-screen="firstopen"] #rangecust
 #nvr-root .nvr-ccs{flex:0 1 auto;min-width:140px;max-width:240px;min-height:34px;padding:4px 8px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink2);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
 #nvr-root .nvr-ccs.on{outline:2px solid var(--cyan);outline-offset:1px;color:#fff}
 #nvr-root .roi-t tbody tr.on td{background:var(--raise)}
-@media (max-width:760px){#nvr-root .nvr-cus input[type=date]{font-size:16px}#nvr-root .nvr-cc{flex-wrap:wrap}#nvr-root .nvr-ccr{flex:1 1 100%;order:3}#nvr-root .nvr-ccs{font-size:16px}}
+/* the period · country · tiles card stays under the site's top bar while the tables scroll (owner, 3 Nov 2026): tight
+   tiles in one row (sideways on a phone) so the tables keep most of the screen */
+#nvr-root .nvr-stk{position:sticky;top:var(--nvr-stick,0px);z-index:7;margin-bottom:12px;padding-top:11px;padding-bottom:7px;box-shadow:0 10px 22px rgba(0,0,0,.32)}
+#nvr-root .nvr-stk .roi-ct{margin-bottom:6px}#nvr-root .nvr-stk .roi-ct h3{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#nvr-root .nvr-stk .roi-ct h3 .nvr-fl{font-size:1em;line-height:1}   /* one line: a picked country's name never moves the controls under it */#nvr-root .nvr-stk .roi-ctl{margin-bottom:8px}#nvr-root .nvr-stk .nvr-cc{margin-bottom:8px}
+#nvr-root .nvr-stk .roi-ks6{grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:4px}
+#nvr-root .nvr-stk .roi-k{padding:7px 10px}#nvr-root .nvr-stk .roi-kv{font-size:17px;margin:2px 0 1px}
+#nvr-root .nvr-stk .roi-ks{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:760px){#nvr-root .nvr-cus input[type=date]{font-size:16px}#nvr-root .nvr-cc{flex-wrap:wrap}#nvr-root .nvr-ccr{flex:1 1 100%;order:3}#nvr-root .nvr-ccs{font-size:16px}
+  #nvr-root .nvr-stk{padding:8px 10px 5px}#nvr-root .nvr-stk .roi-ct h3{font-size:14px}
+  #nvr-root .nvr-stk .roi-ks6{display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}#nvr-root .nvr-stk .roi-ks6::-webkit-scrollbar{display:none}
+  #nvr-root .nvr-stk .roi-k{flex:0 0 auto;min-width:118px;max-width:176px;padding:6px 9px}#nvr-root .nvr-stk .roi-kv{font-size:15px}
+  #nvr-root .nvr-stk .roi-ks{display:none}#nvr-root .nvr-stk .roi-ct .roi-note{font-size:11px}
+  #nvr-root .nvr-stk .nvr-cc{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;gap:6px}#nvr-root .nvr-stk .nvr-cc::-webkit-scrollbar{display:none}
+  #nvr-root .nvr-stk .nvr-ccl{display:none}#nvr-root .nvr-stk .nvr-ccr{flex:none;order:0;overflow:visible}#nvr-root .nvr-stk .nvr-ccs{flex:none;min-width:150px;max-width:200px}}
 /* the By country board's period (owner, 2 Nov 2026: "jo time period select kru uska data aaye", All time + Custom): one row
    of buttons (a strip that scrolls sideways on a phone), the custom dates under it; the board's All countries row */
 .fo-per{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:0 0 10px;padding:2px}.fo-per::-webkit-scrollbar{display:none}
@@ -9245,9 +9258,10 @@ function view(aid,d){ const [lo,hi]=rng(d), x=sums(d,lo,hi), t=x.t, nt=t[0]+t[2]
   const fmts=Object.keys(fm).map(k=>({key:k,label:E(k||'(not set)'),v:fm[k]}));
   const ccs=Object.keys(x.c).map(k=>({key:k,label:`<span class="nvr-fl">${FL(k)}</span> ${E(k==='--'?'Not named':CN(k))}`,v:x.c[k]})).filter(r=>r.v[1]||r.v[3]);
   const cx=CC?x.c[CC]:null, has=CC?!!(cx&&(cx[1]||cx[3])):!!(t[1]||t[3]);
-  return `<div class="roi-card"><div class="roi-ct"><h3>👥 First session vs Returning · eCPM${CC?` · <span class="nvr-fl">${FL(CC)}</span> ${E(CN(CC))}`:''}</h3><span class="roi-note">${fdy(lo)}${lo!==hi?' – '+fdy(hi):''} · GA4</span></div>`
-    +perCtl(d)+ccCtl(x)
-    +(x.n&&has?tiles(x)+chart(d,lo,hi):`<p class="roi-note">Is period me ${CC?E(CN(CC))+' ke ':''}ad impressions nahi.</p>`)
+  // the card that stays on top while the tables scroll (owner, 3 Nov 2026): the title, the period, the country, the tiles
+  return `<div class="roi-card nvr-stk" id="nvr-stk"><div class="roi-ct"><h3>👥 First session vs Returning · eCPM${CC?` · <span class="nvr-fl">${FL(CC)}</span> ${E(CN(CC))}`:''}</h3><span class="roi-note">${fdy(lo)}${lo!==hi?' – '+fdy(hi):''} · GA4</span></div>`
+    +perCtl(d)+ccCtl(x)+(x.n&&has?tiles(x):'')+`</div><div class="roi-card">`
+    +(x.n&&has?chart(d,lo,hi):`<p class="roi-note">Is period me ${CC?E(CN(CC))+' ke ':''}ad impressions nahi.</p>`)
     +(CC?`<p class="roi-note">🌍 <b>${E(CN(CC))}</b> chuna hai: tiles aur chart sirf is country ke (country ke sessions GA4 se nahi padhe, isliye wahan impressions). Ad units / formats ki tables sab countries ki hain.</p>`:'')
     +(lim.length?`<p class="roi-note nvr-lim">⏳ ${lim.join(' · ')}.</p>`:'')
     +`<p class="roi-note"><b>First session</b> = user ka pehla session (GA4 "new"), <b>Returning</b> = 2nd session aur uske baad (GA4 "returning"). eCPM = GA4 ad revenue ÷ impressions × 1000 (AdMob se GA4 me aaye <code>ad_impression</code>, AdMob tab se thoda farak ho sakta hai).${nt>0&&t[4]>0?` GA4 ne ${Math.max(0.1,Math.round(t[4]/nt*1000)/10)}% kamai kisi session group me nahi daali — wo tiles me nahi.`:''}</p></div>`
@@ -9260,10 +9274,12 @@ function inner(aid){ const a=apOf(aid);
   if(!d){ if(AERR[a.file]) return `<div class="roi-card"><p class="roi-note">⚠️ First session vs Returning load nahi hua. <button type="button" class="roi-lnk" data-nvr-retry="1">Try again</button></p></div>`;
     ensure(aid,repaint); return `<div class="roi-card"><p class="roi-note">⏳ First session vs Returning load ho raha hai…</p></div>`; }
   return view(aid,d); }
-function block(aid){ if(!ptr()||!aid) return ''; wire();
+function block(aid){ if(!ptr()||!aid) return ''; wire(); if(typeof setTimeout==='function') setTimeout(stick,0);
   return `<section class="roi nvr" id="nvr-root" data-aid="${E(aid)}" aria-label="First session vs returning eCPM">${inner(aid)}</section>`; }
 function root(){ return (typeof document!=='undefined'&&document.getElementById)?document.getElementById('nvr-root'):null; }
-function repaint(){ const r=root(); if(r) r.innerHTML=inner(r.dataset.aid); }
+function stick(){ const r=root(); if(!r||typeof getComputedStyle!=='function') return; try{ const tb=document.querySelector('.topbar'), cs=tb?getComputedStyle(tb):null;
+  r.style.setProperty('--nvr-stick',(tb&&cs&&cs.position==='sticky'?tb.offsetHeight:0)+'px'); }catch(e){} }
+function repaint(){ const r=root(); if(r) r.innerHTML=inner(r.dataset.aid);  stick(); }
 // the chart's tooltip: the day nearest the pointer, both eCPMs and impressions
 function tip(ev){ const w=ev.target&&ev.target.closest&&ev.target.closest('[data-nvr-ch]'); if(!w) return; const sv=w.querySelector('svg'), t=w.querySelector('.nvr-tip'), pts=CHP;
   if(!sv||!t) return; const r=sv.getBoundingClientRect(); if(!r.width||!pts.length) return;
@@ -9272,6 +9288,7 @@ function tip(ev){ const w=ev.target&&ev.target.closest&&ev.target.closest('[data
   t.hidden=false; const px=(44+(720-44-92)*(pts.length>1?i/(pts.length-1):0.5))*r.width/720; t.style.left=Math.max(0,Math.min(r.width-t.offsetWidth,px-t.offsetWidth/2))+'px';
   const rl=sv.querySelector('.rule'); if(rl){ const xx=(44+(720-44-92)*(pts.length>1?i/(pts.length-1):0.5)).toFixed(1); rl.setAttribute('x1',xx); rl.setAttribute('x2',xx); rl.setAttribute('visibility','visible'); } }
 function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventListener) return; WIRED=true;
+  let rz=0; if(typeof addEventListener==='function') addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(stick,150); });
   const keep=(r,sel,fn)=>{ const b0=r.querySelector(sel), y0=b0&&b0.getBoundingClientRect?b0.getBoundingClientRect().top:null; fn();
     const b=y0==null?null:r.querySelector(sel); if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) window.scrollBy(0,dy); } };   // the tapped control stays where it was
   document.addEventListener('click',ev=>{ const t=ev.target, r=t&&t.closest&&t.closest('#nvr-root'); if(!r) return; let b;

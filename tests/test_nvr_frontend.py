@@ -76,3 +76,10 @@ def test_country_picker(out):
                           ["Impressions", "6,000 · 60,000"], ["Kamai ka hissa", "44% · 56%"]]
     assert x["chart"] and x["row_on"] and x["note"]
     assert out["cc_xa"] == "$2.00" and out["cc_all"] == ["$2.00", False]
+
+
+def test_period_country_and_tiles_stay_on_top(out):
+    """Owner, 3 Nov 2026: the period, the country and the KPI tiles stay on top while the tables below scroll — one sticky
+    card first in the section, the chart and the tables after it."""
+    assert out["sticky"] == {"first": True, "period": True, "country": True, "tiles": True, "chart_out": True,
+                             "tables_out": True}

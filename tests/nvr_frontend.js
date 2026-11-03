@@ -59,6 +59,13 @@ const tbl = (title) => { const i = h().indexOf(`<h3>${title}</h3>`); return i < 
     out.title30 = (h().match(/<h3>👥 First session vs Returning · eCPM<\/h3><span class="roi-note">([^<]*)<\/span>/) || [])[1];
     out.tiles30 = [...h().matchAll(/<div class="roi-kl">([^<]*)<\/div><div class="roi-kv">([^<]*)<\/div><div class="roi-ks">([^<]*)<\/div>/g)].map(m => [m[1], m[2], m[3]]);
     out.chart = /<path d="M[^"]+" class="n"\/><path d="M[^"]+" class="r"\/>/.test(h()) && h().includes('class="n">$2.00</text>') && h().includes('class="r">$1.00</text>');
+    // the card that stays on top while the tables scroll: the title, the period, the country and the tiles in it; the chart
+    // and the tables after it (owner, 3 Nov 2026)
+    { const x = h(), i = x.indexOf('<div class="roi-card nvr-stk" id="nvr-stk">'), j = x.indexOf('</div><div class="roi-card">', i);
+      const stk = i >= 0 && j > i ? x.slice(i, j) : '';
+      out.sticky = { first: i === 0, period: stk.includes('data-nvr-per="30"'), country: stk.includes('data-nvr-cc=""'),
+        tiles: stk.includes('First session eCPM'), chart_out: !stk.includes('data-nvr-ch') && x.indexOf('data-nvr-ch') > j,
+        tables_out: x.indexOf('<h3>Ad units</h3>') > j }; }
     out.units_rows = [...tbl('Ad units').matchAll(/<tr><td class="roi-nm">([^<]*)/g)].map(m => m[1]);
     out.unit_open = tbl('Ad units').includes('<td class="roi-nm">unit_open <small>App open</small></td><td><b>$2.50</b></td><td>$1.00</td><td>2.5×</td><td>18,000</td><td>15,000</td><td>$45</td><td>$15</td></tr>');
     out.units_more = h().includes('data-nvr-all="u">Sab 20 dikhao</button>');
