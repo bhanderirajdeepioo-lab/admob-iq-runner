@@ -6,7 +6,8 @@ the private stores of fetch.ga4_source, every day of every store, nothing trimme
                         "d0" (the first day with any GA4 session), "rev": [[paid, notification, organic, other], …] (total
                         revenue USD, one row a day d0 … today; null = not read yet), "ses": the same for sessions,
                         "mk": {row: "s" sampled | "t" thresholded}, "bf": the backfill reached the history start,
-                        "file": its channel file}]}
+                        "file": its channel file, "adm": [[month, AdMob revenue USD], …] the complete months of the
+                        app's 📈 ROI file (its AdMob days), absent without one — the page's GA4 vs AdMob check}]}
   site/source_<key>.json.gz  {"v", "key", "app_id", "d0", "ch": [GA4 channel names], "days": [[[sessions, active users,
                         ad revenue, total revenue] | null for each channel] | null, …]}   (the GA4 screen's own rows)
 and the pointer dashboard["source"] = {"file", "v", "apps": {app id: {"file", "v"}}}.
@@ -121,6 +122,25 @@ def build_app(store, aid, name, now):
     return entry, body
 
 
+def _admob_months(dashboard, out_dir, aid, now):
+    """[[month, AdMob revenue USD]] of the app's complete months (before now's month), from its 📈 ROI file written
+    earlier in this build (life: [[AdMob day, revenue USD, …]]); None without one."""
+    ptr = (((dashboard.get("roi") or {}).get("apps") or {}).get(aid) or {}).get("file")
+    if not ptr or not re.match(r"^roi_[0-9a-f]{12}\.json\.gz$", ptr):
+        return None
+    try:
+        with gzip.open(os.path.join(out_dir, ptr), "rt", encoding="utf-8") as f:
+            life = json.load(f).get("life") or []
+    except (OSError, ValueError):
+        return None
+    cur, out = now.strftime("%Y-%m"), {}
+    for row in life:
+        m = str(row[0])[:7]
+        if m < cur and row[1]:
+            out[m] = out.get(m, 0.0) + float(row[1])
+    return [[m, _r2(v)] for m, v in sorted(out.items())] or None
+
+
 def _stores(data_dir):
     folder = os.path.join(data_dir, gs.DIR)
     try:
@@ -179,6 +199,9 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             if not got:
                 continue
             entry, body = got
+            adm = _admob_months(dashboard, out_dir, aid, now)
+            if adm:
+                entry["adm"] = adm
             raw, gz = _gz(body)
             if gz > MAX_GZ:
                 big += 1
@@ -205,8 +228,9 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
         write_json_gz_stable(os.path.join(out_dir, FILE), body)
         _clean(out_dir, keep)
         dashboard["source"] = {"file": FILE, "v": hashlib.sha1(raw).hexdigest()[:12], "apps": ptr_apps}
-        LINE = "source: apps %d, days %d, history done %d, channels %d, kb %d%s" % (
-            len(apps), days_n, sum(1 for a in apps if a["bf"]), len(seen), gz // 1024,
+        LINE = "source: apps %d, days %d, history done %d, channels %d, admob %d, kb %d%s" % (
+            len(apps), days_n, sum(1 for a in apps if a["bf"]), len(seen), sum(1 for a in apps if a.get("adm")),
+            gz // 1024,
             (", too big %d" % big) if big else "")
         return list(HEADER_PATHS)
     except Exception as e:

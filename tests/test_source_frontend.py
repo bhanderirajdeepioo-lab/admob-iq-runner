@@ -68,3 +68,28 @@ def test_one_app(out):
 
 def test_rupee_view(out):
     assert "Total ₹51,040" in out["app_inr"]
+
+
+def test_custom_dates(out):
+    # the period buttons end with All time + Custom; Custom shows from / to bounded by the first day … today
+    h = out["cus_html"]
+    assert 'data-src-per="all"' in h and 'data-src-per="cus" aria-pressed="true"' in h
+    assert 'data-src-pf="1" value="2026-09-22" min="2026-09-22" max="2026-10-31"' in h
+    # 10 Oct → 1 Oct (reversed: swapped) = 1–10 Oct: Alpha 10 × $20, Beta 10 × $2; the input stays in place
+    assert "1 Oct 26 – 10 Oct 26" in out["cus"] and "All apps $220 $110 50%" in out["cus"]
+    assert out["cus_scroll"] == 0
+
+
+def test_ga4_vs_admob_and_the_first_zero_months(out):
+    # Gamma: Jul–Sep (the last 3 complete months; Oct is the current one, Jun is older) GA4 $368 vs AdMob $184
+    assert out["adm"]["n"] == 3 and out["adm"]["from"] == "2026-07" and out["adm"]["to"] == "2026-09"
+    assert abs(out["adm"]["r"] - 2.0) < 1e-9 and out["adm_a"] is None        # Alpha: no AdMob months → no check
+    assert out["adm_old"] is None              # the last 3 months hold $60 of AdMob: an older big month is never used
+    s = out["all_adm"]
+    assert "Gamma App ⚠️ GA4 2.0× AdMob" in s and "Alpha App ⚠️" not in s
+    assert "GA4 n× AdMob = us app ki GA4 kamai" in s
+    c = out["app_c"]
+    assert "AdMob se milaan: Jul 2026 – Sep 2026: GA4 $368 · AdMob $184 — is app ki GA4 kamai AdMob ki 2.00× hai" in c
+    # Mar–May 2026 earned $0 in GA4: one line under the months, not three rows
+    assert "Mar 2026 – May 2026 · 3 mahine GA4 me kamai $0 (kamai Jun 2026 se shuru)" in c
+    assert "Apr 2026 $0" not in c and "Jun 2026 $120" in c

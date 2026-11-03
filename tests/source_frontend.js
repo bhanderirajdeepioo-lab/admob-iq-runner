@@ -73,6 +73,28 @@ const tap = (sel) => handlers.click({ target: { closest: s => s === '#src-root' 
     out.app_html = ROOT.innerHTML;
     out.loads2 = LOADS.slice();
     CUR = 'INR'; SRC.repaint(); out.app_inr = strip(ROOT.innerHTML);
+    CUR = 'USD';
+    // Custom: the from / to inputs (a change keeps the input in place), every app's own days, reversed dates swapped
+    ROOT.dataset.aid = '';
+    tap({ k: '[data-src-per]', d: { srcPer: 'cus' } });
+    out.cus_html = ROOT.innerHTML;
+    const change = (attr, value) => handlers.change({ target: { value, getBoundingClientRect: () => ({ top: 100 }),
+      closest: s => s === '#src-root' ? ROOT : (s === attr ? {} : null) } });
+    SCROLL = 0;
+    change('[data-src-pf]', '2026-10-10'); change('[data-src-pto]', '2026-10-01');
+    out.cus = strip(ROOT.innerHTML); out.cus_scroll = SCROLL;
+    // GA4 vs AdMob (the build's AdMob months) and the first $0 months folded: app C earns from Jun 2026, GA4 2× AdMob
+    const dC = '2026-03-01', nC = Math.round((Date.parse(TODAY) - Date.parse(dC)) / 864e5) + 1;
+    const C = { app_id: 'ca-app-pub-0000000000000000~3', key: '000000000003', app: 'Gamma', tz: 'UTC', today: TODAY, d0: dC,
+      rev: Array.from({ length: nC }, (_, i) => iso(Date.parse(dC) + i * 864e5) < '2026-06-01' ? [0, 0, 0, 0] : [2, 1, 1, 0]),
+      ses: Array.from({ length: nC }, () => [1, 1, 1, 0]), mk: {}, bf: true, ch: ['Cross-network'], file: 'source_000000000003.json.gz',
+      adm: [['2026-06', 60], ['2026-07', 62], ['2026-08', 62], ['2026-09', 60], ['2026-10', 40]] };
+    ctx.DATA.apps_catalog.push({ app_id: C.app_id, app_name: 'Gamma App' });
+    SRC._.set('ALL', Object.assign({}, ALLF, { apps: [A, B, C] })); SRC._.set('PER', '30');
+    out.adm = SRC._.admChk(C); out.adm_a = SRC._.admChk(A);
+    out.adm_old = SRC._.admChk(Object.assign({}, C, { adm: [['2026-06', 500], ['2026-07', 20], ['2026-08', 20], ['2026-09', 20]] }));
+    ROOT.dataset.aid = ''; SRC.repaint(); out.all_adm = strip(ROOT.innerHTML);
+    ROOT.dataset.aid = C.app_id; SRC.repaint(); out.app_c = strip(ROOT.innerHTML);
   } catch (e) { errors.push(e.stack || e.message); }
   out.errors = errors;
   console.log(JSON.stringify(out));

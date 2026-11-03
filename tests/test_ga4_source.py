@@ -130,11 +130,37 @@ def test_run_writes_files_pointer_and_removes_stale(tmp_path):
     assert j["groups"][1][2] == ["Mobile Push Notifications"] and j["groups"][3][2] == ["(other)", "Unassigned"]
     assert (out / p["apps"][AID]["file"]).exists()
     line = sb.pop_line()
-    assert line.startswith("source: apps 1, days 61, history done 1, channels 7, kb ") and AID not in line
+    assert line.startswith("source: apps 1, days 61, history done 1, channels 7, admob 0, kb ") and AID not in line
+    assert "adm" not in j["apps"][0]                          # no 📈 ROI file: no AdMob months
     # no store: no files, no pointer
     dash2 = {}
     assert sb.run(dash2, str(tmp_path / "none"), str(out), {}, NOW) == [] and "source" not in dash2
     assert not (out / "source.json.gz").exists() and sb.pop_line() == "source: apps 0"
+
+
+def test_admob_months_from_the_roi_file(tmp_path):
+    """The app's 📈 ROI file (written earlier in the build) → its complete AdMob months (NOW's month left out) for the
+    page's GA4 vs AdMob check; a pointer to a file that is not there → no months, nothing else changes."""
+    data, out = tmp_path / "data", tmp_path / "site"
+    (data / gs.DIR).mkdir(parents=True)
+    out.mkdir()
+    with gzip.open(data / gs.DIR / (gu.file_key(AID) + ".json.gz"), "wt", encoding="utf-8") as f:
+        json.dump(_store(), f)
+    roi = "roi_%s.json.gz" % gu.file_key(AID)
+    life = [["2026-09-%02d" % d, 1.5, 0.0, 0.0] for d in range(1, 31)] + [["2026-10-%02d" % d, 2.0, 1.0, 1.0] for d in range(1, 32)]
+    life += [["2026-08-31", 0, 3.0, 3.0]]                          # spend only: no AdMob month
+    with gzip.open(out / roi, "wt", encoding="utf-8") as f:
+        json.dump({"life": life + [["2026-11-01", 9.0, 0.0, 0.0]]}, f)
+    dash = {"apps_catalog": [{"app_id": AID, "app_name": "Alpha App"}], "roi": {"apps": {AID: {"file": roi}}}}
+    assert sb.run(dash, str(data), str(out), {}, datetime(2026, 11, 2, 6, 0, tzinfo=timezone.utc)) == ["/source*"]
+    with gzip.open(out / "source.json.gz", "rt", encoding="utf-8") as f:
+        j = json.load(f)
+    assert j["apps"][0]["adm"] == [["2026-09", 45], ["2026-10", 62]]
+    assert ", admob 1, kb " in sb.pop_line()
+    (out / roi).unlink()
+    assert sb.run(dash, str(data), str(out), {}, NOW) == ["/source*"]
+    with gzip.open(out / "source.json.gz", "rt", encoding="utf-8") as f:
+        assert "adm" not in json.load(f)["apps"][0]
 
 
 def test_log_line_is_counts_only():
