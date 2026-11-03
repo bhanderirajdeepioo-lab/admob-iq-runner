@@ -19,6 +19,12 @@ and the shapes that might fold less (does ANY read give the whole split?), on F 
   UCK1   F   the same, countryId == TOP[0]                                 one day, the top country alone
   UN1    F   adFormat × adUnitName × countryId (no newVsReturning)         one day, without the session group
   C7 / UC7   [F − 6, F]  as C1 / UC1                                       seven days
+and the same with the impressions counted as ad_impression EVENTS (eventCount, eventName == ad_impression) — does that
+count stay whole where publisherAdImpressions does not?
+  EC1    F   newVsReturning × countryId                       totalAdRevenue, eventCount   the truth of the E reads
+  EU1    F   newVsReturning × adFormat × adUnitName × countryId          the same metrics
+  EC7D / EU7D     [F − 6, F]   as EC1 / EU1 + date
+  EC14D / EU14D   [F − 13, F]  as EC1 / EU1 + date             (the fetch's chunk shape)
 A record: accepted or the HTTP class, rows, the "(other)" / "(not set)" shares, GA4's flags, "tie" to its truth (C for
 UC / FCD; C restricted to TOP for UCT / UCTD; U for UC's ad units) and "keys": per country (device probe tie_by:
 overall, p10 / p90, keys off by > 2 %) with "w2" = the truth's share held by countries within 2 %.
@@ -199,6 +205,37 @@ def probe_app(run, u, token, now, prop, opts):
                 want = got[truth] if kind != "UCK1" else [r for r in got[truth] if str(r.get(CTY) or "") == top[0]]
                 rec["tie"] = {m: dp.tie(dp._tot(got[kind], m), dp._tot(want, m)) for m in AD}
                 rec["keys"] = pr._safely(keys_tie, got[kind], want, CTY, fallback=None)
+        EM = ("totalAdRevenue", "eventCount")
+
+        def read_ev(kind, a2, dims):
+            body = dp._body(a2, f0, dims, EM)
+            rec2, rows2 = cp._read(ga, kind, lambda: ga.report_all(body, event="ad_impression", page_rows=PAGE_ROWS),
+                                   dp.p_rows(dims, EM))
+            if rec2.get("ok"):
+                got[kind] = rows2
+            res["reads"][kind] = rec2
+            return rec2
+
+        def ev_keys(g, w):
+            out2 = {}
+            for m in EM:
+                t2 = dp.tie_by(g, w, CTY, m)
+                gb, wb = dp._by(g, CTY, m), dp._by(w, CTY, m)
+                tot2 = sum(v for v in wb.values() if v > 0)
+                t2["w2"] = pr._ratio(sum(v for k2, v in wb.items() if v > 0 and abs(gb.get(k2, 0) / v - 1) <= 0.02), tot2)
+                out2[m] = t2
+            return out2
+        for days, sfx in ((1, "1"), (7, "7D"), (14, "14D")):
+            a2 = f - timedelta(days=days - 1)
+            dd = () if days == 1 else ("date",)
+            read_ev("EC" + sfx, a2, (NVR, CTY) + dd)
+            rec = read_ev("EU" + sfx, a2, (NVR,) + UNIT + (CTY,) + dd)
+            if rec.get("ok") and ("EC" + sfx) in got:
+                w = got["EC" + sfx]
+                rec["tie"] = {m: dp.tie(dp._tot(got["EU" + sfx], m), dp._tot(w, m)) for m in EM}
+                rec["keys"] = pr._safely(ev_keys, got["EU" + sfx], w, fallback=None)
+        if "EC1" in got and "C1" in got:          # eventCount vs publisherAdImpressions, the country read of F
+            res["ev_vs_imps"] = dp.tie(dp._tot(got["EC1"], "eventCount"), dp._tot(got["C1"], "publisherAdImpressions"))
         rec = read("FCD", (NVR, "adFormat", CTY, "date"))
         if rec.get("ok") and "C" in got:
             rec["tie"] = {m: dp.tie(dp._tot(got["FCD"], m), dp._tot(got["C"], m)) for m in AD}

@@ -47,7 +47,8 @@ class FakeGA:
                 n = a["n"]
                 for m in mets:
                     e[m] += {"newUsers": n if age == 0 else 0, "activeUsers": n, "sessions": n,
-                             "publisherAdImpressions": IMPS * n, "totalAdRevenue": IMPS * n * ECPM[nvr] / 1000}[m]
+                             "publisherAdImpressions": IMPS * n, "eventCount": IMPS * n,
+                                 "totalAdRevenue": IMPS * n * ECPM[nvr] / 1000}[m]
         rows = [{"dimensionValues": [{"value": v} for v in k], "metricValues": [{"value": str(e[m])} for m in mets]}
                 for k, e in sorted(agg.items())]
         off, lim = body.get("offset", 0), body.get("limit", 10000)
