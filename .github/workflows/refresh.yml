@@ -279,6 +279,7 @@ jobs:
           AC_PRESPLIT:          ${{ vars.AC_PRESPLIT }}
           AC_ACCOUNT_WORKERS:   ${{ vars.AC_ACCOUNT_WORKERS }}
           ZONE_CHECK_OUT:       /tmp/zone_check.json      # admob_iq/tz_check.py's counts (the zone check step prints them)
+          HEALTH_OUT:           /tmp/health.json          # admob_iq/health.py: the failed steps' names (the health step)
         run: |
           # PRIVACY: Actions logs on a PUBLIC repo are world-readable and the build prints
           # app ids and revenue totals. So its output goes to a file, never to the log. On
@@ -317,6 +318,13 @@ jobs:
         if: always()
         continue-on-error: true
         run: python -m admob_iq.tz_check public /tmp/zone_check.json 2>/dev/null || true
+
+      - name: Build health (failed steps, names only)
+        # admob_iq/health.py read the build's own "<step> skipped: <ErrorType>" lines: a step that failed becomes a
+        # ::warning:: here (fixed step names only — never data) and a red banner on the dashboard.
+        if: always()
+        continue-on-error: true
+        run: python -m admob_iq.health public /tmp/health.json 2>/dev/null || true
 
       - name: Deploy guard report (Cloudflare limits, counts only)
         # admob_iq/deploy_guard.py ran at the end of the build. It keeps the site inside Cloudflare's deploy limits

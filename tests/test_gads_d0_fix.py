@@ -904,6 +904,12 @@ def ov(tmp_path_factory):
     fx["daygap"] = json.loads(json.dumps(fx["daymiss"]))
     fx["daygap"]["roas"]["d0"]["day_gap"] = {"2026-01-04": "tz"}
     fx["daygap"]["build_faults"] = [{"kind": "tz", "names": ["Asia/Calcutta"], "of": 3}]
+    # build steps that failed (admob_iq/health.py): alone, and next to a time zone fault
+    fx["stepfault"] = json.loads(json.dumps(fx["daymiss"]))
+    fx["stepfault"]["build_faults"] = [{"kind": "step", "steps": [{"name": "ecpm intraday", "error": "KeyError"},
+                                                                 {"name": "gads geo", "error": "HttpError"}]}]
+    fx["bothfault"] = json.loads(json.dumps(fx["daygap"]))
+    fx["bothfault"]["build_faults"].append({"kind": "step", "steps": [{"name": "roi", "error": "ValueError"}]})
     fx["daylater"] = json.loads(json.dumps(fx["daymiss"]))
     by = fx["daylater"]["roas"]["by_app"]
     by["Demo Gallery"]["d0day_next"] = {"date": "2026-01-07", "at": "2026-01-08T12:00:00Z"}     # 17:30 IST, 8 Jan
@@ -1886,6 +1892,14 @@ def test_day_a_morning_lost_to_the_build_machines_time_zone_says_so(ov):
                                        ' By date D0, eCPM same time yesterday aur raat ka "today" ruke hue hain. Fix'
                                        ' hone tak ye numbers update nahi honge.')
     assert ov["_fb"]["daymiss|USD"] == "" and "⚠️" not in _tday(_cells(ov["daymiss|USD"])["Demo Gallery"][0])
+    # failed build steps: named on the banner, alone or after the time zone part; no By date warning for them
+    assert ov["_fb"]["stepfault|USD"] == ("⚠️ Build problem: ye hisse update nahi ho rahe: ecpm intraday, gads geo"
+                                          " (robot me error). Fix hone tak ye numbers update nahi honge.")
+    assert "⚠️" not in _tday(_cells(ov["stepfault|USD"])["Demo Gallery"][0])
+    assert ov["_fb"]["bothfault|USD"] == ('⚠️ Build problem: time zone data missing on the build machine (Asia/Calcutta)'
+                                          ' — By date D0, eCPM same time yesterday aur raat ka "today" ruke hue hain ·'
+                                          ' ye hisse update nahi ho rahe: roi (robot me error). Fix hone tak ye numbers'
+                                          ' update nahi honge.')
 
 
 def test_day_each_app_at_its_own_moment(ov):

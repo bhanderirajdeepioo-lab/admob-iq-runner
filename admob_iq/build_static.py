@@ -1948,6 +1948,11 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # page (dashboard["build_faults"]) and a counts-only warning in the public log, instead of a silent guess
     from . import tz_check
     tz_check.run(dashboard, report_tz, acct_tz, data_dir, os.getenv("ZONE_CHECK_OUT") or None)
+    # every step that failed so far this build ("<step> skipped: <ErrorType>", read off stderr by health.watch) → the
+    # page's red banner: a part of the dashboard that stops updating is never silent (the steps after this point: the
+    # public log only)
+    from . import health
+    health.attach(dashboard)
 
     _sc.step("dashboard_write")
     os.makedirs(out_dir, exist_ok=True)
@@ -2105,12 +2110,17 @@ def main():
     # ⏱ The stage clock (admob_iq/stage_clock.py) only measures: data/build_profile.json.gz in the PRIVATE data dir,
     # written in the finally, so a build that crashes still leaves what it measured. It never fails the build.
     _sc.begin(imports=True)
+    # 🩺 every "<step> skipped: <ErrorType>" line this build prints counts as a failed step (admob_iq/health.py): the
+    # dashboard's red banner and the public log's health line — a step that fails on every build is never silent
+    from . import health
+    health.watch()
     data_dir, ok = "data", False
     try:
         result = build(data_dir=data_dir)
         ok = True
     finally:
         _sc.finish(data_dir, ok=ok)
+        health.write_public(os.getenv("HEALTH_OUT") or None)
     print("build complete:", result)
 
 

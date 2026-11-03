@@ -10642,10 +10642,16 @@ function d0Ist(t){ const x=new Date(t+330*60000).toISOString(); return fmtD(x.sl
 // the build's time zone fault (DATA.build_faults, admob_iq/tz_check.py: a zone name this build's machine could not
 // load) or null — the red banner and the By date tooltip say it, so a guessed day boundary is never silent
 function tzFault(){ return (DATA.build_faults||[]).find(f=>f&&f.kind==='tz')||null; }
-// the red banner's text over every screen ('' = none): the build machine could not load a time zone
-function faultBannerText(){ const f=tzFault();
-  return f?'⚠️ Build problem: time zone data missing on the build machine ('+(f.names||[]).join(', ')+') — By date D0,'
-    +' eCPM same time yesterday aur raat ka "today" ruke hue hain. Fix hone tak ye numbers update nahi honge.':''; }
+// the red banner's text over every screen ('' = none): the build machine could not load a time zone (tz_check), and/or
+// build steps that failed in this build (admob_iq/health.py: each "<step> skipped: <ErrorType>" the robot printed) —
+// a part of the dashboard that stops updating is never silent
+function faultBannerText(){ const f=tzFault(), st=((DATA.build_faults||[]).find(x=>x&&x.kind==='step')||{}).steps||[],
+    parts=[];
+  if(f) parts.push('time zone data missing on the build machine ('+(f.names||[]).join(', ')+') — By date D0, eCPM same'
+    +' time yesterday aur raat ka "today" ruke hue hain');
+  if(st.length) parts.push('ye hisse update nahi ho rahe: '+st.map(x=>x&&x.name).filter(Boolean).join(', ')
+    +' (robot me error)');
+  return parts.length?'⚠️ Build problem: '+parts.join(' · ')+'. Fix hone tak ye numbers update nahi honge.':''; }
 // The install-day ("Day") D0 of an app over the period vs DATA.roas.d0's Day keys: the backend (merge_spend) takes a
 // store's click date ONCE, from a complete read at most day_next.late_h after its Day moment ((date+1 00:00 in its
 // accounts' zone) + Google's lag: the next morning), and never changes it. by_app[app].d0day_next: the app's own next
