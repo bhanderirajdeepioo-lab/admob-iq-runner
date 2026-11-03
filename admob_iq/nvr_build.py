@@ -20,7 +20,7 @@ same one (shard_of: the page computes it too), so a pick loads one file, never o
   site/nvr_uc_<key>_<s>.json.gz  {"v", "key", "s", "d0" (= the nvr file's first_day: the same day index),
                            "units": [[ad unit, format], …], "c": {cc: [[day index, unit index, group (0 new · 1
                            returning), revenue, impressions], …]}}   (GA4's not-set group left out: the tables have none)
-  "uc" = {"n", "files": [[name, v], …], "from", "last", "rd": [[first, last] day index runs read], "bf", "daily"}
+  "uc" = {"n", "files": [[name, v], …], "from", "last", "rd": [[first, last] day index runs read], "bf"}
   ({"big": True, "n": 0, "files": []} when even UC_MAX shards are over MAX_GZ).
 The page sets what GA4 gave of the country against the nvr file's own country total (its "c": a whole read) and says
 how much — GA4 folds a large part of the biggest app's ad unit × country into "(other)" before any read.
@@ -158,8 +158,7 @@ def uc_files(data_dir, out_dir, aid, d0):
         else:
             cur = [i, i]
             runs.append(cur)
-    out = {"from": first, "last": last, "rd": runs, "bf": bool((meta.get("backfill") or {}).get("done")),
-           "daily": bool(meta.get("daily"))}
+    out = {"from": first, "last": last, "rd": runs, "bf": bool((meta.get("backfill") or {}).get("done"))}
     key, n = gu.file_key(aid), UC_SHARDS
     while n <= UC_MAX:
         files, bodies = [], []

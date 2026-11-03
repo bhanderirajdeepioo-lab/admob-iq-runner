@@ -58,12 +58,13 @@ def test_one_read_shape_month_files_and_the_folded_row(tmp_path):
     assert days["2026-10-05"] == sorted([["n", "App open", "u_open", "XA", 1, 500], ["r", "App open", "u_open", "XA", 2, 2000],
                                          ["n", "Banner", "u_ban", "XB", 0.5, 400], ["r", "Banner", "u_ban", "--", 0.1, 100],
                                          ["x", "Banner", "u_ban", "XA", 0.01, 2]])
-    # GA4's folded row has no real day: the range is read again a day at a time and the row kept on its day
+    # GA4's folded row has no day and no country: left out and counted, never read again day by day (GA4's one-day
+    # reads of this split lose impressions instead — the page measures what GA4 gave against the country's own total)
     meta2, ga = {"v": gnc.STORE_V}, FakeGA(fold=True)
     gnc.step_app(ga, meta2, str(tmp_path / "b"), AID, TODAY, date(2026, 10, 28), NOW)
     d2 = gnc.load_days(str(tmp_path / "b"), AID, meta2["months"])
-    assert meta2["daily"] is True and ["x", "(other)", "(other)", "--", 0.3, 30] in d2["2026-10-30"]
-    assert len(d2) == 5 and all(len(v) == 6 for v in d2.values())                 # the recent window: 27 … 31 Oct
+    assert meta2.get("folded") == 1 and "daily" not in meta2 and len(ga.asked) == 1
+    assert len(d2) == 5 and all(len(v) == 5 for v in d2.values())                 # the recent window: 27 … 31 Oct
 
 
 def _app_store(data):

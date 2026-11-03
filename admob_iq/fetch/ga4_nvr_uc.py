@@ -10,7 +10,7 @@ publisherAdImpressions (USD), pinned to the app's Android stream (ga4.Ga4App), e
 
 Store, kept for good, one file a month (a month GA4 no longer changes is written once and then left alone):
     data/ga4_nvr_uc/<key>.json.gz          {"v", "app_id", "package", "property_id", "stream_id", "time_zone",
-                                            "recent_at", "upto", "daily", "backfill": {"oldest", "done"}, "months": […]}
+                                            "recent_at", "upto", "folded", "backfill": {"oldest", "done"}, "months": […]}
     data/ga4_nvr_uc/<key>/<YYYY-MM>.json.gz {"v", "days": {YYYY-MM-DD: [[nvr, ad format, ad unit, country, revenue,
                                             impressions], …]}}   (nvr: "n" new · "r" returning · "x" not set; country: the
                                             ISO code, "--" for anything else — as fetch.ga4_nvr; [] = nothing that day)
@@ -19,8 +19,10 @@ Per app and run (at most MAX_CALLS calls; the property's quota floors as the Aud
     longer outage left between the last such read ("upto") and them are read first, oldest first (never a hole);
   * the backfill: CHUNK_DAYS at a time, newest first, from the day before the recent window back to the app's history
     start (the Uninstall store's). Days older than RECENT_DAYS are final in GA4.
-GA4's folded "(other)" row comes with no real day: a range read whose rows hold one is read again one day at a time
-(each day's own "(other)" row then kept on that day), and the app is read day by day from then on ("daily": True).
+GA4's folded "(other)" row comes with no real day and no country: it is left out (counted in "folded": reads that had
+one) — the page measures, per country and period, what GA4 gave against the country's own whole total. NOT read again
+day by day: measured 3 Nov 2026 (ga4_nvrcc_probe), GA4's one-day reads of this split carry no "(other)" row but only a
+part of the impressions and a country spread unlike its own country read — worse, and quieter.
 Switched by GA4_NVR_UC. Never raises; never prints (log_line: counts only).
 """
 import json
@@ -39,13 +41,13 @@ from . import ga4_source as gs
 from . import ga4_uninstall as gu
 
 DIR = "ga4_nvr_uc"
-STORE_V = 1
+STORE_V = 2                         # 2: no day-by-day re-reads (3 Nov 2026) — a v1 store is read again from scratch
 DIMS = ("date", gv.NVR, "adFormat", "adUnitName", "countryId")
 METS = gv.AD
 RECENT_DAYS = 5                     # today … 4 days back: refreshed every REFRESH_HOURS (older days are final in GA4)
 REFRESH_HOURS = 6.0
 CHUNK_DAYS = 14                     # one backfill call: ≤ 14 days × ad units × countries × 3 of rows
-MAX_CALLS = 40                      # per app per run (the backfill goes on next run; a "daily" app: one call a day)
+MAX_CALLS = 20                      # per app per run (the backfill goes on next run)
 BUDGET_SEC = 150
 RETRY_HOURS = 3.0
 PAGE_ROWS = 100000
@@ -83,18 +85,11 @@ def read(ga, a, b):
 
 
 def read_whole(ga, meta, a, b):
-    """[a, b] with nothing left out: one read, or one a day when GA4 folded a part into a row with no day (the app is
-    then read day by day for good: meta "daily")."""
-    if not meta.get("daily") or a == b:
-        got, folded = read(ga, a, b)
-        if not folded:
-            return got
-        meta["daily"] = True
-    out, d = {}, a
-    while d <= b:
-        out.update(read(ga, d, d)[0])
-        d += timedelta(days=1)
-    return out
+    """[a, b] as one read; GA4's folded row (no real day) left out and counted (meta "folded")."""
+    got, folded = read(ga, a, b)
+    if folded:
+        meta["folded"] = int(meta.get("folded") or 0) + 1
+    return got
 
 
 # ── the store: its meta file and one file a month ─────────────────────────────────────────────────────────────────

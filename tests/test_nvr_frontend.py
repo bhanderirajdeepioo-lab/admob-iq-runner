@@ -92,19 +92,21 @@ def test_a_picked_countrys_ad_unit_and_format_tables(out):
     without the country data yet the tables stay all countries', said so."""
     assert "Name XA ke ad units load ho rahe hain" in out["uc_loading"] and "unit_tiny" in out["uc_loading"]   # no collapse
     u = out["uc_xa"]["units"]
-    assert u.startswith("Ad units · [XA] Name XA") and "✓ Neeche Ad units / Ad formats ki tables sirf Name XA ki hain" in u
+    assert u.startswith("Ad units · [XA] Name XA") and "✓ Neeche Ad units / Ad formats ki tables sirf Name XA ki hain — GA4 ne is country ka poora diya" in u
     assert "unit_open App open $2.00 $1.00 2.0× 9,000 30,000 $18 $30" in u      # 30 days: 21 Oct … 30 Oct + earlier, XA only
     assert "unit_banner Banner $2.00 $1.00" in u and "unit_tiny" not in u
     assert "App open $2.00 $1.00 2.0×" in out["uc_xa"]["formats"]
     b = out["uc_xb"]
-    assert b.startswith("Ad units · [XB] Name XB") and "GA4 ne Name XB ki 31% ad kamai hi ad unit ke saath di" in b
+    assert b.startswith("Ad units · [XB] Name XB") and "GA4 ne Name XB ki 31% ad kamai aur 25% impressions hi ad unit ke saath diye" in b
     assert "first session +50%" in b and "returning +0.0%" in b and "unit_banner" not in b
     y = out["uc_yday"]                                     # a recent day: shown, never "measured" against a fresher read
     assert "sirf Name XB ki hain" in y and "pakke dino pe hi naapa" in y and "⚠️" not in y
     assert "aa raha hai" not in out["uc_before"]           # days before the app's first day never "coming"
     m = out["uc_miss"]                                     # 10 of the 30 days read: both sides over those 10 only
-    assert "Is period ke 20 din ka Name XB ka ad-unit data abhi aa raha hai" in m and "Name XB ki 31% ad kamai" in m
+    assert "Is period ke 20 din ka Name XB ka ad-unit data abhi aa raha hai" in m and "Name XB ki 31% ad kamai aur 25% impressions" in m
     n = out["uc_none"]
     assert n.startswith("Ad units har ad unit") and "Name XB ka ad-unit data GA4 se aa raha hai" in n and "unit_tiny" in n
     assert out["uc_loads"] == ["nvr_uc_000000000009_1.json.gz?v=u1", "nvr_uc_000000000009_2.json.gz?v=u2"]
+    i = out["uc_imps"]                                     # revenue whole, impressions a quarter: the eCPMs are wrong
+    assert "⚠️" in i and "Name XA ki 100% ad kamai aur 25% impressions" in i and "first session +300%" in i and "✓" not in i
 

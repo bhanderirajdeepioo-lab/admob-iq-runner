@@ -118,8 +118,9 @@ const tbl = (title) => { const i = h().indexOf(`<h3>${title}</h3>`); return i < 
     // a picked country's ad unit / format tables (owner, 3 Nov 2026): the app's "uc" shard holding the country (XA → 1,
     // XB → 2 of 8), loaded on the pick; XA whole (✓), XB a part only (⚠️ the share GA4 gave + the kept eCPM's gap),
     // days the country read has not reached counted, and no "uc" yet → said, the tables all countries'
+    let QI = 1;                                            // XA's impressions in its shard ÷ this (revenue always whole)
     const shard = (n) => ({ v: 1, key: '000000000009', s: n, d0: D0, units: [['unit_open', 'App open'], ['unit_banner', 'Banner']],
-      c: n === 1 ? { XA: [].concat(...Array.from({ length: 63 }, (_, i) => i === 10 ? [] : [[i, 0, 0, 0.6, 300], [i, 0, 1, 1, 1000], [i, 1, 0, 0.6, 300], [i, 1, 1, 1, 1000]])) }
+      c: n === 1 ? { XA: [].concat(...Array.from({ length: 63 }, (_, i) => i === 10 ? [] : [[i, 0, 0, 0.6, 300 / QI], [i, 0, 1, 1, 1000 / QI], [i, 1, 0, 0.6, 300 / QI], [i, 1, 1, 1, 1000 / QI]])) }
         : n === 2 ? { XB: [].concat(...Array.from({ length: 63 }, (_, i) => i === 10 ? [] : [[i, 0, 0, 0.3, 50], [i, 0, 1, 0.25, 500]])) } : {} });
     const UCL = [];
     ctx.fetchGzJson = url => { UCL.push(url); const m = /^nvr_uc_000000000009_(\d)\.json\.gz/.exec(url);
@@ -143,6 +144,11 @@ const tbl = (title) => { const i = h().indexOf(`<h3>${title}</h3>`); return i < 
     delete ptr.uc; NVR.repaint();
     out.uc_none = strip(card('Ad units'));
     out.uc_loads = UCL.filter(u => u.startsWith('nvr_uc_'));
+    // revenue whole but a quarter of the impressions (GA4's one-day reads of this split): ⚠️, never ✓
+    QI = 4; ptr.uc = { n: 8, files: Array.from({ length: 8 }, (_, i) => ['nvr_uc_000000000009_' + i + '.json.gz', 'w' + i]), from: D0, last: day(62),
+      rd: [[0, 9], [11, 62]], bf: true };
+    tap('[data-nvr-cc]', { nvrCc: 'XA' }); await flush(); await flush();
+    out.uc_imps = strip(card('Ad units'));
     tap('[data-nvr-cc]', { nvrCc: '' });
   } catch (e) { errors.push(String(e && e.stack || e)); }
   console.log(JSON.stringify({ errors, out }));
