@@ -1,0 +1,46 @@
+# One-off: does Python's zoneinfo find the time zone names the build gets from Google ("Asia/Calcutta" is an old alias
+# name) on each runner image? Prints generic zone names only — no data, no secrets.
+name: zone-check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -q -r requirements.txt
+      - name: Zones
+        run: |
+          python - <<'PY'
+          import os, sys, zoneinfo
+          print("python", sys.version.split()[0], "tzpath", zoneinfo.TZPATH)
+          for n in ("Asia/Calcutta", "Asia/Kolkata", "America/New_York", "America/Los_Angeles", "Etc/GMT+12", "Etc/GMT", "UTC"):
+              try:
+                  zoneinfo.ZoneInfo(n); r = "ok"
+              except Exception as e:
+                  r = type(e).__name__
+              print("zone", n, r, "system-file" if os.path.exists("/usr/share/zoneinfo/" + n) else "no-system-file")
+          try:
+              import tzdata
+              print("tzdata python package", tzdata.IANA_VERSION)
+          except Exception:
+              print("tzdata python package: not installed")
+          PY
+          grep -E "^(PRETTY_NAME|VERSION_ID)" /etc/os-release
+          dpkg-query -W tzdata tzdata-legacy 2>&1 || true
