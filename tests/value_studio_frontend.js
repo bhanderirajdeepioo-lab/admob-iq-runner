@@ -168,4 +168,11 @@ get('states', `(()=>{ ${RESET} const r={};
   DATA.value.apps.pop(); DATA.apps_catalog.pop(); SMPAPPS=null; VS._.load(__STUDIO); valScreen();
   return JSON.stringify(r); })()`);
 out.n = Object.keys(out).length;
+// the owner's standard picker (3 Nov 2026): every new choice renders — an empty period says so, All time's compare reads —,
+// no NaN / Infinity / undefined anywhere; the buttons in his order
+get('stdper', `(()=>{ const r={}; for(const k of ['7','today','yday','tm','lm','90','all']){ ${RESET} KWIN=k; const h=valScreen();
+  r[k]={empty:/ka koi install week abhi data me nahi/.test(h), bad:/NaN|Infinity|undefined/.test(h), nc:/is range se pehle koi install week nahi/.test(h),
+    pressed:(h.match(/data-r="([^"]+)" aria-pressed="true"/)||[])[1]||'', W:VS._.W(), today:DATA.today_date}; }
+  ${RESET} const h0=valScreen(); r.order=[...((h0.match(/id="vs-rng"[\\s\\S]*?<\\/div>/)||[''])[0]).matchAll(/data-r="([^"]+)"/g)].map(m=>m[1]);
+  return JSON.stringify(r); })()`);
 process.stdout.write(JSON.stringify({ errors, out }));

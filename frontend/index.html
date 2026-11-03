@@ -11906,7 +11906,7 @@ function uniWindow(a,tillOverride){
   const till=tillOverride||(a&&a.data_till), hs=uniFirst(a)||till;
   const none={from:'',to:'',days:0,label:'No GA4 data',empty:true}; if(!till) return none;
   const w=kwWin(hs,till);
-  if(w.empty) return Object.assign({},none,{label:'No GA4 data for this period yet'});
+  if(w.empty) return Object.assign({},none,{label:'No GA4 data for this period yet (GA4 data till '+fmtD(till)+')'});
   return {from:w.from,to:w.to,days:w.days,label:uniSpan(w.from,w.to)+' · '+w.days+'d',empty:false};
 }
 // the common end date for the All-apps pooled window: the MIN data_till among the apps that have one (so every
@@ -12122,13 +12122,30 @@ let KWIN='7', KWCUSTOM={from:'',to:''}, KWERR='';
 // comparison baseline: 'prev' (default — the previous period, same length) · 'month' (the same dates one
 // calendar month back, each end clamped to that month's last day) · 'custom' (any range, any length)
 let KCMP='prev', KCMPCUSTOM={from:'',to:''}, KCMPERR='';
-const KW_OPTS=[['7','7 days'],['14','14 days'],['30','30 days'],['60','60 days'],['custom','📅 Custom']];
+// the owner's standard picker (3 Nov 2026) in his order — Today · Yesterday · 7 days · This month · Last month · 30 / 60 / 90
+// days · All time · Custom — plus the 14 days these tabs had; ONE choice for the three tabs' top numbers and their Studios
+const KW_OPTS=[['today','Today'],['yday','Yesterday'],['7','7 days'],['14','14 days'],['tm','This month'],['lm','Last month'],['30','30 days'],['60','60 days'],['90','90 days'],['all','All time'],['custom','📅 Custom']];
 const KW_CMP_OPTS=[['prev','Previous same days'],['month','Same days last month'],['custom','📅 Custom compare']];
-const KW_N={'7':7,'14':14,'30':30,'60':60};
+const KW_N={'7':7,'14':14,'30':30,'60':60,'90':90};
+// the calendar choices: a window on the AdMob calendar (DATA.today_date = the report's today), not "the last N data days" —
+// GA4 runs 2–3 days behind, so Today / Yesterday (and This month on its first days) have no GA4 day yet: an empty window,
+// said as such, never the newest data day passed off as "Today"
+const KW_CAL={today:1,yday:1,tm:1,lm:1,all:1};
+function kwCal(k){ const T=(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||''; if(!T||!KW_CAL[k]) return null;
+  const m0=T.slice(0,8)+'01';
+  if(k==='today') return {from:T,to:T};
+  if(k==='yday'){ const y=uniAdd(T,-1); return {from:y,to:y}; }
+  if(k==='tm') return {from:m0,to:T};
+  if(k==='lm'){ const l=uniAdd(m0,-1); return {from:l.slice(0,8)+'01',to:l}; }
+  return {from:'0000-01-01',to:T}; }
+// the shared choice's name as its button says it (a fixed label, never data)
+function kwLabel(){ const o=KW_OPTS.find(x=>x[0]===KWIN); return o?o[1].replace('📅 ',''):'Period'; }
+// a Studio button's value for the shared choice (KWIN): 'c' = Custom, the N of an N-day choice, else the calendar key
+function kwStudioR(){ return KWIN==='custom'?'c':(KW_N[KWIN]?String(KW_N[KWIN]):(KW_CAL[KWIN]&&kwCal(KWIN)?KWIN:'7')); }
 const KW_MAXDAYS=365;
 const KW_NONE={from:'',to:'',days:0,empty:true};
 function kwLoad(){ try{ const j=JSON.parse(localStorage.getItem('kwin_v1')||'null'); if(!j||typeof j!=='object') return;
-    if(Object.prototype.hasOwnProperty.call(KW_N,j.win)||j.win==='custom') KWIN=j.win;
+    if(Object.prototype.hasOwnProperty.call(KW_N,j.win)||Object.prototype.hasOwnProperty.call(KW_CAL,j.win)||j.win==='custom') KWIN=j.win;
     if(j.custom&&typeof j.custom==='object') KWCUSTOM={from:String(j.custom.from||''),to:String(j.custom.to||'')};
     if(['prev','month','custom'].includes(j.cmp)) KCMP=j.cmp;
     if(j.cmpCustom&&typeof j.cmpCustom==='object') KCMPCUSTOM={from:String(j.cmpCustom.from||''),to:String(j.cmpCustom.to||'')};
@@ -12152,6 +12169,9 @@ function kwWin(hs,till){
     const f=f0<hs?hs:f0, t=t0>till?till:t0; if(f>t) return KW_NONE;
     return {from:f,to:t,days:uniDiff(f,t)+1,empty:false};
   }
+  const c=kwCal(KWIN);
+  if(c){ const f=c.from<hs?hs:c.from, t=c.to>till?till:c.to; if(f>t) return KW_NONE;   // (Today: GA4 has no day yet)
+    return {from:f,to:t,days:uniDiff(f,t)+1,empty:false}; }
   const t=till, f0=uniAdd(t,-(kwDays()-1)), f=f0<hs?hs:f0; if(f>t) return KW_NONE;
   return {from:f,to:t,days:uniDiff(f,t)+1,empty:false};
 }
@@ -12275,7 +12295,8 @@ function kwRateAvgLine(curV,curDays,cmpV,cmpW,fmt){
   return `${fmt(cmpV)} → ${fmt(curV)}${pct==null?'':' ('+signed(pct)+')'}`;
 }
 // default dates to PREFILL an empty custom box with (never mutates state — Apply still needs a tap)
-function kwDefCustom(hs,till){ const t=till||'', f0=t?uniAdd(t,-(kwDays()-1)):'', f=(f0&&hs&&f0<hs)?hs:f0; return {from:f,to:t}; }
+function kwDefCustom(hs,till){ const w=KWIN!=='custom'&&kwCal(KWIN)?kwWin(hs,till):null; if(w&&!w.empty) return {from:w.from,to:w.to};
+  const t=till||'', f0=t?uniAdd(t,-(kwDays()-1)):'', f=(f0&&hs&&f0<hs)?hs:f0; return {from:f,to:t}; }
 // the selector itself: period chips + (when custom) its date boxes, the Compare dropdown + (when custom) its own
 // date boxes, and the one grey note. tag = 'uni' | 'act' | 'val' (keeps element ids unique — all three screens'
 // markup exists in the DOM at once, only one is shown). hs/till = THIS screen's own data bounds (for the date
@@ -12491,20 +12512,26 @@ try{ const s=JSON.parse(localStorage.getItem(LS)||'{}')||{}; if(s.chgView==='car
   if(s.cvS==='all'||s.cvS==='recent') ST.cvS=s.cvS; if(s.cvR==='30'||s.cvR==='90'||s.cvR==='all') ST.cvR=s.cvR; }catch(e){}
 function save(){ try{ localStorage.setItem(LS,JSON.stringify({chgView:ST.chgView,cohMode:ST.cohMode,cvS:ST.cvS,cvR:ST.cvR})); }catch(e){} }
 const RM=(()=>{ try{ return matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ return false; } })();
-const rangeOf=()=>KWIN==='custom'?'c':(KW_N[KWIN]||7);
+const rangeOf=()=>kwStudioR();   // 'c' · '7' … '90' · a calendar key (today, yday, tm, lm, all)
 const cmpOf=()=>KCMP==='custom'?'c':(KCMP==='month'?'month':'prev');
 
 /* ================= windows ================= */
 const clampD=s=>s<H0()?H0():(s>M.E?M.E:s);
-function windows(){ let f,t; const R0=rangeOf(), C0=cmpOf(), f1=KWCUSTOM.from, t1=KWCUSTOM.to, f2=KCMPCUSTOM.from, t2=KCMPCUSTOM.to;
+// a calendar choice (Today … All time, the owner's standard picker) = its days that have GA4 data; none (Today: GA4 runs 2–3
+// days behind) → empty: the Studio says so (emptyHtml) instead of showing other days. A comparison with no day before the
+// window (All time, a window from the first day) → nc: every "vs" number reads — (never a 1-day stand-in)
+function windows(){ let f,t,E=false; const R0=rangeOf(), C0=cmpOf(), f1=KWCUSTOM.from, t1=KWCUSTOM.to, f2=KCMPCUSTOM.from, t2=KCMPCUSTOM.to, cal=kwCal(R0);
   if(R0==='c'&&f1&&t1){ f=clampD(f1); t=clampD(t1); if(f>t){ const x=f; f=t; t=x; } }
+  else if(cal){ f=cal.from<H0()?H0():cal.from; t=cal.to>M.E?M.E:cal.to; if(f>t){ E=true; f=t=M.E; } }
   else { t=M.E; f=dAdd(M.E,-((R0==='c'?30:+R0)-1)); }
-  const L=dDiff(f,t)+1; let cf,ct;
+  const L=dDiff(f,t)+1; let cf,ct, nc=false;
   if(C0==='month'){ cf=addMonths(f,-1); ct=addMonths(t,-1); if(ct>=f) ct=dAdd(f,-1); }
   else if(C0==='c'&&f2&&t2){ cf=clampD(f2); ct=clampD(t2); if(cf>ct){ const x=cf; cf=ct; ct=x; } }
   else { ct=dAdd(f,-1); cf=dAdd(ct,-(L-1)); }
+  if(ct<H0()) nc=true;
   if(cf<H0()) cf=H0(); if(ct<cf) ct=cf;
-  return {f,t,L,cf,ct,cL:dDiff(cf,ct)+1}; }
+  if(nc){ cf=ct=dAdd(H0(),-1); }                       // no data day: the sums come out empty
+  return {f,t,L,cf,ct,cL:nc?0:dDiff(cf,ct)+1,empty:E,nc}; }
 
 /* ================= core math (mirrors the dashboard's uniSums / uniKpiRow) ================= */
 function sums(a,f,t){ const i0=Math.max(ix(f),a.fi,0), i1=Math.min(ix(t),N-1);
@@ -12753,15 +12780,16 @@ const szH=a=>a.sz==='badi'?'<span class="us-sz us-badi" title="Big app — reven
 
 /* ================= header (the Studio's top bar: range / compare = KPIWINDOW, ₹ / $ = the dashboard's) ================= */
 function winHtml(){ const firstK=dAdd(M.settled,1);
+  if(W.empty) return `<span>📅 <b>${kwLabel()}</b>: is period ka GA4 data abhi nahi — GA4 data <b>${fd(M.E)}</b> tak hai (2–3 din peeche chalta hai)</span>`;
   const kd=W.t>M.settled?`<span class="us-prov">⏳ ${span(firstK>W.f?firstK:W.f,W.t)} not final · final on ${fd(dAdd(W.t,M.late+M.lag))}</span>`:'<span class="us-good">✓ All days final</span>';
-  return `<span>📅 <b>${span(W.f,W.t)}</b> (${W.L} days) <span class="us-faint">vs</span> <b>${span(W.cf,W.ct)}</b>${W.cL!==W.L?' ('+W.cL+' days)':''}</span>`
+  return `<span>📅 <b>${span(W.f,W.t)}</b> (${W.L} days) <span class="us-faint">vs</span> ${W.nc?'<b>—</b> <span class="us-faint">(is period se pehle GA4 data nahi)</span>':`<b>${span(W.cf,W.ct)}</b>${W.cL!==W.L?' ('+W.cL+' days)':''}`}</span>`
     +`<span>All ${A.length} apps: GA4 data till <b>${fd(M.E)}</b> (same day)</span>${kd}<span class="us-faint">Numbers = daily average<span class="us-kb"> · ⌨ <span class="us-kbd">7</span> <span class="us-kbd">1</span> <span class="us-kbd">3</span> <span class="us-kbd">6</span></span></span>`; }
 function topHtml(){ const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
   const rb=(v,l,k)=>`<button data-r="${v}" aria-pressed="${r0===v}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`;
   const iv=(id,v,lab)=>`<input type="date" id="${id}" aria-label="${lab}" value="${v}" min="${pickMin()}" max="${M.E}">`;
   return `<div class="us-top-in"><div class="us-brand"><span class="us-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18"><rect x="4" y="1.5" width="10" height="15" rx="2.2" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M9 5.5v6m-2.6-2.4L9 11.7l2.6-2.6" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`
     +`<div><div class="us-bn">Uninstall Studio</div><div class="us-sub">All apps · ${A.length} apps${NOGA.length?' + '+NOGA.length+' without GA4':''}</div></div></div>`
-    +`<div class="us-ctrls"><div class="us-seg" id="us-rng" role="group" aria-label="Range">${rb('7','7 days','7')}${rb('14','14','1')}${rb('30','30','3')}${rb('60','60','6')}${rb('c','Custom','')}</div>`
+    +`<div class="us-ctrls"><div class="us-seg" id="us-rng" role="group" aria-label="Range">${rb('today','Today','')}${rb('yday','Yesterday','')}${rb('7','7 days','7')}${rb('14','14','1')}${rb('tm','This month','')}${rb('lm','Last month','')}${rb('30','30','3')}${rb('60','60','6')}${rb('90','90','9')}${rb('all','All time','')}${rb('c','Custom','')}</div>`
     +`<label class="us-sel" for="us-cmp"><span>vs</span><select id="us-cmp"><option value="prev"${c0==='prev'?' selected':''}>Previous same days</option><option value="month"${c0==='month'?' selected':''}>Same days last month</option><option value="c"${c0==='c'?' selected':''}>Custom range…</option></select></label>`
     +`<div class="us-seg" id="us-cur" role="group" aria-label="Currency"><button data-c="INR" aria-pressed="${cur==='INR'}">₹</button><button data-c="USD" aria-pressed="${cur==='USD'}">$</button></div></div></div>`
     +`<div class="us-custom" id="us-customRow"${(r0==='c'||c0==='c')?'':' hidden'}><span class="us-grp" id="us-cgA"${r0==='c'?'':' hidden'}>Range ${iv('us-cf1',W.f,'Range from')} – ${iv('us-ct1',W.t,'Range to')}</span>`
@@ -13642,7 +13670,11 @@ function waitHtml(note,view,id){ VIEW=view; PAGE=id; W=windows(); WAITING=true; 
     :`⏳ ${fd(d)} se ${fd(dAdd(RAW.meta.S,-1))} tak ka purana data load ho raha hai… <span class="us-faint">(purane din alag file me — sirf zarurat pe aate)</span>`;
   setTimeout(()=>{ stick(); },0);
   return `<div id="us-root"${view==='app'?' class="us-app-pg"':''}><div class="us-top" id="us-top">${topHtml()}</div><div class="us-wrap" id="us-main">${note||''}<section class="us-panel us-hwait" id="us-hwait" role="status">${msg}</section></div></div>`; }
-function screen(note){ prep(); if(needHist()) return waitHtml(note,'all',null); WAITING=false; VIEW='all'; PAGE=null; SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); engCompute(); font(); wire();
+// a chosen period with no GA4 day yet (Today, Yesterday): the top bar (to pick another) and one line saying so
+function emptyHtml(note,view,id){ VIEW=view; PAGE=id; W=windows(); WAITING=true; font(); wire(); if(ST.drawer>=0) closeDrawer();
+  setTimeout(()=>{ stick(); },0);
+  return `<div id="us-root"${view==='app'?' class="us-app-pg"':''}><div class="us-top" id="us-top">${topHtml()}</div><div class="us-wrap" id="us-main">${note||''}<section class="us-panel us-hwait" role="status">📅 <b>${kwLabel()}</b> ka GA4 data abhi nahi aaya — GA4 data ${fd(M.E)} tak hai (GA4 2–3 din peeche chalta hai). Upar koi aur period chuniye.</section></div></div>`; }
+function screen(note){ prep(); if(needHist()) return waitHtml(note,'all',null); if(windows().empty) return emptyHtml(note,'all',null); WAITING=false; VIEW='all'; PAGE=null; SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); engCompute(); font(); wire();
   setTimeout(afterMount,0);
   return `<div id="us-root"><div class="us-top" id="us-top">${topHtml()}</div>`
     +`<div class="us-wrap" id="us-main">${note||''}<section class="us-story" id="us-story" aria-label="Most important things">${storyHtml()}</section>`
@@ -13654,7 +13686,7 @@ function screen(note){ prep(); if(needHist()) return waitHtml(note,'all',null); 
 // is this app in the Studio's file (visible apps)? — else its older page stays as it was
 function has(id){ try{ prep(); return A.some(a=>a.id===id); }catch(e){ return false; } }
 // one app's full page (the top App selector, "Poora app page →", an app opened anywhere on the tab)
-function appScreen(id,note){ prep(); if(needHist()) return waitHtml(note,'app',id); WAITING=false; VIEW='app'; PAGE=id; SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); font(); wire();
+function appScreen(id,note){ prep(); if(needHist()) return waitHtml(note,'app',id); if(windows().empty) return emptyHtml(note,'app',id); WAITING=false; VIEW='app'; PAGE=id; SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); font(); wire();
   if(ST.drawer>=0) closeDrawer();                       // (the quick look belongs to All apps)
   const i=A.findIndex(a=>a.id===id); setTimeout(afterMount,0);
   return `<div id="us-root" class="us-app-pg"><div class="us-top" id="us-top">${topHtml()}</div><div class="us-wrap" id="us-main">${note||''}<section id="us-apg" aria-label="App page">${pageHtml(i)}</section>`
@@ -13672,7 +13704,7 @@ function afterMount(){ const root=$('us-root'); if(!root) return; layer(); stick
   if(ST.drawer>=0){ const i=A.findIndex(a=>a.id===ST.did); if(i<0) closeDrawer(); else { ST.drawer=i; renderDrawer(ST.dScroll); const d=$('us-drawer'); if(d&&!d.classList.contains('us-on')){ d.classList.add('us-on'); $('us-scrim').classList.add('us-on'); lock(true); } } } }
 // a Studio-only change (range, compare, a key): every section again, in place — the header keeps its focus
 let firstAll=true;
-function renderAll(){ const root=$('us-root'); if(!root||WAITING||needHist()){ uniRerender(); return; }
+function renderAll(){ const root=$('us-root'); if(!root||WAITING||needHist()||windows().empty){ uniRerender(); return; }
   const m=$('us-main'); if(m&&!RM&&!REFRESH_SILENT){ m.classList.remove('us-fresh'); void m.offsetWidth; m.classList.add('us-fresh'); clearTimeout(renderAll.t); renderAll.t=setTimeout(()=>m.classList.remove('us-fresh'),700); }   // never on a silent background refresh — only a user-driven change earns the entrance flash
   SPF='us-s'; spkN=0; for(const k in SPK) delete SPK[k]; compute(); renderTop();
   const set=(id,h)=>{ const el=$(id); if(el) el.innerHTML=h; };
@@ -13730,7 +13762,7 @@ function wire(){ if(WIRED) return; WIRED=true;
     if(typing||e.metaKey||e.ctrlKey||e.altKey) return;
     if(ST.drawer>=0&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){ navDrawer(e.key==='ArrowLeft'?-1:1); e.preventDefault(); return; }
     if(VIEW==='app'&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){ navPage(e.key==='ArrowLeft'?-1:1); e.preventDefault(); return; }
-    const m={'7':'7','1':'14','3':'30','6':'60'}[e.key]; if(m){ setRange(m); e.preventDefault(); return; }
+    const m={'7':'7','1':'14','3':'30','6':'60','9':'90'}[e.key]; if(m){ setRange(m); e.preventDefault(); return; }
     if(e.key==='/'){ const q=$('us-q'); if(q){ q.focus(); q.scrollIntoView({block:'center',behavior:RM?'auto':'smooth'}); e.preventDefault(); } } });
   let rzT=0, lastW=innerWidth; addEventListener('resize',()=>{ clearTimeout(rzT); rzT=setTimeout(()=>{ if(!$('us-root')) return; stick(); if(Math.abs(innerWidth-lastW)<40) return; lastW=innerWidth; if(VIEW==='app'){ const el=$('us-apg'); PW=(el&&el.clientWidth)||PW; renderPage(); return; } renderTl(); if(ST.drawer>=0) renderDrawer(true); },180); }); }
 function navDrawer(dir){ const ord=navOrder(), p=ord.indexOf(ST.drawer), q=(p+dir+ord.length)%ord.length; ST.drawer=ord[q]; ST.did=A[ST.drawer].id; renderDrawer(); const d=$('us-drawer'); if(d) d.scrollTop=0; }
@@ -15919,21 +15951,27 @@ const LS='activeStudio.v1';
 try{ const s=JSON.parse(localStorage.getItem(LS)||'{}')||{}; if(s.chgView==='cards'||s.chgView==='table') ST.chgView=s.chgView; }catch(e){}
 function save(){ try{ localStorage.setItem(LS,JSON.stringify({chgView:ST.chgView})); }catch(e){} }
 const RM=(()=>{ try{ return matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ return false; } })();
-const rangeOf=()=>KWIN==='custom'?'c':(KW_N[KWIN]||7);
+const rangeOf=()=>kwStudioR();   // 'c' · '7' … '90' · a calendar key (today, yday, tm, lm, all)
 const cmpOf=()=>KCMP==='custom'?'c':(KCMP==='month'?'month':'prev');
 
 /* ================= windows ================= */
 const clampD=s=>s<H0()?H0():(s>M.E?M.E:s);
-function windows(){ let f,t; const R0=rangeOf(), C0=cmpOf(), f1=KWCUSTOM.from, t1=KWCUSTOM.to, f2=KCMPCUSTOM.from, t2=KCMPCUSTOM.to;
+// a calendar choice (Today … All time, the owner's standard picker) = its days that have GA4 data; none (Today: GA4 runs 2–3
+// days behind) → empty: the Studio says so (emptyHtml) instead of showing other days. A comparison with no day before the
+// window (All time, a window from the first day) → nc: every "vs" number reads — (never a 1-day stand-in)
+function windows(){ let f,t,E=false; const R0=rangeOf(), C0=cmpOf(), f1=KWCUSTOM.from, t1=KWCUSTOM.to, f2=KCMPCUSTOM.from, t2=KCMPCUSTOM.to, cal=kwCal(R0);
   if(R0==='c'&&f1&&t1){ f=clampD(f1); t=clampD(t1); if(f>t){ const x=f; f=t; t=x; } }
+  else if(cal){ f=cal.from<H0()?H0():cal.from; t=cal.to>M.E?M.E:cal.to; if(f>t){ E=true; f=t=M.E; } }
   else { t=M.E; f=dAdd(M.E,-((R0==='c'?30:+R0)-1)); }
-  const L=dDiff(f,t)+1; let cf,ct;
+  const L=dDiff(f,t)+1; let cf,ct, nc=false;
   if(C0==='month'){ cf=addMonths(f,-1); ct=addMonths(t,-1); if(ct>=f) ct=dAdd(f,-1); }
   else if(C0==='c'&&f2&&t2){ cf=clampD(f2); ct=clampD(t2); if(cf>ct){ const x=cf; cf=ct; ct=x; } }
   else { ct=dAdd(f,-1); cf=dAdd(ct,-(L-1)); }
+  if(ct<H0()) nc=true;
   if(cf<H0()) cf=H0(); if(ct<cf) ct=cf;
+  if(nc){ cf=ct=dAdd(H0(),-1); }                       // no data day: the sums come out empty
   const ts=t>M.settled?M.settled:t;
-  return {f,t,L,cf,ct,cL:dDiff(cf,ct)+1,ts,sL:ts>=f?dDiff(f,ts)+1:0}; }
+  return {f,t,L,cf,ct,cL:nc?0:dDiff(cf,ct)+1,ts,sL:ts>=f?dDiff(f,ts)+1:0,empty:E,nc}; }
 
 /* ================= core math ================= */
 // the noise of a window of L settled days: the app's own spread at 91 earlier ends (engine empirical null), log-interpolated in L
@@ -16269,8 +16307,9 @@ const splitN=L=>(L&&L.far!=null)?`<span class="as-spl"><span title="Due to insta
 
 /* ================= header (the Studio's top bar: range / compare = KPIWINDOW, ₹ / $ = the dashboard's) ================= */
 function winHtml(){ const pv=W.t>M.settled, firstK=dAdd(M.settled,1);
+  if(W.empty) return `<span>📅 <b>${kwLabel()}</b>: is period ka GA4 data abhi nahi — GA4 data <b>${fd(M.E)}</b> tak hai (2–3 din peeche chalta hai)</span>`;
   const kd=pv?`<span class="as-prov" data-tk="prov:0">⏳ ${span(firstK>W.f?firstK:W.f,W.t)} not final · final on ${fd(dAdd(W.t,M.actLate+M.lag))}</span>`:'<span class="as-good">✓ All days final</span>';
-  return `<span>📅 <b>${span(W.f,W.t)}</b> (${W.L} days) <span class="as-faint">vs</span> <b>${span(W.cf,W.ct)}</b>${W.cL!==W.L?' ('+W.cL+' days)':''}</span>`
+  return `<span>📅 <b>${span(W.f,W.t)}</b> (${W.L} days) <span class="as-faint">vs</span> ${W.nc?'<b>—</b> <span class="as-faint">(is period se pehle GA4 data nahi)</span>':`<b>${span(W.cf,W.ct)}</b>${W.cL!==W.L?' ('+W.cL+' days)':''}`}</span>`
     +`<span>All ${A.length} apps: GA4 data till <b>${fd(M.E)}</b> (same day)</span>${kd}<span>Users vs normal: <b>${W.sL?'final days '+pakkaSpan():'—'}</b> vs 4 weeks before</span><span class="as-faint">Numbers = daily average<span class="as-kb"> · ⌨ <span class="as-kbd">7</span> <span class="as-kbd">1</span> <span class="as-kbd">3</span> <span class="as-kbd">6</span></span></span>`; }
 function topHtml(){ const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
   const rb=(v,l,k)=>`<button data-r="${v}" aria-pressed="${r0===v}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`;
@@ -16278,7 +16317,7 @@ function topHtml(){ const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
   return `<div class="as-top-in"><div class="as-brand"><span class="as-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18"><circle cx="6.4" cy="6" r="2.6" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M1.8 15.2c.5-2.7 2.3-4.3 4.6-4.3s4.1 1.6 4.6 4.3" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><path d="M12.2 3.6a2.5 2.5 0 0 1 0 4.9M13.3 10.9c1.6.4 2.6 1.9 2.9 4.3" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg></span>`
     +(MODE==='page'?(()=>{ const o=pgO(); return `<div><div class="as-bn">Active users Studio</div><div class="as-sub"><button class="as-backb" data-back="1">← All apps</button> · ${o?ic(o.a,16,'ail')+esc(o.a.store)+' · '+esc(o.a.acc):''}</div></div></div>`; })()
       :`<div><div class="as-bn">Active users Studio</div><div class="as-sub">All apps · ${A.length} apps${NOGA.length?' + '+NOGA.length+' without GA4':''}</div></div></div>`)
-    +`<div class="as-ctrls"><div class="as-seg" id="as-rng" role="group" aria-label="Range">${rb('7','7 days','7')}${rb('14','14','1')}${rb('30','30','3')}${rb('60','60','6')}${rb('c','Custom','')}</div>`
+    +`<div class="as-ctrls"><div class="as-seg" id="as-rng" role="group" aria-label="Range">${rb('today','Today','')}${rb('yday','Yesterday','')}${rb('7','7 days','7')}${rb('14','14','1')}${rb('tm','This month','')}${rb('lm','Last month','')}${rb('30','30','3')}${rb('60','60','6')}${rb('90','90','9')}${rb('all','All time','')}${rb('c','Custom','')}</div>`
     +`<label class="as-sel" for="as-cmp"><span>vs</span><select id="as-cmp"><option value="prev"${c0==='prev'?' selected':''}>Previous same days</option><option value="month"${c0==='month'?' selected':''}>Same days last month</option><option value="c"${c0==='c'?' selected':''}>Custom range…</option></select></label>`
     +`<div class="as-seg" id="as-cur" role="group" aria-label="Currency"><button data-c="INR" aria-pressed="${cur==='INR'}">₹</button><button data-c="USD" aria-pressed="${cur==='USD'}">$</button></div></div></div>`
     +`<div class="as-custom" id="as-customRow"${(r0==='c'||c0==='c')?'':' hidden'}><span class="as-grp" id="as-cgA"${r0==='c'?'':' hidden'}>Range ${iv('as-cf1',W.f,'Range from')} – ${iv('as-ct1',W.t,'Range to')}</span>`
@@ -16875,7 +16914,11 @@ function waitHtml(note,mode,id){ MODE=mode; PGID=id; W=windows(); WAITING=true; 
     :`⏳ ${fd(d)} se ${fd(dAdd(RAW.meta.S,-1))} tak ka purana data load ho raha hai… <span class="as-faint">(purane din alag file me — sirf zarurat pe aate)</span>`;
   setTimeout(()=>{ stick(); },0);
   return `<div id="as-root"${mode==='page'?' class="as-pgroot"':''}><div class="as-top" id="as-top">${topHtml()}</div><div class="as-wrap" id="as-main">${note||''}<section class="as-panel as-hwait" id="as-hwait" role="status">${msg}</section></div></div>`; }
-function screen(note){ MODE='all'; PGID=null; prep(); if(needHist()) return waitHtml(note,'all',null); WAITING=false; spkN=0; for(const k in SPK) delete SPK[k]; for(const k in CH) delete CH[k]; compute(); font(); wire();
+// a chosen period with no GA4 day yet (Today, Yesterday): the top bar (to pick another) and one line saying so
+function emptyHtml(note,mode,id){ MODE=mode; PGID=id; W=windows(); WAITING=true; font(); wire(); if(ST.drawer>=0) closeDrawer();
+  setTimeout(()=>{ stick(); },0);
+  return `<div id="as-root"${mode==='page'?' class="as-pgroot"':''}><div class="as-top" id="as-top">${topHtml()}</div><div class="as-wrap" id="as-main">${note||''}<section class="as-panel as-hwait" role="status">📅 <b>${kwLabel()}</b> ka GA4 data abhi nahi aaya — GA4 data ${fd(M.E)} tak hai (GA4 2–3 din peeche chalta hai). Upar koi aur period chuniye.</section></div></div>`; }
+function screen(note){ MODE='all'; PGID=null; prep(); if(needHist()) return waitHtml(note,'all',null); if(windows().empty) return emptyHtml(note,'all',null); WAITING=false; spkN=0; for(const k in SPK) delete SPK[k]; for(const k in CH) delete CH[k]; compute(); font(); wire();
   setTimeout(afterMount,0);
   return `<div id="as-root"><div class="as-top" id="as-top">${topHtml()}</div>`
     +`<div class="as-wrap" id="as-main">${note||''}<section class="as-story" id="as-story" aria-label="Most important things">${storyHtml()}</section>`
@@ -16885,7 +16928,7 @@ function screen(note){ MODE='all'; PGID=null; prep(); if(needHist()) return wait
     +`<details class="as-foot" id="as-foot">${footHtml()}</details></div></div>`; }
 // one app's full page (the dashboard's actScreen with an app chosen): the Studio's top bar (the shared range) + the drawer's
 // content laid out full width → null when this app is not in the Studio's file (the page then shows the older page)
-function page(id){ prep(); if(!A.some(a=>a.id===id)) return null; if(needHist()) return waitHtml('','page',id); WAITING=false; MODE='page'; PGID=id; if(ST.drawer>=0) closeDrawer();
+function page(id){ prep(); if(!A.some(a=>a.id===id)) return null; if(needHist()) return waitHtml('','page',id); if(windows().empty) return emptyHtml('','page',id); WAITING=false; MODE='page'; PGID=id; if(ST.drawer>=0) closeDrawer();
   spkN=0; for(const k in SPK) delete SPK[k]; for(const k in CH) delete CH[k]; compute(); font(); wire();
   setTimeout(afterMount,0);
   return `<div id="as-root" class="as-pgroot"><div class="as-top" id="as-top">${topHtml()}</div><div class="as-wrap" id="as-main"><div class="as-pg" id="as-pg">${pageBody(pgO())}</div>`
@@ -16903,7 +16946,7 @@ function afterMount(){ const root=$('as-root'); if(!root) return; layer(); stick
   countUp();
   if(ST.drawer>=0){ const i=A.findIndex(a=>a.id===ST.did); if(i<0) closeDrawer(); else { ST.drawer=i; renderDrawer(ST.dScroll); const d=$('as-drawer'); if(d&&!d.classList.contains('as-on')){ d.classList.add('as-on'); d.setAttribute('aria-hidden','false'); $('as-scrim').classList.add('as-on'); lock(true); } } } }
 // a Studio-only change (range, compare, a key): every section again, in place — the header keeps its focus
-function renderAll(){ const root=$('as-root'); if(!root||WAITING||needHist()){ actRerender(); return; }
+function renderAll(){ const root=$('as-root'); if(!root||WAITING||needHist()||windows().empty){ actRerender(); return; }
   const m=$('as-main'); if(m&&!RM&&!REFRESH_SILENT){ m.classList.remove('as-fresh'); void m.offsetWidth; m.classList.add('as-fresh'); clearTimeout(renderAll.t); renderAll.t=setTimeout(()=>m.classList.remove('as-fresh'),700); }   // never on a silent background refresh — only a user-driven change earns the entrance flash
   spkN=0; for(const k in SPK) delete SPK[k]; for(const k in CH) delete CH[k]; compute(); renderTop();
   const set=(id,h)=>{ const el=$(id); if(el) el.innerHTML=h; };
@@ -16964,7 +17007,7 @@ function wire(){ if(WIRED) return; WIRED=true;
     if((e.key==='Enter'||e.key===' ')&&tg&&tg.closest&&tg.closest('.as-opn')&&inStudio(tg)){ e.preventDefault(); tg.click(); return; }
     if(typing||e.metaKey||e.ctrlKey||e.altKey) return;
     if(ST.drawer>=0&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){ navDrawer(e.key==='ArrowLeft'?-1:1); e.preventDefault(); return; }
-    const m={'7':'7','1':'14','3':'30','6':'60'}[e.key]; if(m){ setRange(m); e.preventDefault(); return; }
+    const m={'7':'7','1':'14','3':'30','6':'60','9':'90'}[e.key]; if(m){ setRange(m); e.preventDefault(); return; }
     if(e.key==='/'){ const q=$('as-q'); if(q){ q.focus(); q.scrollIntoView({block:'center',behavior:RM?'auto':'smooth'}); e.preventDefault(); } } });
   let rzT=0, lastW=innerWidth; addEventListener('resize',()=>{ clearTimeout(rzT); rzT=setTimeout(()=>{ if(!$('as-root')) return; stick(); if(Math.abs(innerWidth-lastW)<40) return; lastW=innerWidth;
     if(MODE==='page'){ const pg=$('as-pg'); if(pg){ PGW=pg.clientWidth||PGW; pg.innerHTML=pageBody(pgO()); } } else renderTl(); if(ST.drawer>=0) renderDrawer(true); },180); }); }
@@ -18283,21 +18326,27 @@ const LS='valueStudio.v1';
 try{ const s=JSON.parse(localStorage.getItem(LS)||'{}')||{}; if(s.chgView==='cards'||s.chgView==='table') ST.chgView=s.chgView; }catch(e){}
 function save(){ try{ localStorage.setItem(LS,JSON.stringify({chgView:ST.chgView})); }catch(e){} }
 const RM=(()=>{ try{ return matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ return false; } })();
-const rangeOf=()=>KWIN==='custom'?'c':(KW_N[KWIN]?String(KWIN):'7');
+const rangeOf=()=>kwStudioR();   // 'c' · '7' … '90' · a calendar key (today, yday, tm, lm, all)
 const cmpOf=()=>KCMP==='custom'?'c':(KCMP==='month'?'month':'prev');
 // the shared range in days → whole install weeks (Mon–Sun): 7 din = 1 · 14 = 2 · 30 = 4 · 60 = 8 (the weeks that fit)
 const wkOf=r=>Math.max(1,Math.floor((+r||7)/7));
 
 /* ================= windows (install weeks, never calendar days) ================= */
-function windows(){ let i0,i1; const R0=rangeOf(), C0=cmpOf(), f1=KWCUSTOM.from, t1=KWCUSTOM.to, f2=KCMPCUSTOM.from, t2=KCMPCUSTOM.to;
+// a calendar choice (the owner's standard picker): the install weeks its days fall in (Today / Yesterday: that day's install
+// week; This / Last month: the weeks of that month; All time: every week) — none in the data → empty: the Studio says so
+// (emptyHtml). A comparison with no week before the range (All time, a range from week 1) → nc: every "vs" reads —
+function windows(){ let i0,i1,E=false; const R0=rangeOf(), C0=cmpOf(), f1=KWCUSTOM.from, t1=KWCUSTOM.to, f2=KCMPCUSTOM.from, t2=KCMPCUSTOM.to, cal=kwCal(R0);
   if(R0==='c'&&f1&&t1){ i0=clampW(wOf(f1)); i1=clampW(wOf(t1)); if(i0>i1){ const x=i0; i0=i1; i1=x; } }
+  else if(cal){ const x0=Math.max(0,wOf(cal.from)), x1=Math.min(NW-1,wOf(cal.to)); if(x0>x1){ E=true; i0=i1=Math.max(0,NW-1); } else { i0=x0; i1=x1; } }
   else { i1=NW-1; i0=clampW(i1-((R0==='c'?4:wkOf(R0))-1)); }
-  const L=i1-i0+1; let c0,c1;
+  const L=i1-i0+1; let c0,c1, nc=false;
   if(C0==='month'){ c0=i0-4; c1=i1-4; if(c1>=i0) c1=i0-1; }
   else if(C0==='c'&&f2&&t2){ c0=clampW(wOf(f2)); c1=clampW(wOf(t2)); if(c0>c1){ const x=c0; c0=c1; c1=x; } }
   else { c1=i0-1; c0=c1-(L-1); }
+  if(c1<0) nc=true;
   c0=Math.max(0,c0); c1=Math.max(c0,c1);
-  return {i0,i1,L,c0,c1,cL:c1-c0+1}; }
+  if(nc){ c0=0; c1=-1; }                                 // no week: the compare sums come out empty
+  return {i0,i1,L,c0,c1,cL:nc?0:c1-c0+1,empty:E,nc}; }
 
 /* ================= core math — ONE lens, used everywhere =================
    Ads munafa / nuksaan per din = (kamai per install by day H − cost per install) × installs per din
@@ -18584,18 +18633,19 @@ const nameTxt=a=>a.store+' · '+a.acc;
 /* ================= header (the Studio's top bar: range / compare = KPIWINDOW, ₹ / $ = the dashboard's) ================= */
 function immLine(){ const i1=W.i1, need7=[], needH=[]; for(let i=W.i0;i<=i1;i++){ if(pakka(i,7)>M.today) need7.push(i); if(pakka(i,H)>M.today) needH.push(i); }
   return {need7,needH}; }
-function winHtml(){ const im=immLine();
+function winHtml(){ if(W.empty) return `<span>📦 <b>${kwLabel()}</b>: is period ka koi install week abhi data me nahi — install-day data ${fd(M.settled)} tak hai</span>`;
+  const im=immLine();
   let kd=''; if(im.need7.length) kd+=`<span class="vs-prov" title="Install ke 7 din abhi pure nahi — chhota number nahi dikhate">⏳ ${wkSpan(im.need7[0],im.need7[im.need7.length-1])}: 7-day number final on ${fd(pakka(im.need7[im.need7.length-1],7))}</span>`;
   if(im.needH.length) kd+=`<span class="vs-prov" title="${H} din ki kamai abhi aage ki hai — engine ka ≈ andaza (is app ke purane hafton ki chaal se)">≈ ${H}-day earning (andaza) · ${wkSpan(im.needH[0],im.needH[im.needH.length-1])} · first final ${fd(pakka(im.needH[0],H))}</span>`;
   if(!kd) kd='<span class="vs-good">✓ All weeks final</span>';
-  return `<span>📦 Installs <b>${wkSpan(W.i0,W.i1)}</b> (${W.L} ${W.L===1?'week':'weeks'}) <span class="vs-faint">vs</span> <b>${wkSpan(W.c0,W.c1)}</b>${W.cL!==W.L?' ('+W.cL+' wk)':''}</span>`
+  return `<span>📦 Installs <b>${wkSpan(W.i0,W.i1)}</b> (${W.L} ${W.L===1?'week':'weeks'}) <span class="vs-faint">vs</span> ${W.nc?'<b>—</b> <span class="vs-faint">(is range se pehle koi install week nahi)</span>':`<b>${wkSpan(W.c0,W.c1)}</b>${W.cL!==W.L?' ('+W.cL+' wk)':''}`}</span>`
     +`<span>🎯 Target: money back in <b>${H} days</b></span>${kd}<span class="vs-faint">Install-day data till ${fd(M.settled)} · Google Ads till ${fd(M.spendTill)}<span class="vs-kb"> · ⌨ <span class="vs-kbd">7</span> <span class="vs-kbd">1</span> <span class="vs-kbd">3</span> <span class="vs-kbd">6</span></span></span>`; }
 function topHtml(){ const r0=rangeOf(), c0=cmpOf(), cur=curView();
   const rb=(v,l,k,t)=>`<button data-r="${v}" aria-pressed="${r0===v}" title="${t}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`;
   const iv=(id,v,lab)=>`<input type="date" id="${id}" aria-label="${lab}" value="${v}" min="${pickMin()}" max="${wE(NW-1)}">`;
   return `<div class="vs-top-in"><div class="vs-brand"><span class="vs-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18"><rect x="4" y="1.5" width="10" height="15" rx="2.2" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M9 5v8.2M11.2 6.6c-.4-.7-1.2-1.1-2.2-1.1-1.3 0-2.2.7-2.2 1.7 0 2.3 4.5 1.2 4.5 3.6 0 1-1 1.8-2.3 1.8-1.1 0-2-.5-2.4-1.3" fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`
     +`<div><div class="vs-bn">Value Studio</div><div class="vs-sub">${MODE==='p'&&AI[PGID]?ic(AI[PGID],16,'ail')+esc(AI[PGID].store)+' · '+esc(AI[PGID].acc):'All apps · '+A.length+' apps'+(NOGA.length?' + '+NOGA.length+' without GA4':'')}</div></div></div>`
-    +`<div class="vs-ctrls"><div class="vs-seg" id="vs-rng" role="group" aria-label="Install weeks">${rb('7','7 days','7','1 install week')}${rb('14','14','1','2 install weeks')}${rb('30','30','3','4 install weeks')}${rb('60','60','6','8 install weeks')}${rb('c','Custom','','Custom install weeks')}</div>`
+    +`<div class="vs-ctrls"><div class="vs-seg" id="vs-rng" role="group" aria-label="Install weeks">${rb('today','Today','','Aaj ka install week')}${rb('yday','Yesterday','','Kal ka install week')}${rb('7','7 days','7','1 install week')}${rb('14','14','1','2 install weeks')}${rb('tm','This month','','Is mahine ke install weeks')}${rb('lm','Last month','','Pichhle mahine ke install weeks')}${rb('30','30','3','4 install weeks')}${rb('60','60','6','8 install weeks')}${rb('90','90','9','12 install weeks')}${rb('all','All time','','Har install week')}${rb('c','Custom','','Custom install weeks')}</div>`
     +`<label class="vs-sel" for="vs-cmp"><span>vs</span><select id="vs-cmp"><option value="prev"${c0==='prev'?' selected':''}>Previous same weeks</option><option value="month"${c0==='month'?' selected':''}>4 weeks before (last month)</option><option value="c"${c0==='c'?' selected':''}>Custom weeks…</option></select></label>`
     +`<div class="vs-seg" id="vs-cur" role="group" aria-label="Currency"><button data-c="INR" aria-pressed="${cur==='INR'}">₹</button><button data-c="USD" aria-pressed="${cur!=='INR'}">$</button></div></div></div>`
     +`<div class="vs-custom" id="vs-customRow"${(r0==='c'||c0==='c')?'':' hidden'}><span class="vs-grp" id="vs-cgA"${r0==='c'?'':' hidden'}>Install weeks ${iv('vs-cf1',wS(W.i0),'Range from')} – ${iv('vs-ct1',wE(W.i1),'Range to')}</span>`
@@ -19185,11 +19235,14 @@ let MODE='a', PGID=null;   // 'a' All apps · 'p' one app's full page (PGID)
 // that app's own first week
 function pickMin(){ const a=MODE==='p'&&PGID?AI[PGID]:null; return wS(a&&a.first>0?a.first:0); }
 function has(id){ try{ if(!RAW) return false; prep(); return !!AI[id]; }catch(e){ return false; } }
-function page(id,note){ prep(); PEND=pendRows(); spkN=0; for(const k in SPK) delete SPK[k]; compute(); font(); wire(); MODE='p'; PGID=id; if(ST.drawer>=0) closeDrawer();
+// a chosen period with no install week in the data yet: the top bar (to pick another) and one line saying so
+function emptyHtml(note,mode,id){ MODE=mode; PGID=id; W=windows(); font(); wire(); if(ST.drawer>=0) closeDrawer();
+  return `<div id="vs-root"${mode==='p'?' class="vs-pg"':''}><div class="vs-top" id="vs-top">${topHtml()}</div><div class="vs-wrap" id="vs-main">${note||''}<section class="vs-panel" role="status" style="padding:14px 16px">📦 <b>${kwLabel()}</b> ka koi install week abhi data me nahi — install-day data ${fd(M.settled)} tak hai. Upar koi aur period chuniye.</section></div></div>`; }
+function page(id,note){ prep(); if(windows().empty) return emptyHtml(note,'p',id); PEND=pendRows(); spkN=0; for(const k in SPK) delete SPK[k]; compute(); font(); wire(); MODE='p'; PGID=id; if(ST.drawer>=0) closeDrawer();
   const a=AI[id]; if(!a) throw new Error('app'); const o=R[a.i];
   setTimeout(afterMount,0);
   return `<div id="vs-root" class="vs-pg"><div class="vs-top" id="vs-top">${topHtml()}</div><div class="vs-wrap" id="vs-main">${note||''}<div id="vs-pgbody">${pageHtml(o)}</div></div></div>`; }
-function screen(note){ MODE='a'; PGID=null; prep(); PEND=pendRows(); spkN=0; for(const k in SPK) delete SPK[k]; compute(); font(); wire();
+function screen(note){ MODE='a'; PGID=null; prep(); if(windows().empty) return emptyHtml(note,'a',null); PEND=pendRows(); spkN=0; for(const k in SPK) delete SPK[k]; compute(); font(); wire();
   setTimeout(afterMount,0);
   return `<div id="vs-root"><div class="vs-top" id="vs-top">${topHtml()}</div>`
     +`<div class="vs-wrap" id="vs-main">${note||''}<section class="vs-story" id="vs-story" aria-label="Most important things">${storyHtml()}</section>`
@@ -19213,7 +19266,7 @@ function afterMount(){ const root=$('vs-root'); if(!root) return; layer(); stick
   if(ST.drawer>=0){ const i=A.findIndex(a=>a.id===ST.did); if(i<0) closeDrawer(); else { ST.drawer=i; renderDrawer(ST.dScroll); const d=$('vs-drawer'); if(d&&!d.classList.contains('vs-on')){ d.classList.add('vs-on'); $('vs-scrim').classList.add('vs-on'); lock(true); } } } }
 // a Studio-only change (range, compare, a key): every section again, in place — the header keeps its focus
 function renderPage(){ const el=$('vs-pgbody'), a=AI[PGID]; if(!el||!a){ valRerender(); return; } el.innerHTML=pageHtml(R[a.i]); bindCurve('p'); fitAll(); }
-function renderAll(){ const root=$('vs-root'); if(!root){ valRerender(); return; }
+function renderAll(){ const root=$('vs-root'); if(!root||windows().empty||!$('vs-story')&&MODE==='a'||!$('vs-pgbody')&&MODE==='p'){ valRerender(); return; }
   if(MODE==='p'){ spkN=0; for(const k in SPK) delete SPK[k]; compute(); renderTop(); renderPage(); return; }
   const m=$('vs-main'); if(m&&!RM&&!REFRESH_SILENT){ m.classList.remove('vs-fresh'); void m.offsetWidth; m.classList.add('vs-fresh'); clearTimeout(renderAll.t); renderAll.t=setTimeout(()=>m.classList.remove('vs-fresh'),700); }   // never on a silent background refresh — only a user-driven change earns the entrance flash
   spkN=0; for(const k in SPK) delete SPK[k]; compute(); renderTop();
@@ -19271,7 +19324,7 @@ function wire(){ if(WIRED) return; WIRED=true;
     if((e.key==='Enter'||e.key===' ')&&tg&&tg.closest&&tg.closest('.vs-opn')&&inStudio(tg)){ e.preventDefault(); tg.click(); return; }
     if(typing||e.metaKey||e.ctrlKey||e.altKey) return;
     if(MODE==='a'&&ST.drawer>=0&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){ navDrawer(e.key==='ArrowLeft'?-1:1); e.preventDefault(); return; }
-    const m={'7':'7','1':'14','3':'30','6':'60'}[e.key]; if(m){ setRange(m); e.preventDefault(); return; }
+    const m={'7':'7','1':'14','3':'30','6':'60','9':'90'}[e.key]; if(m){ setRange(m); e.preventDefault(); return; }
     if(e.key==='/'){ const q=$('vs-q'); if(q){ q.focus(); q.scrollIntoView({block:'center',behavior:RM?'auto':'smooth'}); e.preventDefault(); } } });
   let rzT=0, lastW=innerWidth; addEventListener('resize',()=>{ clearTimeout(rzT); rzT=setTimeout(()=>{ if(!$('vs-root')) return; stick(); fitAll(); if(Math.abs(innerWidth-lastW)<40) return; lastW=innerWidth; if(MODE==='p'){ const r=$('vs-root'); if(r){ PGW=r.clientWidth; renderPage(); } return; } renderTl(); if(ST.drawer>=0) renderDrawer(true); },180); }); }
 function navDrawer(dir){ const ord=navOrder(), p=ord.indexOf(ST.drawer), q=(p+dir+ord.length)%ord.length; ST.drawer=ord[q]; ST.did=A[ST.drawer].id; detLoadV(A[ST.drawer]); renderDrawer(); const d=$('vs-drawer'); if(d) d.scrollTop=0; }

@@ -61,6 +61,12 @@ run(RESET);
 // ---------------------------------------------------------------------------------------------------------------
 // pure window math (no fixture needed)
 get('win_presets', `JSON.stringify(['7','14','30','60'].map(n=>{ const keep=KWIN; KWIN=n; const w=kwWin('2026-01-01','2026-09-23'); KWIN=keep; return w; }))`);
+// the owner's standard picker (3 Nov 2026): the calendar choices on the AdMob calendar (today 25 Sep), clipped to the GA4 data
+// (till 23 Sep) — Today / Yesterday have no GA4 day yet: empty; 90 days like the other N-day ones; the buttons in his order
+get('win_std', `JSON.stringify(Object.fromEntries(['today','yday','tm','lm','90','all'].map(k=>{ const keep=KWIN; KWIN=k; const w=kwWin('2026-01-01','2026-09-23'); KWIN=keep; return [k,w]; })))`);
+get('opts', `JSON.stringify(KW_OPTS.map(o=>o[0]))`);
+get('load_all', `(()=>{ const keep=KWIN; localStorage.setItem('kwin_v1', JSON.stringify({win:'all'})); kwLoad(); const r=KWIN; KWIN=keep; localStorage.removeItem('kwin_v1'); return r; })()`);
+get('empty_label', `(()=>{ const keep=KWIN; KWIN='today'; const w=uniWindow({data_till:'2026-09-23', first_open_day:'2026-01-01'}); KWIN=keep; return JSON.stringify(w); })()`);
 get('win_custom_valid', `${RESET} KWIN='custom'; KWCUSTOM={from:'2026-08-01',to:'2026-08-20'}; JSON.stringify(kwWin('2026-01-01','2026-09-23'))`);
 get('win_custom_clip_hs', `${RESET} KWIN='custom'; KWCUSTOM={from:'2025-01-01',to:'2026-01-10'}; JSON.stringify(kwWin('2026-01-01','2026-09-23'))`);
 get('win_custom_f_gt_t', `${RESET} KWIN='custom'; KWCUSTOM={from:'2026-08-20',to:'2026-08-01'}; JSON.stringify(kwWin('2026-01-01','2026-09-23'))`);

@@ -357,3 +357,20 @@ def test_kpi_bands_never_say_per_1000_owner_rule():
     assert "💵 Revenue per user ≈" in s and "💵 Per 1,000 users ≈" not in s
     assert "tile('arpdau','Revenue per user (/day)'" in s and "tile('arpdau','Kamai har 1,000 users se (roz)'" not in s
     assert "S1.rv*1000/S1.ra" not in s and "A.rv*1000/A.ra" not in s
+
+
+def test_the_owners_standard_picker_on_the_top_numbers(report):
+    """Today · Yesterday · 7 days · 14 · This month · Last month · 30 · 60 · 90 · All time · Custom (owner, 3 Nov 2026), by hand:
+    AdMob today 25 Sep, GA4 data 1 Jan … 23 Sep. Today / Yesterday: no GA4 day yet → empty, said with where the data ends;
+    This month = 1–23 Sep; Last month = all of August; 90 days = 26 Jun – 23 Sep; All time = 1 Jan – 23 Sep (266 days);
+    a saved "All time" comes back."""
+    w = jout(report, "win_std")
+    assert w["today"]["empty"] and w["yday"]["empty"]
+    assert (w["tm"]["from"], w["tm"]["to"], w["tm"]["days"]) == ("2026-09-01", "2026-09-23", 23)
+    assert (w["lm"]["from"], w["lm"]["to"], w["lm"]["days"]) == ("2026-08-01", "2026-08-31", 31)
+    assert (w["90"]["from"], w["90"]["to"], w["90"]["days"]) == ("2026-06-26", "2026-09-23", 90)
+    assert (w["all"]["from"], w["all"]["to"], w["all"]["days"]) == ("2026-01-01", "2026-09-23", 266)
+    assert jout(report, "opts") == ["today", "yday", "7", "14", "tm", "lm", "30", "60", "90", "all", "custom"]
+    assert report["out"]["load_all"] == "all"
+    e = jout(report, "empty_label")
+    assert e["empty"] and e["label"] == "No GA4 data for this period yet (GA4 data till 23 Sep)"

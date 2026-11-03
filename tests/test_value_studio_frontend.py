@@ -387,3 +387,18 @@ def test_the_page_script_scopes_the_studio():
         assert i.startswith("vs-"), i
     assert "if(!shownNow()) return;" in blk and "tg.tagName==='INPUT'" in blk      # keys: this tab only, never while typing
     assert "if(id==='value') valEnsure();" in js and "if(id==='value') VS.ensure(()=>valRerender());" in js
+
+
+def test_the_owners_standard_picker_renders_every_choice(report):
+    """Today · Yesterday · 7 days · 14 · This month · Last month · 30 · 60 · 90 · All time · Custom (owner, 3 Nov 2026) on install
+    weeks: Today / Yesterday = their install week — not in the data yet here (today 21 Sep): the Studio says so; This / Last
+    month = the install weeks their days fall in; 90 days = 12 weeks; All time = every week, its compare reads — (no week
+    before it); nothing renders NaN / Infinity / undefined."""
+    r = J(report, "stdper")
+    assert r["order"] == ["today", "yday", "7", "14", "tm", "lm", "30", "60", "90", "all", "c"]
+    for k in ("7", "today", "yday", "tm", "lm", "90", "all"):
+        assert r[k]["bad"] is False and r[k]["pressed"] == k, k
+    assert r["today"]["empty"] and r["yday"]["empty"] and not any(r[k]["empty"] for k in ("7", "tm", "lm", "90", "all"))
+    assert r["90"]["W"]["L"] == 12 and r["90"]["W"]["i1"] == r["7"]["W"]["i1"]
+    assert r["tm"]["W"]["i1"] == r["7"]["W"]["i1"] and r["lm"]["W"]["i1"] <= r["tm"]["W"]["i0"] + 1
+    assert r["all"]["nc"] and r["all"]["W"]["i0"] == 0 and r["all"]["W"]["cL"] == 0

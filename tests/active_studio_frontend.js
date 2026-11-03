@@ -199,4 +199,11 @@ get('loading', `(()=>{ ${RESET} AS._.load(null); const h=actScreen(); AS._.fail(
     failed:f.indexOf('Active users Studio load nahi hua')>=0&&f.indexOf('Try again')>=0&&f.indexOf('as-root')<0&&f.indexOf('id="act-old"')<0,
     back:h2.indexOf('id="as-root"')>=0}); })()`);
 out.n = Object.keys(out).length;
+// the owner's standard picker (3 Nov 2026): every new choice renders — an empty period says so, All time's compare reads —,
+// no NaN / Infinity / undefined anywhere; the buttons in his order
+get('stdper', `(()=>{ const r={}; for(const k of ['7','today','yday','tm','lm','90','all']){ ${RESET} KWIN=k; const h=actScreen();
+  r[k]={empty:/ka GA4 data abhi nahi aaya/.test(h), bad:/NaN|Infinity|undefined/.test(h), nc:/is period se pehle GA4 data nahi/.test(h),
+    pressed:(h.match(/data-r="([^"]+)" aria-pressed="true"/)||[])[1]||'', W:AS._.W(), today:DATA.today_date}; }
+  ${RESET} const h0=actScreen(); r.order=[...((h0.match(/id="as-rng"[\\s\\S]*?<\\/div>/)||[''])[0]).matchAll(/data-r="([^"]+)"/g)].map(m=>m[1]);
+  return JSON.stringify(r); })()`);
 process.stdout.write(JSON.stringify({ errors, out }));
