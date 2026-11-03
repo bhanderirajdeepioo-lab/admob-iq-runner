@@ -160,6 +160,10 @@ jobs:
           # GA4 ad revenue + impressions by newVsReturning per day × ad unit / country. GA4_NVR=false stops the reads
           GA4_NVR:              ${{ vars.GA4_NVR || 'true' }}
           GA4_NVR_BUDGET_SEC:   ${{ vars.GA4_NVR_BUDGET_SEC }}
+          # 📈 eCPM first session vs returning × country (admob_iq/fetch/ga4_nvr_uc.py; data/ga4_nvr_uc/ in the private
+          # repo, kept for good): the ad unit × country split per day. GA4_NVR_UC=false stops the reads
+          GA4_NVR_UC:           ${{ vars.GA4_NVR_UC || 'true' }}
+          GA4_NVR_UC_BUDGET_SEC: ${{ vars.GA4_NVR_UC_BUDGET_SEC }}
           # 📱 Devices (admob_iq/fetch/ga4_device.py; data/ga4_device/ in the private repo): GA4 by phone model × country per
           # install day for the ROI tab's Devices view. GA4_DEVICE=false stops the reads without a code push
           GA4_DEVICE:           ${{ vars.GA4_DEVICE || 'true' }}

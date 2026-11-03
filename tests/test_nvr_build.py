@@ -49,7 +49,7 @@ def test_run_writes_files_pointer_and_removes_stale(tmp_path):
     assert p["file"] == fn and (p["from"], p["last"]) == ("2026-10-01", "2026-10-03")
     with gzip.open(out / fn, "rt") as f:
         assert json.load(f)["final_till"] == "2026-10-31"
-    assert nb.pop_line() == "nvr: apps 1, days 3, ad units 2"
+    assert nb.pop_line() == "nvr: apps 1, days 3, ad units 2, by country 0"
     dash2 = {}
     assert nb.run(dash2, str(tmp_path / "none"), str(out), {}, NOW) == [] and "nvr" not in dash2
     assert not any(f.startswith("nvr_") for f in os.listdir(out)) and nb.pop_line() == "nvr: apps 0"

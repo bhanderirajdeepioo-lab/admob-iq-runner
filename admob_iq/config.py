@@ -157,6 +157,11 @@ def settings() -> dict:
         # printed; GA4_NVR_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
         "ga4_nvr": _env("GA4_NVR", "false").lower() == "true",
         "ga4_nvr_budget_sec": _int_env(("GA4_NVR_BUDGET_SEC",), 0),
+        # 📈 eCPM first session vs returning × country: the ad unit × country split per day for the ad unit / format tables
+        # of a picked country (fetch.ga4_nvr_uc: one file a month, the last 5 days every 6 hours, the history newest
+        # first). Off: nothing of it is read, written or printed; GA4_NVR_UC_BUDGET_SEC = its own seconds per build
+        "ga4_nvr_uc": _env("GA4_NVR_UC", "false").lower() == "true",
+        "ga4_nvr_uc_budget_sec": _int_env(("GA4_NVR_UC_BUDGET_SEC",), 0),
         # 📱 Devices: GA4 by phone model × country per install day (fetch.ga4_device: installs, paid, back next day and
         # revenue at 7 / 30 / 90 days, each read once). Off: nothing of it is read, written or printed (the ROI file
         # then has no "dev" block); GA4_DEVICE_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)

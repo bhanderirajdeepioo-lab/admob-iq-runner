@@ -12,7 +12,18 @@ day of every store, nothing trimmed — per app ONE lazy file:
                                      {unit index: [new revenue, new impressions, returning revenue, returning impressions]},
                                      {cc: [the same four]}] | null, …]}      (one row a day first … last; null = not read)
   (revenue USD, 4 decimals; "new" = the user's first session, "returning" = session 2 on — GA4's newVsReturning)
-and the pointer dashboard["nvr"] = {"v", "apps": {app id: {"file", "v", "from", "last"}}}.
+and the pointer dashboard["nvr"] = {"v", "apps": {app id: {"file", "v", "from", "last"[, "uc"]}}}.
+
+The ad unit / format tables of a PICKED country (owner, 3 Nov 2026: "US kiya to ad unit table me US ka hi aana chaiye";
+every country, every period): from fetch.ga4_nvr_uc's days, per app UC_SHARDS lazy files — a country always in the
+same one (shard_of: the page computes it too), so a pick loads one file, never one file a country:
+  site/nvr_uc_<key>_<s>.json.gz  {"v", "key", "s", "d0" (= the nvr file's first_day: the same day index),
+                           "units": [[ad unit, format], …], "c": {cc: [[day index, unit index, group (0 new · 1
+                           returning), revenue, impressions], …]}}   (GA4's not-set group left out: the tables have none)
+  "uc" = {"n", "files": [[name, v], …], "from", "last", "rd": [[first, last] day index runs read], "bf", "daily"}
+  ({"big": True, "n": 0, "files": []} when even UC_MAX shards are over MAX_GZ).
+The page sets what GA4 gave of the country against the nvr file's own country total (its "c": a whole read) and says
+how much — GA4 folds a large part of the biggest app's ad unit × country into "(other)" before any read.
 
 run(dashboard, data_dir, out_dir, s) → the _headers no-store paths (["/nvr*"], ONE splat rule) or [] (no store: the files
 removed, no pointer). off(out_dir): the switch (NVR_TAB=false). Failure-isolated; ONE counts-only line.
@@ -31,7 +42,9 @@ from .fetch import ga4_nvr as gv
 from .fetch import ga4_uninstall as gu
 
 PREFIX = "nvr_"
-APP_RE = re.compile(r"^nvr_[0-9a-f]{12}\.json\.gz$")
+APP_RE = re.compile(r"^nvr_(?:uc_)?[0-9a-f]{12}(?:_\d+)?\.json\.gz$")
+UC_SHARDS = 8                       # the shard files an app's country data starts with …
+UC_MAX = 64                         # … doubled while one is over MAX_GZ, up to this
 HEADER_PATHS = ["/nvr*"]
 V = 1
 MAX_GZ = 8 * 1024 * 1024
@@ -102,6 +115,72 @@ def build_app(store, aid):
             "units": units, "days": out}
 
 
+def shard_of(cc, n=UC_SHARDS):
+    """A country → its shard of n: two letters → (code 0 × 31 + code 1) mod n (the page computes the same); else 0."""
+    return (ord(cc[0]) * 31 + ord(cc[1])) % n if len(cc) == 2 and cc.isalpha() else 0
+
+
+def uc_files(data_dir, out_dir, aid, d0):
+    """The app's ad unit × country shards (fetch.ga4_nvr_uc's days, a month file at a time; day index from d0, the nvr
+    file's first day) → its "uc" pointer, or None (no store / no day). UC_SHARDS files, more (×2, up to UC_MAX) when one
+    would be over MAX_GZ; still over → {"big": True} (the page says so)."""
+    from .fetch import ga4_nvr_uc as gnc
+    meta = gnc.load_store(gnc.store_path(data_dir, aid))
+    if not meta:
+        return None
+    base = gu._d(d0)
+    units, uix, read, per = [], {}, set(), {}
+    first = last = None
+    for m in meta.get("months") or []:
+        for d, rows in gnc.load_month(data_dir, aid, m).items():
+            i = (gu._d(d) - base).days
+            if i < 0:
+                continue
+            read.add(i)
+            if rows:
+                first = d if first is None or d < first else first
+                last = d if last is None or d > last else last
+            for k, fm, un, cc, rv, im in rows or []:
+                if k not in ("n", "r"):
+                    continue
+                if (un, fm) not in uix:
+                    uix[(un, fm)] = len(units)
+                    units.append([un, fm])
+                per.setdefault(cc, []).append([i, uix[(un, fm)], 0 if k == "n" else 1, _r4(rv), int(im or 0)])
+    if first is None:
+        return None
+    for v in per.values():
+        v.sort()
+    runs, cur = [], None
+    for i in sorted(read):
+        if cur and i == cur[1] + 1:
+            cur[1] = i
+        else:
+            cur = [i, i]
+            runs.append(cur)
+    out = {"from": first, "last": last, "rd": runs, "bf": bool((meta.get("backfill") or {}).get("done")),
+           "daily": bool(meta.get("daily"))}
+    key, n = gu.file_key(aid), UC_SHARDS
+    while n <= UC_MAX:
+        files, bodies = [], []
+        for s_i in range(n):
+            body = {"v": V, "key": key, "s": s_i, "d0": d0, "units": units,
+                    "c": {cc: r for cc, r in sorted(per.items()) if shard_of(cc, n) == s_i}}
+            b = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+            if len(b) > MAX_GZ and len(gzip.compress(b, 6, mtime=0)) > MAX_GZ:
+                break
+            files.append(["%suc_%s_%d.json.gz" % (PREFIX, key, s_i), hashlib.sha1(b).hexdigest()[:12]])
+            bodies.append(body)
+        if len(files) == n:
+            for (fn, _), body in zip(files, bodies):
+                write_json_gz_stable(os.path.join(out_dir, fn), body)
+            out.update(n=n, files=files)
+            return out
+        n *= 2
+    out.update(n=0, files=[], big=True)
+    return out
+
+
 def _stores(data_dir):
     folder = os.path.join(data_dir, gv.DIR)
     try:
@@ -139,7 +218,7 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
     dashboard.pop("nvr", None)
     try:
         now = now or datetime.now(timezone.utc)
-        apps, keep, big, days_n, units_n = {}, set(), 0, 0, 0
+        apps, keep, big, days_n, units_n, uc_n, uc_big = {}, set(), 0, 0, 0, 0, 0
         for st in _stores(data_dir):
             aid = str(st["app_id"])
             body = build_app(st, aid)
@@ -156,6 +235,16 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             keep.add(fn)
             apps[aid] = {"file": fn, "v": hashlib.sha1(raw).hexdigest()[:12], "from": body["first_day"],
                          "last": body["last_day"]}
+            try:
+                uc = uc_files(data_dir, out_dir, aid, body["first_day"])
+            except Exception as e:                      # a bad store costs the country tables only
+                uc = None
+                print("nvr uc skipped: %s" % type(e).__name__, file=sys.stderr)
+            if uc:
+                apps[aid]["uc"] = uc
+                keep.update(f for f, _ in uc["files"])
+                uc_n += 1 if uc["files"] else 0
+                uc_big += 1 if uc.get("big") else 0
             days_n += len(body["days"])
             units_n += len(body["units"])
         _clean(out_dir, keep)
@@ -163,7 +252,9 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             LINE = "nvr: apps 0"
             return []
         dashboard["nvr"] = {"v": V, "apps": apps}
-        LINE = "nvr: apps %d, days %d, ad units %d%s" % (len(apps), days_n, units_n, (", too big %d" % big) if big else "")
+        LINE = "nvr: apps %d, days %d, ad units %d, by country %d%s%s" % (
+            len(apps), days_n, units_n, uc_n, (", too big %d" % big) if big else "",
+            (", by country too big %d" % uc_big) if uc_big else "")
         return list(HEADER_PATHS)
     except Exception as e:
         dashboard.pop("nvr", None)

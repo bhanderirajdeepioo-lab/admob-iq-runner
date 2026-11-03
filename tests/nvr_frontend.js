@@ -115,6 +115,35 @@ const tbl = (title) => { const i = h().indexOf(`<h3>${title}</h3>`); return i < 
     out.fail = h().includes('⚠️ First session vs Returning load nahi hua. <button type="button" class="roi-lnk" data-nvr-retry="1">Try again</button>');
     FAIL = false; tap('[data-nvr-retry]', {}); await flush(); await flush();
     out.retry = h().includes('First session eCPM');
+    // a picked country's ad unit / format tables (owner, 3 Nov 2026): the app's "uc" shard holding the country (XA → 1,
+    // XB → 2 of 8), loaded on the pick; XA whole (✓), XB a part only (⚠️ the share GA4 gave + the kept eCPM's gap),
+    // days the country read has not reached counted, and no "uc" yet → said, the tables all countries'
+    const shard = (n) => ({ v: 1, key: '000000000009', s: n, d0: D0, units: [['unit_open', 'App open'], ['unit_banner', 'Banner']],
+      c: n === 1 ? { XA: [].concat(...Array.from({ length: 63 }, (_, i) => i === 10 ? [] : [[i, 0, 0, 0.6, 300], [i, 0, 1, 1, 1000], [i, 1, 0, 0.6, 300], [i, 1, 1, 1, 1000]])) }
+        : n === 2 ? { XB: [].concat(...Array.from({ length: 63 }, (_, i) => i === 10 ? [] : [[i, 0, 0, 0.3, 50], [i, 0, 1, 0.25, 500]])) } : {} });
+    const UCL = [];
+    ctx.fetchGzJson = url => { UCL.push(url); const m = /^nvr_uc_000000000009_(\d)\.json\.gz/.exec(url);
+      return Promise.resolve(m ? shard(+m[1]) : JSON.parse(JSON.stringify(F))); };
+    const ptr = ctx.DATA.nvr.apps['id-x'];
+    ptr.uc = { n: 8, files: Array.from({ length: 8 }, (_, i) => ['nvr_uc_000000000009_' + i + '.json.gz', 'u' + i]), from: D0, last: day(62),
+      rd: [[0, 9], [11, 62]], bf: true, daily: false };
+    const card = (t) => { const i = h().indexOf('<h3>' + t); return i < 0 ? '' : h().slice(i, h().indexOf('</table>', i) > 0 ? h().indexOf('</table>', i) : i + 600); };
+    tap('[data-nvr-per]', { nvrPer: '30' }); tap('[data-nvr-cc]', { nvrCc: 'XA' });
+    out.uc_loading = strip(card('Ad units'));
+    await flush(); await flush();
+    out.uc_xa = { units: strip(card('Ad units')), formats: strip(card('Ad formats')) };
+    tap('[data-nvr-cc]', { nvrCc: 'XB' }); await flush(); await flush();
+    out.uc_xb = strip(card('Ad units'));
+    ptr.uc.rd = [[0, 9], [11, 40]]; NVR.repaint();
+    out.uc_miss = strip(card('Ad units'));
+    ptr.uc.rd = [[0, 9], [11, 62]];
+    tap('[data-nvr-per]', { nvrPer: 'yday' }); out.uc_yday = strip(card('Ad units'));           // a recent day: not measured
+    change('[data-nvr-pf]', '2026-08-01'); change('[data-nvr-pto]', '2026-08-20'); out.uc_before = strip(card('Ad units'));
+    tap('[data-nvr-per]', { nvrPer: '30' });
+    delete ptr.uc; NVR.repaint();
+    out.uc_none = strip(card('Ad units'));
+    out.uc_loads = UCL.filter(u => u.startsWith('nvr_uc_'));
+    tap('[data-nvr-cc]', { nvrCc: '' });
   } catch (e) { errors.push(String(e && e.stack || e)); }
   console.log(JSON.stringify({ errors, out }));
 })();

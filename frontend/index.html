@@ -9248,12 +9248,50 @@ function table(rows,S,kind,all){ const ex=r=>({en:EC(r.v[0],r.v[1]),er:EC(r.v[2]
     ||`<tr><td colspan="8" class="roi-note" style="text-align:left">Is period me data nahi.</td></tr>`;
   const more=rs.length>15&&kind!=='f'?`<p class="roi-note"><button type="button" class="roi-lnk" data-nvr-all="${kind}">${all?'Sirf top 15 dikhao':`Sab ${rs.length} dikhao`}</button></p>`:'';
   return `<div class="roi-tw"><table class="roi-t nvr-t"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>${more}`; }
+// a picked country's ad unit / format tables (owner, 3 Nov 2026: "US kiya to ad unit table me US ka hi aana chaiye", every
+// country, every period): the app's "uc" shard that holds the country (nvr_build.shard_of — the same sum here), loaded when
+// first needed; what GA4 gave of the country is set against the country's own whole total (this file's "c")
+const UF={}, UBUSY={}, UERR={};
+function ucOf(aid){ const a=apOf(aid), u=a&&a.uc; return u&&(u.big||(Array.isArray(u.files)&&u.n>0))?u:null; }
+function shardOf(cc,n){ return /^[A-Za-z]{2}$/.test(cc)?(cc.charCodeAt(0)*31+cc.charCodeAt(1))%n:0; }
+function ucShard(aid,cc){ const u=ucOf(aid), fv=u&&!u.big&&u.files[shardOf(cc,u.n)]; if(!fv) return null; const [f,v]=fv, j=UF[f];
+  if(j&&j._v===v) return {j}; if(UERR[f]) return {err:1};
+  if(!UBUSY[f]){ UBUSY[f]=true; fetchGzJson(f+'?v='+encodeURIComponent(v||'')).then(z=>{ if(!z||z.v!==1||!z.c||!Array.isArray(z.units)) throw new Error('format'); z._v=v; UF[f]=z; UERR[f]=false; })
+    .catch(()=>{ UERR[f]=true; }).then(()=>{ UBUSY[f]=false; repaint(); }); }
+  return {busy:1}; }
+// the country over [lo, hi] — kept to this file's own days, the day index on the shard's d0 (dates matched, so a file and a
+// shard of different builds never mix their indexes): u = the tables' sums over the days the country read has; what GA4
+// gave = kept vs truth (this file's own country total, a whole read) over the MEASURED days only — read by the country
+// store, present in this file and final in both (older than the recent days both still re-read, at different hours)
+function ucView(d,j,cc,lo,hi,rd){ const off=Math.round((t0(j.d0)-t0(d.first_day))/DAY), at=s=>Math.round((t0(s)-t0(j.d0))/DAY);
+  const i0=Math.max(at(lo),0,-off), i1=Math.min(at(hi),at(d.last_day)), lastFinal=at(addD(d.final_till,-3));
+  const inRd=i=>(rd||[]).some(([a,b])=>i>=a&&i<=b), meas=new Set(), u={}, kept=[0,0,0,0], truth=[0,0,0,0]; let nRead=0;
+  for(let i=i0;i<=i1;i++){ if(!inRd(i)) continue; nRead++; const r=d.days[i+off]; if(i>lastFinal||!r) continue; meas.add(i);
+    const v=r[4]&&r[4][cc]; if(v) for(let k=0;k<4;k++) truth[k]+=+v[k]||0; }
+  for(const r of (j.c[cc]||[])){ const i=r[0]; if(i<i0||i>i1||!inRd(i)) continue; const e=u[r[1]]||(u[r[1]]=[0,0,0,0]), g=r[2]*2;
+    e[g]+=+r[3]||0; e[g+1]+=+r[4]||0; if(meas.has(i)){ kept[g]+=+r[3]||0; kept[g+1]+=+r[4]||0; } }
+  const nd=Math.max(0,i1-i0+1); return {u, kept, truth, nd, miss:nd-nRead, nMeas:meas.size}; }
+const PCT=v=>(v>=0?'+':'−')+Math.abs(v*100).toFixed(Math.abs(v)<0.1?1:0)+'%';
 function view(aid,d){ const [lo,hi]=rng(d), x=sums(d,lo,hi), t=x.t, nt=t[0]+t[2]+t[4];
   const lim=[];
   if(lo<d.first_day) lim.push(`data ${fdy(d.first_day)} se`);
   if(x.miss) lim.push(`${x.miss} din ka data abhi aa raha hai (purani history har build me thodi aur)`);
   if(x.nf) lim.push('aakhri 2 din GA4 me abhi badal rahe hain (final nahi)');
-  const units=d.units.map((u,i)=>({key:String(i),label:E(u[0]),sub:u[1],v:x.u[String(i)]||[0,0,0,0]})).filter(r=>r.v[1]||r.v[3]);
+  let units=d.units.map((u,i)=>({key:String(i),label:E(u[0]),sub:u[1],v:x.u[String(i)]||[0,0,0,0]})).filter(r=>r.v[1]||r.v[3]), uNote='', uCty=false;   // uCty: the tables are the country's
+  const cn=CC?E(CN(CC)):'';
+  if(CC){ const uc=ucOf(aid), sh=uc&&!uc.big?ucShard(aid,CC):null;
+    if(uc&&uc.big) uNote=`<p class="roi-note">⚠️ Is app ka country-wise ad-unit data file ki seema se bada hai — neeche ki tables sab countries ki hain.</p>`;
+    else if(!uc||!sh) uNote=`<p class="roi-note">⏳ <b>${cn}</b> ka ad-unit data GA4 se aa raha hai (pehli baar kuch builds) — tab tak neeche ki tables sab countries ki hain.</p>`;
+    else if(sh.busy) uNote=`<p class="roi-note">⏳ <b>${cn}</b> ke ad units load ho rahe hain — tab tak neeche sab countries ki tables.</p>`;   // the tables stay: nothing under the stuck card collapses
+    else if(sh.err) uNote=`<p class="roi-note">⚠️ <b>${cn}</b> ke ad units load nahi hue — neeche sab countries ki tables. <button type="button" class="roi-lnk" data-nvr-retry="1">Try again</button></p>`;
+    else { const r=ucView(d,sh.j,CC,lo,hi,uc.rd); uCty=true;
+      units=sh.j.units.map((u,i)=>({key:String(i),label:E(u[0]),sub:u[1],v:r.u[i]||[0,0,0,0]})).filter(z=>z.v[1]||z.v[3]);
+      const tr=r.truth[0]+r.truth[2], share=r.nMeas&&tr>0?(r.kept[0]+r.kept[2])/tr:null;
+      const gap=(a,b,c,e)=>{ const p=EC(a,b), q=EC(c,e); return ok(p)&&ok(q)&&q>0?p/q-1:null; }, gn=gap(r.kept[0],r.kept[1],r.truth[0],r.truth[1]), gr=gap(r.kept[2],r.kept[3],r.truth[2],r.truth[3]);
+      if(r.nd&&r.miss>=r.nd) uNote=`<p class="roi-note">⏳ Is period ke din ka <b>${cn}</b> ka ad-unit data abhi aa raha hai — tab tak neeche ki tables khaali hain.</p>`;
+      else uNote=(share!=null&&share<0.995?`<p class="roi-note">⚠️ Is period me GA4 ne <b>${cn}</b> ki <b>${Math.round(share*100)}%</b> ad kamai hi ad unit ke saath di — baaki GA4 ne apni "(other)" row me daal di (GA4 ki limit, bade app pe hoti hai). Is bache hisse ka eCPM ${cn} ke poore eCPM se: first session <b>${gn==null?'—':PCT(gn)}</b>, returning <b>${gr==null?'—':PCT(gr)}</b> <small>(pakke dino pe naapa)</small>.</p>`
+          :`<p class="roi-note">✓ Neeche Ad units / Ad formats ki tables sirf <b>${cn}</b> ki hain.${share==null&&r.nd?' <small>(Haal ke din GA4 abhi badal raha hai — GA4 ne kitna diya, ye pakke dino pe hi naapa jaata hai.)</small>':''}</p>`)
+        +(r.miss?`<p class="roi-note">⏳ Is period ke ${r.miss} din ka ${cn} ka ad-unit data abhi aa raha hai.</p>`:''); } }
   const fm={}; units.forEach(r=>{ const e=fm[r.sub]||(fm[r.sub]=[0,0,0,0]); for(let j=0;j<4;j++) e[j]+=r.v[j]; });
   const fmts=Object.keys(fm).map(k=>({key:k,label:E(k||'(not set)'),v:fm[k]}));
   const ccs=Object.keys(x.c).map(k=>({key:k,label:`<span class="nvr-fl">${FL(k)}</span> ${E(k==='--'?'Not named':CN(k))}`,v:x.c[k]})).filter(r=>r.v[1]||r.v[3]);
@@ -9262,11 +9300,11 @@ function view(aid,d){ const [lo,hi]=rng(d), x=sums(d,lo,hi), t=x.t, nt=t[0]+t[2]
   return `<div class="roi-card nvr-stk" id="nvr-stk"><div class="roi-ct"><h3>👥 First session vs Returning · eCPM${CC?` · <span class="nvr-fl">${FL(CC)}</span> ${E(CN(CC))}`:''}</h3><span class="roi-note">${fdy(lo)}${lo!==hi?' – '+fdy(hi):''} · GA4</span></div>`
     +perCtl(d)+ccCtl(x)+(x.n&&has?tiles(x):'')+`</div><div class="roi-card">`
     +(x.n&&has?chart(d,lo,hi):`<p class="roi-note">Is period me ${CC?E(CN(CC))+' ke ':''}ad impressions nahi.</p>`)
-    +(CC?`<p class="roi-note">🌍 <b>${E(CN(CC))}</b> chuna hai: tiles aur chart sirf is country ke (country ke sessions GA4 se nahi padhe, isliye wahan impressions). Ad units / formats ki tables sab countries ki hain.</p>`:'')
+    +(CC?`<p class="roi-note">🌍 <b>${E(CN(CC))}</b> chuna hai: tiles, chart aur Ad units / Ad formats sirf is country ke (country ke sessions GA4 se nahi padhe, isliye wahan impressions).</p>`:'')
     +(lim.length?`<p class="roi-note nvr-lim">⏳ ${lim.join(' · ')}.</p>`:'')
     +`<p class="roi-note"><b>First session</b> = user ka pehla session (GA4 "new"), <b>Returning</b> = 2nd session aur uske baad (GA4 "returning"). eCPM = GA4 ad revenue ÷ impressions × 1000 (AdMob se GA4 me aaye <code>ad_impression</code>, AdMob tab se thoda farak ho sakta hai).${nt>0&&t[4]>0?` GA4 ne ${Math.max(0.1,Math.round(t[4]/nt*1000)/10)}% kamai kisi session group me nahi daali — wo tiles me nahi.`:''}</p></div>`
-    +`<div class="roi-card"><div class="roi-ct"><h3>Ad units</h3><span class="roi-note">har ad unit ka first session vs returning eCPM · column pe tap = sort</span></div>${table(units,US,'u',UALL)}</div>`
-    +`<div class="roi-card"><div class="roi-ct"><h3>Ad formats</h3><span class="roi-note">same format me bhi fark — ya sirf format mix ka?</span></div>${table(fmts,US,'f',true)}</div>`
+    +`<div class="roi-card"><div class="roi-ct"><h3>Ad units${uCty?` · <span class="nvr-fl">${FL(CC)}</span> ${cn}`:''}</h3><span class="roi-note">har ad unit ka first session vs returning eCPM · column pe tap = sort</span></div>${uNote}${table(units,US,'u',UALL)}</div>`
+    +`<div class="roi-card"><div class="roi-ct"><h3>Ad formats${uCty?` · <span class="nvr-fl">${FL(CC)}</span> ${cn}`:''}</h3><span class="roi-note">same format me bhi fark — ya sirf format mix ka?</span></div>${table(fmts,US,'f',true)}</div>`
     +`<div class="roi-card"><div class="roi-ct"><h3>Countries</h3><span class="roi-note">same country me bhi fark — ya sirf country mix ka?</span></div>${table(ccs,CS,'c',CALL)}</div>`; }
 function inner(aid){ const a=apOf(aid);
   if(!a) return `<div class="roi-card"><div class="roi-ct"><h3>👥 First session vs Returning · eCPM</h3></div><p class="roi-note">Is app ka GA4 data abhi nahi aaya — agle robot run me.</p></div>`;
@@ -9297,14 +9335,14 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
       keep(r,`[data-nvr-sort="${kind}:${k}"]`,()=>{ if(S.k===k) S.d=-S.d; else { S.k=k; S.d=k==='lab'?1:-1; } repaint(); }); return; }
     if((b=t.closest('[data-nvr-all]'))){ const kind=b.dataset.nvrAll; keep(r,`[data-nvr-all="${kind}"]`,()=>{ if(kind==='c') CALL=!CALL; else UALL=!UALL; repaint(); }); return; }
     if((b=t.closest('[data-nvr-cc]'))){ const k=b.dataset.nvrCc||''; keep(r,`[data-nvr-cc="${k}"]`,()=>{ CC=k; repaint(); }); return; }
-    if((b=t.closest('[data-nvr-retry]'))){ Object.keys(AERR).forEach(k=>AERR[k]=false); repaint(); return; }
+    if((b=t.closest('[data-nvr-retry]'))){ Object.keys(AERR).forEach(k=>AERR[k]=false); Object.keys(UERR).forEach(k=>UERR[k]=false); repaint(); return; }
     if(t.closest('[data-nvr-ch]')) tip(ev); });
   document.addEventListener('change',ev=>{ const t=ev.target, r=t&&t.closest&&t.closest('#nvr-root'); if(!r) return;
     if(t.closest('[data-nvr-ccsel]')){ const v=String(t.value||''); if(v) keep(r,'[data-nvr-ccsel]',()=>{ CC=v; repaint(); }); return; }
     const f=t.closest('[data-nvr-pf]'), to=t.closest('[data-nvr-pto]'); if(!f&&!to) return;
     keep(r,f?'[data-nvr-pf]':'[data-nvr-pto]',()=>{ if(f) PF=String(t.value||''); else PTO=String(t.value||''); PER='cus'; repaint(); }); });
   document.addEventListener('pointermove',ev=>{ const t=ev.target; if(t&&t.closest&&t.closest('#nvr-root [data-nvr-ch]')) tip(ev); },{passive:true}); }
-return {ptr, block, repaint, _:{rng, sums, view, set:(k,v)=>{ if(k==='PER') PER=v; if(k==='PF') PF=v; if(k==='PTO') PTO=v; if(k==='CC') CC=v; if(k==='AF') Object.assign(AF,v); }, AF}};
+return {ptr, block, repaint, _:{rng, sums, view, shardOf, ucView, UF, set:(k,v)=>{ if(k==='PER') PER=v; if(k==='PF') PF=v; if(k==='PTO') PTO=v; if(k==='CC') CC=v; if(k==='AF') Object.assign(AF,v); }, AF}};
 })();
 // the Install value page: 📈 ROI first, the Value Studio + the older views folded under "📊 More details" (a jump into one
 // of their sections from another tab opens it)
