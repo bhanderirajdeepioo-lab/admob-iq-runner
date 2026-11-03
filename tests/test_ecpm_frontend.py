@@ -606,7 +606,9 @@ def test_no_tab_of_its_own_and_the_views_controls():
     assert "else if(cur==='ecpm') show('ecpm');" in h                                     # the auto-refresh re-opens it
     assert "if(id==='ecpm') ecPaint(); else ecLeft();" in h and "root.append(renderEcpm());" in h
     assert 'body[data-screen="ecpm"] #rangectl' in h                                       # the header Period is not this view's
-    for t in ("['30','30 days'],['90','90 days'],['365','1 year'],['all','Full']", "[['day','Day'],['month','Month']]",
+    for t in ("const EC_RS=[['today','Today'],['yesterday','Yesterday'],['7d','7 days'],['month','This month'],['lastmonth','Last month'],"
+              "['30','30 days'],['60','60 days'],['90','90 days'],['365','1 year'],['all','All time'],['custom','Custom']];",
+              "${seg(EC.r,'ecSetR',EC_RS)}", "[['day','Day'],['month','Month']]",
               "eCPM = har 1,000 ads (impressions) pe kamai", "← All apps (eCPM)", "← Overview"):
         assert t in h, t
     css = h[h.index("/* ===== 📈 eCPM trend"):h.index("/* \"Stay after N days\"")]
@@ -1380,6 +1382,15 @@ def _snap(tmp, page, dash, mode="snap"):
 
 
 @needs_node
+def _norm_periods(h):
+    """The eCPM chart's period buttons grew to the owner's standard picker on 3 Nov 2026 (Today … 1 year, All time, Custom;
+    "Full" is now "All time") — an intended change of that one control row; everything else must stay byte-identical."""
+    if not isinstance(h, str):
+        return h
+    h = re.sub(r'<div class="ec-ctl">.*?</div></div>', '<div class="ec-ctl">PERIODS</div>', h, flags=re.S)
+    return h.replace("<b>Full</b> pe sab", "<b>All time</b> pe sab")
+
+
 def test_cmp_default_view_is_byte_identical_to_before(tmp_path, dash):
     try:
         old = subprocess.run(["git", "-C", ROOT, "show", BASE_REV + ":frontend/index.html"], check=True, capture_output=True,
@@ -1393,7 +1404,7 @@ def test_cmp_default_view_is_byte_identical_to_before(tmp_path, dash):
     assert a["hasCtl"] is False and b["hasCtl"] is True
     assert len(a["S"]) > 40 and a["S"].keys() == b["S"].keys()
     for k in a["S"]:
-        assert a["S"][k] == b["S"][k], k
+        assert _norm_periods(a["S"][k]) == _norm_periods(b["S"][k]), k
     assert "All apps · yesterday vs last 7 days" in b["S"]["all_USD"] and "Countries · yesterday vs last 7 days" in b["S"]["app_INR_Demo Gallery"]
 
 
@@ -1413,7 +1424,7 @@ def test_cmp_yesterday_mode_is_byte_identical_to_before_the_two_pickers(tmp_path
     b = _snap(str(tmp_path / "new"), _page(), dash, "ysnap")
     assert len(a["S"]) > 150 and a["S"].keys() == b["S"].keys()
     for k in a["S"]:
-        assert a["S"][k] == b["S"][k], k
+        assert _norm_periods(a["S"][k]) == _norm_periods(b["S"][k]), k
     # it saw the real thing: every pick's card with its control row, the Month ‹ › to the first month, Ad units + Countries
     S = b["S"]
     assert 'aria-label="Previous month" disabled>' in S["tap_USD_3_ecCmpMon(-1)"] and "All apps · yesterday vs Dec 2025 (20–31)" in S["tap_INR_3_ecCmpMon(-1)"]

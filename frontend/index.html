@@ -178,6 +178,9 @@
   .banner.demo{background:var(--watch-b);color:var(--watch);border:1px solid #4a3a12}
   .banner.empty{background:var(--panel);color:var(--muted);border:1px solid var(--line2)}
   .banner.fault{background:var(--bad-b);color:var(--bad);border:1px solid var(--bad)}
+  .std-cus{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:6px 0 8px}
+  .std-cus input{background:var(--panel);border:1px solid var(--line2);color:var(--ink);border-radius:7px;padding:4px 8px;font:inherit;font-size:12px;color-scheme:dark}
+  .std-cus button{border:1px solid var(--cyan);background:rgba(61,208,240,.14);color:#fff;font:inherit;font-weight:650;font-size:12px;padding:5px 11px;border-radius:8px;cursor:pointer}
   .lgd{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:8px}.lgd span{display:inline-flex;align-items:center;gap:6px}.dot{width:9px;height:9px;border-radius:3px;display:inline-block}
   .est{font-weight:800;color:var(--good)}svg.chart{width:100%;display:block}
   /* Overview layout grid — big tables span the FULL width so every column fits (no cut); movers+attn share one row up top */
@@ -4663,6 +4666,28 @@ function windowDates(axis, range, cf, ct){
   const n = range==='7d'?7:range==='30d'?30:range==='60d'?60:range==='90d'?90:7;
   return comp.slice(-n);
 }
+// ---- a daily chart's period (the owner's standard picker, 3 Nov 2026: Today · Yesterday · 7 days · This month · Last month ·
+// 30 / 60 / 90 days · All time · Custom, in his order) on the chart's own sorted dates: Today / Yesterday = that day on the AdMob
+// calendar (DATA.today_date); This / Last month = its calendar month; N days = the chart's last N dates; All time = every
+// date; Custom = from–to (swapped when reversed). → [first index, last index], or null when no date of the chart is in it
+// (the chart says so). extra: a chart's own longer choices ({key: N days}, e.g. 1 year).
+const STD_KEYS=[['today','Today'],['yesterday','Yesterday'],['7d','7 days'],['month','This month'],['lastmonth','Last month'],['30d','30 days'],['60d','60 days'],['90d','90 days'],['all','All time'],['custom','Custom']];
+const STD_N={'7d':7,'30d':30,'60d':60,'90d':90};
+function stdSpan(dates,key,cf,ct,extra){ const n=(dates||[]).length; if(!n) return null;
+  const T=(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||dates[n-1], DAY=864e5, iso=t=>new Date(t).toISOString().slice(0,10);
+  const inR=(a,b)=>{ if(a>b) [a,b]=[b,a]; let i0=-1,i1=-1; for(let i=0;i<n;i++) if(dates[i]>=a&&dates[i]<=b){ if(i0<0) i0=i; i1=i; } return i0<0?null:[i0,i1]; };
+  const N=STD_N[key]||(extra&&extra[key]);
+  if(N) return [Math.max(0,n-N),n-1];
+  if(key==='today') return inR(T,T);
+  if(key==='yesterday'){ const y=iso(Date.parse(T+'T00:00:00Z')-DAY); return inR(y,y); }
+  if(key==='month') return inR(T.slice(0,8)+'01',T);
+  if(key==='lastmonth'){ const l=iso(Date.parse(T.slice(0,8)+'01T00:00:00Z')-DAY); return inR(l.slice(0,8)+'01',l); }
+  if(key==='custom') return inR(cf||dates[0],ct||dates[n-1]);
+  return [0,n-1]; }
+// the period's words for a chart line (its dates follow): '' for N days / All time / Custom (their line says them already)
+function stdWord(key){ return ({today:'Today',yesterday:'Yesterday',month:'This month',lastmonth:'Last month'})[key]||''; }
+// Custom's two dates + Show for a chart (inputs id-f / id-t inside the chart's first … last date; apply(from, to))
+function stdCusBox(id,d0,dN,f,t,apply){ return `<div class="std-cus"><input type="date" id="${id}-f" aria-label="From" min="${d0}" max="${dN}" value="${f||d0}"><span class="faint">se</span><input type="date" id="${id}-t" aria-label="To" min="${d0}" max="${dN}" value="${t||dN}"><button type="button" onclick="${apply}(document.getElementById('${id}-f').value,document.getElementById('${id}-t').value)">Show</button></div>`; }
 function sumDaily(daily, winSet){
   let e=0,im=0,rq=0,ma=0,ck=0;
   (daily||[]).forEach(r=>{ if(winSet.has(r[0])){ e+=r[1]; im+=r[2]; rq+=r[3]; ma+=r[4]; ck+=r[5]; } });
@@ -5718,15 +5743,20 @@ function ecSortRows(rows,S){ const k=S.k, dir=S.d==='desc'?-1:1, lowLast=k!=='na
 // impressions × 1000), the month of yesterday "partial" unless yesterday was its last day. Each point keeps the one before it
 // (pv, even from outside the range) for the tooltip's "vs previous day / month".
 function ecMonthEnd(d){ const t=new Date(Date.UTC(+d.slice(0,4),+d.slice(5,7)-1,+d.slice(8,10)+1)); return t.getUTCDate()===1; }
+// the chart's periods (the owner's standard picker, 3 Nov 2026, + its own 1 year) on the complete days (Today: none — the
+// day is still running; its live eCPM is the Today tile's)
+const EC_RS=[['today','Today'],['yesterday','Yesterday'],['7d','7 days'],['month','This month'],['lastmonth','Last month'],['30','30 days'],['60','60 days'],['90','90 days'],['365','1 year'],['all','All time'],['custom','Custom']];
+const EC_N={'30':30,'60':60,'90':90,'365':365};
 function ecPts(dm,W,first,r,g){ const comp=first?W.comp.filter(d=>d>=first):W.comp.slice(); if(!comp.length) return [];
-  let days=r==='all'?comp:comp.slice(-(+r||30));
-  if(g==='month'){ const m0=days[0].slice(0,7), by={}, ord=[];
+  const sp=stdSpan(comp,r,EC.cf,EC.ct,EC_N); if(!sp) return [];
+  const days=comp.slice(sp[0],sp[1]+1);
+  if(g==='month'){ const m0=days[0].slice(0,7), mN=days[days.length-1].slice(0,7), by={}, ord=[];
     comp.forEach(d=>{ const m=d.slice(0,7); let o=by[m]; if(!o){ o=by[m]={k:m,e:0,i:0,n:0,d0:d,d1:d}; ord.push(o); } const x=dm[d]; if(x){ o.e+=x[0]; o.i+=x[1]; } o.n++; o.d1=d; });
     const ms=ord.map(o=>({k:o.k,e:o.e,i:o.i,n:o.n,ec:o.i?o.e/(o.i*1000):null,low:o.i>0&&o.i<EC_MIN_IMPR,
       partial:o.k===String(W.L||'').slice(0,7)&&!ecMonthEnd(W.L),from:(o.d0.slice(8,10)!=='01')?o.d0:''}));
     ms.forEach((p,i)=>{ p.pv=i?ms[i-1].ec:null; });
-    return ms.filter(p=>p.k>=m0); }
-  const at=comp.length-days.length;
+    return ms.filter(p=>p.k>=m0&&p.k<=mN); }
+  const at=sp[0];
   return days.map((d,j)=>{ const x=dm[d], e=x?x[0]:0, i=x?x[1]:0, pd=comp[at+j-1], px=pd?dm[pd]:null;
     return {k:d,e,i,ec:i?e/(i*1000):null,low:i>0&&i<EC_MIN_IMPR,pv:(px&&px[1])?px[0]/(px[1]*1000):null}; }); }
 // what the chart prints: the range average (earnings ÷ impressions of the whole range), min, max, latest
@@ -5813,7 +5843,7 @@ function renderEcpm(){ const s=screenDiv('ecpm'); EC.el=s; return s; }
 // the Overview "Avg eCPM" tile → a button into this view (pointer + "Trend →")
 function ecKpiTile(h){ return String(h).replace('<div class="card kpi">',`<div class="card kpi ec-kpi" role="button" tabindex="0" title="eCPM trend kholo — daily / monthly history, har app" onclick="ecOpen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();ecOpen()}"><span class="ec-hint" aria-hidden="true">Trend →</span>`); }
 function ecOn(){ const on=document.querySelector('.screen.on'); return !!(on&&on.dataset&&on.dataset.screen==='ecpm'); }
-function ecSave(){ try{ localStorage.setItem('ecpmview',JSON.stringify({app:EC.app,r:EC.r,g:EC.g})); }catch(e){} }
+function ecSave(){ try{ localStorage.setItem('ecpmview',JSON.stringify({app:EC.app,r:EC.r,g:EC.g,cf:EC.cf||'',ct:EC.ct||''})); }catch(e){} }
 function ecOpen(){ EC.hdr=APP; EC.app=APP||''; EC.r='30'; EC.g='day'; EC.pin=false; EC.booted=true;
   if(!HUB.on) hbOv('ecpm',true,ecUndo); show('ecpm'); }
 function ecUndo(){ if(ecOn()) show('overview'); }                        // phone Back on the view → Overview
@@ -5824,6 +5854,7 @@ function ecLeft(){ EC.pin=false; if(!HB.st.some(x=>x.tag==='ecpm'||x.tag==='ecpm
 function ecApp(name){ if(!name) return; if(APP){ setApp(name); return; } EC.app=name; hbOv('ecpm-app',true,ecAppUndo); ecPaint(); window.scrollTo({top:0}); }
 function ecAllApps(){ if(APP){ setApp(''); window.scrollTo({top:0}); return; } hbDrop('ecpm-app'); EC.app=''; ecPaint(); window.scrollTo({top:0}); }
 function ecSetR(r){ EC.r=r; EC.pin=false; ecPaintChart(); ecSave(); }
+function ecSetCus(f,t){ if(!/^\d{4}-\d\d-\d\d$/.test(f||'')||!/^\d{4}-\d\d-\d\d$/.test(t||'')) return; EC.cf=f; EC.ct=t; ecSetR('custom'); }
 function ecSetG(g){ EC.g=g; EC.pin=false; ecPaintChart(); ecSave(); }
 function ecSort(t,k){ const key={a:'sort',u:'usort',c:'csort'}[t], S=EC[key]; if(S.k===k) S.d=S.d==='asc'?'desc':'asc'; else { S.k=k; S.d=EC_DEF[k]||'desc'; }
   const el=document.getElementById('ec-tb-'+t); if(el) el.innerHTML=ecTableHtml(t); }
@@ -5964,10 +5995,10 @@ function ecChartCard(){ const W=EC.W||ecWin(), dm=ecChartDm(), first=EC.app?ecFi
   const seg=(cur,fn,opts)=>`<div class="ec-seg" role="group">${opts.map(([v,l])=>`<button type="button" class="${cur===v?'on':''}" aria-pressed="${cur===v}" onclick="${fn}('${v}')">${l}</button>`).join('')}</div>`;
   const S=ecPtStats(pts), nm=EC.app?ecAppLbl(EC.app).label:'all apps';
   const dl=pts.length?(mo?ecML(pts[0].k)+' – '+ecML(pts[pts.length-1].k)+' · '+pts.length+' months':ecYear(pts[0].k)+' – '+ecYear(pts[pts.length-1].k)+' · '+pts.length+' days'):'';
-  const facts=S.last>=0?`<b>${dl}</b> · latest <b>${cm(pts[S.last].ec)}</b> · avg <b>${S.avg!=null?cm(S.avg):'—'}</b> · min <b>${cm(pts[S.min].ec)}</b> (${mo?bMon(pts[S.min].k):fmtD(pts[S.min].k)}) · max <b>${cm(pts[S.max].ec)}</b> (${mo?bMon(pts[S.max].k):fmtD(pts[S.max].k)})`:'Is range me data nahi.';
-  const hist=first&&W.L?`Poori history: <b>${ecYear(first)}</b> se <b>${ecYear(W.L)}</b> tak (${W.comp.filter(d=>d>=first).length.toLocaleString()} din) — <b>Full</b> pe sab.`:'';
+  const facts=S.last>=0?`<b>${dl}</b> · latest <b>${cm(pts[S.last].ec)}</b> · avg <b>${S.avg!=null?cm(S.avg):'—'}</b> · min <b>${cm(pts[S.min].ec)}</b> (${mo?bMon(pts[S.min].k):fmtD(pts[S.min].k)}) · max <b>${cm(pts[S.max].ec)}</b> (${mo?bMon(pts[S.max].k):fmtD(pts[S.max].k)})`:(EC.r==='today'?'Aaj ka din abhi chal raha hai — chart sirf poore din dikhata hai; aaj ka live eCPM upar Today tile me hai.':'Is range me data nahi.');
+  const hist=first&&W.L?`Poori history: <b>${ecYear(first)}</b> se <b>${ecYear(W.L)}</b> tak (${W.comp.filter(d=>d>=first).length.toLocaleString()} din) — <b>All time</b> pe sab.`:'';
   return `<div class="ct"><h3>📈 ${mo?'Monthly':'Daily'} eCPM · ${hAttr(nm)}</h3><span class="faint" style="font-size:11.5px">hover / tap = us ${mo?'mahine':'din'} ke numbers</span></div>
-    <div class="ec-ctl">${seg(EC.r,'ecSetR',[['30','30 days'],['90','90 days'],['365','1 year'],['all','Full']])}${seg(EC.g,'ecSetG',[['day','Day'],['month','Month']])}</div>
+    <div class="ec-ctl">${seg(EC.r,'ecSetR',EC_RS)}${seg(EC.g,'ecSetG',[['day','Day'],['month','Month']])}</div>${EC.r==='custom'?stdCusBox('ec-cus',first||W.comp[0]||'',W.L||'',EC.cf,EC.ct,'ecSetCus'):''}
     <div class="ec-chw" id="ec-chw"><div class="ec-svgw"></div><div class="ec-tip" role="status" aria-live="polite"></div></div>
     <div class="ec-lg"><span><i style="background:#3dd0f0"></i>eCPM</span><span><i class="ec-la"></i>range avg</span><span><i class="ec-lb"></i>impressions (faint)</span><span><i style="background:#34d99a"></i>max</span><span><i style="background:#ff6b6b"></i>min</span></div>
     <div class="ec-note">${facts}</div>
@@ -6004,7 +6035,8 @@ function ecWire(){ if(EC.wired) return; EC.wired=true;
     if(ecOn()&&w&&EC.ch&&Math.abs((w.clientWidth||0)-(EC.ch.cw||0))>2) ecDraw(); },120); }); }
 function ecPaint(){ const s=(EC.el&&EC.el.isConnected!==false)?EC.el:document.querySelector('.screen[data-screen=ecpm]'); if(!s||!DATA) return;
   if(!EC.booted){ EC.booted=true; let sv=null; try{ sv=JSON.parse(localStorage.getItem('ecpmview')||'null'); }catch(e){}   // a reload / restored tab: the same view
-    if(sv){ if(['30','90','365','all'].includes(sv.r)) EC.r=sv.r; if(sv.g==='month'||sv.g==='day') EC.g=sv.g; }
+    if(sv){ if(EC_RS.some(o=>o[0]===sv.r)) EC.r=sv.r; if(sv.g==='month'||sv.g==='day') EC.g=sv.g;
+      if(typeof sv.cf==='string'&&typeof sv.ct==='string'){ EC.cf=sv.cf; EC.ct=sv.ct; } }
     EC.hdr=APP; EC.app=APP||((sv&&sv.app&&ecAgg().apps[sv.app])?sv.app:''); }
   if(EC.hdr!==APP){ EC.hdr=APP; EC.app=APP||''; }       // the header App picker drives the view
   if(!EC.app) hbDrop('ecpm-app');                       // back on All apps: no "app" Back step stays behind
@@ -9597,10 +9629,7 @@ function adDailySeries(appName){
     show.push(o.m? o.i/o.m : null); });
   return {d,rev,ecpm,ctr,match,show,req};
 }
-function adDailyWin(dates){ const n=dates.length, idx=[]; if(!n)return idx;
-  if(ADRANGE==='all'){ for(let i=0;i<n;i++)idx.push(i); return idx; }
-  if(ADRANGE==='custom'){ const f=ADCUSTOM.from,t=ADCUSTOM.to; for(let i=0;i<n;i++){ if((!f||dates[i]>=f)&&(!t||dates[i]<=t))idx.push(i);} return idx; }
-  const days=ADRANGE==='90d'?90:30; for(let i=Math.max(0,n-days);i<n;i++)idx.push(i); return idx; }
+function adDailyWin(dates){ const sp=stdSpan(dates,ADRANGE,ADCUSTOM.from,ADCUSTOM.to), idx=[]; if(sp) for(let i=sp[0];i<=sp[1];i++) idx.push(i); return idx; }
 function adDMetric(k){ const i=ADMETS.indexOf(k); if(i>=0)ADMETS.splice(i,1); else ADMETS.push(k); adRedraw(); }
 function adDWin(w){ ADRANGE=w; adRedraw(); }
 function adDCustomApply(){ const f=document.getElementById('adcf'),t=document.getElementById('adct'); ADCUSTOM={from:f?f.value:'',to:t?t.value:''}; ADRANGE='custom'; adRedraw(); }
@@ -9609,7 +9638,7 @@ function adDailyPanel(appName){
   if(!S.d.length) return `<div class="card span2" style="margin-bottom:14px"><div class="ct"><h3>📅 Daily graph</h3></div><div class="faint" style="font-size:12.5px;padding:14px 4px">Is app ka daily data nahi.</div></div>`;
   const idx=adDailyWin(S.d); const days=idx.map(i=>S.d[i]);
   const spanYr=bSpansYears(days[0],days[days.length-1]);   // ≥11 months showing → the axis / tooltip / label need the year
-  const RGS=[['30d','30 days'],['90d','3 months'],['all','All time'],['custom','Custom']];
+  const RGS=STD_KEYS;   // the owner's standard picker
   const rgChips=RGS.map(([w,lab])=>`<button onclick="adDWin('${w}')" style="border:1px solid ${ADRANGE===w?'var(--cyan)':'var(--line2)'};background:${ADRANGE===w?'rgba(61,208,240,.16)':'var(--panel)'};color:${ADRANGE===w?'#fff':'var(--ink2)'};font:inherit;font-size:12px;font-weight:${ADRANGE===w?650:400};padding:5px 11px;border-radius:8px;cursor:pointer">${lab}</button>`).join('');
   const d0=S.d[0], dN=S.d[S.d.length-1];
   const customBox=ADRANGE==='custom'?`<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px">
@@ -9630,7 +9659,7 @@ function adDailyPanel(appName){
         <span class="faint" style="font-size:11.5px">this window — low ${bDFmt(k,st.min)} · high ${bDFmt(k,st.max)} · avg ${bDFmt(k,st.avg)}</span></div>`;
       return `<div style="margin:6px 0 12px">${head}${bTrendChart(days,vals,{color:cfg.col,fmt:v=>bDFmt(k,v),xlab:d=>bDay(d,spanYr)})}</div>`;
     }).join(''); }
-  const winLbl=ADRANGE==='all'?`full ${S.d.length}-day history`:(ADRANGE==='custom'?(days.length?`${bDay(days[0],spanYr)} – ${bDay(days[days.length-1],spanYr)} · ${days.length} days`:'custom'):(ADRANGE==='90d'?'last 90 days':'last 30 days'));
+  const winLbl=ADRANGE==='all'?`full ${S.d.length}-day history`:!days.length?'is period me data nahi':(ADRANGE==='custom'||stdWord(ADRANGE))?`${stdWord(ADRANGE)?stdWord(ADRANGE)+' · ':''}${bDay(days[0],spanYr)}${days.length>1?' – '+bDay(days[days.length-1],spanYr):''} · ${days.length} days`:`last ${STD_N[ADRANGE]||30} days`;
   return `<div class="card span2" style="margin-bottom:14px;border-color:#2b3f5e">
     <div class="ct"><h3>📅 ${appIcon(appName,18,'ail')}${appName} · daily graph</h3><span class="faint" style="font-size:11.5px">${winLbl} · pick a metric to see it daily · hover for value</span></div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin:2px 0 2px">${rgChips}</div>${customBox}
@@ -10460,10 +10489,7 @@ function bDFmt(k,v){ if(v==null||isNaN(v))return'—';
 // which metrics come preselected: the placement's out-of-range APPROVED metrics (the alert), else eCPM+Revenue
 function bDailyDefaults(u){ const out=BMET.filter(k=>{const st=(u.status||{})[k];return (u.approved&&u.approved[k])&&(st==='above'||st==='below');}); return out.length?out.slice():['ecpm','rev']; }
 // indices of rec.d that fall inside the chosen window
-function bDailyWin(rec){ const d=rec.d||[]; const n=d.length; const idx=[]; if(!n)return idx;
-  if(BDRANGE==='all'){ for(let i=0;i<n;i++)idx.push(i); return idx; }
-  if(BDRANGE==='custom'){ const f=BDCUSTOM.from,t=BDCUSTOM.to; for(let i=0;i<n;i++){ if((!f||d[i]>=f)&&(!t||d[i]<=t))idx.push(i);} return idx; }
-  const days=BDRANGE==='90d'?90:30; for(let i=Math.max(0,n-days);i<n;i++)idx.push(i); return idx; }
+function bDailyWin(rec){ const sp=stdSpan(rec.d||[],BDRANGE,BDCUSTOM.from,BDCUSTOM.to), idx=[]; if(sp) for(let i=sp[0];i<=sp[1];i++) idx.push(i); return idx; }
 function bDStats(vals){ const nn=vals.filter(v=>v!=null&&!isNaN(v)); let latest=null; for(let i=vals.length-1;i>=0;i--){ if(vals[i]!=null&&!isNaN(vals[i])){latest=vals[i];break;} }
   if(!nn.length)return {latest:null,min:null,max:null,avg:null};
   return {latest:latest,min:Math.min(...nn),max:Math.max(...nn),avg:nn.reduce((a,b)=>a+b,0)/nn.length}; }
@@ -10484,7 +10510,7 @@ function bDailyPanel(u){
   if(BDUNIT!==u.id){ BDMETS=bDailyDefaults(u); BDUNIT=u.id; }            // (re)default when a different unit opens
   const fromAlert=bDailyDefaults(u), isAlertDef=fromAlert.every(k=>BDMETS.includes(k))&&BDMETS.length===fromAlert.length&&(u.approved&&fromAlert.some(k=>['above','below'].includes((u.status||{})[k])));
   // time-range chips
-  const RGS=[['30d','30 days'],['90d','3 months'],['all','All time'],['custom','Custom']];
+  const RGS=STD_KEYS;   // the owner's standard picker
   const rgChips=RGS.map(([w,lab])=>`<button onclick="bDWin('${w}')" style="border:1px solid ${BDRANGE===w?'var(--cyan)':'var(--line2)'};background:${BDRANGE===w?'rgba(61,208,240,.16)':'var(--panel)'};color:${BDRANGE===w?'#fff':'var(--ink2)'};font:inherit;font-size:12px;font-weight:${BDRANGE===w?650:400};padding:5px 11px;border-radius:8px;cursor:pointer">${lab}</button>`).join('');
   const d0=rec.h0||rec.d[0], dN=rec.d[rec.d.length-1];   // min reaches the TRUE first day (h0) — the owner's "no trim"
   const customBox=BDRANGE==='custom'?`<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px">
@@ -10510,7 +10536,7 @@ function bDailyPanel(u){
         <span class="faint" style="font-size:11.5px">this window — low ${bDFmt(k,st.min)} · high ${bDFmt(k,st.max)} · avg ${bDFmt(k,st.avg)}</span></div>`;
       return `<div style="margin:6px 0 12px">${head}${bTrendChart(days,vals,{color:cfg.col,fmt:v=>bDFmt(k,v),xlab:d=>bDay(d,spanYr)})}</div>`;
     }).join(''); }
-  const winLbl=BDRANGE==='all'?`full ${rec.d.length}-day history`:(BDRANGE==='custom'?(days.length?`${bDay(days[0],spanYr)} – ${bDay(days[days.length-1],spanYr)} · ${days.length} days`:'custom'):(BDRANGE==='90d'?'last 90 days':'last 30 days'));
+  const winLbl=BDRANGE==='all'?`full ${rec.d.length}-day history`:!days.length?'is period me data nahi':(BDRANGE==='custom'||stdWord(BDRANGE))?`${stdWord(BDRANGE)?stdWord(BDRANGE)+' · ':''}${bDay(days[0],spanYr)}${days.length>1?' – '+bDay(days[days.length-1],spanYr):''} · ${days.length} days`:`last ${STD_N[BDRANGE]||30} days`;
   return `<div class="card span2" style="margin-bottom:14px;border-color:#2b3f5e">
     <div class="ct"><h3>📅 ${u.name} · daily graph</h3><span class="faint" style="font-size:11.5px">${winLbl} · ${isAlertDef?'alert wali metric auto-selected':'metric select karke daily dekho'}</span></div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;margin:2px 0 2px">${rgChips}</div>${customBox}
@@ -11637,6 +11663,7 @@ function smpValInfoRow(o,app,id,old){ const kind=o.kind||'info';
 // (mostly app_remove) for up to ~7 days: days after an app's settled_till are PROVISIONAL — drawn hatched /
 // lighter and called "kaccha", because their numbers can still grow (never shrink).
 let UNI=null, UNILOADING=false, UNIERR=false, UNIVER=null; let UNIAPP=''; let UNISORT={k:'alert',d:-1};
+let UNIDCUS={from:'',to:''};   // the daily chart's Custom dates
 let UNIDRANGE='90d', UNICSRC='all', UNICRANGE='90', UNITRI='cp', UNITRIPAGE=0, UNITRIEXP=false, UNIOLDEXP=false, UNICLEXP=false, UNICPEXP=false;
 let UNIPRE=false;   // true = also show the test installs before an app's launch (hidden by default, never dropped)
 let UNISTEXP='';    // All apps "At a glance": the status / rate chip whose app list is open ('' = none — no lists by default)
@@ -11668,7 +11695,8 @@ function uniBack(){ UNIAPP=''; UNIOLDEXP=false; UNICLEXP=false; UNIPRE=false; UN
   if(APP){ setApp(''); return; } uniRerender(); window.scrollTo({top:0}); _navSave(); }
 function uniGo(id){ show('uninstall'); uniOpen(id); }   // from an Alerts-screen card
 function uniSort(k){ UNISORT=(UNISORT.k===k)?{k,d:-UNISORT.d}:{k,d:(k==='app'?1:-1)}; uniRerender(); }
-function uniDR(v){ UNIDRANGE=v; uniRerender(); }       // daily chart window (local; the top Period only drives the KPI sums)
+function uniDR(v){ UNIDRANGE=v; uniRerender(); }
+function uniDCus(f,t){ if(!/^\d{4}-\d\d-\d\d$/.test(f||'')||!/^\d{4}-\d\d-\d\d$/.test(t||'')) return; UNIDCUS={from:f,to:t}; uniDR('custom'); }       // daily chart window (local; the top Period only drives the KPI sums)
 function uniCS(v){ UNICSRC=v; uniRerender(); }        // "How many stay" curve: 'all' all time (every install) | 'recent' (last 90 days of installs)
 function uniCR(v){ UNICRANGE=v; uniRerender(); }       // "How many stay" curve: '30' | '90' | 'all' days after install
 function uniCX(){ UNICPEXP=!UNICPEXP; uniRerender(); } // "Show full table" (every shown day: newest installs vs before)
@@ -12783,7 +12811,7 @@ function winHtml(){ const firstK=dAdd(M.settled,1);
   if(W.empty) return `<span>📅 <b>${kwLabel()}</b>: is period ka GA4 data abhi nahi — GA4 data <b>${fd(M.E)}</b> tak hai (2–3 din peeche chalta hai)</span>`;
   const kd=W.t>M.settled?`<span class="us-prov">⏳ ${span(firstK>W.f?firstK:W.f,W.t)} not final · final on ${fd(dAdd(W.t,M.late+M.lag))}</span>`:'<span class="us-good">✓ All days final</span>';
   return `<span>📅 <b>${span(W.f,W.t)}</b> (${W.L} days) <span class="us-faint">vs</span> ${W.nc?'<b>—</b> <span class="us-faint">(is period se pehle GA4 data nahi)</span>':`<b>${span(W.cf,W.ct)}</b>${W.cL!==W.L?' ('+W.cL+' days)':''}`}</span>`
-    +`<span>All ${A.length} apps: GA4 data till <b>${fd(M.E)}</b> (same day)</span>${kd}<span class="us-faint">Numbers = daily average<span class="us-kb"> · ⌨ <span class="us-kbd">7</span> <span class="us-kbd">1</span> <span class="us-kbd">3</span> <span class="us-kbd">6</span></span></span>`; }
+    +`<span>All ${A.length} apps: GA4 data till <b>${fd(M.E)}</b> (same day)</span>${kd}<span class="us-faint">Numbers = daily average<span class="us-kb"> · ⌨ <span class="us-kbd">7</span> <span class="us-kbd">1</span> <span class="us-kbd">3</span> <span class="us-kbd">6</span> <span class="us-kbd">9</span></span></span>`; }
 function topHtml(){ const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
   const rb=(v,l,k)=>`<button data-r="${v}" aria-pressed="${r0===v}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`;
   const iv=(id,v,lab)=>`<input type="date" id="${id}" aria-label="${lab}" value="${v}" min="${pickMin()}" max="${M.E}">`;
@@ -14154,10 +14182,13 @@ function uniDailyCard(a){
   const D=a.daily||{}, n=(D.new||D.un||[]).length;
   const hd='<div class="ct"><h3>📊 Daily installs vs uninstalls</h3></div>';
   if(!n||!D.start) return `<div class="card" id="uni-daily" style="margin-bottom:14px">${hd}<div class="muted" style="font-size:13px">Roz ka data abhi nahi.</div></div>`;
-  const k=UNIDRANGE==='30d'?30:(UNIDRANGE==='90d'?90:n), i0=Math.max(0,n-k,Math.min(n-1,uniDiff(D.start,uniFirst(a)||D.start))), dates=[]; for(let i=i0;i<n;i++) dates.push(uniAdd(D.start,i));
-  const sl=arr=>(arr||[]).slice(i0,n);
-  const chips=[['30d','30 days'],['90d','3 months'],['all','All time']].map(([v,l])=>`<span class="chip${UNIDRANGE===v?' on':''}" onclick="uniDR('${v}')">${l}</span>`).join('');
-  const inc=uniIncDays(a).filter(d=>d>=dates[0]);
+  // the period (the owner's standard picker) on the app's own days, from its first day: [i0, i1]; none → the charts say so
+  const lo=Math.max(0,Math.min(n-1,uniDiff(D.start,uniFirst(a)||D.start))), own=[]; for(let i=lo;i<n;i++) own.push(uniAdd(D.start,i));
+  const sp=stdSpan(own,UNIDRANGE,UNIDCUS.from,UNIDCUS.to), i0=sp?lo+sp[0]:lo, i1=sp?lo+sp[1]:lo-1, dates=[]; for(let i=i0;i<=i1;i++) dates.push(uniAdd(D.start,i));
+  const sl=arr=>(arr||[]).slice(i0,i1+1);
+  const chips=STD_KEYS.map(([v,l])=>`<span class="chip${UNIDRANGE===v?' on':''}" onclick="uniDR('${v}')">${l}</span>`).join('')
+    +(UNIDRANGE==='custom'?stdCusBox('uni-dcus',own[0],own[own.length-1],UNIDCUS.from,UNIDCUS.to,'uniDCus'):'');
+  const inc=uniIncDays(a).filter(d=>dates.length&&d>=dates[0]&&d<=dates[dates.length-1]);
   const marks=[...(a.alerts||[]),...(a.alerts_closed||[])].filter(z=>/^rate/.test(z.family||'')&&(z.day||z.since)).map(z=>({x:z.day||z.since,color:'#ffd479',label:'⚠'}))
     .concat((a.releases||[]).filter(r=>r.date).map(r=>({x:r.date,color:'#a78bfa',label:'v'})))
     .concat(inc.map(d=>({x:d,color:'#ff9f43',label:'½'})));
@@ -14183,6 +14214,7 @@ function uniDailyCard(a){
     <span><i style="display:inline-block;height:11px;border-left:2px dashed #ffd479"></i>Alert</span><span><i style="display:inline-block;height:11px;border-left:2px dashed #a78bfa"></i>Version change</span>
     ${pv>=0?'<span><i style="display:inline-block;width:14px;height:10px;background:repeating-linear-gradient(45deg,rgba(132,150,181,.35) 0 2px,transparent 2px 5px)"></i>⏳ Not final — late data abhi aa raha</span>':''}${inc.length?'<span title="GA4 ne us din ke install-din numbers poore nahi diye — un dino se koi alert nahi"><i style="display:inline-block;height:11px;border-left:2px dashed #ff9f43"></i>½ Data incomplete</span>':''}</div>`;
   return `<div class="card" id="uni-daily" style="margin-bottom:14px">${hd}${now}${late}<div class="chips" style="margin-bottom:8px">${chips}</div>
+    ${sp?'':`<div class="muted" style="font-size:12.5px;padding:6px 2px 10px">Is period ka GA4 data abhi nahi — GA4 data ${uniD(own[own.length-1])} tak hai (GA4 2–3 din peeche chalta hai).</div>`}
     ${uniBarsChart(dates,sl(D.new),sl(D.un),pv)}
     <div style="font-size:12px;font-weight:700;color:var(--ink2);margin:10px 0 2px">Uninstall rate (% of active users)</div>
     ${rateChart}${hasRate?lgd:''}
@@ -16310,7 +16342,7 @@ function winHtml(){ const pv=W.t>M.settled, firstK=dAdd(M.settled,1);
   if(W.empty) return `<span>📅 <b>${kwLabel()}</b>: is period ka GA4 data abhi nahi — GA4 data <b>${fd(M.E)}</b> tak hai (2–3 din peeche chalta hai)</span>`;
   const kd=pv?`<span class="as-prov" data-tk="prov:0">⏳ ${span(firstK>W.f?firstK:W.f,W.t)} not final · final on ${fd(dAdd(W.t,M.actLate+M.lag))}</span>`:'<span class="as-good">✓ All days final</span>';
   return `<span>📅 <b>${span(W.f,W.t)}</b> (${W.L} days) <span class="as-faint">vs</span> ${W.nc?'<b>—</b> <span class="as-faint">(is period se pehle GA4 data nahi)</span>':`<b>${span(W.cf,W.ct)}</b>${W.cL!==W.L?' ('+W.cL+' days)':''}`}</span>`
-    +`<span>All ${A.length} apps: GA4 data till <b>${fd(M.E)}</b> (same day)</span>${kd}<span>Users vs normal: <b>${W.sL?'final days '+pakkaSpan():'—'}</b> vs 4 weeks before</span><span class="as-faint">Numbers = daily average<span class="as-kb"> · ⌨ <span class="as-kbd">7</span> <span class="as-kbd">1</span> <span class="as-kbd">3</span> <span class="as-kbd">6</span></span></span>`; }
+    +`<span>All ${A.length} apps: GA4 data till <b>${fd(M.E)}</b> (same day)</span>${kd}<span>Users vs normal: <b>${W.sL?'final days '+pakkaSpan():'—'}</b> vs 4 weeks before</span><span class="as-faint">Numbers = daily average<span class="as-kb"> · ⌨ <span class="as-kbd">7</span> <span class="as-kbd">1</span> <span class="as-kbd">3</span> <span class="as-kbd">6</span> <span class="as-kbd">9</span></span></span>`; }
 function topHtml(){ const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
   const rb=(v,l,k)=>`<button data-r="${v}" aria-pressed="${r0===v}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`;
   const iv=(id,v,lab)=>`<input type="date" id="${id}" aria-label="${lab}" value="${v}" min="${pickMin()}" max="${M.E}">`;
@@ -17091,7 +17123,9 @@ function actGo(id){ show('active'); ACTJUMP='act-chg'; ACTJT=Date.now(); actOpen
 function actJumpNow(){ const k=ACTJUMP; if(!k) return; if(Date.now()-ACTJT>15000){ ACTJUMP=''; return; }
   const e=document.getElementById(k), r=(e&&e.getBoundingClientRect)?e.getBoundingClientRect():null; if(!r||!(r.height>0)) return; ACTJUMP=''; uniJump(k,'act'); }
 function actJump(sec){ uniJump(sec,'act'); }
-function actR(v){ ACTRANGE=v; actRerender(); }        // chart window: 30d | 90d | 1y | all
+function actR(v){ ACTRANGE=v; actRerender(); }        // chart window: the owner's standard picker + 1 year
+let ACTDCUS={from:'',to:''};                              // the charts' Custom dates
+function actDCus(f,t){ if(!/^\d{4}-\d\d-\d\d$/.test(f||'')||!/^\d{4}-\d\d-\d\d$/.test(t||'')) return; ACTDCUS={from:f,to:t}; actR('custom'); }
 function actSm(v){ ACTSMOOTH=v; actRerender(); }       // '7d' 7-day average | 'day' every day
 function actUM(v){ ACTUSEM=v; actRerender(); }         // 'time' | 'sess'
 function actUP(v){ ACTUSEPOP=v; actRerender(); }       // 'r' returning | 'all' | 'n' new installs
@@ -17385,7 +17419,13 @@ function actKpis(d){
 function actX(d){ const D=(d&&d.daily)||{}, st=D.start||(d&&d.history_start)||'', n=(st&&d&&d.data_till)?Math.max(0,uniDiff(st,d.data_till)+1):0;
   const iS=(st&&d.settled_till)?uniDiff(st,d.settled_till):n-1, L=(d&&d.launch)||{}, iL=(L.hidden&&L.day&&st)?Math.max(0,Math.min(n,uniDiff(st,L.day))):0;
   return {D,st,n,iS,iL}; }
-function actI0(X){ const k=ACTRANGE==='30d'?30:(ACTRANGE==='90d'?90:(ACTRANGE==='1y'?365:X.n)); return Math.max(0,X.n-k,ACTPRE?0:Math.min(Math.max(0,X.n-1),X.iL)); }
+// the charts' window (the owner's standard picker + 1 year) on the app's days from its first shown day (launch, or the day before
+// with ACTPRE) → [first index, end) — a period with none of its days → [n, n]: nothing drawn, the chart says so. Every series
+// stays computed on its whole history (a 7-day average at the window's first day reads the days before it).
+function actSpan(X){ const lo=ACTPRE?0:Math.min(Math.max(0,X.n-1),X.iL), own=[]; for(let i=lo;i<X.n;i++) own.push(uniAdd(X.st,i));
+  const sp=stdSpan(own,ACTRANGE,ACTDCUS.from,ACTDCUS.to,{'1y':365}); return sp?[lo+sp[0],lo+sp[1]+1]:[X.n,X.n]; }
+function actI0(X){ return actSpan(X)[0]; }
+function actE(X){ return actSpan(X)[1]; }
 // 7-day average: of a count (mean of the known days) or of a ratio (Σnum ÷ Σden — never a mean of daily ratios); ≥4 known days
 function actRoll(num,den,n){ const out=new Array(n).fill(null);
   for(let i=0;i<n;i++){ let a=0,b=0,c=0; for(let j=Math.max(0,i-6);j<=i;j++){ const x=actAt(num,j), y=den?actAt(den,j):1; if(x!=null&&y!=null&&y>0){ a+=x; b+=y; c++; } } out[i]=(c>=4&&b>0)?a/b:null; }
@@ -17401,12 +17441,16 @@ function actPkgs(d,from,to){ const L=(d.releases||[]).filter(x=>x&&x.date&&x.dat
   return `<div class="act-pkgs">${sh.map(x=>x.key?`<span class="act-pkg" data-key="${hAttr(x.key)}" title="Tap — is update ka asar (Update impact)" onclick="uniImp('${uniQ(x.key)}','act')">📦 ${hAttr(lb(x))} · ${uniD(x.date)}</span>`
     :`<span class="act-pkg off" title="Is update ka Update impact block nahi (launch se pehle ya bahut jaldi agla update)">📦 ${hAttr(lb(x))} · ${uniD(x.date)}</span>`).join('')}`
     +(L.length>MX?`<span class="lnk" style="font-size:11.5px;align-self:center" onclick="actRX()">${ACTRELALL?'Show fewer':'+'+(L.length-MX)+' more updates'}</span>`:'')+'</div>'; }
-function actChart(X,i0,vals,o){ const dates=[]; for(let i=i0;i<X.n;i++) dates.push(uniAdd(X.st,i));
-  const sl=a=>{ const r=[]; for(let i=i0;i<X.n;i++) r.push(Array.isArray(a)&&a[i]!=null&&isFinite(+a[i])?+a[i]:null); return r; };
+function actChart(X,i0,vals,o){ const e=actE(X), dates=[]; for(let i=i0;i<e;i++) dates.push(uniAdd(X.st,i));
+  if(!dates.length) return `<div class="muted" style="font-size:12.5px;padding:12px 4px">Is period ka GA4 data abhi nahi — GA4 data ${uniD(uniAdd(X.st,X.n-1))} tak hai (GA4 2–3 din peeche chalta hai).</div>`;
+  const sl=a=>{ const r=[]; for(let i=i0;i<e;i++) r.push(Array.isArray(a)&&a[i]!=null&&isFinite(+a[i])?+a[i]:null); return r; };
   const dim=dates.map((x,j)=>(i0+j)>X.iS||(i0+j)<X.iL), pv=X.iS+1-i0;
   return bTrendChart(dates,sl(vals),{idp:'act-',xlab:uniD,fmt:o.fmt,gaps:true,color:o.color,band:o.band?{lo:sl(o.band.lo),hi:sl(o.band.hi)}:null,marks:o.marks||[],dim,
     lines:(o.lines||[]).map(l=>Object.assign({},l,{v:sl(l.v)})),shade:(pv>0&&pv<dates.length)?{from:pv,label:'⏳ not final →'}:null}); }
-function actRangeChips(){ return [['30d','30 days'],['90d','3 months'],['1y','1 year'],['all','All time']].map(([v,l])=>`<span class="chip${ACTRANGE===v?' on':''}" onclick="actR('${v}')">${l}</span>`).join(''); }
+function actRangeChips(X){ const L=STD_KEYS.slice(0,8).concat([['1y','1 year']],STD_KEYS.slice(8));   // + 1 year before All time
+  const own=X&&X.n?[uniAdd(X.st,ACTPRE?0:Math.min(Math.max(0,X.n-1),X.iL)),uniAdd(X.st,X.n-1)]:null;
+  return L.map(([v,l])=>`<span class="chip${ACTRANGE===v?' on':''}" onclick="actR('${v}')">${l}</span>`).join('')
+    +(ACTRANGE==='custom'&&own?stdCusBox('act-dcus',own[0],own[1],ACTDCUS.from,ACTDCUS.to,'actDCus'):''); }
 function actSmChips(){ return [['7d','7-day average'],['day','Every day']].map(([v,l])=>`<span class="chip${ACTSMOOTH===v?' on':''}" onclick="actSm('${v}')">${l}</span>`).join(''); }
 const actLg=(c,t,dash)=>`<span><i style="display:inline-block;width:14px;height:0;border-top:2px ${dash?'dashed':'solid'} ${c}"></i>${t}</span>`;
 const actLgBand=t=>`<span><i class="dot" style="background:rgba(61,208,240,.28)"></i>${t}</span>`;
@@ -17435,13 +17479,13 @@ function actDailyCard(d){
   const X=actX(d), hd='<div class="ct uni-ct"><h3>👥 Old users — every day</h3><span class="faint" style="font-size:11.5px">active users − that day\'s installs</span></div>';
   if(!X.n) return `<div class="card" id="act-daily" style="margin-bottom:14px">${hd}<div class="muted" style="font-size:13px">Roz ka data abhi nahi.</div></div>`;
   const i0=actI0(X), D=X.D, sm=ACTSMOOTH!=='day', B=(d.bands||{}).ret_dau||{}, oq=D.oq||[];
-  const R=sm?actRoll(D.ret,null,X.n):D.ret, O=sm?actRoll(D.old,null,X.n):D.old, hasO=(D.old||[]).some((v,i)=>i>=i0&&actOk(v)), est=oq.some((q,i)=>i>=i0&&q===1);
+  const e=actE(X), R=sm?actRoll(D.ret,null,X.n):D.ret, O=sm?actRoll(D.old,null,X.n):D.old, hasO=(D.old||[]).some((v,i)=>i>=i0&&i<e&&actOk(v)), est=oq.some((q,i)=>i>=i0&&i<e&&q===1);
   const lines=[]; if(hasO) lines.push({v:O,color:'#8fb8ff',dash:'6 4'}); if(sm&&(B.med||[]).some(actOk)) lines.push({v:actRoll(B.med,null,X.n),color:'#8496b5',dash:'3 4',width:1.6});
   const chart=actChart(X,i0,R,{fmt:v=>actNum(v),band:sm?null:B,lines,marks:actMarks(d,X)});
-  const from=uniAdd(X.st,i0), to=d.data_till, newc=actBars((()=>{ const a=[]; for(let i=i0;i<X.n;i++) a.push(uniAdd(X.st,i)); return a; })(),(D.new||[]).slice(i0,X.n),X.iS+1-i0);
+  const from=uniAdd(X.st,i0), to=e<X.n?uniAdd(X.st,e-1):d.data_till, newc=actBars((()=>{ const a=[]; for(let i=i0;i<e;i++) a.push(uniAdd(X.st,i)); return a; })(),(D.new||[]).slice(i0,e),X.iS+1-i0);
   const lgd=`<div class="lgd">${actLg('#3dd0f0','Old users/day'+(sm?' (7-day avg)':''))}${hasO?actLg('#8fb8ff',actOldLbl(D.old_k)+(est?' ≈':''),true):''}${sm?(lines.length>(hasO?1:0)?actLg('#8496b5','Normal (7-day average)',true):''):actLgBand('Normal range')}`
     +`${(d.releases||[]).length?actLgMark(ACT_PKG,'📦 App update'):''}${(D.breaks||[]).length?actLgMark('#ff9f43','No data (tracking)'):''}${X.iS<X.n-1?ACT_LG_PROV:''}</div>`;
-  return `<div class="card" id="act-daily" style="margin-bottom:14px">${hd}<div class="chips" style="margin-bottom:6px">${actSmChips()}</div><div class="chips" style="margin-bottom:8px">${actRangeChips()}</div>
+  return `<div class="card" id="act-daily" style="margin-bottom:14px">${hd}<div class="chips" style="margin-bottom:6px">${actSmChips()}</div><div class="chips" style="margin-bottom:8px">${actRangeChips(X)}</div>
     ${chart}${lgd}${actPkgs(d,from,to)}
     <div style="font-size:12px;font-weight:700;color:var(--ink2);margin:12px 0 2px">Installs / day</div>${newc}${actLateLine(d)}
     <div class="faint" style="font-size:10.5px;margin-top:6px;line-height:1.5">Old users = us din ke GA4 active users − us din ke naye installs (old users). ${hasO?actOldLbl(D.old_k)+' = inme se jo 30+ din pehle install hue (haal ke installs ka wapas aana hata ke)'+(est?'; ≈ = andaza (wapsi ki rate se)':'')+'. ':''}Khali jagah = us din ka data nahi (0 nahi maana).</div></div>`; }
@@ -17459,7 +17503,7 @@ function actRetChart(d,X,T){
   const chart=actChart(Xp,i0,v,{fmt:x=>(+x).toFixed(1)+'%',lines:actOk(ref)?[{v:new Array(X.n).fill(+ref*100),color:'#8496b5',dash:'5 4',width:1.6}]:[],
     marks:actMarks(d,X,edge&&(d.edges||{}).ret_state==='found'?[{x:edge,color:'#8fb8ff',label:'Data starts'}]:[])});
   const lgd=`<div class="lgd">${actLg('#3dd0f0','Back · '+ns.find(([k])=>k===N)[1].toLowerCase()+' (7 install days together)')}${actOk(ref)?actLg('#8496b5',actLbl(T.label)+' '+uniPct(ref),true):''}${edge&&(d.edges||{}).ret_state==='found'?actLgMark('#8fb8ff','Install-day return data starts '+uniD(edge)):''}${ACT_LG_PROV}</div>`;
-  return `<div style="padding:4px 17px 0"><div style="font-size:12.5px;font-weight:700;color:var(--ink2);margin:6px 0 6px">By install day</div><div class="chips" style="margin-bottom:6px">${chips}</div><div class="chips" style="margin-bottom:8px">${actRangeChips()}</div>
+  return `<div style="padding:4px 17px 0"><div style="font-size:12.5px;font-weight:700;color:var(--ink2);margin:6px 0 6px">By install day</div><div class="chips" style="margin-bottom:6px">${chips}</div><div class="chips" style="margin-bottom:8px">${actRangeChips(X)}</div>
     <div id="act-ret-chart">${chart}</div>${lgd}${actPkgs(d,uniAdd(X.st,i0),d.data_till)}</div>`; }
 function actLbl(t){ return hAttr(String(t||'All-time normal').replace(/\b(\d{4}-\d\d-\d\d)\b/g,(m,d)=>uniD(d))); }
 function actHeat(h){ return +h>0?'background:rgba(52,217,154,.30);color:#fff':(+h<0?'background:rgba(255,107,107,.30);color:#fff':''); }
@@ -17772,7 +17816,9 @@ function actPfPtr(){ const P=DATA&&DATA.active&&DATA.active.portfolio; return (P
 function loadACTPf(cb){ const P=actPfPtr(); if(!P||ACTPF){cb&&cb();return;} if(ACTPFL) return; ACTPFL=true; ACTPFERR=false;
   fetchGzJson(P.file+'?t='+Date.now()).then(j=>{ if(!j||typeof j!=='object'||!Array.isArray(j.apps)) throw new Error('file'); ACTPF=j; ACTPFSIG=P.sig||null; ACTPFC=null; ACTPFL=false; cb&&cb(); })
     .catch(()=>{ ACTPFERR=true; ACTPFL=false; cb&&cb(); }); }   // an error still calls back → "Try again", never "loading" forever
-function actPfR(v){ ACTPFR=v; actRerender(); }                          // chart window: 30d | 90d | 180d | all
+function actPfR(v){ ACTPFR=v; actRerender(); }                          // chart window: the owner's standard picker + 6 months
+let ACTPFCUS={from:'',to:''};                                              // its Custom dates
+function actPfCus(f,t){ if(!/^\d{4}-\d\d-\d\d$/.test(f||'')||!/^\d{4}-\d\d-\d\d$/.test(t||'')) return; ACTPFCUS={from:f,to:t}; actPfR('custom'); }
 function actPfMore(k){ ACTPFN=k>0?ACTPFN+k:14; actRerender(); }          // the date-wise table: 14 rows, then +30 a tap
 function actPfMX(){ ACTPFMK=!ACTPFMK; actRerender(); }                  // all the "apps with data changed" chips
 const ACT_WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -17841,7 +17887,10 @@ function actPfEvents(S,i0,M){ const ev=[]; M.forEach(m=>m.o.forEach(c=>ev.push({
   // big = the chip of something drawn on the chart (a banded tracking check, a "⏸️" missing run): shown even when the chips are folded
   ev.forEach(x=>{ if(x.k==='gap'||x.k==='late'||x.k==='stale'){ for(let i=x.i;i<=x.e;i++) if(S.inc[i]){ x.big=true; break; } } });
   return ev.sort((x,y)=>y.i-x.i||(x.p.name<y.p.name?-1:1)); }
-function actPfI0(S){ const k={'30d':30,'90d':90,'180d':180}[ACTPFR]; return k?Math.max(0,S.n-k):0; }
+// the chart's window (the owner's standard picker + 6 months) on the portfolio's days → [first index, end); none → [n, n]
+function actPfSpan(S){ const own=[]; for(let i=0;i<S.n;i++) own.push(uniAdd(S.from,i));
+  const sp=stdSpan(own,ACTPFR,ACTPFCUS.from,ACTPFCUS.to,{'180d':180}); return sp?[sp[0],sp[1]+1]:[S.n,S.n]; }
+function actPfI0(S){ return actPfSpan(S)[0]; }
 const actPfN=v=>actOk(v)?Math.round(+v).toLocaleString():'—';   // the day's numbers in full ("12,345,678" — never "12.3M", which hides a day-to-day change)
 const actPfK=v=>{ const t=(x,u)=>x.toFixed(2).replace(/\.?0+$/,'')+u; return v>=1e6?t(v/1e6,'M'):(v>=1e3?t(v/1e3,'k'):String(Math.round(v))); };   // axis ticks: "250k" · "1.25M"
 function actPfNice(v){ const x=Math.max(+v||0,1), raw=x/4, m=Math.pow(10,Math.floor(Math.log10(raw))), f=raw/m, s=Math.max(1,(f<=1?1:(f<=2?2:(f<=2.5?2.5:(f<=5?5:10))))*m);
@@ -17947,7 +17996,9 @@ function actPfCard(rows){ const P=actPfPtr(); if(!P) return '';
   if(!ACTPF){ if(ACTPFERR) return wrap(`<div class="muted" style="font-size:13.5px;padding:10px 2px">⚠️ Roz ka data load nahi hua. <span class="lnk" onclick="ACTPFERR=false;actEnsure();actRerender()">Try again</span></div>`);
     return wrap(`<div class="muted" style="font-size:13.5px;padding:14px 2px">⏳ Roz ka data load ho raha hai…</div>`); }
   const S=actPfSeries(rows); if(!S||!S.n) return wrap(`<div class="muted" style="font-size:13.5px;padding:10px 2px">Dikhne wali apps ka roz ka data abhi nahi.</div>`);
-  const E=S.n-1, i0=actPfI0(S), C=ACT_PF_C;
+  const E=S.n-1, pfs=actPfSpan(S), i0=pfs[0], C=ACT_PF_C;
+  // the chart's own copy ends with the period (the series keep their whole history; the table below is every day)
+  const Sw=pfs[1]<S.n?Object.assign({},S,{n:pfs[1]}):S;
   // the apps not in the file: no day with active users yet, or their part not built this run — named, never a silent 0
   const lost=S.lost||[];
   // the latest settled day in one line — never a day a big app's data is missing (its sum reads low); only when every settled
@@ -17959,19 +18010,21 @@ function actPfCard(rows){ const P=actPfPtr(); if(!P) return '';
   const top=ls>=0?`<div class="act-line" id="act-pf-last">📅 ${actWd(lsd)} ${uniD(lsd)} <span class="faint" style="font-weight:500">(aakhri pakka din)</span>: ${actPfN(S.dau[ls])} active users (DAU) · ${S.rtn[ls]?actPfN(S.rt[ls])+' old users':'old users —'} · ${S.nwn[ls]?actPfN(S.nw[ls])+' new installs':'new installs —'}${S.wow[ls]!=null?` · <span title="${hAttr('Sirf wo '+S.wowc[ls]+' apps jinka dono din data hai (same apps)')}">${uniChg(S.wow[ls])} vs last ${actWd(lsd)}</span>`:''} · ${S.ap[ls]} of ${S.nn[ls]} apps${lsx}</div>`:'';
   // app-count changes in the range: chart marks + one chip per app
   // (3+ apps the same day and way — e.g. many apps' first GA4 day — are one chip, named in its tooltip)
-  const M=actPfMarks(S,i0), ev=[], by={}; actPfEvents(S,i0,M).forEach(x=>{ const g=x.i+'|'+x.e+'|'+x.k; if(by[g]){ by[g].ps.push(x.p); if(x.big) by[g].big=true; } else { by[g]=Object.assign({},x,{ps:[x.p]}); ev.push(by[g]); } });
+  const M=actPfMarks(Sw,i0), ev=[], by={}; actPfEvents(Sw,i0,M).forEach(x=>{ const g=x.i+'|'+x.e+'|'+x.k; if(by[g]){ by[g].ps.push(x.p); if(x.big) by[g].big=true; } else { by[g]=Object.assign({},x,{ps:[x.p]}); ev.push(by[g]); } });
   const MX=8, sh=ACTPFMK?ev:ev.filter((x,j)=>j<MX||x.big);   // folded: the newest 8 + every chip of a mark on the chart
   const evd=x=>{ const a=uniAdd(S.from,x.i); return x.k==='stale'?'GA4 till '+uniD(uniAdd(S.from,x.p.till)):(x.k==='late'?'from '+uniD(a):(x.e>x.i?uniSpan(a,uniAdd(S.from,x.e)):uniD(a))); };
   const chips=ev.length?`<div class="act-pfcs">${sh.map(x=>{ const k=ACT_PF_CK[x.k]||ACT_PF_CK.gap; return `<span class="act-pfc" data-k="${x.k}" data-day="${uniAdd(S.from,x.i)}" title="${hAttr((x.ps.length>2?actPfNames(x.ps,40)+' — ':'')+k[2])}">${k[0]} ${x.s>0?'+ ':(x.s<0?'− ':'')}${x.ps.length>2?x.ps.length+' apps':x.ps.map(p=>appIconId(p.id,p.name,14,'ail')+hAttr(p.name)).join(', ')} · ${k[1]} · ${evd(x)}</span>`; }).join('')}`
     +(ev.length>ev.filter((x,j)=>j<MX||x.big).length?`<span class="lnk" style="font-size:11.5px;align-self:center" onclick="actPfMX()">${ACTPFMK?'Show fewer':'+'+(ev.length-sh.length)+' more'}</span>`:'')+'</div>':'';
-  const rng=[['30d','30 days'],['90d','3 months'],['180d','6 months'],['all','All time']].map(([v,l])=>`<span class="chip${ACTPFR===v?' on':''}" onclick="actPfR('${v}')">${l}</span>`).join('');
-  const anyPv=S.pv.some((x,i)=>x&&i>=i0), anyRg=S.pv.some((x,i)=>i>=i0&&S.ap[i]>0&&!actPfRetOk(S,i)&&S.rtn[i]>0);
-  const anyInc=S.inc.some((x,i)=>x&&i>=i0&&S.ap[i]>0), anyBig=(S.bk||[]).some(b=>b.big&&b.e>=i0), anyBk=ev.some(x=>x.k==='brk');
+  const rng=STD_KEYS.slice(0,8).concat([['180d','6 months']],STD_KEYS.slice(8)).map(([v,l])=>`<span class="chip${ACTPFR===v?' on':''}" onclick="actPfR('${v}')">${l}</span>`).join('')
+    +(ACTPFR==='custom'?stdCusBox('act-pfcus',uniAdd(S.from,0),uniAdd(S.from,S.n-1),ACTPFCUS.from,ACTPFCUS.to,'actPfCus'):'');
+  const inW=i=>i>=i0&&i<pfs[1];
+  const anyPv=S.pv.some((x,i)=>x&&inW(i)), anyRg=S.pv.some((x,i)=>inW(i)&&S.ap[i]>0&&!actPfRetOk(S,i)&&S.rtn[i]>0);
+  const anyInc=S.inc.some((x,i)=>x&&inW(i)&&S.ap[i]>0), anyBig=(S.bk||[]).some(b=>b.big&&b.e>=i0&&b.i<pfs[1]), anyBk=ev.some(x=>x.k==='brk');
   const lgd=`<div class="lgd">${actLg(C.dau,'Active users (DAU)')}${actLg(C.ret,'Old users/day',true)}<span><i class="dot" style="background:${C.new}"></i>Installs (lower bars)</span>`
     +`${M.length?actLgMark(C.mk,'App count changed (new app / stopped)'):''}`
     +`${anyInc?`<span title="${hAttr('Us din kisi badi app ka data nahi aaya — DAU kam dikhta hai, ye girawat nahi')}"><i style="display:inline-block;width:7px;height:7px;border-radius:50%;border:2px solid ${C.dau}"></i>⏸️ App data missing (total low)</span>`:''}`
     +`${anyBig?`<span title="${hAttr(ACT_PF_CK.brk[2])}"><i style="display:inline-block;width:14px;height:8px;background:rgba(255,159,67,.3);border-top:3px solid ${ACT_PF_BRK}"></i>Tracking check</span>`:''}${anyPv?ACT_LG_PROV:''}</div>`;
-  const chart=`<div id="act-pf-chart">${actPfChart(S,i0,M)}</div>`;
+  const chart=`<div id="act-pf-chart">${i0<pfs[1]?actPfChart(Sw,i0,M):`<div class="muted" style="font-size:12.5px;padding:12px 4px">Is period ka GA4 data abhi nahi — GA4 data ${uniD(uniAdd(S.from,S.n-1))} tak hai (GA4 2–3 din peeche chalta hai).</div>`}</div>`;
   // the date-wise table: newest first, ACTPFN rows, then "Show more" — each "Show more" block starts with the column names again
   const TH=[['Date'],['Apps with data','Us din kitni apps ka GA4 data aaya (dikhne wali apps me se) — cell pe ruko: kaun nahi. ⏸️ = kisi badi app ka data nahi, total kam'],['DAU','Active users: sab apps ke roz ke GA4 active users jode — ek insaan 2 apps pe ho to 2 baar gina'],
     ['Old users/day','Active users − us din ke naye installs, har app ka, jode'],['Installs','GA4 new users (pehli baar app khola), sab apps jode'],
@@ -18639,7 +18692,7 @@ function winHtml(){ if(W.empty) return `<span>📦 <b>${kwLabel()}</b>: is perio
   if(im.needH.length) kd+=`<span class="vs-prov" title="${H} din ki kamai abhi aage ki hai — engine ka ≈ andaza (is app ke purane hafton ki chaal se)">≈ ${H}-day earning (andaza) · ${wkSpan(im.needH[0],im.needH[im.needH.length-1])} · first final ${fd(pakka(im.needH[0],H))}</span>`;
   if(!kd) kd='<span class="vs-good">✓ All weeks final</span>';
   return `<span>📦 Installs <b>${wkSpan(W.i0,W.i1)}</b> (${W.L} ${W.L===1?'week':'weeks'}) <span class="vs-faint">vs</span> ${W.nc?'<b>—</b> <span class="vs-faint">(is range se pehle koi install week nahi)</span>':`<b>${wkSpan(W.c0,W.c1)}</b>${W.cL!==W.L?' ('+W.cL+' wk)':''}`}</span>`
-    +`<span>🎯 Target: money back in <b>${H} days</b></span>${kd}<span class="vs-faint">Install-day data till ${fd(M.settled)} · Google Ads till ${fd(M.spendTill)}<span class="vs-kb"> · ⌨ <span class="vs-kbd">7</span> <span class="vs-kbd">1</span> <span class="vs-kbd">3</span> <span class="vs-kbd">6</span></span></span>`; }
+    +`<span>🎯 Target: money back in <b>${H} days</b></span>${kd}<span class="vs-faint">Install-day data till ${fd(M.settled)} · Google Ads till ${fd(M.spendTill)}<span class="vs-kb"> · ⌨ <span class="vs-kbd">7</span> <span class="vs-kbd">1</span> <span class="vs-kbd">3</span> <span class="vs-kbd">6</span> <span class="vs-kbd">9</span></span></span>`; }
 function topHtml(){ const r0=rangeOf(), c0=cmpOf(), cur=curView();
   const rb=(v,l,k,t)=>`<button data-r="${v}" aria-pressed="${r0===v}" title="${t}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`;
   const iv=(id,v,lab)=>`<input type="date" id="${id}" aria-label="${lab}" value="${v}" min="${pickMin()}" max="${wE(NW-1)}">`;

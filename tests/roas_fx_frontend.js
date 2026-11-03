@@ -69,6 +69,15 @@ try {
   wd = JSON.parse(run(`(()=>{ const ax=[]; for(let i=0;i<100;i++) ax.push(new Date(Date.UTC(2026,7,1)+i*864e5).toISOString().slice(0,10));
     const keep=DATA; DATA={today_date:ax[99], latest_complete:ax[98]}; const o={};
     ['today','yesterday','7d','month','lastmonth','30d','60d','90d','all'].forEach(r=>{ const w=windowDates(ax,r,'',''); o[r]=[w.length,w[0],w[w.length-1]]; });
-    o.labels=["60d","90d"].map(r=>pRangeLabel(r)); DATA=keep; return JSON.stringify(o); })()`));
+    o.labels=["60d","90d"].map(r=>pRangeLabel(r));
+    // a daily chart's period (stdSpan) on the same dates, the chart's own last date 7 Nov (8 Nov not in the chart): first / last
+    const cx=ax.slice(0,99), sp={}; ['today','yesterday','7d','month','lastmonth','30d','60d','90d','all'].forEach(r=>{ const q=stdSpan(cx,r,'',''); sp[r]=q?[cx[q[0]],cx[q[1]]]:null; });
+    sp.custom=stdSpan(cx,'custom','2026-09-10','2026-09-01').map(i=>cx[i]); sp.year=stdSpan(cx,'1y','','',{'1y':365}).map(i=>cx[i]);
+    o.span=sp;
+    // the eCPM chart's points: Last month by day (31) and by month (1); 60 days by day (60); Today none (the day still runs)
+    const dm={}; cx.forEach(d=>{ dm[d]=[1e6,1000]; }); const W={comp:cx,L:cx[98]};
+    o.ec={lmDay:ecPts(dm,W,'','lastmonth','day').length, lmMon:ecPts(dm,W,'','lastmonth','month').map(p=>p.k), d60:ecPts(dm,W,'','60','day').length,
+      today:ecPts(dm,W,'','today','day').length, all:ecPts(dm,W,'','all','day').length, mon:ecPts(dm,W,'','month','month').map(p=>p.k)};
+    DATA=keep; return JSON.stringify(o); })()`));
 } catch (e) { errors.push('wd: ' + (e.stack || e.message)); }
 process.stdout.write(JSON.stringify({ errors, out, other, wd }));

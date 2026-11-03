@@ -105,7 +105,9 @@ def test_detail_sections_in_order_with_english_titles(report, fixture):
         # (SPEC_SIMPLIFY §6.5: the update card lives on the Uninstall tab — here its one-line link, test_imp_card_in_active)
         assert a["has_titles"] == ["📌 At a glance", "🔔 What changed? (", "When will I know?", "← All apps"], r["app"]
         assert a["imp_line"].startswith("📦 "), r["app"]
-        assert {"7-day average", "Every day", "30 days", "3 months", "1 year", "All time"} <= set(a["chips_seen"]), r["app"]
+        assert {"7-day average", "Every day", "30 days", "90 days", "1 year", "All time"} <= set(a["chips_seen"]), r["app"]
+        # the owner's standard picker (3 Nov 2026) + 1 year
+        assert {"Today", "Yesterday", "7 days", "This month", "Last month", "60 days", "Custom"} <= set(a["chips_seen"]), r["app"]
 
 
 def test_header_names_app(report, fixture):
@@ -871,13 +873,17 @@ def test_pf_ranges_default_90_and_chart_points(report):
     F = report["pf"]["file"]
     days, frm, n = pf_days(F)
     S = report["pf"]["s"]
-    assert S["90d"]["ranges"] == [["30d", "30 days", False], ["90d", "3 months", True], ["180d", "6 months", False], ["all", "All time", False]]
+    # the owner's standard picker (3 Nov 2026), in his order, + 6 months before All time
+    assert S["90d"]["ranges"] == [["today", "Today", False], ["yesterday", "Yesterday", False], ["7d", "7 days", False],
+                                  ["month", "This month", False], ["lastmonth", "Last month", False],
+                                  ["30d", "30 days", False], ["60d", "60 days", False], ["90d", "90 days", True],
+                                  ["180d", "6 months", False], ["all", "All time", False], ["custom", "Custom", False]]
     for k, N in (("30d", 30), ("90d", 90), ("180d", 180), ("all", n)):
         want = [d for d in sorted(days)[-min(N, n):] if days[d]["k"]]
         pts = S[k]["pts"]
         assert len(pts) == len(want), (k, len(pts), len(want))
         assert [p["v"] for p in pts] == ["{:,} active users".format(days[d]["dau"]) for d in want], k
-    assert S["30d"]["ranges"][0][2] and not S["30d"]["ranges"][1][2]
+    assert [r[0] for r in S["30d"]["ranges"] if r[2]] == ["30d"]
 
 
 def test_pf_provisional_days_hatched_faded_and_pilled(report):

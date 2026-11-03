@@ -317,3 +317,20 @@ def test_the_period_windows_of_the_owners_standard_picker(page):
     assert w["lastmonth"] == [31, "2026-10-01", "2026-10-31"] and w["30d"] == [30, "2026-10-09", "2026-11-07"]
     assert w["60d"] == [60, "2026-09-09", "2026-11-07"] and w["90d"] == [90, "2026-08-10", "2026-11-07"]
     assert w["all"] == [99, "2026-08-01", "2026-11-07"] and w["labels"] == ["60 days", "90 days"]
+
+
+def test_a_daily_charts_period_and_the_ecpm_chart_points(page):
+    """stdSpan (every daily chart's period, the owner's standard picker): on chart dates 1 Aug – 7 Nov 2026 with the AdMob
+    today 8 Nov — Today: not a chart date (none); Yesterday = 7 Nov; This month = 1–7 Nov; Last month = October; N days = the
+    last N dates; Custom swapped when reversed; a chart's own 1 year. The eCPM chart on the same days: Last month = 31 daily
+    points or 1 monthly; 60 days = 60; Today none (the day still runs: its live eCPM is the Today tile); by hand."""
+    sp = page["wd"]["span"]
+    assert sp["today"] is None and sp["yesterday"] == ["2026-11-07", "2026-11-07"]
+    assert sp["month"] == ["2026-11-01", "2026-11-07"] and sp["lastmonth"] == ["2026-10-01", "2026-10-31"]
+    assert sp["7d"] == ["2026-11-01", "2026-11-07"] and sp["30d"] == ["2026-10-09", "2026-11-07"]
+    assert sp["60d"] == ["2026-09-09", "2026-11-07"] and sp["90d"] == ["2026-08-10", "2026-11-07"]
+    assert sp["all"] == ["2026-08-01", "2026-11-07"] and sp["custom"] == ["2026-09-01", "2026-09-10"]
+    assert sp["year"] == ["2026-08-01", "2026-11-07"]
+    ec = page["wd"]["ec"]
+    assert ec["lmDay"] == 31 and ec["lmMon"] == ["2026-10"] and ec["d60"] == 60 and ec["today"] == 0 and ec["all"] == 99
+    assert ec["mon"] == ["2026-11"]

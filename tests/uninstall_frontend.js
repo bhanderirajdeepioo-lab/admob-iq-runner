@@ -614,7 +614,8 @@ console.log(JSON.stringify({
     box_line: has(A0, 'Har box = us hafte install karne walon me se us din tak kitne % ne app hata diya'),
     glance_app: apps.every(a => has(`detail|${a.app}|all|30|cp|false`, '📌 At a glance') && has(`detail|${a.app}|all|30|cp|false`, '>Vs last month<')
       && /<div class="l">Daily uninstall rate(?: · (?:last 7 days|pakke 7 din))?<\/div>/.test(out[`detail|${a.app}|all|30|cp|false`] || '')) && has(A0, '>new users<') && has(A0, '— still in app:') && has(A0, 'of daily active users'),
-    daily_title: has(A0, '📊 Daily installs vs uninstalls') && ['30 days', '3 months', 'All time'].every(s => has(A0, '>' + s + '</span>')),
+    daily_title: has(A0, '📊 Daily installs vs uninstalls') && ['Today', 'Yesterday', '7 days', 'This month', 'Last month', '30 days', '60 days',
+      '90 days', 'All time', 'Custom'].every(s => has(A0, '>' + s + '</span>')),   // the owner's standard picker (3 Nov 2026)
     back_link: has(A0, '<span class="backlnk" onclick="uniBack()">← All apps</span>'),
     portfolio_titles: ['<h2 class="sc">Uninstall</h2><p class="scd smp-top"><b style="color:var(--ink2)">UNINSTALL</b> · Each app (', 'ALL APPS TOGETHER (', '>App status <span>',
       '>Uninstall rate <span>', '🔔 What changed? (', '📋 All apps', '🔌 Apps without GA4 data (5)', '<b>When will I know?</b>']
