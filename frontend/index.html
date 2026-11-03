@@ -4186,7 +4186,7 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
       <div class="tb-ctl">
       <label class="ctrl" id="apk" for="apk-btn" style="cursor:pointer;gap:6px" title="Ek app choose karo — poora dashboard us app ka ho jayega"><span id="appsel-ic" aria-hidden="true">📱</span> <span class="cx">App:</span><select id="appsel" hidden tabindex="-1" aria-hidden="true"></select><button type="button" id="apk-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="apk-list"><span id="apk-nm">All apps</span><span class="apk-cv" aria-hidden="true">▾</span></button></label>
       <span class="ctrl" id="smp-pick" title="Yahan Period picker lagu nahi — har section ki dates us section me likhi hain">📅 Dates: in each section</span>
-      <label class="ctrl" id="rangectl" style="cursor:pointer;gap:6px" title="Time period — poora dashboard isi window ka data dikhata hai"><span class="cx">🗓<span class="tb-w"> Period:</span></span><select id="rangesel" style="background:transparent;border:none;color:var(--ink);font:inherit;font-weight:700;cursor:pointer;outline:none"><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7d">7 days</option><option value="30d">30 days</option><option value="90d">90 days</option><option value="month">This month</option><option value="lastmonth">Last month</option><option value="all">All time</option><option value="custom">Custom…</option></select></label>
+      <label class="ctrl" id="rangectl" style="cursor:pointer;gap:6px" title="Time period — poora dashboard isi window ka data dikhata hai"><span class="cx">🗓<span class="tb-w"> Period:</span></span><select id="rangesel" style="background:transparent;border:none;color:var(--ink);font:inherit;font-weight:700;cursor:pointer;outline:none"><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7d">7 days</option><option value="month">This month</option><option value="lastmonth">Last month</option><option value="30d">30 days</option><option value="60d">60 days</option><option value="90d">90 days</option><option value="all">All time</option><option value="custom">Custom…</option></select></label>
       <span class="ctrl" id="rangecustom" style="display:none;gap:6px"><input type="date" id="rc-from" style="background:transparent;border:none;color:var(--ink);font:inherit;color-scheme:dark;outline:none"><span class="cx">→</span><input type="date" id="rc-to" style="background:transparent;border:none;color:var(--ink);font:inherit;color-scheme:dark;outline:none"><span class="lnk" style="cursor:pointer;color:var(--cyan);font-weight:700" onclick="applyRangeCustom()">Apply</span></span>
       <button class="ctrl" id="curtoggle" onclick="toggleCur()" title="Currency badlo — poora dashboard USD ⇄ INR" style="cursor:pointer;font:inherit;font-weight:700;color:var(--ink)">💱 <span id="cur-lbl">USD</span><span id="fx-rate" style="font-weight:600;color:var(--muted);font-size:11px;margin-left:7px;white-space:nowrap"></span></button>
       </div>
@@ -4660,7 +4660,7 @@ function windowDates(axis, range, cf, ct){
     const prev = m>1 ? y+'-'+String(m-1).padStart(2,'0') : (y-1)+'-12';
     return comp.filter(d=>d.slice(0,7)===prev);
   }
-  const n = range==='7d'?7:range==='30d'?30:range==='90d'?90:7;
+  const n = range==='7d'?7:range==='30d'?30:range==='60d'?60:range==='90d'?90:7;
   return comp.slice(-n);
 }
 function sumDaily(daily, winSet){
@@ -4672,7 +4672,7 @@ function sumDaily(daily, winSet){
           // AdMob's own ratio, so no 100% cap (an ad matched one day and shown the next can pass it)
           show: ma? im/ma : 0, ctr: im? ck/im : 0};
 }
-function pRangeLabel(r){return {today:'Today',yesterday:'Yesterday','7d':'7 days','30d':'30 days','90d':'90 days',month:'This month',lastmonth:'Last month',all:'All time',custom:'Custom'}[r]||r;}
+function pRangeLabel(r){return {today:'Today',yesterday:'Yesterday','7d':'7 days','30d':'30 days','60d':'60 days','90d':'90 days',month:'This month',lastmonth:'Last month',all:'All time',custom:'Custom'}[r]||r;}
 // portfolio calendar axis (all placement dates), cached; invalidated each render()
 function gAxis(){ if(window.__ax) return window.__ax; window.__ax=[...new Set((DATA.placements||[]).flatMap(p=>(p.daily||[]).map(r=>r[0])))].sort(); return window.__ax; }
 function curWinArr(){ const ax=gAxis(); let cf=RCUSTOM.from,ct=RCUSTOM.to;
@@ -5156,7 +5156,7 @@ function hubOv(s){ if(!HUB.on||!APP||!s) return s;
 function hubDay(){ return (DATA&&DATA.latest_complete)||''; }
 // the top bar's Period, as a caption: "Today" / "Yesterday" / "Last 7 days" … (a one-day custom range: its Today / Yesterday)
 function hubPerName(){ if(RANGE==='custom'){ const w=curWinArr(); return (w.length===1&&relDay(w[0]))||'Custom'; }
-  return {today:'Today',yesterday:'Yesterday','7d':'Last 7 days','30d':'Last 30 days','90d':'Last 90 days',month:'This month',lastmonth:'Last month',all:'All time'}[RANGE]||'Period'; }
+  return {today:'Today',yesterday:'Yesterday','7d':'Last 7 days','30d':'Last 30 days','60d':'Last 60 days','90d':'Last 90 days',month:'This month',lastmonth:'Last month',all:'All time'}[RANGE]||'Period'; }
 // the app's AdMob day: revenue / impressions on `day`, and its usual (the 7 complete days before it, per day)
 function hubRev(name){ const L=hubDay(), T=(DATA&&DATA.today_date)||''; const ax=gAxis().filter(d=>d!==T&&d<L).slice(-7), ws=new Set(ax);
   let e=0,i=0,ue=0; (DATA.placements||[]).forEach(p=>{ if(p.app!==name) return; (p.daily||[]).forEach(r=>{ if(r[0]===L){ e+=r[1]; i+=r[2]; } else if(ws.has(r[0])) ue+=r[1]; }); });
@@ -6768,13 +6768,15 @@ function adsArrive(a){ if(!onScreen()) return; const cur=APP&&RAW?appOf(APP):nul
   const slot=document.getElementById('fo-ccbx'), m=document.getElementById('fo-mtw'), dw=document.getElementById('fo-dtw'), d=ccData(a);
   hold(()=>{ if(slot&&d) slot.innerHTML=ccBoard(a,d); if(m) m.innerHTML=monthTable(a); if(dw) dw.innerHTML=dayTable(a); },slot); }
 // the board's period on the app's calendar → [lo, hi] (YYYY-MM-DD): today = the property's today (the file's final till + 2);
-// 7 / 30 days = the last 7 / 30 FINAL days (≤ final till, as the status: GA4 and Google Ads still add to the last 2);
+// 7 / 30 / 60 / 90 days = the last 7 / 30 / 60 / 90 FINAL days (≤ final till, as the status: GA4 and Google Ads still
+// add to the last 2; a part that starts later says so: ccBoard's "… se");
 // This month = its 1st … today; Last month = the whole calendar month before;
 // All time = from the oldest day any part has (the funnel, Google Ads, GA4); Custom = the picked from / to (swapped when
 // reversed; All time's ends while one is not picked)
 function perEnds(a,ad){ const T=addD(a.final_till,2); return [[a.first_day,ad&&ad.first_day].filter(Boolean).sort()[0]||T,T]; }
 function perRange(a,ad){ const [first,T]=perEnds(a,ad), Y=addD(T,-1), m0=T.slice(0,8)+'01';
   if(PER==='today') return [T,T]; if(PER==='yday') return [Y,Y]; if(PER==='30') return [addD(a.final_till,-29),a.final_till];
+  if(PER==='60') return [addD(a.final_till,-59),a.final_till]; if(PER==='90') return [addD(a.final_till,-89),a.final_till];
   if(PER==='tm') return [m0,T]; if(PER==='lm'){ const l=addD(m0,-1); return [l.slice(0,8)+'01',l]; }
   if(PER==='all') return [first,T];
   if(PER==='cus'){ let f=PF||first, t=PTO||T; if(f>t) [f,t]=[t,f]; return [f,t]; }
@@ -6979,7 +6981,7 @@ function ccGapNote(d){ const m=+d.missing||0, ft=d.final_till; if(!(m>0)||!ft) r
   return `<p class="fo-note fo-ccgap">⚠️ Status ke liye ${fmtD(lo)} – ${fmtD(ft)} ke saare din ka country data chahiye — inme se <b>${m} din</b> abhi nahi padhe (country data ${ccWhen(d)}; backfill chal raha hai ya country fetch peeche hai). Isliye abhi status <b>Too early</b>, aur "last 7 days" / usual sirf ${fmtD(ft)} tak ke lagatar dino ka (beech ka gap kabhi joda nahi).</p>`; }
 // (a picked country's view says the dates once — the note under its Country control — and the missing steps once — the
 // Every day card: the board's note leaves both out there)
-function perCtl(a,ad){ const L=[['today','Today'],['yday','Yesterday'],['7','7 days'],['30','30 days'],['tm','This month'],['lm','Last month'],['all','All time'],['cus','Custom']];
+function perCtl(a,ad){ const L=[['today','Today'],['yday','Yesterday'],['7','7 days'],['tm','This month'],['lm','Last month'],['30','30 days'],['60','60 days'],['90','90 days'],['all','All time'],['cus','Custom']];   // the owner's standard picker (3 Nov 2026)
   const [first,T]=perEnds(a,ad), [lo,hi]=perRange(a,ad);
   return `<div class="fo-per" role="group" aria-label="Period">${L.map(([k,l])=>`<button type="button" class="fo-pb" data-fo-per="${k}" aria-pressed="${PER===k}">${l}</button>`).join('')}</div>`
     +(PER==='cus'?`<div class="fo-cus"><label>From <input type="date" data-fo-pf="1" value="${lo}" min="${first}" max="${T}"></label><label>To <input type="date" data-fo-pto="1" value="${hi}" min="${first}" max="${T}"></label></div>`:''); }
@@ -7968,8 +7970,9 @@ const CPK={};                                          // the board's files read
 const CP_RE=/^roi_[0-9a-f]{12}_cpd?\.json\.gz$/;
 const CP_JUDGE=300, CP_SHARE=0.1, CP_TOP=25;           // an age counts (decision, money back) with ≥ 300 of its installs and ≥ 10% of the period's cost
 const CP_SHOW=[7,30,90,180,360];
-const CP_PERS=[['today','Today'],['yday','Yesterday'],['7','7 days'],['30','30 days'],['tm','This month'],['lm','Last month'],
-  ['3m','3 months'],['6m','6 months'],['all','All time'],['cus','Custom']];
+// the owner's standard picker (3 Nov 2026) in his order, the board's own 3 / 6 months before All time
+const CP_PERS=[['today','Today'],['yday','Yesterday'],['7','7 days'],['tm','This month'],['lm','Last month'],['30','30 days'],
+  ['60','60 days'],['90','90 days'],['3m','3 months'],['6m','6 months'],['all','All time'],['cus','Custom']];
 function cpMeta(d){ const c=cdOf(d), m=c&&c.cp; return m&&CP_RE.test(m.file||'')&&CP_RE.test(m.days||'')?m:null; }
 // one of the board's files (days: the Custom one): its state; a file of another build than the index in hand → stale
 function cpGet(d,days){ const c=cdOf(d), m=cpMeta(d); if(!m) return null; const f=days?m.days:m.file, v=days?m.dv:m.v, k=f+'?'+v;
@@ -8906,7 +8909,8 @@ const SRC=(()=>{
 let ALL=null, ALLV='', ALLBUSY=false, ALLERR=false, PER='30', PF='', PTO='', SHOWD=31, WIRED=false;
 const AF={}, ABUSY={}, AERR={};
 const G=[['Paid','c4'],['Notification','c3'],['Organic','c2'],['Other','c1']];
-const PERS=[['today','Today'],['yday','Yesterday'],['7','7 days'],['30','30 days'],['tm','This month'],['lm','Last month'],['all','All time'],['cus','Custom']];
+// the owner's standard picker (3 Nov 2026), in his order
+const PERS=[['today','Today'],['yday','Yesterday'],['7','7 days'],['tm','This month'],['lm','Last month'],['30','30 days'],['60','60 days'],['90','90 days'],['all','All time'],['cus','Custom']];
 const E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ok=v=>v!=null&&isFinite(v);
 function MV(usd){ if(!ok(usd)) return '—'; const x=usd*cfx(), a=Math.abs(x), inr=curView()==='INR'; if(a===0) return csym()+'0';
@@ -8925,14 +8929,16 @@ function ensureCh(a,cb){ const p=ptr(), pa=p&&p.apps&&p.apps[a.app_id], f=a.file
   fetchGzJson(f+'?v='+encodeURIComponent(pa.v)).then(j=>{ if(!j||j.v!==1||!Array.isArray(j.days)) throw new Error('format'); j._v=pa.v; AF[f]=j; AERR[f]=false; })
     .catch(()=>{ AERR[f]=true; }).then(()=>{ ABUSY[f]=false; cb&&cb(); }); }
 function nameOf(a){ return (((typeof DATA!=='undefined'&&DATA&&DATA.apps_catalog)||[]).find(c=>c.app_id===a.app_id)||{}).app_name||a.app; }
-// a period → the app's row range [i0, i1] (its own days, its timezone's today; 7 / 30 days end yesterday: whole days;
-// Custom = the picked from / to on every app's own calendar, swapped when reversed)
+// a period → the app's row range [i0, i1] (its own days, its timezone's today; 7 / 30 / 60 / 90 days end yesterday: whole
+// days; Custom = the picked from / to on every app's own calendar, swapped when reversed)
 function rng(a,per){ const n=(a.rev||[]).length, at=d=>Math.round((t0(d)-t0(a.d0))/DAY), ti=at(a.today), m1=a.today.slice(0,8)+'01';
   let i0, i1;
   if(per==='today'){ i0=i1=ti; }
   else if(per==='yday'){ i0=i1=ti-1; }
   else if(per==='7'){ i0=ti-7; i1=ti-1; }
   else if(per==='30'){ i0=ti-30; i1=ti-1; }
+  else if(per==='60'){ i0=ti-60; i1=ti-1; }
+  else if(per==='90'){ i0=ti-90; i1=ti-1; }
   else if(per==='tm'){ i0=at(m1); i1=ti; }
   else if(per==='lm'){ const e=t0(m1)-DAY, s=iso(e).slice(0,8)+'01'; i0=at(s); i1=at(iso(e)); }
   else if(per==='cus'){ const [f,t]=cusRange(a.d0,a.today); i0=at(f); i1=at(t); }
@@ -9042,7 +9048,9 @@ function chCard(a,i0,i1){ const d=chOf(a), hd=`<div class="roi-ct"><h3>GA4 chann
 // windows — GA4 folds much of a short window's phones into "(other)") by the four groups; under #srcx-root
 let XPER='30', XPF='', XPTO='', XCALL=false, XWIN='30', XDALL=false;
 const XF={}, XBUSY={}, XERR={}, XTOP=25;
-const XWINS=[['30','30 days'],['lm','Last month'],['90','90 days'],['all','All time']];
+// whole windows only (owner-approved, 3 Nov 2026: GA4 folds a short window's phones into "(other)") — of his standard picker:
+// Last month · 30 / 60 / 90 days · All time, in his order
+const XWINS=[['lm','Last month'],['30','30 days'],['60','60 days'],['90','90 days'],['all','All time']];
 function xGet(file,v){ if(!file) return null; const j=XF[file]; if(j&&j._v===v) return j; if(XBUSY[file]||XERR[file]) return null; XBUSY[file]=true;
   fetchGzJson(file+'?v='+encodeURIComponent(v||'')).then(x=>{ if(!x||x.v!==1) throw new Error('format'); x._v=v; XF[file]=x; XERR[file]=false; })
     .catch(()=>{ XERR[file]=true; }).then(()=>{ XBUSY[file]=false; xRepaint(); }); return null; }
@@ -9109,7 +9117,7 @@ function xDevIn(aid){
   return xHead('💰 Revenue by source · phones',w.lo===w.hi?fdy(w.lo):fdy(w.lo)+' – '+fdy(w.hi))+ctl
     +(tb.tot>0?tb.html:`<p class="roi-note">Is period me revenue nahi.</p>`)
     +(tb.tot>0&&tb.oth/tb.tot>=0.005?`<p class="roi-note">⚠️ Is period ki <b>${P(tb.oth,tb.tot)}</b> kamai GA4 ne "(other)" / bina phone ke di — wo upar ke phones me nahi, apni alag row me hai (GA4 ki limit; bade app pe hoti hai).</p>`:'')
-    +`<p class="roi-note">Har phone ki <b>us period me hui</b> GA4 kamai (Total revenue), session ke channel ke hisaab se. Sirf 30 din / pichhla mahina / 90 din / All time: chhote period (Today, 7 din, Custom) pe GA4 bade app ke phones ka bada hissa "(other)" me daal deta hai, isliye wo yahan nahi.</p>`; }
+    +`<p class="roi-note">Har phone ki <b>us period me hui</b> GA4 kamai (Total revenue), session ke channel ke hisaab se. Sirf pichhla mahina / 30 din / 60 din / 90 din / All time: chhote period (Today, 7 din, Custom) pe GA4 bade app ke phones ka bada hissa "(other)" me daal deta hai, isliye wo yahan nahi.</p>`; }
 function chipsX(mn,mx){ const [f,t]=cusX(mn,mx);
   return `<div class="roi-ctl"><span class="roi-mini" role="group" aria-label="Period">${PERS.map(([k,l])=>`<button type="button" data-srcx-per="${k}" aria-pressed="${XPER===k}">${l}</button>`).join('')}</span></div>`
     +(XPER==='cus'?`<div class="src-cus"><label>From <input type="date" data-srcx-pf="1" value="${E(f)}" min="${E(mn)}" max="${E(mx)}"></label><label>To <input type="date" data-srcx-pto="1" value="${E(t)}" min="${E(mn)}" max="${E(mx)}"></label></div>`:''); }
@@ -9417,7 +9425,7 @@ function openApp(name){
   const d=document.getElementById('pl-detail');d.style.display='block';
   d.innerHTML=`<div class="backlnk" onclick="show('placements')">← Back to apps</div>
     <div class="verdict" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2)"><div>${appIcon(name,32)}</div><div><div class="big">${name}</div><div class="muted" style="font-size:12.5px">${app.account} · ${ps.length} placements · <b style="color:var(--ink2)">${revCell(appTot)}</b> <span class="faint">(${winLbl})</span></div></div><div class="spacer"></div><div class="appstat"><div><div class="n" style="color:var(--good)">${app.avg_health}</div><div class="t">Avg health</div></div><div><div class="n" style="color:var(--bad)">${app.at_risk}</div><div class="t">At-risk</div></div></div></div>
-    <div class="note" style="margin:2px 0 12px">⏱ <b>${pRangeLabel(RANGE)}</b> — neeche har metric isi window ka hai. Upar "Period" se badlo (Today/Yesterday/7d/30d/90d/This month/Last month/All/Custom).</div>
+    <div class="note" style="margin:2px 0 12px">⏱ <b>${pRangeLabel(RANGE)}</b> — neeche har metric isi window ka hai. Upar "Period" se badlo (Today/Yesterday/7d/This month/Last month/30d/60d/90d/All/Custom).</div>
     <div class="chips" style="margin-top:4px">${chips}</div>
     <div class="card pad0"><table><thead><tr><th>Health</th><th>Placement</th><th>Revenue</th><th>Impr</th><th>Req</th><th>Match</th><th>Show</th><th>CTR</th><th>eCPM</th><th>Trend</th><th>Verdict</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="faint" style="font-size:12px;margin-top:10px">${ps.length} placements · ${winLbl} · row → Report Card. ${RANGE==='today'?'Aaj ka din abhi chal raha hai (live/partial).':RANGE==='custom'?'Custom range (literal dates).':'Poore complete din.'}</p>`;
@@ -9470,7 +9478,7 @@ function openAppDetail(name){
 
 
   // ----- period chip bar (drives the GLOBAL range) -----
-  const PERIODS=[['today','Today'],['yesterday','Yesterday'],['7d','7 days'],['30d','30 days'],['90d','90 days'],['month','This month'],['lastmonth','Last month'],['all','All time'],['custom','Custom']];
+  const PERIODS=[['today','Today'],['yesterday','Yesterday'],['7d','7 days'],['month','This month'],['lastmonth','Last month'],['30d','30 days'],['60d','60 days'],['90d','90 days'],['all','All time'],['custom','Custom']];
   const perBar=PERIODS.map(([v,t])=>{const on=RANGE===v;
     return `<button onclick="adSetRange('${v}')" style="border:1px solid ${on?'var(--cyan)':'var(--line2)'};background:${on?'rgba(61,208,240,.16)':'var(--panel)'};color:${on?'#fff':'var(--ink2)'};font:inherit;font-weight:${on?650:400};font-size:12.5px;padding:5px 12px;border-radius:8px;cursor:pointer">${t}</button>`;}).join('');
 
@@ -10081,8 +10089,8 @@ function dedIvtPill(pctv,dedMicros){ const material=(dedMicros||0)>=20e6;
   return '<span class="pill p-g" style="font-size:10px">normal</span>'; }
 const _dedBackBtn=(lbl)=>`<button class="lnk" onclick="dedBack()" style="background:none;border:none;color:var(--cyan);cursor:pointer;font:inherit;font-size:13px;padding:0;margin-bottom:10px">← ${lbl}</button>`;
 
-function dedPeriodBar(){   // deduction window quick-pick, at the top of the tab. "All time" = full history.
-  const opts=[['7d','7 days'],['30d','30 days'],['90d','90 days'],['month','This month'],['all','All time']];
+function dedPeriodBar(){   // deduction window quick-pick, at the top of the tab (the owner's standard picker). "All time" = full history.
+  const opts=[['today','Today'],['yesterday','Yesterday'],['7d','7 days'],['month','This month'],['lastmonth','Last month'],['30d','30 days'],['60d','60 days'],['90d','90 days'],['all','All time'],['custom','Custom']];
   const btns=opts.map(([v,t])=>{const on=RANGE===v;return `<button onclick="setRange('${v}')" style="border:1px solid ${on?'var(--cyan)':'var(--line2)'};background:${on?'rgba(61,208,240,.14)':'var(--panel)'};color:${on?'#fff':'var(--ink2)'};font:inherit;font-weight:650;font-size:12.5px;padding:6px 13px;border-radius:8px;cursor:pointer">${t}</button>`;}).join('');
   return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px"><span class="muted" style="font-size:12px;font-weight:600">🗓 Deduction period:</span>${btns}</div>`;
 }
@@ -10302,7 +10310,7 @@ function renderMediation(){
     <table style="margin-top:10px"><thead><tr><th>App</th><th>Total</th><th>AdMob</th><th>Other mediation</th><th>Other %</th><th>Top other source</th></tr></thead><tbody>${appMedRows}</tbody></table></div>`;
   const periodPill=covered
     ? `<span class="pill p-g" style="font-size:11px;vertical-align:middle">⏱ ${pRangeLabel(RANGE)}</span> <span class="muted" style="font-size:12px">${curWinDates()} — jo period upar select kiya wahi</span>`
-    : `<span class="pill p-y" style="font-size:11px;vertical-align:middle">all-time</span> <span class="muted" style="font-size:12px">${MEDLOADING?'⏳ period-wise data load ho raha hai…':(['90d','all'].includes(RANGE)?'is lambe period ka granular mediation abhi utni history me nahi — poora aggregate dikha rahe hain':'daily mediation load hone par period-wise ho jayega')}</span>`;
+    : `<span class="pill p-y" style="font-size:11px;vertical-align:middle">all-time</span> <span class="muted" style="font-size:12px">${MEDLOADING?'⏳ period-wise data load ho raha hai…':((MED&&(MED.dates||[]).length)?'is lambe period ka granular mediation abhi utni history me nahi — poora aggregate dikha rahe hain':'daily mediation load hone par period-wise ho jayega')}</span>`;
   s.innerHTML=`<h2 class="sc">Mediation${APP?' · '+appIcon(APP,20,'ail')+APP:''} — network competition</h2><p class="scd">Har ad source ka fill, eCPM aur revenue share — sab real (AdMob + third-party).</p>
     <div style="margin:0 0 12px">${periodPill}</div>
     <div class="row c4" style="margin-bottom:14px">${kpi('Ad sources',m.summary.networks,'earning','muted')}${kpi('Blended fill',pct(m.summary.blended_fill),'','muted')}${kpi('Best eCPM',m.summary.best_ecpm?m.summary.best_ecpm.ad_source:'—',m.summary.best_ecpm?cm(m.summary.best_ecpm.ecpm):'','up')}${kpi('Other mediation',othTotal>0?money(othTotal):'—',medTotal?((othTotal/medTotal*100).toFixed(1)+'% of total'):'AdMob-only','muted')}</div>

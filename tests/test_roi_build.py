@@ -1958,11 +1958,13 @@ def test_cp_periods_every_button():
     got = {k: (lo.isoformat(), hi.isoformat()) for k, lo, hi in rb._cp_periods(date(2025, 10, 6), date(2026, 11, 2))}
     assert got == {"today": ("2026-11-02", "2026-11-02"), "yday": ("2026-11-01", "2026-11-01"),
                    "7": ("2026-10-27", "2026-11-02"), "30": ("2026-10-04", "2026-11-02"),
+                   "60": ("2026-09-04", "2026-11-02"), "90": ("2026-08-05", "2026-11-02"),
                    "tm": ("2026-11-01", "2026-11-02"), "lm": ("2026-10-01", "2026-10-31"),
                    "3m": ("2026-08-03", "2026-11-02"), "6m": ("2026-05-03", "2026-11-02"),
                    "all": ("2025-10-06", "2026-11-02")}
     short = {k: (lo.isoformat(), hi.isoformat()) for k, lo, hi in rb._cp_periods(date(2026, 10, 20), date(2026, 11, 2))}
     assert short["lm"] == ("2026-10-20", "2026-10-31") and short["6m"] == short["all"] == ("2026-10-20", "2026-11-02")
+    assert short["60"] == short["90"] == ("2026-10-20", "2026-11-02")             # a younger app: from its first day
     assert "lm" not in {k for k, *_ in rb._cp_periods(date(2026, 11, 1), date(2026, 11, 2))}   # wholly before: out
     assert rb._months_back(date(2026, 5, 31), 3) == date(2026, 2, 28) and rb._months_back(date(2026, 1, 15), 2) == \
         date(2025, 11, 15)

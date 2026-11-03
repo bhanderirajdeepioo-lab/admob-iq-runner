@@ -246,7 +246,9 @@ async function byCountry() {
   R.board_unnamed_last = /data-fo-ccr="XI"[\s\S]*<tr class="fo-un"><td class="fo-nm"><span class="fo-an"><span class="fo-fl">❔<\/span><span>Not named<\/span><\/span><\/td><td class="fo-stc"><small>no status<\/small><\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>63<\/td><td><b>88%<\/b><\/td><td>89%<\/td><td>0.8%<\/td><\/tr><\/tbody>/.test(board);
   R.board_total_first = /<tbody><tr class="fo-tot"><td class="fo-nm">🌍 All countries<\/td><td class="fo-stc"><small>period ka total<\/small><\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>8,361<\/td><td><b>61%<\/b><\/td><td>80%<\/td><td>100%<\/td><\/tr><tr class="clk" data-fo-ccr="XA">/.test(board);
   R.board_period = board.includes('<h3>By country · 21 Sep 2026 – 27 Sep 2026</h3>') && board.includes('data-fo-per="7" aria-pressed="true">7 days</button>')
-    && ['today', 'yday', '30', 'tm', 'lm', 'all', 'cus'].every(k => board.includes(`data-fo-per="${k}" aria-pressed="false"`))
+    && ['today', 'yday', '30', '60', '90', 'tm', 'lm', 'all', 'cus'].every(k => board.includes(`data-fo-per="${k}" aria-pressed="false"`))
+    // the owner's standard picker, in his order (3 Nov 2026)
+    && [...board.matchAll(/data-fo-per="([^"]+)"/g)].map(m => m[1]).join(',') === 'today,yday,7,tm,lm,30,60,90,all,cus'
     && board.includes('Google Ads installs ka data abhi nahi bana');
   R.board_chips = [...board.matchAll(/data-fo-ccfilt="([^"]+)"[^>]*><span>[^<]*<\/span> <b>(\d+)<\/b>/g)].map(m => [m[1], +m[2]]);
   R.board_cells_xa = board.includes('<small>7 din 50% · usual 60% · −10 pts</small></td><td>—</td><td>—</td><td>—</td><td>—</td><td>3,500</td><td><b>50%</b></td><td>80%</td><td>42%</td></tr>');
@@ -664,6 +666,9 @@ async function byAds() {
   // only the board's slot is drawn again by a period: the rest of the page as it was
   R.slot_only = html3 === all.slice(0, html3.length) || html3.length > 0;
   const before = html3; click('[data-fo-per]', { foPer: '30' }); R.slot_only = html3 === before && board().includes('<h3>By country · 29 Aug 2026 – 27 Sep 2026</h3>');
+  // 60 / 90 days = the last 60 / 90 final days; 90 reaches before the funnel's first day: the board says so
+  click('[data-fo-per]', { foPer: '60' }); R.p60 = board().includes('<h3>By country · 30 Jul 2026 – 27 Sep 2026</h3>');
+  click('[data-fo-per]', { foPer: '90' }); R.p90 = board().includes('<h3>By country · 30 Jun 2026 – 27 Sep 2026</h3>') && board().includes(' se');
   // a picked country: its Every day carries its own three columns (XA on 28 Sep)
   click('[data-fo-per]', { foPer: '7' });
   FO._.pick('XA');

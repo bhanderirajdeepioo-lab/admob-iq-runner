@@ -135,17 +135,19 @@ def test_phone_windows_read_whole_and_again_when_they_move():
     w = gsd.windows(TODAY, date(2026, 9, 15))
     assert w["30"] == (date(2026, 9, 29), date(2026, 10, 28)) and w["lm"] == (date(2026, 9, 15), date(2026, 9, 30))
     assert w["90"] == (date(2026, 9, 15), date(2026, 10, 28)) and w["all"] == (date(2026, 9, 15), date(2026, 10, 28))
+    assert w["60"] == (date(2026, 9, 15), date(2026, 10, 28))                     # (from the history start)
+    assert gsd.windows(TODAY, date(2026, 1, 1))["60"] == (date(2026, 8, 30), date(2026, 10, 28))
     assert gsd.windows(date(2026, 11, 3), date(2026, 1, 1))["lm"] == (date(2026, 10, 1), date(2026, 10, 31))
     assert gsd.windows(date(2026, 9, 10), date(2026, 9, 15)) == {}                  # nothing whole yet
     ga, store = FakeGA(), {"v": gsd.STORE_V}
-    assert gsd.step_app(ga, store, TODAY, date(2026, 1, 1), NOW) == "fetched" and ga.calls == 4
+    assert gsd.step_app(ga, store, TODAY, date(2026, 1, 1), NOW) == "fetched" and ga.calls == 5
     assert [x["name"] for x in ga.asked[0]["dimensions"]] == ["mobileDeviceModel", "sessionDefaultChannelGroup"]
     assert store["w"]["lm"]["lo"] == "2026-09-01" and store["w"]["all"]["lo"] == "2026-01-01"
     assert store["w"]["30"]["rows"]["XP-1"]["Mobile Push Notifications"] == [10, 1.0]
     ga2 = FakeGA()
     assert gsd.step_app(ga2, store, TODAY, date(2026, 1, 1), NOW) == "fresh" and ga2.calls == 0
     assert gsd.step_app(ga2, store, TODAY + timedelta(days=1), date(2026, 1, 1), NOW) == "fetched"
-    assert ga2.calls == 3                                                         # 30 / 90 / all moved; lm not yet
+    assert ga2.calls == 4                                                         # 30 / 60 / 90 / all moved; lm not yet
     assert gsd.step_app(FakeGA(), store, TODAY + timedelta(days=3), date(2026, 1, 1), NOW) == "fetched"
     assert store["w"]["lm"]["hi"] == "2026-10-31"                                 # 3 Nov: October is final
 
@@ -195,7 +197,7 @@ def test_phone_file_rows_biggest_first_with_names(tmp_path):
     p = sb.dv_file(str(data), str(out), AID)
     with gzip.open(out / p["file"], "rt", encoding="utf-8") as f:
         D = json.load(f)
-    assert set(D["w"]) == {"30", "lm", "90", "all"}
+    assert set(D["w"]) == {"30", "lm", "60", "90", "all"}
     assert D["w"]["30"]["rows"] == [["XP-1", 4.0, 1.0, 0, 0, 50], ["XP-2", 0, 0, 2.0, 0, 30], ["(other)", 0, 0, 0, 0.5, 5]]
     assert D["names"] == {"XP-1": ["XBrand", "Phone One"]}
 

@@ -1794,13 +1794,14 @@ def _months_back(d, k):
 
 def _cp_periods(first, last):
     """🌍 The board's period buttons (owner, 2 Nov 2026: "default all time … jo period select kiya uska data jo bhi ho
-    available"; every picker: Today … All time, Custom on the page) → [(key, first day, last day)] inside first … last
-    (a period wholly outside: left out)."""
+    available"; 3 Nov: every picker Today · Yesterday · 7 days · This month · Last month · 30 / 60 / 90 days · All time ·
+    Custom — Custom on the page) → [(key, first day, last day)] inside first … last (a period wholly outside: left out)."""
     tm0 = last.replace(day=1)
     lm1 = tm0 - ONE
     out = []
     for k, lo, hi in (("today", last, last), ("yday", last - ONE, last - ONE), ("7", last - timedelta(days=6), last),
-                      ("30", last - timedelta(days=29), last), ("tm", tm0, last), ("lm", lm1.replace(day=1), lm1),
+                      ("30", last - timedelta(days=29), last), ("60", last - timedelta(days=59), last),
+                      ("90", last - timedelta(days=89), last), ("tm", tm0, last), ("lm", lm1.replace(day=1), lm1),
                       ("3m", _months_back(last, 3) + ONE, last), ("6m", _months_back(last, 6) + ONE, last),
                       ("all", first, last)):
         lo, hi = max(lo, first), min(hi, last)

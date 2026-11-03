@@ -62,4 +62,13 @@ for (const dash of Object.keys(ctx.__FX).filter(k => k !== 'app')) {
   }
 }
 run(`CURVIEW=null; APP='';`);
-process.stdout.write(JSON.stringify({ errors, out, other }));
+// the dashboard's Period windows (the owner's standard picker, 3 Nov 2026) on a SYNTHETIC 100-day axis, 1 Aug – 8 Nov 2026
+// (8 Nov = the AdMob day of the build: partial) → [days, first, last] per range
+let wd = null;
+try {
+  wd = JSON.parse(run(`(()=>{ const ax=[]; for(let i=0;i<100;i++) ax.push(new Date(Date.UTC(2026,7,1)+i*864e5).toISOString().slice(0,10));
+    const keep=DATA; DATA={today_date:ax[99], latest_complete:ax[98]}; const o={};
+    ['today','yesterday','7d','month','lastmonth','30d','60d','90d','all'].forEach(r=>{ const w=windowDates(ax,r,'',''); o[r]=[w.length,w[0],w[w.length-1]]; });
+    o.labels=["60d","90d"].map(r=>pRangeLabel(r)); DATA=keep; return JSON.stringify(o); })()`));
+} catch (e) { errors.push('wd: ' + (e.stack || e.message)); }
+process.stdout.write(JSON.stringify({ errors, out, other, wd }));

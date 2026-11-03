@@ -168,7 +168,7 @@ def page(tmp_path_factory):
                          check=True, capture_output=True, text=True, timeout=300)
     rep = json.loads(out.stdout)
     assert rep["errors"] == []
-    return {**rep["out"], "other": rep["other"]}
+    return {**rep["out"], "other": rep["other"], "wd": rep["wd"]}
 
 
 def _num(s):
@@ -305,3 +305,15 @@ def test_overview_says_the_rule_the_same_in_both_views(page):
     strip = lambda t: re.sub(r"\d+\.\d+×|[$₹][\d,.]+", "#", t)      # only the numbers differ between the views
     assert strip(note(o["dated|USD"]["ov"])) == strip(note(o["dated|INR"]["ov"]))
     assert "us din ke apne" not in o["one|USD"]["ov"] and "us din ke apne" not in o["eur|USD"]["ov"]
+
+
+def test_the_period_windows_of_the_owners_standard_picker(page):
+    """The dashboard's Period (owner, 3 Nov 2026: Today · Yesterday · 7 days · This month · Last month · 30 / 60 / 90 days ·
+    All time · Custom) on a synthetic axis 1 Aug – 8 Nov 2026, 8 Nov = today (partial): N days = the last N COMPLETE days;
+    This month = its complete days; Last month = the whole calendar month before; by hand."""
+    w = page["wd"]
+    assert w["today"] == [1, "2026-11-08", "2026-11-08"] and w["yesterday"] == [1, "2026-11-07", "2026-11-07"]
+    assert w["7d"] == [7, "2026-11-01", "2026-11-07"] and w["month"] == [7, "2026-11-01", "2026-11-07"]
+    assert w["lastmonth"] == [31, "2026-10-01", "2026-10-31"] and w["30d"] == [30, "2026-10-09", "2026-11-07"]
+    assert w["60d"] == [60, "2026-09-09", "2026-11-07"] and w["90d"] == [90, "2026-08-10", "2026-11-07"]
+    assert w["all"] == [99, "2026-08-01", "2026-11-07"] and w["labels"] == ["60 days", "90 days"]

@@ -279,7 +279,7 @@ def test_installs_never_opened_and_the_period(out):
     ads file = one Try again line, Try again loads it."""
     a = out["ads"]
     for k in ("wait_board", "wait_tables", "b7_title", "b7_total", "b7_xa", "b7_xb", "b7_unnamed", "b7_no_retry", "m_jul",
-              "m_aug", "d_old", "d_order", "all_title", "all_total", "all_lim", "today", "lm", "tm", "custom", "slot_only",
+              "m_aug", "d_old", "d_order", "all_title", "all_total", "all_lim", "today", "lm", "tm", "custom", "slot_only", "p60", "p90",
               "cc_day", "cc_old", "cc_month_cols", "fail_line", "retry_ok"):
         assert a[k] is True, k
     assert a["loads_ads"] == 1 and a["b7_order"] == ["XA", "XB"]

@@ -48,7 +48,7 @@ from .fetch import ga4_uninstall as gu
 FILE = "source.json.gz"
 PREFIX = "source_"
 APP_RE = re.compile(r"^source_(?:cc_|ccd_|dv_)?[0-9a-f]{12}\.json\.gz$")
-CC_PERS = ("today", "yday", "7", "30", "tm", "lm", "all")
+CC_PERS = ("today", "yday", "7", "30", "60", "90", "tm", "lm", "all")
 HEADER_PATHS = ["/source*"]
 V = 1
 MAX_GZ = 8 * 1024 * 1024
@@ -169,11 +169,13 @@ def _cc_key(cc):
 
 
 def _cc_ranges(d0, today):
-    """The page's periods on an app's own days → {period: (first, last)} (7 / 30 days end yesterday: whole days)."""
+    """The page's periods on an app's own days → {period: (first, last)} (7 / 30 / 60 / 90 days end yesterday: whole
+    days)."""
     y, m1 = today - timedelta(days=1), today.replace(day=1)
     lm = m1 - timedelta(days=1)
     rng = {"today": (today, today), "yday": (y, y), "7": (today - timedelta(days=7), y),
-           "30": (today - timedelta(days=30), y), "tm": (m1, today), "lm": (lm.replace(day=1), lm), "all": (d0, today)}
+           "30": (today - timedelta(days=30), y), "60": (today - timedelta(days=60), y),
+           "90": (today - timedelta(days=90), y), "tm": (m1, today), "lm": (lm.replace(day=1), lm), "all": (d0, today)}
     return {k: (max(a, d0), b) for k, (a, b) in rng.items() if b >= d0}
 
 

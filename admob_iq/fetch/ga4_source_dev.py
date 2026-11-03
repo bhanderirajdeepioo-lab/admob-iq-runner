@@ -7,7 +7,8 @@ kept.
 
 Windows (the app's GA4 days; F = today − LATE, the newest FINAL day — GA4 still moves sessions between channels for the
 newest days; never before the app's history start):
-  "30"  [F − 29, F]    "lm"  the last calendar month whose last day ≤ F    "90"  [F − 89, F]    "all"  [history start, F]
+  "30"  [F − 29, F]    "lm"  the last calendar month whose last day ≤ F    "60"  [F − 59, F]    "90"  [F − 89, F]
+  "all"  [history start, F]   (60 days: owner, 3 Nov 2026 — his standard picker on every section; whole windows only)
 ONE read shape a window: runReport mobileDeviceModel × sessionDefaultChannelGroup → sessions, totalRevenue (USD), pinned to
 the app's Android stream (ga4.Ga4App), every row paged (nothing cut).
 
@@ -35,9 +36,9 @@ DIR = "ga4_source_dev"
 STORE_V = 1
 MODEL = "mobileDeviceModel"
 METS = ("sessions", "totalRevenue")
-WINDOWS = ("30", "lm", "90", "all")
+WINDOWS = ("30", "lm", "60", "90", "all")
 LATE = gu.IDAY_LATE                 # F = today − LATE: the newest day GA4 no longer changes
-MAX_CALLS = 8                       # per app per run (4 windows + their pages)
+MAX_CALLS = 10                      # per app per run (5 windows + their pages)
 BUDGET_SEC = 120
 RETRY_HOURS = 3.0
 PAGE_ROWS = 100000
@@ -47,8 +48,8 @@ def windows(today, hs):
     """The app's windows → {window: (lo, hi)} (F = today − LATE; none before the history start; empty ones left out)."""
     f = today - timedelta(days=LATE)
     lm_hi = f if (f + timedelta(days=1)).day == 1 else f.replace(day=1) - timedelta(days=1)
-    out = {"30": (f - timedelta(days=29), f), "lm": (lm_hi.replace(day=1), lm_hi), "90": (f - timedelta(days=89), f),
-           "all": (hs or f, f)}
+    out = {"30": (f - timedelta(days=29), f), "lm": (lm_hi.replace(day=1), lm_hi), "60": (f - timedelta(days=59), f),
+           "90": (f - timedelta(days=89), f), "all": (hs or f, f)}
     res = {}
     for k, (lo, hi) in out.items():
         lo = max(lo, hs) if hs else lo
