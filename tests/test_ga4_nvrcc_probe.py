@@ -20,8 +20,9 @@ def test_reads_tie_whole_and_country_by_country(monkeypatch, capsys):
     rep = _run(monkeypatch, FakeGA())
     a = list(rep["apps"].values())[0]
     assert a["complete"] and a["top"] == len(CC)
-    assert set(a["reads"]) == {"C", "U", "UC", "UCT", "UCTD", "FCD"} and all(r["ok"] for r in a["reads"].values())
-    for k in ("UC", "UCT", "UCTD", "FCD"):
+    assert set(a["reads"]) == {"C", "U", "UC", "UCT", "UCTD", "FCD", "C1", "UC1", "UCK1", "UN1", "C7", "UC7"}
+    assert all(r["ok"] for r in a["reads"].values())
+    for k in ("UC", "UCT", "UCTD", "FCD", "UC1", "UN1", "UC7"):        # (UCK1: this fake ignores the country filter)
         r = a["reads"][k]
         assert all(abs(v - 1.0) < 1e-9 for v in r["tie"].values()), (k, r["tie"])
         assert all(t["w2"] == 1.0 and t["off2"] == 0 for t in r["keys"].values()), (k, r["keys"])

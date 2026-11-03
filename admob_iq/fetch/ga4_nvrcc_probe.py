@@ -13,6 +13,12 @@ with the most ad revenue in W (from C). Reads (USD; AD = totalAdRevenue, publish
   UCT    W   the same, countryId ∈ TOP                                     ad units × the top countries
   UCTD   W   the same + date                                               … day by day (what a daily store holds)
   FCD    W   newVsReturning × adFormat × countryId × date (all)            ad formats × every country, day by day
+and the shapes that might fold less (does ANY read give the whole split?), on F alone and on its last 7 days:
+  C1     F   newVsReturning × countryId                                    the truth of the F reads
+  UC1    F   newVsReturning × adFormat × adUnitName × countryId            one day, every country
+  UCK1   F   the same, countryId == TOP[0]                                 one day, the top country alone
+  UN1    F   adFormat × adUnitName × countryId (no newVsReturning)         one day, without the session group
+  C7 / UC7   [F − 6, F]  as C1 / UC1                                       seven days
 A record: accepted or the HTTP class, rows, the "(other)" / "(not set)" shares, GA4's flags, "tie" to its truth (C for
 UC / FCD; C restricted to TOP for UCT / UCTD; U for UC's ad units) and "keys": per country (device probe tie_by:
 overall, p10 / p90, keys off by > 2 %) with "w2" = the truth's share held by countries within 2 %.
@@ -171,6 +177,28 @@ def probe_app(run, u, token, now, prop, opts):
             res["ecpm"] = pr._safely(lambda: {
                 "unit": ecpm_check(_by2(got["UC"], ("adUnitName",)), _by2(got["U"], ("adUnitName",))),
                 "country": ecpm_check(_by2(got["UC"], (CTY,)), _by2(got["C"], (CTY,)))}, fallback=None)
+        f0, f7 = f, f - timedelta(days=6)
+
+        def read_on(kind, a2, dims, extra=None):
+            body = dp._body(a2, f0, dims, AD)
+            rec2, rows2 = cp._read(ga, kind, lambda: ga.report_all(body, extra=extra or [], page_rows=PAGE_ROWS),
+                                   dp.p_rows(dims, AD))
+            if rec2.get("ok"):
+                got[kind] = rows2
+            res["reads"][kind] = rec2
+            return rec2
+        for kind, a2, dims, extra, truth in (
+                ("C1", f0, (NVR, CTY), None, None), ("UC1", f0, (NVR,) + UNIT + (CTY,), None, "C1"),
+                ("UCK1", f0, (NVR,) + UNIT + (CTY,), [ga4._in_list(CTY, top[:1])] if top else None, "C1"),
+                ("UN1", f0, UNIT + (CTY,), None, "C1"),
+                ("C7", f7, (NVR, CTY), None, None), ("UC7", f7, (NVR,) + UNIT + (CTY,), None, "C7")):
+            if kind == "UCK1" and not top:
+                continue
+            rec = read_on(kind, a2, dims, extra)
+            if rec.get("ok") and truth and truth in got:
+                want = got[truth] if kind != "UCK1" else [r for r in got[truth] if str(r.get(CTY) or "") == top[0]]
+                rec["tie"] = {m: dp.tie(dp._tot(got[kind], m), dp._tot(want, m)) for m in AD}
+                rec["keys"] = pr._safely(keys_tie, got[kind], want, CTY, fallback=None)
         rec = read("FCD", (NVR, "adFormat", CTY, "date"))
         if rec.get("ok") and "C" in got:
             rec["tie"] = {m: dp.tie(dp._tot(got["FCD"], m), dp._tot(got["C"], m)) for m in AD}
