@@ -1915,10 +1915,10 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # GA4 Uninstall tab: fetch what is due (≤ once/~20h per app), evaluate, write its lazy assets and only
     # then add the small dashboard["uninstall"] summary. OPTIONAL — without GA4 secrets (or on any failure)
     # the AdMob dashboard builds exactly as before.
-    uni_files, any_paths = [], []
+    uni_files, any_paths, acct_tz = [], [], {}
     if mode == "live" and has_creds and repo.has_data():
-        uni_files = _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, today,
-                                            account_tzs(accounts, s, report_tz, mode, has_creds))
+        acct_tz = account_tzs(accounts, s, report_tz, mode, has_creds)
+        uni_files = _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, today, acct_tz)
         any_paths = _impact_any_tail(out_dir)
     _sc.step("tabs")
     # 🧭 Uninstall Studio (the Uninstall tab's All-apps view): one lazy file from what the Uninstall step just wrote —
@@ -1944,6 +1944,10 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # 📈 eCPM "same time yesterday": this build's point of today's totals so far (data/ecpm_intraday.json) — never for
     # the sample data, failure-isolated, counts-only line
     _intraday_step(dashboard, data_dir, report_tz)
+    # every time zone name the data uses must load here (tz_check): a name this machine lacks puts a red banner on the
+    # page (dashboard["build_faults"]) and a counts-only warning in the public log, instead of a silent guess
+    from . import tz_check
+    tz_check.run(dashboard, report_tz, acct_tz, data_dir, os.getenv("ZONE_CHECK_OUT") or None)
 
     _sc.step("dashboard_write")
     os.makedirs(out_dir, exist_ok=True)

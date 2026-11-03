@@ -77,6 +77,9 @@ def _search(customer_id, login_customer_id, dev_token, access_token, query):
     return out
 
 
+ACCOUNT_TZ = set()       # every account time zone NAME a roster read returned (this process): tz_check loads each one
+
+
 def _child_accounts(login_customer_id, dev_token, access_token):
     """Non-manager client accounts under the MCC (id + currency + descriptive name). The name lets
     the UI show which Google Ads account each campaign's spend comes from (user's rule: 1 account =
@@ -100,6 +103,8 @@ def _child_accounts(login_customer_id, dev_token, access_token):
              "name": cc.get("descriptiveName") or ""}
         if with_tz:
             a["tz"] = cc.get("timeZone") or None
+            if a["tz"]:
+                ACCOUNT_TZ.add(a["tz"])
         out.append(a)
     return out
 
@@ -1146,7 +1151,8 @@ def _d0_fix_at(cached, fresh, fixed, still):
         return None
 
 
-D0_DAY_KEYS = ("convval_d0day", "d1_day_read", "d1_day_next", "d1_day_at")    # merge_spend's install-day keys
+# merge_spend's install-day keys
+D0_DAY_KEYS = ("convval_d0day", "d1_day_read", "d1_day_next", "d1_day_at", "d1_day_gap")
 
 
 def _d0day_clean(cached):
@@ -1173,7 +1179,10 @@ def _merge_d0day(cached, fresh, d1, daily, still):
     A store-day not taken yet may still be taken by a later read on time for it; after that never.
     → ({"convval_d0day", "d1_day_read": {X: the first read that took X for any store}, "d1_day_next": {"date": X+1,
     "at": its Day moment, "late_h"} over every asked account (the page's fallback), "d1_day_at": {store: {"date",
-    "at"}: its next Day moment} (the page's per-app moment)} — this read's, else the cache's —, [(X, stores taken)])."""
+    "at"}: its next Day moment} (the page's per-app moment), "d1_day_gap": {X: why no store took X} (the cache's, kept
+    as is: a date written there by hand once its morning was lost — "tz": the build machine could not load the
+    accounts' time zone; the page names that cause instead of a missed read)} — this read's, else the cache's —,
+    [(X, stores taken)])."""
     from datetime import date, timedelta
     cached = cached if isinstance(cached, dict) else {}
     cv = cached.get("convval_d0day")
@@ -1185,6 +1194,8 @@ def _merge_d0day(cached, fresh, d1, daily, still):
     ca = cached.get("d1_day_at")
     at = {sid: e for sid, e in (ca.items() if isinstance(ca, dict) else ())
           if isinstance(e, dict) and _d0_date(e.get("date")) and isinstance(e.get("at"), str)}
+    cg = cached.get("d1_day_gap")
+    gap = {d: r for d, r in (cg.items() if isinstance(cg, dict) else ()) if _d0_date(d) and isinstance(r, str) and r}
     day = fresh.get("d1_day") if isinstance(fresh.get("d1_day"), dict) else {}
     late = day.get("late_h") if isinstance(day.get("late_h"), int) and not isinstance(day.get("late_h"), bool) else None
 
@@ -1215,7 +1226,7 @@ def _merge_d0day(cached, fresh, d1, daily, still):
         vals.setdefault(sid, {})[x] = v
         read.setdefault(x, str(day.get("read") or e.get("at") or ""))
         took[x] = took.get(x, 0) + 1
-    return ({"convval_d0day": vals, "d1_day_read": read, "d1_day_next": nxt, "d1_day_at": at},
+    return ({"convval_d0day": vals, "d1_day_read": read, "d1_day_next": nxt, "d1_day_at": at, "d1_day_gap": gap},
             sorted(took.items()))
 
 

@@ -126,8 +126,8 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None, daily_dated=Non
     # incomplete (the latest read could fix nothing) — only the keys the cache has; none → no "d0" at all. Per app:
     # d0_open / d0_wait above. The install-day ("Day") D0 (convval_d0day, taken once): day_read {date: the first read
     # that took it}, day_next (the next date to come over every account: its moment, the late limit), day_since (the
-    # first date taken) — dates and times only, when the cache has them. Per app: convval_d0day_daily / d0day_next
-    # (_d0day_per_app)
+    # first date taken), day_gap ({date: why none took it}) — dates and times only, when the cache has them. Per app:
+    # convval_d0day_daily / d0day_next (_d0day_per_app)
     d0 = {k: spend.get("d1_" + k) for k in ("fixed_till", "next_fix_utc", "fix_at", "lag_h", "drift", "incomplete")}
     d0 = {k: v for k, v in d0.items() if v is not None}
     if spend.get("d1_day_read"):
@@ -135,6 +135,8 @@ def build_roas(spend, app_store_ids, apps_catalog, aliases=None, daily_dated=Non
         d0["day_since"] = min(spend["d1_day_read"])
     if spend.get("d1_day_next"):
         d0["day_next"] = dict(spend["d1_day_next"])
+    if spend.get("d1_day_gap"):                      # {date: why no store took it} (google_ads._merge_d0day)
+        d0["day_gap"] = dict(spend["d1_day_gap"])
     if d0:
         out["d0"] = d0
     return out

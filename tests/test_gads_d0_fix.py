@@ -900,6 +900,10 @@ def ov(tmp_path_factory):
     del fx["dayholes"]["roas"]["by_app"]["Demo Gallery"]["convval_d0day_daily"]["2026-01-05"]
     fx["dayzone"] = json.loads(json.dumps(fx["daymiss"]))
     fx["dayzone"]["roas"]["by_app"]["Demo Gallery"]["d0day_next"] = {"date": "2026-01-07", "at": _iso(PART_NEXT)}
+    # a morning lost to the build machine's time zone (d0.day_gap "tz": 4 Jan) while the fault still stands (build_faults)
+    fx["daygap"] = json.loads(json.dumps(fx["daymiss"]))
+    fx["daygap"]["roas"]["d0"]["day_gap"] = {"2026-01-04": "tz"}
+    fx["daygap"]["build_faults"] = [{"kind": "tz", "names": ["Asia/Calcutta"], "of": 3}]
     fx["daylater"] = json.loads(json.dumps(fx["daymiss"]))
     by = fx["daylater"]["roas"]["by_app"]
     by["Demo Gallery"]["d0day_next"] = {"date": "2026-01-07", "at": "2026-01-08T12:00:00Z"}     # 17:30 IST, 8 Jan
@@ -934,7 +938,8 @@ def ov(tmp_path_factory):
                           str(tmp / "fx.json")], check=True, capture_output=True, text=True, timeout=300)
     rep = json.loads(out.stdout)
     assert rep["errors"] == []
-    return {k: v["ov"] for k, v in rep["other"].items()} | {"_fx": fx}
+    return {k: v["ov"] for k, v in rep["other"].items()} | {"_fx": fx} | {"_fb": {k: v["fb"] for k, v in
+                                                                                rep["other"].items()}}
 
 
 def _tds(h):
@@ -1380,7 +1385,52 @@ DAY_KEYS = ("convval_d0day", "d1_day_read", "d1_day_next", "d1_day_at")
 
 
 def _no_day(m):
-    return {k: v for k, v in m.items() if k not in DAY_KEYS + ("d1_day",)}
+    return {k: v for k, v in m.items() if k not in DAY_KEYS + ("d1_day", "d1_day_gap")}
+
+
+def test_a_day_gap_written_once_is_kept_by_every_merge_and_reaches_the_page():
+    """d1_day_gap {date: why no store took it} (written by hand once a morning was lost — "tz": the build machine could
+    not load the accounts' time zone): every merge keeps it as is (an odd entry dropped), roas carries it as d0.day_gap,
+    and it never blocks a Day number."""
+    cost = {"s.a": {"2026-01-05": 100}}
+    cached = _cache({}, fixed="2026-01-03", daily={"s.a": {"2026-01-04": 100}})
+    cached.update(d1_day_gap={"2026-01-04": "tz", "bad": "tz", "2026-01-03": ""}, d1_day_read={"2026-01-02": "x"})
+    m = google_ads.merge_spend(json.loads(json.dumps(cached)), _fresh({"s.a": {"2026-01-05": 7.5}}, daily=cost,
+                                                                      d1_day=_day("2026-01-05")), "2026-01-01")
+    assert m["d1_day_gap"] == {"2026-01-04": "tz"} and m["convval_d0day"] == {"s.a": {"2026-01-05": 7.5}}
+    m2 = google_ads.merge_spend(m, _fresh({"s.a": {"2026-01-06": 1.0}}, daily=cost), "2026-01-01")
+    assert m2["d1_day_gap"] == {"2026-01-04": "tz"}
+    assert google_ads._d0day_clean(m2)["d1_day_gap"] == {"2026-01-04": "tz"}
+    plain = _cache({}, fixed="2026-01-03")
+    assert "d1_day_gap" not in google_ads.merge_spend(plain, _fresh({}, daily=cost), "2026-01-01")   # none: no key
+    assert build_roas(_spend_to_usd(m2, 0.01), {}, [])["d0"]["day_gap"] == {"2026-01-04": "tz"}
+
+
+def test_a_zone_this_machine_cannot_load_is_a_guess_and_never_takes_a_day_number(monkeypatch):
+    """1 Nov 2026: the runner's zone files lost "Asia/Calcutta" — d0_day must treat a name it cannot load like no zone
+    (the UTC−12 guess, ok False: no Day number holding later revenue), and the roster read records every name for
+    the zone check (tz_check)."""
+    from datetime import datetime, timezone
+    import zoneinfo
+    real = zoneinfo.ZoneInfo
+
+    def no_alias(name):
+        if name == "Asia/Calcutta":
+            raise zoneinfo.ZoneInfoNotFoundError(name)
+        return real(name)
+    monkeypatch.setattr(zoneinfo, "ZoneInfo", no_alias)
+    now = datetime(2026, 1, 5, 22, 40, tzinfo=timezone.utc)
+    bad = google_ads.d0_day([{"id": "1", "tz": "Asia/Calcutta"}], now)
+    assert bad["ok"] is False and bad["at"] == "2026-01-05T16:00:00Z"            # the guess: 4 Jan, UTC−12 + 4 h
+    good = google_ads.d0_day([{"id": "1", "tz": "Asia/Kolkata"}], now)
+    assert good == {"date": "2026-01-05", "at": "2026-01-05T22:30:00Z", "next": "2026-01-06T22:30:00Z", "ok": True,
+                    "late_h": 3}
+    monkeypatch.setattr(google_ads, "ACCOUNT_TZ", set())
+    monkeypatch.setattr(google_ads, "_search", lambda *a, **k: [
+        {"customerClient": {"id": "1", "timeZone": "Asia/Calcutta"}}, {"customerClient": {"id": "2"}},
+        {"customerClient": {"id": "3", "manager": True, "timeZone": "UTC"}}])
+    accs = google_ads._child_accounts("9", "d", "t")
+    assert [a["tz"] for a in accs] == ["Asia/Calcutta", None] and google_ads.ACCOUNT_TZ == {"Asia/Calcutta"}
 
 
 def test_day_is_taken_once_and_never_changed():
@@ -1821,6 +1871,21 @@ def test_day_tooltip_says_what_each_row_is_and_when_it_fixes(ov):
     holes = _tday(_cells(ov["dayholes|USD"])["Demo Gallery"][0])
     assert holes == _day_tip(_hh(DAY_MISS), " 2/8 din ka number fixed hai.%s 4 din (2 Jan–7 Jan me se)%s"
                              % (OLD, GONE))
+
+
+def test_day_a_morning_lost_to_the_build_machines_time_zone_says_so(ov):
+    """d0.day_gap names the cause of a lost morning ("tz": the build machine could not load the accounts' time zone —
+    1 Nov 2026) instead of "the read was missing"; a time zone fault that still stands adds a warning to the tooltip
+    and the red banner over every screen; without one: no banner."""
+    gap = _tday(_cells(ov["daygap|USD"])["Demo Gallery"][0])
+    assert gap == _day_tip(_hh(DAY_MISS), " 3/8 din ka number fixed hai.%s 4 Jan — us raat hamari build machine pe time"
+                           " zone nahi mila, isliye By date number nahi liya gaya (Google Ads subah wala purana number"
+                           " nahi rakhta). 2 Jan, 7 Jan%s ⚠️ Abhi build machine pe time zone nahi mil raha — By date"
+                           " number ruka hua hai." % (OLD, GONE))
+    assert ov["_fb"]["daygap|USD"] == ('⚠️ Build problem: time zone data missing on the build machine (Asia/Calcutta) —'
+                                       ' By date D0, eCPM same time yesterday aur raat ka "today" ruke hue hain. Fix'
+                                       ' hone tak ye numbers update nahi honge.')
+    assert ov["_fb"]["daymiss|USD"] == "" and "⚠️" not in _tday(_cells(ov["daymiss|USD"])["Demo Gallery"][0])
 
 
 def test_day_each_app_at_its_own_moment(ov):

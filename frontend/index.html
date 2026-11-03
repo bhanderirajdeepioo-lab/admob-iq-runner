@@ -177,6 +177,7 @@
   .banner{padding:11px 16px;border-radius:10px;margin-bottom:14px;font-size:13.5px;font-weight:600}
   .banner.demo{background:var(--watch-b);color:var(--watch);border:1px solid #4a3a12}
   .banner.empty{background:var(--panel);color:var(--muted);border:1px solid var(--line2)}
+  .banner.fault{background:var(--bad-b);color:var(--bad);border:1px solid var(--bad)}
   .lgd{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:8px}.lgd span{display:inline-flex;align-items:center;gap:6px}.dot{width:9px;height:9px;border-radius:3px;display:inline-block}
   .est{font-weight:800;color:var(--good)}svg.chart{width:100%;display:block}
   /* Overview layout grid — big tables span the FULL width so every column fits (no cut); movers+attn share one row up top */
@@ -4760,7 +4761,8 @@ function render(){
   if(bn){
     if(DATA.is_demo){ bn.innerHTML='<div class="banner demo">🧪 SAMPLE DATA — ye demo numbers hain. Setup poora hone ke baad yahan aapka asli AdMob data aa jayega.</div>'; }
     else if(DATA.empty){ bn.innerHTML='<div class="banner empty">⏳ Abhi koi data nahi aaya. Pehle sync ke baad (ya AdMob me is duration ki earning aane par) yahan dikh jayega.</div>'; }
-    else { bn.innerHTML=''; }
+    else { bn.innerHTML=''; const t=faultBannerText();
+      if(t){ const d=document.createElement('div'); d.className='banner fault'; d.textContent=t; bn.appendChild(d); } }
   }
   updateFreshness();
   HUB.hold++; try{ show('overview'); }finally{ HUB.hold--; }   // ✨ hub: not a route — the caller shows the real screen next
@@ -10637,6 +10639,13 @@ function d0FixAt(D,d){ let t=Date.parse((D.fix_at||{})[d]||'');
   if(!isFinite(t)||t<=Date.now()) return null;
   return d0Ist(t); }
 function d0Ist(t){ const x=new Date(t+330*60000).toISOString(); return fmtD(x.slice(0,10))+', '+x.slice(11,16)+' IST'; }
+// the build's time zone fault (DATA.build_faults, admob_iq/tz_check.py: a zone name this build's machine could not
+// load) or null — the red banner and the By date tooltip say it, so a guessed day boundary is never silent
+function tzFault(){ return (DATA.build_faults||[]).find(f=>f&&f.kind==='tz')||null; }
+// the red banner's text over every screen ('' = none): the build machine could not load a time zone
+function faultBannerText(){ const f=tzFault();
+  return f?'⚠️ Build problem: time zone data missing on the build machine ('+(f.names||[]).join(', ')+') — By date D0,'
+    +' eCPM same time yesterday aur raat ka "today" ruke hue hain. Fix hone tak ye numbers update nahi honge.':''; }
 // The install-day ("Day") D0 of an app over the period vs DATA.roas.d0's Day keys: the backend (merge_spend) takes a
 // store's click date ONCE, from a complete read at most day_next.late_h after its Day moment ((date+1 00:00 in its
 // accounts' zone) + Google's lag: the next morning), and never changes it. by_app[app].d0day_next: the app's own next
@@ -10689,10 +10698,15 @@ function d0DayTip(st){ if(!st) return '';
       :'agle refresh me fix (~'+d0Ist(at+d0DayLate(D))+' tak)')+', phir ye number nahi badlega.'; }
   if(!since&&!(e.d0day_next||D.day_next)) return t+(st.miss.length?' By date number abhi shuru nahi hua (Google Ads subah'
     +' wala purana number nahi rakhta) — pehla number agli subah ke read se aayega.':'');
-  const old=st.miss.filter(d=>!since||d<since), gone=st.miss.filter(d=>since&&d>=since);
+  // day_gap: dates whose morning was lost to a known cause (backend d1_day_gap; "tz": the build machine's time zone)
+  const gap=D.day_gap||{}, old=st.miss.filter(d=>!since||d<since), gone=st.miss.filter(d=>since&&d>=since),
+    lost=gone.filter(d=>gap[d]==='tz'), rest=gone.filter(d=>gap[d]!=='tz');
   if(old.length) t+=' '+(since?'By date number '+fmtD(since)+' se hai':'By date number abhi shuru nahi hua')
     +' (Google Ads subah wala purana number nahi rakhta) — '+span(old)+' ka nahi hai.';
-  if(gone.length) t+=' '+span(gone)+' — us subah Google Ads ka poora read nahi mila, isliye By date number nahi hai.';
+  if(lost.length) t+=' '+span(lost)+' — us raat hamari build machine pe time zone nahi mila, isliye By date number'
+    +' nahi liya gaya (Google Ads subah wala purana number nahi rakhta).';
+  if(rest.length) t+=' '+span(rest)+' — us subah Google Ads ka poora read nahi mila, isliye By date number nahi hai.';
+  if(tzFault()) t+=' ⚠️ Abhi build machine pe time zone nahi mil raha — By date number ruka hua hai.';
   return t; }
 // the "By 24h" row's part of the tooltip (its second line): what the number is, then fixed / still filling (when it
 // fixes) / the drift after fixing

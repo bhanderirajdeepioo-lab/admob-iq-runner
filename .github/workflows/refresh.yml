@@ -44,7 +44,10 @@ concurrency:
 
 jobs:
   refresh:
-    runs-on: ubuntu-latest
+    # PINNED, never ubuntu-latest: on 1 Nov 2026 GitHub moved ubuntu-latest to Ubuntu 26.04 between two runs and its
+    # zone files lacked the time zone names Google sends — the By date D0 and other day-boundary numbers stopped while
+    # every run stayed green. A new image is a deliberate change: test it first (the zone-check workflow, a build).
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4          # this repo = code only
 
@@ -275,6 +278,7 @@ jobs:
           AC_SKIP_DROPPED:      ${{ vars.AC_SKIP_DROPPED }}
           AC_PRESPLIT:          ${{ vars.AC_PRESPLIT }}
           AC_ACCOUNT_WORKERS:   ${{ vars.AC_ACCOUNT_WORKERS }}
+          ZONE_CHECK_OUT:       /tmp/zone_check.json      # admob_iq/tz_check.py's counts (the zone check step prints them)
         run: |
           # PRIVACY: Actions logs on a PUBLIC repo are world-readable and the build prints
           # app ids and revenue totals. So its output goes to a file, never to the log. On
@@ -306,6 +310,13 @@ jobs:
         if: always()
         continue-on-error: true
         run: python -m admob_iq.stage_clock public data/build_profile.json.gz /tmp/build_wall 2>/dev/null || true
+
+      - name: Time zone check (counts only)
+        # admob_iq/tz_check.py ran in the build: every time zone name the data uses must load on this runner. A missing
+        # one becomes a ::warning:: here (counts only — never a name) and a red banner on the dashboard.
+        if: always()
+        continue-on-error: true
+        run: python -m admob_iq.tz_check public /tmp/zone_check.json 2>/dev/null || true
 
       - name: Deploy guard report (Cloudflare limits, counts only)
         # admob_iq/deploy_guard.py ran at the end of the build. It keeps the site inside Cloudflare's deploy limits

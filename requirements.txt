@@ -15,5 +15,9 @@ uvicorn[standard]==0.32.1
 # Notifications
 requests==2.32.3
 
+# Time zones: zoneinfo reads the machine's zone files first, this package second. Ubuntu 26.04 runners dropped the old
+# alias names Google still sends (e.g. Asia/Calcutta) and every day-boundary number broke there on 1 Nov 2026
+tzdata==2026.6
+
 # Dev / QA
 pytest==8.3.4
