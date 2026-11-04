@@ -638,6 +638,29 @@ def _nvr_step(dashboard, data_dir, out_dir, s):
         return []
 
 
+@_sc.timed("scr_tab")
+def _screens_step(dashboard, data_dir, out_dir, s):
+    """🖼️ Screens tab (admob_iq.screens_build: per app, per Activity — visits, ad impressions, the status word, the cause
+    and the developer report): its lazy files from the private GA4 screens store + this dashboard's AdMob ad units
+    (placements, apps_catalog, latest_complete, report_tz; data/app_store_ids.json read there), its pointer and ONE
+    counts-only line → its _headers path (one splat rule). Switched off (SCREENS_TAB=false) or failing: its files removed,
+    nothing else changes."""
+    try:
+        from . import screens_build as scb
+        if not scb.enabled(s):
+            scb.off(out_dir)
+            return []
+        paths = scb.run(dashboard, data_dir, out_dir, s)
+        line = scb.pop_line()
+        if line:
+            print(line, file=sys.stderr)
+        return list(paths)
+    except Exception as e:
+        dashboard.pop("scr", None)
+        print(f"scr skipped: {type(e).__name__}", file=sys.stderr)
+        return []
+
+
 @_sc.timed("source_tab")
 def _source_step(dashboard, data_dir, out_dir, s):
     """💰 Revenue by source (admob_iq.source_build, a section of the Install value tab): its lazy files from the private
@@ -1939,6 +1962,10 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # stores — OPTIONAL (SOURCE_TAB) and failure-isolated; without a store it leaves no file behind
     aud_paths = aud_paths + _source_step(dashboard, data_dir, out_dir, s)
     aud_paths = aud_paths + _nvr_step(dashboard, data_dir, out_dir, s)
+    # 🖼️ Screens tab (per app, per Activity: visits vs ad impressions, status, cause, developer report): its lazy files
+    # from the private GA4 screens store + the AdMob ad units above — OPTIONAL (SCREENS_TAB) and failure-isolated;
+    # without a store it leaves no file behind
+    aud_paths = aud_paths + _screens_step(dashboard, data_dir, out_dir, s)
 
     _sc.step("intraday")
     # 📈 eCPM "same time yesterday": this build's point of today's totals so far (data/ecpm_intraday.json) — never for

@@ -2805,6 +2805,108 @@ body[data-screen="firstopen"] #rangectl,body[data-screen="firstopen"] #rangecust
   .fo-bar{grid-template-columns:74px minmax(0,1fr) auto;gap:8px}.fo-tip{min-width:0;font-size:11.5px}
   .fo-t.fo-mini{min-width:0}.fo-mini th{white-space:normal;line-height:1.25}.fo-mini th:not(:has(button)),.fo-mini td{padding:8px 6px}
   .fo-mini th:first-child,.fo-mini td:first-child{min-width:80px;max-width:100px}.fo-mini td{font-size:12.5px}.fo-mini th{font-size:10px;letter-spacing:.02em}.fo-wide{display:none}}
+/* ---------- 🖼️ Screens (scoped: every class sc-; the tab has its own period, so the top bar's Period + month mover hide) ---------- */
+body[data-screen="scr"] #rangectl,body[data-screen="scr"] #rangecustom,body[data-screen="scr"] #rangemon{display:none!important}   /* every number says its own GA4 days */
+body[data-screen="scr"] #smp-pick{display:inline-flex}
+.screen[data-screen="scr"]{max-width:1360px;overflow-anchor:none}   /* the module keeps the reader's place itself (a late file, a tap) */
+.sc-card{margin-bottom:14px;min-width:0}.sc-card .ct{flex-wrap:wrap;gap:4px 12px;align-items:baseline}
+.sc-note{color:var(--muted);font-size:12px;line-height:1.5;margin:0 0 10px;max-width:860px}.sc-note b{color:var(--ink2)}
+.sc-sub{color:var(--faint);font-size:11.5px;margin:2px 0 10px}.sc-faint{color:var(--faint);font-size:11.5px;font-weight:500}
+.sc-ok{margin:0 0 8px;color:var(--good);font-weight:700}
+.sc-x{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.sc-crumb{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 12px;color:var(--muted);font-size:12px}.sc-crumb small{color:var(--faint)}
+.sc-back{min-height:36px;padding:4px 12px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+.sc-back[disabled]{opacity:.55;cursor:default}
+.sc-lnk{background:none;border:0;padding:0 2px;min-height:32px;color:var(--cyan);font:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+/* the period strip: one row (sideways on a phone), the Custom row always there (no height change), the period's dates */
+.sc-stk{position:sticky;top:var(--sc-stick,0px);z-index:7;padding-top:10px;padding-bottom:8px;box-shadow:0 10px 22px rgba(0,0,0,.32)}
+.sc-per{display:flex;gap:6px;flex-wrap:nowrap;overflow-y:hidden;scrollbar-width:none;margin:0 0 8px;padding:2px}.sc-per::-webkit-scrollbar{display:none}
+.sc-pb{flex:none;min-height:34px;padding:4px 12px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink2);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.sc-pb[aria-pressed="true"]{outline:2px solid var(--cyan);outline-offset:-2px;color:#fff}.sc-pb[disabled]{opacity:.4;cursor:default}
+.sc-cus{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 6px;font-size:12px;color:var(--muted)}.sc-cd{color:var(--faint)}.sc-cus label{display:inline-flex;align-items:center;gap:6px}
+.sc-cus input[type=date]{min-height:34px;padding:4px 8px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px;color-scheme:dark}
+.sc-pl{font-size:12.5px;color:var(--ink2);font-weight:600}
+/* tiles */
+.sc-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 14px}
+.sc-k{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 13px;min-width:0}
+.sc-kl{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.sc-kv{font-size:20px;font-weight:800;color:#fff;margin:3px 0 2px;font-variant-numeric:tabular-nums;line-height:1.25}
+.sc-ks{font-size:11.5px;color:var(--faint)}.sc-ks b{color:#fff}.sc-kst .sc-kv{font-size:16px}
+.sc-mut{color:var(--faint);font-weight:500}.sc-dn{color:var(--bad)!important}.sc-up{color:var(--good)!important}
+/* the coverage strip (All apps) + the apps not whole */
+.sc-cov{display:flex;gap:8px;flex-wrap:wrap;padding:2px}
+.sc-cv{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:4px 12px;border-radius:999px;border:1px solid var(--line2);background:var(--raise);color:var(--ink2);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.sc-cv b{color:var(--watch);font-variant-numeric:tabular-nums}.sc-cv.sc-cvok b{color:var(--good)}
+.sc-cv[aria-pressed="true"]{outline:2px solid var(--cyan);outline-offset:-2px;color:#fff}
+.sc-covl{margin:4px 0 0;border-top:1px solid var(--line);padding-top:8px}.sc-covh{font-size:12.5px;color:var(--ink2);margin:0 0 6px}
+.sc-covr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink2)}.sc-covr small{color:var(--muted)}
+.sc-an{display:inline-flex;align-items:center;gap:8px;min-width:0}.sc-an .aicon{flex:none}
+/* tables: the name + status chip + score in the sticky first column */
+.sc-tw{border-top:1px solid var(--line);max-width:100%}
+.sc-tall{max-height:560px;overflow-y:auto}
+.sc-t{min-width:640px;width:100%;border-collapse:collapse;font-size:12.5px}.sc-t.sc-mini{min-width:520px}.sc-t.sc-terms{min-width:0}
+.sc-t th{white-space:nowrap;text-align:right;padding:8px 10px;position:sticky;top:0;z-index:2;background:var(--panel2)}
+.sc-t th:has(button){padding:0}
+.sc-t th button{display:flex;align-items:center;justify-content:flex-end;width:100%;min-height:38px;padding:6px 10px;background:none;border:none;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer;white-space:nowrap}
+.sc-t th[aria-sort="ascending"] button,.sc-t th[aria-sort="descending"] button{color:var(--cyan)}
+.sc-t td{white-space:nowrap;text-align:right;padding:8px 10px;font-variant-numeric:tabular-nums;vertical-align:top}
+.sc-t td b{color:#fff}.sc-t td small{display:block;color:var(--faint);font-size:11px;white-space:normal}
+.sc-t th:first-child,.sc-t td:first-child{position:sticky;left:0;z-index:1;background:var(--panel);text-align:left;white-space:normal;min-width:170px;max-width:270px;box-shadow:1px 0 0 var(--line)}
+.sc-t thead th:first-child{z-index:3;background:var(--panel2)}.sc-t th:first-child button{justify-content:flex-start}
+.sc-t td.sc-nm{color:#fff;font-weight:600;overflow-wrap:anywhere}.sc-n{display:block}.sc-stl{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:3px}
+.sc-t td.sc-nm small{font-weight:500}.sc-t td.sc-nf{color:var(--muted)}.sc-t td.sc-cz{text-align:left;white-space:normal;min-width:120px;color:var(--ink2)}
+.sc-t td.sc-why{text-align:left;white-space:normal;min-width:180px;color:var(--muted)}.sc-id{font-family:ui-monospace,Menlo,monospace;font-size:10.5px!important;overflow-wrap:anywhere}
+.sc-t tbody tr.sc-clk{cursor:pointer}.sc-t tbody tr.sc-clk:hover td{background:var(--raise)}
+.sc-t tbody tr.sc-on td{background:var(--raise)}.sc-t tbody tr.sc-on td:first-child{box-shadow:inset 3px 0 0 var(--cyan),1px 0 0 var(--line)}
+.sc-more{display:block;margin:10px auto 0;min-height:36px;padding:4px 14px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink2);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+/* segmented controls (tables, drill-down sections) */
+.sc-seg{display:flex;gap:2px;flex-wrap:nowrap;background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:2px;margin:0 0 8px;width:max-content;max-width:100%;scrollbar-width:none}.sc-seg::-webkit-scrollbar{display:none}
+.sc-seg button{flex:none;min-height:34px;padding:4px 12px;border:0;border-radius:7px;background:none;color:var(--ink2);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.sc-seg button[aria-pressed="true"]{background:var(--raise);color:#fff;box-shadow:inset 0 0 0 1px var(--line2)}.sc-seg small{color:var(--faint)}
+/* Needs attention */
+.sc-at{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px}.sc-at:last-child{border-bottom:0}
+.sc-atn{color:#fff;font-weight:700;min-width:0;overflow-wrap:anywhere}.sc-atr{color:var(--ink2);font-variant-numeric:tabular-nums}.sc-atc{color:var(--watch);font-weight:600}
+.sc-at .sc-lnk{margin-left:auto}
+/* the drill-down: its own card after the table card */
+.sc-dd{border-color:var(--line2)}
+.sc-ddh{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px 12px;margin:0 0 10px}.sc-ddt{flex:1 1 240px;min-width:0}.sc-ddt b{color:#fff;font-size:15px;overflow-wrap:anywhere}
+.sc-ddc{display:block;color:var(--faint);font-size:11px;overflow-wrap:anywhere}.sc-dds{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:12px;color:var(--muted)}.sc-dds small{color:var(--faint)}
+.sc-h4{font-size:12.5px;margin:14px 0 6px;color:var(--ink2)}
+/* the chart: ads / 100 (cyan line), visits (bars), the normal (dashed); its box keeps its height while drawn */
+.sc-chart{position:relative;min-height:220px}
+.sc-chart svg{display:block;overflow:visible;touch-action:pan-y}
+.sc-chart text{fill:var(--faint);font-size:10.5px}.sc-chart line.sc-g{stroke:var(--line);stroke-width:1}
+.sc-chart rect.sc-v{fill:var(--blue);opacity:.28}.sc-chart rect.sc-v.sc-nf{opacity:.14}
+.sc-chart path{fill:none;stroke-width:2;stroke-linejoin:round}.sc-chart path.sc-r{stroke:var(--cyan)}.sc-chart path.sc-nf{stroke-dasharray:4 4;opacity:.55}
+.sc-chart line.sc-nl{stroke:var(--watch);stroke-width:1.3;stroke-dasharray:5 4}.sc-chart text.sc-nt{fill:var(--watch);font-weight:700;font-size:11px}
+.sc-chart circle.sc-rd{fill:var(--cyan)}.sc-chart text.sc-rl{fill:var(--cyan);font-weight:800;font-size:11.5px}.sc-chart text.sc-al{fill:var(--ink2);font-weight:700;font-size:11px}
+.sc-chart text.sc-vl{fill:var(--blue);font-size:10px}.sc-chart line.sc-rule{stroke:var(--muted);stroke-dasharray:3 3}
+.sc-tip{position:absolute;top:0;z-index:6;min-width:170px;max-width:260px;background:#0b1220;border:1px solid #38507a;border-radius:9px;padding:7px 10px;font-size:12px;color:var(--ink2);box-shadow:0 8px 24px rgba(0,0,0,.5);line-height:1.5;pointer-events:none}.sc-tip b{color:#fff}
+.sc-lg{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:11.5px;color:var(--muted);margin:6px 0 10px}
+.sc-lg span.sc-la::before,.sc-lg span.sc-lb::before,.sc-lg span.sc-lc::before{content:"";display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.sc-lg .sc-la::before{background:var(--cyan)}.sc-lg .sc-lb::before{background:var(--blue);opacity:.5;height:8px}.sc-lg .sc-lc::before{background:none;border-top:2px dashed var(--watch);height:0}
+/* the 🗂 folds */
+.sc-fold{background:var(--panel);border:1px solid var(--line);border-radius:13px;margin:0 0 10px}
+.sc-fold>summary{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;min-height:44px;padding:8px 14px;cursor:pointer;list-style:none;font-weight:700;color:var(--ink)}.sc-fold>summary::-webkit-details-marker{display:none}
+.sc-chev{color:var(--muted);transition:transform .15s}.sc-fold[open] .sc-chev{transform:rotate(90deg)}
+.sc-fh{color:var(--faint);font-size:11.5px;font-weight:500}.sc-fin{padding:0 14px 12px}
+.sc-ul{margin:4px 0 10px;padding-left:18px;color:var(--ink2);font-size:12.5px;line-height:1.6}
+/* Copy report: the button, a reserved line for the result, the text */
+.sc-copy{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:0 0 8px}.sc-cpl{min-height:20px;font-size:12px;color:var(--good);font-weight:700}
+.sc-ta{width:100%;min-height:180px;max-height:420px;padding:8px 10px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink2);font:12px/1.5 ui-monospace,Menlo,monospace;resize:vertical}
+@media (max-width:760px){
+  .sc-tiles{display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.sc-tiles::-webkit-scrollbar{display:none}
+  .sc-k{flex:0 0 auto;min-width:132px;max-width:190px;padding:8px 10px}.sc-kv{font-size:16px}
+  .sc-stk{padding:8px 10px 6px}.sc-cus{flex-wrap:nowrap;gap:6px}.sc-cus input[type=date]{font-size:16px;width:132px;padding:4px 6px}.sc-cl,.sc-ch{display:none}
+  .sc-cov{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.sc-cov::-webkit-scrollbar{display:none}.sc-cv{flex:none}
+  .sc-t th:first-child,.sc-t td:first-child{min-width:132px;max-width:160px}.sc-t td{padding:8px 8px}.sc-t th button{padding:6px 8px}
+  .sc-t.sc-mini{min-width:0}.sc-mini th{white-space:normal;line-height:1.25;font-size:10px}.sc-mini td{font-size:12px;padding:7px 6px}
+  .sc-mini th:first-child,.sc-mini td:first-child{min-width:86px;max-width:110px}
+  .sc-tip{min-width:0;font-size:11.5px}.sc-ta{font-size:16px}}
+/* a narrow phone: the KPI tiles wrap into two columns — every tile in view, the row never scrolls sideways */
+@media (max-width:480px){
+  .sc-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;overflow-x:visible}
+  .sc-k{min-width:0;max-width:none}}
 /* ---------- 👥 Audience (the approved Audience demo, ported: every rule scoped to #au-root / #au-tip) ---------- */
 body[data-screen="audience"] #rangectl,body[data-screen="audience"] #rangecustom{display:none!important}   /* every section says its own dates */
 body[data-screen="audience"] #smp-pick{display:inline-flex}
@@ -4172,6 +4274,7 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
       <li><button data-screen="uninstall"><span class="i">🚪</span> Uninstall</button></li>
       <li id="nav-aud-li" hidden><button data-screen="audience"><span class="i">👪</span> Audience</button></li>
       <li id="nav-fo-li" hidden><button data-screen="firstopen"><span class="i">🆕</span> First open</button></li>
+      <li id="nav-scr-li" hidden><button data-screen="scr"><span class="i">🖼️</span> Screens</button></li>
     </ul>
     <div class="nav-lbl">Act</div>
     <ul class="nav">
@@ -4474,6 +4577,7 @@ const TITLES={overview:["Portfolio Overview","Live · engine-computed"],placemen
   uninstall:["Uninstall","Installs vs uninstalls (GA4)"],
   audience:["Audience","Who has the app · who opens it · who went quiet (GA4)"],
   firstopen:["First open","Pehli baar khola → Splash → Home · full history (GA4)"],
+  scr:["Screens","Har screen pe visits vs ads · full history (GA4 + AdMob)"],
   review:["Daily Review","One card per app per day · team review"],
   datewise:["Date-wise Report","Har din · spend · installs · revenue · P/L"],
   ecpm:["eCPM trend","Daily · monthly · har app · ad units"],
@@ -4791,6 +4895,8 @@ function render(){
   { const li=document.getElementById('nav-aud-li'); if(li) li.hidden=!AU.ptr(); }   // the tab only when this build wrote its file
   root.append(renderFirstOpen()); // 🆕 First open: the same (filled by show('firstopen'), its lazy file loads on the first open)
   { const li=document.getElementById('nav-fo-li'); if(li) li.hidden=!FO.ptr(); }
+  root.append(renderScreens()); // 🖼️ Screens: the same (filled by show('scr'); its files load on the first open)
+  { const li=document.getElementById('nav-scr-li'); if(li) li.hidden=!SCR.ptr(); }
   if(HUB.on) root.append(renderHubRv());   // ✨ hub: an app's ✅ Review history tab
   root.append(renderReview());   // ONE persistent node: drafts / open panels survive the 5-min refresh and the ₹/$ toggle
   rvRestoreFocus();
@@ -4972,6 +5078,7 @@ function show(id){
   if(id==='ecpm') ecPaint(); else ecLeft();   // 📈 eCPM trend: filled when shown (its own range); leaving it takes its Back steps off
   if(id==='audience') AU.show(); else AU.left();   // 👪 Audience: the same (its lazy file loads on the first open)
   if(id==='firstopen') FO.show();                  // 🆕 First open: the same
+  if(id==='scr') SCR.show(); else SCR.left();      // 🖼️ Screens: the same; leaving it takes its drill-down's Back step off
   const _rvKeep=rvKeepScroll(id);           // Review re-shown by the 5-min refresh / ₹⇄$: stay where the reader was
   rvOnShow(id);                             // body[data-screen] (hides App / Period on Review) + the #review hash
   if(!_rvKeep&&!REFRESH_SILENT&&!SP.keep) window.scrollTo({top:0});   // a silent background refresh / a same-view rebuild (rerender) never jumps the page
@@ -5028,12 +5135,12 @@ const HUB_LS='iq_layout';
 // tab id → [label, icon, screen at All apps, screen at an app] ('' = the tab is not in that scope)
 const HUB_T={overview:['Overview','📊','overview','overview'],revenue:['Revenue & Ad units','💵','placements','appdetail'],
   ecpm:['eCPM','📈','ecpm','ecpm'],active:['Active users','👥','active','active'],uninstall:['Uninstall','🚪','uninstall','uninstall'],
-  value:['Install value','💸','value','value'],audience:['Audience','👪','audience','audience'],firstopen:['First open','🆕','firstopen','firstopen'],mediation:['Mediation','🔗','mediation','mediation'],
+  value:['Install value','💸','value','value'],audience:['Audience','👪','audience','audience'],firstopen:['First open','🆕','firstopen','firstopen'],scr:['Screens','🖼️','scr','scr'],mediation:['Mediation','🔗','mediation','mediation'],
   roas:['Marketing ROAS','💰','roas','roas'],baseline:['Baseline','📐','baseline','baseline'],deductions:['Deductions','📉','deductions','deductions'],
   health:['Account Health','🛡️','health','health'],movers:['Movers','↕️','movers','movers'],alerts:['Alerts','🔔','','alerts'],
   review:['Review history','✅','','hubrv']};
-const HUB_ALL=['overview','revenue','ecpm','active','uninstall','value','audience','firstopen','mediation','roas','baseline','deductions','health','movers'];
-const HUB_APP=['overview','revenue','ecpm','active','uninstall','value','audience','firstopen','baseline','alerts','review','mediation','roas','deductions','health','movers'];
+const HUB_ALL=['overview','revenue','ecpm','active','uninstall','value','audience','firstopen','scr','mediation','roas','baseline','deductions','health','movers'];
+const HUB_APP=['overview','revenue','ecpm','active','uninstall','value','audience','firstopen','scr','baseline','alerts','review','mediation','roas','deductions','health','movers'];
 const HUB_PAGE={review:1,reco:1,settings:1};                                    // left-nav pages outside Home (Alerts: below)
 const HUB_DRILL={datewise:'overview',countries:'overview',reportcard:'revenue'};   // drill pages: inside the tab they came from
 function hubLsGet(){ try{ return localStorage.getItem(HUB_LS); }catch(e){ return null; } }
@@ -5096,8 +5203,8 @@ function hubNameOf(key){ if(!key||key==='all') return '';
   return n==null?null:n; }
 // ---- routes ----
 function hubParse(h){ const m=/^#home(?:\/([a-z0-9]{1,16})(?:\/([a-z]+))?)?\/?$/.exec(String(h||'')); return m?{key:m[1]||'all',tab:m[2]||''}:null; }
-function hubTabs(app){ let au=false, fo=false; try{ au=!!AU.ptr(); }catch(e){} try{ fo=!!FO.ptr(); }catch(e){}
-  return (app?HUB_APP:HUB_ALL).filter(t=>(t!=='audience'||au)&&(t!=='firstopen'||fo)); }
+function hubTabs(app){ let au=false, fo=false, sc=false; try{ au=!!AU.ptr(); }catch(e){} try{ fo=!!FO.ptr(); }catch(e){} try{ sc=!!SCR.ptr(); }catch(e){}   // 🖼️ Screens only when this build wrote its pointer
+  return (app?HUB_APP:HUB_ALL).filter(t=>(t!=='audience'||au)&&(t!=='firstopen'||fo)&&(t!=='scr'||sc)); }
 function hubHost(t,app){ const x=HUB_T[t]; return x?(app?x[3]:x[2]):''; }
 function hubHashOf(r){ return '#home/'+hubKeyOf(r.a)+'/'+r.t; }
 function hubHash(){ return hubHashOf({a:APP,t:HUB.tab}); }
@@ -7258,6 +7365,650 @@ return {ptr, ensure, render, paint, show, left, card, ready:()=>!!RAW&&!!ptr(), 
   setPer:(k,f,t)=>{ PER=k; PF=f||''; PTO=t||''; }, ADS}};
 })();
 function renderFirstOpen(){ return FO.render(); }
+// ---- 🖼️ Screens (owner, 4 Nov 2026: "per app, per Activity: visits, the ad impressions against them, the ratio — a NEW
+// tab"; "a score for every screen's views against its impressions, for the most visited screens; from it we see which screen
+// has a problem — requests low or show rate low — so we can send the developer a report and get a fix"). The build's files
+// (admob_iq/screens_build.py): the pointer DATA.scr; scr_all.json.gz when the tab opens (every app's day arrays from its first
+// GA4 day per display item: top screens, all other screens, not recorded, ad screens, GA4 grouped, full-screen triggers);
+// when an app opens, scr_<key>.json.gz (classes, units, AdMob per unit per GA4 day) and right after it scr_l_<key>.json.gz
+// (the layers, versions, the developer report); one month's version / country shard only for a picked period's partial edge
+// month. The status word, its why, the cause and the report come from the files (a fixed window: the last 10 final GA4 days
+// vs the 28 before, whatever is picked) — the picker changes the numbers only. A piece GA4 did not give whole on a day is not
+// used that day and the page says why (never a sampled number; unknown = "—", never 0).
+const SCR=(()=>{
+let ALL=null, VER=null, LOADING=false, ERR=false, EL=null, WIRED=false, CH=null;
+// the period (owner's standard picker, one for All apps and every app page) + its Custom from / to; PREAD: the saved one
+// read (lazily, on the first paint — never at script load)
+let PER='30', PF='', PTO='', PREAD=false;
+// SORT: All apps' column; TS: an app's tables; SEG: Screens ('s') / Full-screen ('f'); MORE: the screens past 90 % shown;
+// OPEN: the drill-down's item (its index in the app's items, null = closed); SEC: its section; COVP: the coverage chip open
+let SORT={k:'rank',dir:1}, TS={k:'st',dir:1}, SEG='s', MORE=false, OPEN=null, SEC='ov', COVP='';
+// OPENAPP: the app the drill-down was opened on; LASTAPP: the app (or All apps, null) the last paint showed
+let OPENAPP=null, LASTAPP=null;
+const FOLD={}, FILES={};   // FOLD: the 🗂 folds open; FILES: file name → {raw, v, busy, err}
+const PERS=[['today','Today'],['yday','Yesterday'],['7','7 days'],['tm','This month'],['lm','Last month'],['30','30 days'],['60','60 days'],['90','90 days'],['all','All time'],['cus','Custom']];
+const PERK=new Set(PERS.map(p=>p[0])), PER_LS='scr_per_v1';
+// the owner's six status words → the page's chips (WD keys), and their order (Worse first)
+const WDK={Worse:'bigda',Watch:'dhyan',Better:'behtar',Normal:'normal','Too early':'jaldi','N/A':'lagu'};
+const RANK={Worse:0,Watch:1,Better:2,Normal:3,'Too early':4,'N/A':5};
+const FULL=new Set(['interstitial','appopen','rewarded','rewardedinterstitial']);
+const FMTN={interstitial:'Interstitial',appopen:'App open',rewarded:'Rewarded',rewardedinterstitial:'Rewarded interstitial',banner:'Banner',native:'Native',notset:'Format not recorded',fold:'Other (GA4 grouped)'};
+const KINDN={o:'All other screens',ns:'Not recorded',ad:'Ad screens',g:'Other (GA4 grouped)'};
+const KINDW={o:'baaki saare screens (top 90% ke bahar)',ns:'GA4 ne screen class nahi likhi',ad:'ad SDK ki apni Activity (full-screen ads yahin dikhte hain)',g:'GA4 ne "(other)" me jod diya'};
+// the pieces (coverage strip / Data coverage): [code, label, the read ids whose day states it needs]
+const PIECES=[['v','Visits',['v']],['a','Ads by screen',['a']],['w','Full-screen triggers',['w']],['r','Versions',['rV','rA']],['c','Countries',['cV','cA']],
+  ['n','New vs returning',['nV','nA']],['k','Clicks',['k']],['e','Exposure',['e']],['u','Users who saw ads',['uA','uV']],['s','Ad sources',['s']],['x','Own events',['x']]];
+// a day's state per read: w whole · p GA4 grouped part of it into "(other)" · t thresholded · o GA4 dropped rows (the parts do
+// not add up to its own total) · s sampled · x the build could not read the store's month file holding it · - not read yet;
+// anything else (?) = not whole
+const SRANK={w:0,p:1,t:2,o:3,s:4,x:5,'?':5,'-':6};
+const STW={p:'GA4 grouped',t:'GA4 thresholding',o:'GA4 ne rows chhod di (not whole)',s:'GA4 sampled',x:'store file unreadable (build store ki month file padh nahi saka)','-':'abhi padha nahi'};
+const DQN={ns:'Kuch ad events pe screen class nahi (Not recorded, pichhle 28 din me 2%+)',no_screens:'Aadhe se zyada ad events pe screen class nahi — ads ke liye screen tracking nahi',
+  dup:'ad_impression do baar log hota hai (doosri copy me ad_format / ad_unit_name nahi)',unmatched:'GA4 ke kuch unit names AdMob me nahi mile',ids:'GA4 unit ke naam ki jagah AdMob unit id log karta hai',
+  test_ids:'Google ke test ad unit ids production me log ho rahe hain',admob_only:'Kuch AdMob units GA4 me kabhi log nahi hue',no_click:'App ad_click log nahi karta'};
+// the cause's measured terms (the build's ids) → the owner's words
+const TERMN={tie:'GA4 logging changed',share:'Ads moved to other screens',show:'Lower show rate',fill:'Lower fill',req:'Fewer ad requests',vis:'More visits, same ads',units:'Ad units changed',unmatched:'Units not in AdMob'};
+const E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ok=v=>v!=null&&isFinite(v);
+const N=v=>ok(v)?Math.round(v).toLocaleString('en-US'):'—';
+const R=v=>ok(v)?(Math.abs(v)>=100?Math.round(v).toLocaleString('en-US'):(Math.round(v*10)/10).toFixed(1)):'—';   // ads per 100 visits
+const PC=(a,b)=>ok(a)&&ok(b)&&a>0?(b>=a?'+':'−')+Math.abs(Math.round((b/a-1)*100))+'%':'—';                          // a → b
+const P1=v=>ok(v)?(Math.round(v*1000)/10).toFixed(1)+'%':'—';
+const secs=v=>!ok(v)?'—':v>=10?Math.round(v)+' s':v>=1?(Math.round(v*10)/10).toFixed(1)+' s':(Math.round(v*100)/100).toFixed(2)+' s';
+const DAY=864e5, t0=s=>Date.parse(s+'T00:00:00Z'), iso=t=>new Date(t).toISOString().slice(0,10), addD=(s,k)=>iso(t0(s)+k*DAY);
+const nD=(a,b)=>Math.round((t0(b)-t0(a))/DAY)+1, okD=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&isFinite(t0(s));
+const fd=s=>{ try{ return fmtD(s); }catch(e){ return String(s||''); } }, fdy=s=>s?fd(s)+' '+String(s).slice(0,4):'—';
+const vis=id=>{ try{ return uniVis(id); }catch(e){ return true; } };   // the apps hidden in Settings stay hidden here too
+const quiet=f=>{ try{ if(typeof SP!=='undefined'&&SP&&SP.quietly) SP.quietly(f); else f(); }catch(e){} };
+const phone=()=>{ try{ return (+window.innerWidth||1280)<=720; }catch(e){ return false; } };
+// ---- the files ----
+function ptr(){ const p=(typeof DATA!=='undefined'&&DATA&&DATA.scr)||null; return (p&&typeof p.file==='string'&&/^[\w.-]+\.json\.gz$/.test(p.file)&&p.apps&&typeof p.apps==='object')?p:null; }
+function apPtr(id){ const p=ptr(), a=p&&p.apps[id]; return (a&&typeof a.key==='string'&&/^[0-9a-f]{12}$/.test(a.key))?a:null; }
+function ensure(cb){ const p=ptr(); if(!p||LOADING||(ALL&&VER===p.fv)||(ERR&&VER===p.fv)) return; LOADING=true;
+  fetchGzJson(p.file+'?v='+encodeURIComponent(p.fv||'')).then(j=>{ if(!j||j.v!==1||!j.apps||typeof j.apps!=='object'||Array.isArray(j.apps)) throw new Error('format');
+      ALL=j; VER=p.fv; ERR=false; LOADING=false; cb&&cb(); })
+    .catch(()=>{ ERR=!ALL; VER=p.fv; LOADING=false; cb&&cb(); }); }
+// one lazy file: kept per name; a newer version loads quietly while the older one stays on screen (never "Loading…" over data)
+function loadF(name,v,chk,cb){ const st=FILES[name]||(FILES[name]={}); if(st.busy||(st.raw&&st.v===v)||(st.err&&st.v===v)) return; st.busy=true;
+  fetchGzJson(name+'?v='+encodeURIComponent(v||'')).then(j=>{ if(!chk(j)) throw new Error('format'); st.raw=j; st.err=false; })
+    .catch(()=>{ st.err=!st.raw; }).then(()=>{ st.v=v; st.busy=false; cb&&cb(); }); }
+const fRaw=n=>(FILES[n]&&FILES[n].raw)||null, fErr=n=>!!(FILES[n]&&FILES[n].err&&!FILES[n].raw);
+const f2Name=a=>'scr_'+a.key+'.json.gz', lName=a=>'scr_l_'+a.key+'.json.gz', shName=(a,k,ym)=>'scr_'+k+'_'+a.key+'_'+ym+'.json.gz';
+function f2Of(id){ const a=apPtr(id), j=a&&fRaw(f2Name(a)); return j&&j.key===a.key?j:null; }
+function lOf(id){ const a=apPtr(id), j=a&&fRaw(lName(a)); return j&&(j.key==null||j.key===a.key)?j:null; }
+// the open app's two files: file 2 first, its layers right after (both before any drill-down asks)
+function ensureApp(id){ const a=apPtr(id); if(!a) return; const n2=f2Name(a);
+  const goL=()=>loadF(lName(a),a.vl,j=>!!j&&j.v===1&&(j.key==null||j.key===a.key),()=>arrive(id,'l'));
+  loadF(n2,a.v,j=>!!j&&j.v===1&&j.key===a.key&&Array.isArray(j.days)&&Array.isArray(j.screens),()=>{ arrive(id,'2'); goL(); });
+  if(FILES[n2]&&!FILES[n2].busy) goL(); }
+function ensureShard(id,k,ym){ const a=apPtr(id), L=lOf(id), v=L&&L.shards&&L.shards[k]?L.shards[k][ym]:null; if(!a||v==null) return;
+  loadF(shName(a,k,ym),v,j=>!!j&&j.v===1&&j.key===a.key&&String(j.m).replace('-','')===ym&&Array.isArray(j.days),()=>arrive(id,k)); }
+function onScreen(){ const on=document.querySelector('.screen.on'); return !!(on&&on.dataset&&on.dataset.screen==='scr'); }
+function nameOf(id){ const c=((typeof DATA!=='undefined'&&DATA&&DATA.apps_catalog)||[]).find(z=>z.app_id===id); return (c&&c.app_name)||id; }
+// the header's app (a name) → its id in the file (by the catalog's id first, then by name)
+function appIdNow(){ if(!ALL||!APP) return null; let id=''; try{ id=appIdOf(APP); }catch(e){}
+  const ids=Object.keys(ALL.apps).filter(vis); return (id&&ids.includes(id))?id:(ids.find(z=>nameOf(z)===APP)||null); }
+// ---- the calendar: GA4 days (UTC); ft = the last final day (td − 2), td = the property's today ----
+// a period → [lo, hi]: Today / Yesterday = td / td − 1 (not final); 7 / 30 / 60 / 90 days = the last N FINAL days ending ft;
+// This month = its 1st … td; Last month = the month before; a month key = that month (the current one … td); All time = d0 …
+// td; Custom = the picked from / to inside [d0, td] (swapped when reversed)
+function rng(x,per,pf,pto){ per=per==null?PER:per; pf=pf==null?PF:pf; pto=pto==null?PTO:pto;
+  if(!x||!okD(x.ft)) return ['',''];
+  const ft=x.ft, T=x.td||addD(ft,2), d0=x.d0||ft, m0=T.slice(0,8)+'01', n={'7':7,'30':30,'60':60,'90':90}[per];
+  if(per==='today') return [T,T]; if(per==='yday'){ const y=addD(T,-1); return [y,y]; }
+  if(n) return [addD(ft,-(n-1)),ft];
+  const ms=monSpan(per,T); if(ms) return ms;
+  if(per==='tm') return [m0,T]; if(per==='lm'){ const l=addD(m0,-1); return [l.slice(0,8)+'01',l]; }
+  if(per==='all') return [d0,T];
+  if(per==='cus'){ const cl=v=>v<d0?d0:v>T?T:v; let f=cl(okD(pf)?pf:d0), t=cl(okD(pto)?pto:T); if(f>t) [f,t]=[t,f]; return [f,t]; }
+  return [addD(ft,-29),ft]; }
+// the period's normal: the max(28, period length) FINAL days just before it (a not-final period: ending ft)
+function normWin(x,lo,hi){ const L=Math.max(28,nD(lo,hi)), e0=addD(lo,-1), e=e0<x.ft?e0:x.ft; return [addD(e,-(L-1)),e]; }
+// final days of [lo, hi] inside the app's life
+function finals(x,lo,hi){ const a=x.d0&&lo<x.d0?x.d0:lo, b=hi<x.ft?hi:x.ft; return a>b?0:nD(a,b); }
+function perName(k){ if(monOf(k)) return monName(monOf(k)); const p=PERS.find(z=>z[0]===k); return p?p[1]:k; }
+// the period's line: "Today (GA4 · 4 Nov) · not final", "30 days (GA4 · 5 Oct – 3 Nov)"
+function perLine(x,lo,hi){ return `${E(perName(PER))} (GA4 · ${lo===hi?fd(lo):fd(lo)+' – '+fd(hi)}${lo.slice(0,4)!==hi.slice(0,4)?' '+hi.slice(0,4):''})${hi>x.ft?' · not final':''}`; }
+// ---- the period's numbers (JS; the status, its why and the cause are the file's) ----
+const dIx=(x,d)=>Math.round((t0(d)-t0(x.d0))/DAY);
+// the app's day indexes of [lo, hi] on its own calendar (from d0): spanK hands the index only (the period sums and the
+// coverage count by index — no date string per day); span also hands the day's date to the callers that read it
+function spanK(x,lo,hi,f){ if(!x.d0) return; const len=Math.max((x.vis||[]).length,x.td?nD(x.d0,x.td):0), i0=Math.max(0,dIx(x,lo)), i1=Math.min(len-1,dIx(x,hi)); for(let k=i0;k<=i1;k++) f(k); }
+function span(x,lo,hi,f){ spanK(x,lo,hi,k=>f(k,addD(x.d0,k))); }
+const itemV=(x,i,k)=>{ const it=x.items[i]; if(it&&it[1]==='fs'){ const v=(x.vis||[])[k]; return v==null?null:+v; } const r=(x.V||[])[k]; return r&&r[i]!=null?+r[i]:null; };
+const itemA=(x,i,k)=>{ const r=(x.A||[])[k]; return r&&r[i]!=null?+r[i]:null; };
+// a row over [lo, hi]: vAll = visits on every day that has them; v / a = visits and ads on the days where the row's ads
+// exist at that day's grain (n of them — a day GA4 gave only per screen, without the format, has no inline ads); nd = the
+// row's days in the period; nf = not-final days used; rate = ads per 100 visits
+function sumItem(x,i,lo,hi){ let v=0,a=0,n=0,vAll=0,nv=0,nd=0,nf=0;
+  span(x,lo,hi,(k,d)=>{ nd++; const V=itemV(x,i,k), A=itemA(x,i,k); if(V!=null){ vAll+=V; nv++; } if(V==null||A==null) return; v+=V; a+=A; n++; if(d>x.ft) nf++; });
+  return {v:n?v:null, a:n?a:null, n, nd, vAll:nv?vAll:null, nv, nf, rate:n&&v>0?a/v*100:null}; }
+// the row's period vs its normal: score = 100 × rate ÷ normal rate; muted ("short period") under 7 final days; none for All time
+function perScore(x,i,lo,hi,all){ const p=sumItem(x,i,lo,hi), nw=all?null:normWin(x,lo,hi), q=nw?sumItem(x,i,nw[0],nw[1]):null, fin=finals(x,lo,hi);
+  return {p,q,nw,fin,muted:fin<7,score:!all&&p.rate!=null&&q&&q.rate>0?Math.round(100*p.rate/q.rate):null}; }
+// the app's own totals from GA4's truth (date × format, whole on every app): visits, inline / full-screen / not recorded ads
+// — kept per (the app's data object = its build, the period's dates): a sort / chip tap or the 5-minute refresh on the same
+// build never sums the days again (a new build's file is a new object)
+const ASUM=new WeakMap();
+function appSum(x,lo,hi){ const mk=lo+'|'+hi, memo=x&&typeof x==='object'?(ASUM.get(x)||new Map()):null; if(memo&&memo.has(mk)) return memo.get(mk);
+  let v=0,il=0,fl=0,ns=0,n=0,vAll=0,nv=0,nd=0;
+  spanK(x,lo,hi,k=>{ nd++; const V=(x.vis||[])[k], t=(x.ta||[])[k]; if(V!=null){ vAll+=+V; nv++; } if(V==null||!t) return; v+=+V; il+=+t[0]||0; fl+=+t[1]||0; ns+=+t[2]||0; n++; });
+  const r={v:n?v:null, il:n?il:null, fl:n?fl:null, ns:n?ns:null, n, nd, vAll:nv?vAll:null, nv, ir:n&&v>0?il/v*100:null, fr:n&&v>0?fl/v*100:null};
+  if(memo){ memo.set(mk,r); ASUM.set(x,memo); } return r; }
+function appScore(x,lo,hi,all){ const p=appSum(x,lo,hi), nw=all?null:normWin(x,lo,hi), q=nw?appSum(x,nw[0],nw[1]):null, fin=finals(x,lo,hi);
+  const sc=(a,b)=>!all&&a!=null&&b>0?Math.round(100*a/b):null;
+  return {p,q,fin,muted:fin<7,is:sc(p.ir,q&&q.ir),fs:sc(p.fr,q&&q.fr)}; }
+// the status window's numbers (the file judged them: the last 10 final days vs the 28 before)
+function statWin(x){ const W=[addD(x.ft,-9),x.ft], Nw=[addD(x.ft,-37),addD(x.ft,-10)]; return {W,N:Nw}; }
+// ---- coverage: per piece, per day, the worst state of its reads ----
+function dayState(x,ids,k){ let w='w'; for(const id of ids){ const c=String(((x.st||{})[id])||'').charAt(k)||'-', s=c in SRANK?c:'?'; if(SRANK[s]>SRANK[w]) w=s; } return w; }
+function cover(x,ids,lo,hi){ const c={w:0,p:0,t:0,o:0,s:0,x:0,'?':0,'-':0}; let nd=0; spanK(x,lo,hi,k=>{ nd++; c[dayState(x,ids,k)]++; });
+  return {c,nd,whole:nd>0&&c.w===nd}; }
+// how far a piece's history has filled: the newest "oldest" of its reads, done when all are
+function histFrom(x,ids){ let from='', done=true, any=false; for(const id of ids){ const b=(x.bf||{})[id]; if(!Array.isArray(b)){ done=false; continue; } any=true; if(b[0]&&b[0]>from) from=b[0]; if(!b[1]) done=false; }
+  return any?{from,done}:null; }
+function covWhy(x,ids,cv){ const c=cv.c, o=[]; if(!cv.nd) return x.d0?'is period me app ka koi din nahi':'abhi koi din nahi padha';
+  if(c.s) o.push(`GA4 sampled ${c.s} din`); if(c.o) o.push(`GA4 ne rows chhod di ${c.o} din`); if(c.t) o.push(`GA4 thresholding ${c.t} din`);
+  if(c.p) o.push(`GA4 grouped ${c.p} din (${Math.round(c.p/cv.nd*100)}% din)`);
+  if(c.x) o.push(`store file unreadable ${c.x} din (build store ki month file padh nahi saka — ye din gine nahi)`);
+  if(c['-']){ const h=histFrom(x,ids); o.push(h&&h.from&&!h.done?`history ${fdy(h.from)} se (bhar rahi hai) · ${c['-']} din abhi padhe nahi`:`${c['-']} din abhi padhe nahi`); }
+  if(c['?']) o.push(`${c['?']} din aur wajah se not whole`); return o.join(' · '); }
+// the strip: per piece, the visible apps whole on every day of the period (each app on its own calendar) + the rest with
+// why — kept for the same apps (their data objects = this build, their names) and the same period (key, from, to): a sort /
+// chip tap or the 5-minute refresh on the same build never counts the days again
+let COVM=null;
+function coverAll(L){ const pk=PER+'|'+PF+'|'+PTO;
+  if(COVM&&COVM.pk===pk&&COVM.L.length===L.length&&COVM.L.every((r,j)=>r.x===L[j].x&&r.id===L[j].id&&r.name===L[j].name)) return COVM.v;
+  const v=PIECES.map(([code,label,ids])=>{ const bad=[]; let w=0;
+    for(const r of L){ const [lo,hi]=rng(r.x), cv=cover(r.x,ids,lo,hi); if(cv.whole) w++; else bad.push({id:r.id,name:r.name,why:covWhy(r.x,ids,cv)}); }
+    return {code,label,w,m:L.length,bad}; });
+  COVM={pk,L:L.map(r=>({x:r.x,id:r.id,name:r.name})),v}; return v; }
+// ---- names ----
+function fmtOf(raw){ const s=String(raw==null?'':raw).toLowerCase().replace(/[^a-z]/g,'');
+  if(s.includes('rewardedinter')) return 'rewardedinterstitial'; if(s.includes('rewarded')) return 'rewarded';
+  if(s.includes('appopen')||s==='aoa') return 'appopen'; if(s.includes('interstitial')||s.startsWith('inter')) return 'interstitial';
+  if(s.includes('native')) return 'native'; if(s.includes('banner')||s.includes('mrec')||s.includes('adaptive')) return 'banner';
+  if(s===''||s==='notset'||s==='none') return 'notset'; if(s==='other'||s==='fold') return 'fold'; return s; }
+const inl=f=>{ const g=fmtOf(f); return !FULL.has(g)&&g!=='notset'&&g!=='fold'; };
+// a screen's display name: the class without its package and its "Activity" suffix, a soft break before each capital (the
+// full class goes in the title)
+function dispName(c){ let s=String(c==null?'':c); const j=s.lastIndexOf('.'); if(j>=0&&j<s.length-1) s=s.slice(j+1); if(/.Activity$/.test(s)) s=s.slice(0,-8);
+  return E(s).replace(/([a-z0-9])(?=[A-Z])/g,'$1<wbr>'); }
+function itemName(it){ if(!it) return '—'; const k=it[1]; if(k==='s') return dispName(it[0]); if(KINDN[k]) return E(KINDN[k]);
+  if(k==='fs'){ const f=fmtOf(it[2]); return E((FMTN[f]||it[2]||'Full-screen')+' · '+it[0]); } return E(it[0]); }
+const itemTitle=it=>!it?'':it[1]==='s'?it[0]:it[1]==='fs'?(FMTN[fmtOf(it[2])]||it[2])+' · '+it[0]:(KINDN[it[1]]||it[0])+' — '+(KINDW[it[1]]||'');
+const stOf=(x,i)=>{ const s=(x.status||{})[String(i)]; return Array.isArray(s)&&s[0]?s:null; };
+const rankOf=w=>w in RANK?RANK[w]:6;
+function chip(w){ try{ return hubStChip(WDK[w]||'lagu'); }catch(e){ return `<span class="sc-st">${E(w||'N/A')}</span>`; } }
+const judged=it=>it&&(it[1]==='s'||it[1]==='o'||it[1]==='fs');
+function scoreTxt(s,muted,all){ if(all) return '<span class="sc-mut" title="All time pe normal nahi">score —</span>'; if(s==null) return '<span class="sc-mut">score —</span>';
+  if(muted) return `<span class="sc-mut" title="7 se kam final din: score sirf ishaara">score ${s} · short period</span>`;
+  return `score <b class="${s<90?'sc-dn':s>110?'sc-up':''}">${s}</b>`; }
+// ---- the reader's place ----
+// a tap that repaints: the tapped control (sel) goes back to its place on screen, its sideways strip / table box keeps its
+// scroll, the page holds its height while it is redrawn and lets the blank go afterwards (the 2 Nov rule)
+const boxOf=b=>{ try{ return b&&b.closest?b.closest('.sc-x'):null; }catch(e){ return null; } };
+// KEEPING: a keep() repaint is running — paint() leaves the held height alone until unholdLater lets it go (else a
+// shorter repaint near the page's end lets the browser clamp the scroll before the tapped control is put back)
+let KEEPING=false;
+function keep(sel,fn){ const s=EL; let b0=null; try{ b0=s&&s.querySelector?s.querySelector(sel):null; }catch(e){}
+  const y0=b0&&b0.getBoundingClientRect?b0.getBoundingClientRect().top:null, r0=boxOf(b0), sx=r0?+r0.scrollLeft||0:0;
+  hold(s); KEEPING=true; try{ fn(); }finally{ KEEPING=false; }
+  const s2=EL; let b=null; try{ b=y0==null||!s2||!s2.querySelector?null:s2.querySelector(sel); }catch(e){}
+  if(b){ const r=boxOf(b); if(r&&sx) r.scrollLeft=sx; const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) quiet(()=>window.scrollBy(0,dy)); }
+  unholdLater(s2); }
+function hold(r){ if(r&&r.style) r.style.minHeight=Math.max(+r.offsetHeight||0,parseFloat(r.style.minHeight)||0)+'px'; }
+// the held height down to the content's own as far as the page below the window can give it back; the rest as the reader
+// scrolls (the ROI pattern)
+function unhold(r,scroll){ const se=typeof document!=='undefined'&&(document.scrollingElement||document.documentElement), ks=r&&r.children;
+  if(!r||!r.style||!r.style.minHeight||!ks||!se||typeof window==='undefined'||!r.getBoundingClientRect) return 0;
+  const q=r.getBoundingClientRect(), vh=+window.innerHeight||0; let end=0;
+  for(let i=0;i<ks.length;i++){ const k=ks[i]; if(k.hidden) continue; let cs=null; try{ cs=getComputedStyle(k); }catch(e){}
+    if(cs&&(cs.position==='absolute'||cs.position==='fixed'||cs.display==='none')) continue;
+    end=Math.max(end,k.getBoundingClientRect().bottom-q.top+((cs&&parseFloat(cs.marginBottom))||0)); }
+  const y=+window.scrollY||0, room=y>0?Math.max(0,(se.scrollHeight||0)-y-vh):Infinity;
+  const x=scroll?Math.min(room,q.top+q.height-Math.max(vh,q.top+end)):room, h=Math.max(end,q.height-Math.max(0,x));
+  r.style.minHeight=h>end+1?h+'px':''; return r.style.minHeight?1:0; }
+let UNW=false;
+function unholdLater(r){ if(!unhold(r)||UNW||typeof window==='undefined'||!window.addEventListener) return; UNW=true;
+  const on=()=>{ const x=EL; if(x&&x.style&&x.style.minHeight&&unhold(x,true)) return; UNW=false; window.removeEventListener('scroll',on); };
+  window.addEventListener('scroll',on,{passive:true}); }
+// a late file fills its slots: the block being read stays where it is (the FO hold: the first block reaching below the
+// reading line; nothing scrolls at the very top of the page)
+function late(fn){ const s=EL; let an=null, y0=0;
+  try{ if((+window.scrollY||0)>0&&s&&s.children){ const tb=document.querySelector('.topbar'), H=+window.innerHeight||0, top=Math.max(0,tb?tb.getBoundingClientRect().bottom:0);
+    for(const c of Array.from(s.children)){ const r=c.getBoundingClientRect(); if(r.height>0&&r.bottom>Math.max(top,H*0.3)){ an=c; y0=r.top; break; } } } }catch(e){}
+  fn();
+  try{ if(an&&an.isConnected!==false){ const d=an.getBoundingClientRect().top-y0; if(Math.abs(d)>1) quiet(()=>window.scrollBy(0,d)); } }catch(e){} }
+// ---- the period: saved per viewer (scr_per_v1 = {k, f, t}), read once on the first paint ----
+function perRestore(raw,d0,T){ let o=raw; try{ if(typeof raw==='string') o=JSON.parse(raw); }catch(e){ return null; }
+  if(!o||typeof o!=='object') return null; const k=String(o.k==null?'':o.k);
+  if(MON_RE.test(k)){ const m=monOf(k); if(!d0||m<String(d0).slice(0,7)||(T&&m>String(T).slice(0,7))) return null; return {k,f:'',t:''}; }
+  if(!PERK.has(k)) return null; if(k!=='cus') return {k,f:'',t:''};
+  let f=o.f, t=o.t; if(!okD(f)||!okD(t)) return null; if(f>t) [f,t]=[t,f];
+  const cl=v=>d0&&v<d0?d0:T&&v>T?T:v; return {k,f:cl(f),t:cl(t)}; }
+function perLoad(d0,T){ if(PREAD) return; PREAD=true; let raw=null; try{ raw=localStorage.getItem(PER_LS); }catch(e){ return; } if(raw==null) return;
+  const r=perRestore(raw,d0,T); if(r){ PER=r.k; PF=r.f; PTO=r.t; } }
+function perSave(){ try{ localStorage.setItem(PER_LS,JSON.stringify({k:PER,f:PF,t:PTO})); }catch(e){} }
+function perCtl(x){ const [lo,hi]=rng(x), T=x.td, d0=x.d0||x.ft, all=PER==='all';
+  const b=(k,l,on,dis,ar)=>`<button type="button" class="sc-pb" data-sc-per="${E(k)}" aria-pressed="${!!on}"${dis?' disabled':''}${ar?` aria-label="${E(ar)}"`:''}>${E(l)}</button>`;
+  return `<div class="sc-per sc-x" role="group" aria-label="Period">${PERS.map(([k,l])=>b(k,l,PER===k)).join('')}${monMover(PER,T,d0,b)}</div>`
+    +`<div class="sc-cus"><label><span class="sc-cl">From</span> <input type="date" data-sc-pf="1" aria-label="From" value="${lo}" min="${d0}" max="${T}"></label><span class="sc-cd">–</span><label><span class="sc-cl">To</span> <input type="date" data-sc-pto="1" aria-label="To" value="${hi}" min="${d0}" max="${T}"></label><span class="sc-faint sc-ch">${PER==='cus'?'Custom':'tarikh badlein = Custom'}</span></div>`
+    +`<div class="sc-pl">${perLine(x,lo,hi)}${all?' · <span class="sc-faint">All time pe normal nahi — score ke liye koi aur period chunein</span>':''}</div>`; }
+// ---- All apps ----
+function apps(){ return ALL?Object.keys(ALL.apps).filter(vis).map(id=>({id,x:ALL.apps[id],name:nameOf(id)})).filter(r=>r.x&&typeof r.x==='object'):[]; }
+function refCal(L){ let ft='', td='', d0=''; for(const r of L){ if(!okD(r.x.ft)) continue; if(r.x.ft>ft) ft=r.x.ft; if((r.x.td||'')>td) td=r.x.td; if(r.x.d0&&(!d0||r.x.d0<d0)) d0=r.x.d0; } return {ft,td:td||(ft?addD(ft,2):''),d0:d0||ft}; }
+function appRow(r){ const a=Array.isArray(r.x.app)?r.x.app:[], all=PER==='all';
+  if(!r.x.d0||!okD(r.x.ft)) return {r,lo:'',hi:'',all,s:{p:{},muted:true,is:null,fs:null},st:a[0]||null,why:a[1]||'',wn:+a[2]||0,an:+a[3]||0,v:null,ir:null,fr:null};
+  const [lo,hi]=rng(r.x), s=appScore(r.x,lo,hi,all);
+  return {r,lo,hi,all,s,st:a[0]||null,why:a[1]||'',wn:+a[2]||0,an:+a[3]||0,v:s.p.vAll,ir:s.p.ir,fr:s.p.fr}; }
+function sortApps(rows){ const k=SORT.k, d=SORT.dir, val=z=>k==='rank'?null:k==='name'?z.r.name:z[k];
+  return rows.slice().sort((a,b)=>{ if(k==='rank') return d*(rankOf(a.st)-rankOf(b.st)||b.wn-a.wn)||b.an-a.an||(b.v||0)-(a.v||0)||a.r.name.localeCompare(b.r.name);
+    const va=val(a), vb=val(b); if(va==null&&vb==null) return (b.v||0)-(a.v||0); if(va==null) return 1; if(vb==null) return -1;
+    return (typeof va==='string'?d*va.localeCompare(vb):d*(va-vb))||(b.v||0)-(a.v||0); }); }
+function histCell(x){ const h=histFrom(x,['v','a']); const t=Object.keys(x.bf||{}).map(k=>`${k}: ${(x.bf[k]||[])[0]||'—'}${(x.bf[k]||[])[1]?' ✓':''}`).join(' · ');
+  return h&&h.from?`<span title="${E(t)}">from ${fdy(h.from)} ${h.done?'✓':'⏳'}</span>`:(x.d0?`from ${fdy(x.d0)}`:'—'); }
+function covHtml(L){ const C=coverAll(L), op=C.find(c=>c.code===COVP);
+  return `<div class="sc-cov sc-x" role="group" aria-label="Data coverage">${C.map(c=>`<button type="button" class="sc-cv${c.w===c.m?' sc-cvok':''}" data-sc-cov="${c.code}" aria-pressed="${COVP===c.code}"><span>${E(c.label)}</span> <b>${c.w}/${c.m}</b></button>`).join('')}</div>`
+    +`<p class="sc-sub">whole · this period — chip pe tap = jo apps whole nahi, unki wajah</p>`
+    +(op?`<div class="sc-covl" id="sc-covl"><div class="sc-covh"><b>${E(op.label)}</b> · ${op.w}/${op.m} apps whole</div>${op.bad.length?op.bad.map(b=>`<div class="sc-covr"><span class="sc-an">${appIconId(b.id,b.name,20)}<span>${E(b.name)}</span></span><small>${E(b.why)}</small></div>`).join(''):'<div class="sc-covr">✅ Sab apps whole</div>'}</div>`:''); }
+function allTable(rows){ const cols=[['rank','App · status'],['wn','Worse'],['an','Watch'],['v','Visits'],['ir','Inline ads / 100'],['fr','Full-screen / 100']];
+  const head=cols.map(([k,l])=>`<th aria-sort="${SORT.k===k?(SORT.dir>0?'ascending':'descending'):'none'}"><button type="button" data-sc-sort="${k}">${l}</button></th>`).join('')+'<th>History</th>';
+  const body=rows.map(z=>`<tr class="sc-clk" data-sc-app="${E(z.r.name)}" tabindex="0"><td class="sc-nm"><span class="sc-an">${appIconId(z.r.id,z.r.name,22)}<span>${E(z.r.name)}</span></span><span class="sc-stl">${chip(z.st)}</span>${z.why?`<small>${E(z.why)}</small>`:''}</td>`
+    +`<td>${z.wn||'—'}</td><td>${z.an||'—'}</td><td>${N(z.v)}</td><td><b>${R(z.ir)}</b><small>${scoreTxt(z.s.is,z.s.muted,z.all)}</small></td><td><b>${R(z.fr)}</b><small>${scoreTxt(z.s.fs,z.s.muted,z.all)}</small></td><td>${histCell(z.r.x)}</td></tr>`).join('')
+    ||'<tr><td colspan="7" class="sc-faint">Koi app nahi</td></tr>';
+  return `<div class="sc-tw sc-x" id="sc-atw"><table class="sc-t"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`; }
+function allHtml(){ const L=apps(); if(!L.length) return '<div class="card sc-card"><p class="sc-note">Abhi kisi app ka Screens data nahi aaya — history bhar rahi hai.</p></div>';
+  const ref=refCal(L); if(!ref.ft) return '<div class="card sc-card"><p class="sc-note">Abhi kisi app ka Screens data nahi aaya — history bhar rahi hai.</p></div>';
+  perLoad(ref.d0,ref.td); const rows=sortApps(L.map(appRow));
+  return `<div class="card sc-card sc-stk" id="sc-stk">${perCtl(ref)}</div>`
+    +`<div class="card sc-card"><div class="ct"><h3>Data coverage</h3><span class="sc-faint">har piece kitne apps pe poora (whole) aaya</span></div>${covHtml(L)}</div>`
+    +`<div class="card sc-card"><div class="ct"><h3>All apps</h3><span class="sc-faint">status = pichhle 10 final din vs usse pehle ke 28 · app pe tap = us app ke screens · column pe tap = sort</span></div>${allTable(rows)}</div>`
+    +`<p class="sc-note">GA4 data till ${fdy(ref.ft)} (aakhri 2 din GA4 me abhi badalte hain). <b>Inline ads / 100</b> = banner + native har 100 screen visits pe; <b>Full-screen / 100</b> = interstitial / app open / rewarded. Score = is period ka rate ÷ normal (period se pehle ke max(28, period) final din) × 100.</p>`; }
+// ---- one app ----
+function tile(l,v,sub,cls){ return `<div class="sc-k${cls?' '+cls:''}"><div class="sc-kl">${l}</div><div class="sc-kv">${v}</div><div class="sc-ks">${sub}</div></div>`; }
+function tilesHtml(x,lo,hi){ const all=PER==='all', s=appScore(x,lo,hi,all), a=Array.isArray(x.app)?x.app:[], p=s.p;
+  const basis=p.n<p.nv?` · ${p.n}/${p.nd} days`:'';
+  return `<div class="sc-tiles sc-x">${tile('Visits',N(p.vAll),`${p.nv<p.nd?p.nv+' of '+p.nd:p.nv} days`)}${tile('Inline ads / 100',R(p.ir),scoreTxt(s.is,s.muted,all)+basis)}`
+    +`${tile('Full-screen / 100',R(p.fr),scoreTxt(s.fs,s.muted,all)+basis)}${tile('Status',`${+a[2]||0} Worse · ${+a[3]||0} Watch`,'pichhle 10 final din vs 28 pehle','sc-kst')}</div>`; }
+function attnHtml(x){ const items=x.items||[], w=statWin(x), rows=[];
+  items.forEach((it,i)=>{ const s=stOf(x,i); if(s&&judged(it)) rows.push({i,it,s}); });
+  const bad=rows.filter(r=>r.s[0]==='Worse'||r.s[0]==='Watch').sort((a,b)=>rankOf(a.s[0])-rankOf(b.s[0])||(+a.s[2]||0)-(+b.s[2]||0)).slice(0,5);
+  const one=r=>{ const qn=sumItem(x,r.i,w.N[0],w.N[1]), qw=sumItem(x,r.i,w.W[0],w.W[1]);
+    return `<div class="sc-at">${chip(r.s[0])}<span class="sc-atn" title="${E(itemTitle(r.it))}">${itemName(r.it)}</span><span class="sc-atr">ads/100 ${R(qn.rate)} → ${R(qw.rate)} (${PC(qn.rate,qw.rate)})</span>${r.s[3]?`<span class="sc-atc">${E(r.s[3])}</span>`:''}<button type="button" class="sc-lnk" data-sc-open="${r.i}">Details ▸</button></div>`; };
+  if(bad.length) return `<div class="card sc-card" id="sc-attn"><div class="ct"><h3>Needs attention</h3><span class="sc-faint">pichhle 10 final din (${fd(w.W[0])} – ${fd(w.W[1])}) vs usse pehle ke 28</span></div>${bad.map(one).join('')}</div>`;
+  const good=rows.filter(r=>r.s[0]==='Better').slice(0,5), fine=rows.some(r=>r.s[0]==='Normal'||r.s[0]==='Better'), a=Array.isArray(x.app)?x.app:[];
+  if(!fine) return `<div class="card sc-card" id="sc-attn"><div class="ct"><h3>Needs attention</h3></div><p class="sc-note">Abhi koi screen judge nahi ho saki${a[1]?': '+E(a[1]):' (data kam ya GA4 se whole nahi)'} — numbers neeche hain, status nahi.</p></div>`;
+  return `<div class="card sc-card" id="sc-attn"><div class="ct"><h3>Needs attention</h3></div><p class="sc-ok">✅ Sab screens normal</p>${good.map(one).join('')}</div>`; }
+function miniHtml(x){ const T=x.td, Y=addD(T,-1), s7=[addD(x.ft,-6),x.ft], nw=normWin(x,s7[0],s7[1]);
+  const c=[appSum(x,T,T),appSum(x,Y,Y),appSum(x,s7[0],s7[1]),appSum(x,nw[0],nw[1])];
+  return `<div class="card sc-card"><div class="ct"><h3>Today · Yesterday · 7 days · Normal</h3></div><div class="sc-tw sc-x"><table class="sc-t sc-mini"><thead><tr><th></th><th>Today <small>${fd(T)}</small></th><th>Yesterday <small>${fd(Y)}</small></th><th>7 days</th><th>Normal <small>28 days before</small></th></tr></thead><tbody>`
+    +`<tr><td>Visits <small>/ day</small></td>${c.map((z,j)=>`<td>${N(z.vAll!=null?z.vAll/(j<2?1:Math.max(1,z.nv)):null)}</td>`).join('')}</tr>`
+    +`<tr><td>Inline ads / 100</td>${c.map(z=>`<td><b>${R(z.ir)}</b></td>`).join('')}</tr>`
+    +`<tr><td>Full-screen / 100</td>${c.map(z=>`<td>${R(z.fr)}</td>`).join('')}</tr></tbody></table></div>`
+    +`<p class="sc-note">Today aur Yesterday abhi final nahi (GA4 data till ${fdy(x.ft)}). Normal = 7 days se pehle ke 28 final din.</p></div>`; }
+// the Screens / Full-screen tables: status chip + its score under the name (sticky column), then the period's numbers
+function tableRows(x,lo,hi,seg){ const items=x.items||[], all=PER==='all', av=appSum(x,lo,hi).vAll, idx=[];
+  items.forEach((it,i)=>{ if(seg==='f'?it[1]==='fs':it[1]!=='fs') idx.push(i); });
+  return idx.map(i=>{ const it=items[i], ps=perScore(x,i,lo,hi,all), st=stOf(x,i); return {i,it,ps,st,v:ps.p.vAll,a:ps.p.a,r:ps.p.rate,n:ps.q?ps.q.rate:null,sc:ps.score,sh:av>0&&ps.p.vAll!=null?ps.p.vAll/av:null}; }); }
+function sortItems(rows){ const k=TS.k, d=TS.dir; return rows.slice().sort((a,b)=>{
+  if(k==='st') return d*(rankOf(a.st&&judged(a.it)?a.st[0]:null)-rankOf(b.st&&judged(b.it)?b.st[0]:null))||(b.v||0)-(a.v||0);
+  const va=k==='name'?String(a.it[0]):a[k], vb=k==='name'?String(b.it[0]):b[k]; if(va==null&&vb==null) return (b.v||0)-(a.v||0); if(va==null) return 1; if(vb==null) return -1;
+  return (typeof va==='string'?d*va.localeCompare(vb):d*(va-vb))||(b.v||0)-(a.v||0); }); }
+// the screens shown at once: the top ones covering 90 % of the period's screen views (+ every Worse / Watch row; the
+// unjudged Not recorded / Ad screens / GA4 grouped rows always); the rest behind "Show N more screens"
+function topSplit(rows){ const sc=rows.filter(z=>z.it[1]==='s'||z.it[1]==='o').sort((a,b)=>(b.v||0)-(a.v||0)), tot=sc.reduce((s,z)=>s+(z.v||0),0), top=new Set(); let c=0;
+  for(const z of sc){ if(tot>0&&c>=0.9*tot) break; top.add(z.i); c+=z.v||0; }
+  for(const z of rows) if(!(z.it[1]==='s'||z.it[1]==='o')||(z.st&&(z.st[0]==='Worse'||z.st[0]==='Watch'))) top.add(z.i);
+  return top; }
+function whyNull(x,it,lo,hi){ const id=it[1]==='fs'?'w':'a', cv=cover(x,[id],lo,hi); if(!cv.nd) return 'is period me din nahi';
+  if(cv.c.w+cv.c.p===cv.nd) return it[1]==='fs'?'units ka data nahi':'format not split (GA4 ne sirf screen-wise diya)'; return covWhy(x,[id],cv); }
+function tableHtml(x,lo,hi){ const seg=SEG, all=PER==='all', rows=sortItems(tableRows(x,lo,hi,seg)), top=seg==='s'?topSplit(rows):null, shown=top&&!MORE?rows.filter(z=>top.has(z.i)):rows, more=rows.length-shown.length;
+  const th=(k,l)=>`<th aria-sort="${TS.k===k?(TS.dir>0?'ascending':'descending'):'none'}"><button type="button" data-sc-tsort="${k}">${l}</button></th>`;
+  const head=seg==='s'?th('st','Screen')+th('v','Visits')+th('a',x.allf?'Ads (all formats)':'Inline ads')+th('r','Ads / 100')+th('n','Normal')+th('sc','Score')+th('sh','Share of visits')+'<th>Cause</th>'
+    :th('st','Trigger')+th('a','Full-screen ads')+th('r','Per 100 app visits')+th('n','Normal')+th('sc','Score')+'<th>Cause</th>';
+  const tr=z=>{ const it=z.it, p=z.ps.p, jd=judged(it), st=z.st, basis=p.n&&p.n<p.nv?`<small>${N(p.v)} visits · ${p.n}/${p.nd} days</small>`:'', nul=p.n?'':`<small>${E(whyNull(x,it,lo,hi))}</small>`;
+    const nm=`<td class="sc-nm" title="${E(itemTitle(it))}"><span class="sc-n">${itemName(it)}</span><span class="sc-stl">${jd&&st?chip(st[0])+(st[2]!=null?` <small class="sc-ssc">${E(st[2])}</small>`:''):`<small class="sc-faint">${jd?'—':'not judged'}</small>`}</span>${jd&&st&&st[1]?`<small>${E(st[1])}</small>`:''}</td>`;
+    const tail=`<td>${R(z.n)}</td><td>${scoreTxt(z.sc,z.ps.muted,all)}</td>`;
+    return `<tr class="sc-clk${OPEN===z.i?' sc-on':''}" data-sc-open="${z.i}" aria-expanded="${OPEN===z.i}" tabindex="0">${nm}`
+      +(seg==='s'?`<td>${N(z.v)}</td><td>${N(z.a)}</td><td><b>${R(z.r)}</b>${basis}${nul}</td>${tail}<td>${P1(z.sh)}</td>`:`<td>${N(z.a)}</td><td><b>${R(z.r)}</b>${basis}${nul}</td>${tail}`)
+      +`<td class="sc-cz">${jd&&st&&st[3]?E(st[3]):'—'}</td></tr>`; };
+  const nf=rows.length;
+  return `<div class="sc-tw sc-x" id="sc-ttw"><table class="sc-t"><thead><tr>${head}</tr></thead><tbody>${shown.map(tr).join('')||`<tr><td colspan="8" class="sc-faint">${seg==='f'?'Is app ke full-screen units ka trigger data nahi':'Koi screen nahi'}</td></tr>`}</tbody></table></div>`
+    +(seg==='s'&&(more>0||MORE)&&nf?`<button type="button" class="sc-more" data-sc-more="1">${MORE?'Show fewer screens':`Show ${more} more screens`}</button>`:''); }
+function segHtml(x,lo,hi){ const n=k=>(x.items||[]).filter(it=>k==='f'?it[1]==='fs':it[1]!=='fs').length;
+  return `<div class="card sc-card" id="sc-tcard"><div class="sc-seg sc-x" role="group" aria-label="Table">${[['s','Screens'],['f','Full-screen']].map(([k,l])=>`<button type="button" data-sc-seg="${k}" aria-pressed="${SEG===k}">${l} <small>${n(k)}</small></button>`).join('')}</div>`
+    +`<p class="sc-sub">${SEG==='s'?'Inline ads (banner + native) har 100 screen visits pe · row pe tap = details':'Full-screen ads har trigger pe (unit names se) · har 100 app visits pe · row pe tap = details'}</p>`
+    +`<div id="sc-tb">${tableHtml(x,lo,hi)}</div></div>`; }
+// ---- the drill-down (its own card after the table card) ----
+const SECS=[['ov','Overview'],['un','Units'],['ver','Versions'],['nvr','New vs returning'],['cc','Countries'],['eng','Engagement'],['x','Own ad events'],['rep','Report']];
+function ddHtml(x,id,lo,hi){ if(OPEN==null||!(x.items||[])[OPEN]) return ''; const it=x.items[OPEN], st=stOf(x,OPEN), ps=perScore(x,OPEN,lo,hi,PER==='all');
+  return `<div class="card sc-card sc-dd" id="sc-dd"><div class="sc-ddh"><div class="sc-ddt"><b title="${E(itemTitle(it))}">${itemName(it)}</b><span class="sc-ddc">${it[1]==='s'?E(it[0]):''}</span></div>`
+    +`<span class="sc-dds">${judged(it)&&st?chip(st[0])+(st[2]!=null?` <small>status score ${E(st[2])}</small>`:'')+(st[1]?` <small>${E(st[1])}</small>`:''):'<small class="sc-faint">not judged</small>'} · ${scoreTxt(ps.score,ps.muted,PER==='all')}</span>`
+    +`<button type="button" class="sc-back" data-sc-close="1">✕ Close</button></div>`
+    +`<div class="sc-seg sc-x" role="group" aria-label="Section">${SECS.map(([k,l])=>`<button type="button" data-sc-sec="${k}" aria-pressed="${SEC===k}">${l}</button>`).join('')}</div>`
+    +`<div id="sc-ddb">${secHtml(x,id,OPEN,lo,hi)}</div></div>`; }
+function waitHtml(n){ return fErr(n)?`<p class="sc-note">⚠️ Data load nahi hua. <button type="button" class="sc-lnk" data-sc-retry="${E(n)}">Try again</button></p>`:'<p class="sc-note">⏳ Loading data…</p>'; }
+// a section's file(s) not here: which = 'f2' (file 2) · 'l' (scr_l; file 2's failure shows while scr_l has not come) ·
+// '2l' (needs both: whichever failed shows its error + Try again — never "Loading" for good while file 2 failed)
+function fileGate(id,which){ const a=apPtr(id); if(!a) return '<p class="sc-note">Is app ki detail file is build me nahi bani.</p>';
+  return waitHtml(which==='f2'||fErr(f2Name(a))&&(which==='2l'||!fRaw(lName(a)))?f2Name(a):lName(a)); }
+// a display item's row id in file 2's rows / the reports: a top screen "s<class index>", a trigger "t<group>" (the other
+// display items are not judged)
+function rowId(f2,x,i){ const it=x.items[i]; if(!it||!f2) return null; if(it[1]==='fs'){ const f0=(x.items||[]).findIndex(z=>z[1]==='fs'); return 't'+(i-f0); }
+  if(it[1]!=='s') return null; const si=(f2.screens||[]).findIndex(c=>c&&c[0]===it[0]); return si<0?null:'s'+si; }
+// the units of a trigger item (file 2's trig: [format, label, [unit indexes]])
+function trigUnits(f2,x,i){ const f0=(x.items||[]).findIndex(z=>z[1]==='fs'), t=(f2.trig||[])[i-f0]; return t&&Array.isArray(t[2])?t[2]:[]; }
+// a display item's GA4 classes (indexes into file 2's screens)
+function clsSet(f2,x,i){ const it=x.items[i], S=new Set(); if(!f2||!it||it[1]==='fs') return S; const top=new Set((x.items||[]).filter(z=>z[1]==='s').map(z=>z[0]));
+  (f2.screens||[]).forEach((c,si)=>{ const k=c&&c[1]; if(it[1]==='s'?(k==='s'&&c[0]===it[0]):it[1]==='o'?(k==='s'&&!top.has(c[0])):k===it[1]) S.add(si); }); return S; }
+function fDays(f,x,lo,hi,fn){ const d0=f&&(f.d0||x.d0); if(!d0) return; const ds=(f.days||[]); const i0=Math.max(0,dIx({d0},lo)), i1=Math.min(ds.length-1,dIx({d0},hi)); for(let k=i0;k<=i1;k++) fn(ds[k],addD(d0,k),k); }
+// the item's days of [lo, hi]: [day, visits, ads, why not]
+function itemDays(x,i,lo,hi){ const it=x.items[i], out=[]; span(x,lo,hi,(k,d)=>{ const v=itemV(x,i,k), a=itemA(x,i,k); let why='';
+  if(v==null) why=STW[String((x.st||{}).v||'').charAt(k)||'-']||'visits nahi'; else if(a==null){ const c=String((x.st||{})[it[1]==='fs'?'w':'a']||'').charAt(k)||'-'; why=c==='w'||c==='p'?(it[1]==='fs'?'units ka data nahi':'format not split (GA4 ne sirf screen-wise diya)'):(STW[c]||'not whole'); }
+  out.push([d,v,a,why]); }); return out; }
+function secHtml(x,id,i,lo,hi){ CH=null; const s=SEC;
+  if(s==='ov') return ovSec(x,id,i,lo,hi); if(s==='un') return unSec(x,id,i,lo,hi); if(s==='ver') return verSec(x,id,i,lo,hi);
+  if(s==='nvr') return nvrSec(x,id,i,lo,hi); if(s==='cc') return ccSec(x,id,i,lo,hi); if(s==='eng') return engSec(x,id,i,lo,hi);
+  if(s==='x') return xSec(x,id,i,lo,hi); return repSec(x,id,i); }
+function termsHtml(row){ if(!row) return ''; let T=row.terms; if(T&&!Array.isArray(T)&&typeof T==='object') T=Object.entries(T); T=Array.isArray(T)?T:[];
+  const t=T.map(z=>Array.isArray(z)?[TERMN[z[0]]||z[0],z[1]]:[z&&z.label,z&&z.pct]).filter(z=>z[0]!=null&&z[1]!=null);
+  return `${row.cause?`<p class="sc-note">Cause: <b>${E(row.cause)}</b></p>`:''}${t.length?`<div class="sc-tw sc-x"><table class="sc-t sc-terms"><thead><tr><th>Part of the change</th><th>% of normal rate</th></tr></thead><tbody>${t.map(z=>`<tr><td>${E(z[0])}</td><td class="${ok(+z[1])&&+z[1]<=-10?'sc-dn':''}">${ok(+z[1])?(+z[1]>0?'+':+z[1]<0?'−':'')+Math.abs(Math.round(+z[1]*10)/10)+'%':'—'}</td></tr>`).join('')}</tbody></table></div>`:''}`
+    +`${row.fbd||row.first_bad?`<p class="sc-note">First bad day: <b>${fdy(row.fbd||row.first_bad)}</b> (us din se rate normal ke 90% se neeche hi raha)</p>`:''}`; }
+function ovSec(x,id,i,lo,hi){ const ps=perScore(x,i,lo,hi,PER==='all'), f2=f2Of(id), rid=rowId(f2,x,i), row=f2&&f2.rows&&rid?(f2.rows[rid]||null):null;
+  CH=chartModel(itemDays(x,i,lo,hi),ps.q?ps.q.rate:null,x.ft);
+  const all=itemDays(x,i,x.d0,x.td).reverse(), mo=new Map(); for(const r of all){ const m=r[0].slice(0,7); if(!mo.has(m)) mo.set(m,[]); mo.get(m).push(r); }
+  const rate=(v,a)=>v>0&&a!=null?a/v*100:null;
+  const monthRows=[...mo.entries()].map(([m,rs])=>{ let v=0,a=0,n=0,va=0; for(const r of rs){ if(r[1]!=null) va+=r[1]; if(r[1]!=null&&r[2]!=null){ v+=r[1]; a+=r[2]; n++; } }
+    return `<tr><td class="sc-nm">${E(fmtMon(m))} <small>· ${rs.length}d</small></td><td>${N(va)}</td><td>${n?N(a):'—'}</td><td><b>${n?R(rate(v,a)):'—'}</b>${n&&n<rs.length?`<small>${n}/${rs.length} days</small>`:''}</td></tr>`; }).join('');
+  const dayRows=all.map(r=>`<tr><td class="sc-nm${r[0]>x.ft?' sc-nf':''}">${fdy(r[0])}${r[0]>x.ft?' · not final':''}</td><td>${N(r[1])}</td><td>${N(r[2])}</td><td><b>${R(rate(r[1],r[2]))}</b>${r[3]?`<small>${E(r[3])}</small>`:''}</td></tr>`).join('');
+  return `<div class="sc-chart" id="sc-chart"></div><div class="sc-lg"><span class="sc-la">Ads / 100 visits</span><span class="sc-lb">Visits (bars)</span><span class="sc-lc">Normal</span>${CH&&CH.by!=='d'?`<span class="sc-faint">${CH.by==='w'?'har hafte':'har mahine'} ka rate = Σ ads ÷ Σ visits</span>`:''}</div>`
+    +(f2?termsHtml(row):(apPtr(id)?'<p class="sc-note">⏳ Cause ki details aa rahi hain…</p>':''))
+    +`<h4 class="sc-h4">Every month</h4><div class="sc-tw sc-x"><table class="sc-t"><thead><tr><th>Month</th><th>Visits</th><th>Ads</th><th>Ads / 100</th></tr></thead><tbody>${monthRows}</tbody></table></div>`
+    +`<h4 class="sc-h4">Every day <small class="sc-faint">sabse naya upar</small></h4><div class="sc-tw sc-x sc-tall" id="sc-dtw"><table class="sc-t"><thead><tr><th>Day</th><th>Visits</th><th>Ads</th><th>Ads / 100</th></tr></thead><tbody>${dayRows}</tbody></table></div>`; }
+// AdMob per unit (file 2's "adm": [req, matched, imp] per GA4 day, blended from the two IST days by the build) over [lo, hi]
+function admSum(f2,x,ui,lo,hi){ const A=(f2.adm||{})[ui]; if(!Array.isArray(A)) return null; let rq=0,ma=0,im=0,n=0;
+  const d0=f2.d0||x.d0, i0=Math.max(0,dIx({d0},lo)), i1=Math.min(A.length-1,dIx({d0},hi));
+  for(let k=i0;k<=i1;k++){ const v=A[k]; if(!v) continue; rq+=+v[0]||0; ma+=+v[1]||0; im+=+v[2]||0; n++; }
+  return n?{rq,ma,im,n,rd:rq/n,fill:rq>0?ma/rq:null,show:ma>0?im/ma:null}:null; }
+function unSec(x,id,i,lo,hi){ const f2=f2Of(id); if(!f2) return fileGate(id,'f2');
+  const it=x.items[i], fs=it[1]==='fs', S=clsSet(f2,x,i), U=f2.units||[], nw=normWin(x,lo,hi), g={}, gw={}; let dFu=0,dNo=0;
+  fDays(f2,x,lo,hi,r=>{ if(!r) return; for(const q of r.w||[]) gw[q[0]]=(gw[q[0]]||0)+(+q[1]||0); if(fs) return; const a=r.a; if(!a) return;
+    if(a.g==='fu'){ dFu++; for(const q of a.r||[]){ const u=U[q[1]]; if(S.has(q[0])&&u&&(x.allf||inl(u[1]))) g[q[1]]=(g[q[1]]||0)+(+q[2]||0); } } else dNo++; });
+  const tu=fs?trigUnits(f2,x,i):[], uis=fs?(tu.length?tu:U.map((u,ui)=>ui).filter(ui=>fmtOf(U[ui][1])===fmtOf(it[2])&&String(U[ui][5]||'')===String(it[0]))):Object.keys(g).map(Number);
+  const hasAdm=f2.adm&&Object.keys(f2.adm).length>0;
+  const rows=uis.map(ui=>{ const u=U[ui]||[], gr=fs?gw[ui]:g[ui], ap=admSum(f2,x,ui,lo,hi), an=admSum(f2,x,ui,nw[0],nw[1]), tie=ap&&ap.im>0&&gw[ui]!=null?gw[ui]/ap.im:null;
+    const ids=Array.isArray(u[2])?u[2]:[];
+    return `<tr><td class="sc-nm"><span class="sc-n">${E(u[0]||'(unit not recorded)')}</span>${u[3]&&u[3]!==u[0]?`<small>AdMob: ${E(u[3])}</small>`:''}${ids.length?`<small class="sc-id">${ids.map(E).join(', ')}</small>`:'<small>Not in AdMob</small>'}</td>`
+      +`<td>${E(FMTN[fmtOf(u[1])]||u[1]||'—')}</td><td>${N(gr)}</td>${fs?'':`<td>${gw[ui]>0&&gr!=null?P1(gr/gw[ui]):'—'}</td>`}`
+      +`<td>${N(ap&&ap.rd)} <small>normal ${N(an&&an.rd)}</small></td><td>${P1(ap&&ap.fill)} <small>${P1(an&&an.fill)}</small></td><td>${P1(ap&&ap.show)} <small>${P1(an&&an.show)}</small></td><td>${tie!=null?(Math.round(tie*100)/100).toFixed(2):'—'}</td></tr>`; }).join('');
+  return (!hasAdm?'<p class="sc-note">Is app ka AdMob data (placements) nahi — requests / fill / show yahan nahi.</p>':'')
+    +(!fs&&!dFu&&dNo?`<p class="sc-note">Units not split: is period ke ${dNo} din GA4 ne unit-wise nahi diya.</p>`:(!fs&&dNo?`<p class="sc-note">${dNo} din units not split (unke bina ginti).</p>`:''))
+    +(rows?`<div class="sc-tw sc-x"><table class="sc-t"><thead><tr><th>Unit</th><th>Format</th><th>GA4 ads${fs?'':' (this row)'}</th>${fs?'':'<th>Share of the unit\'s ads</th>'}<th>Requests / day</th><th>Fill</th><th>Show</th><th>GA4 ÷ AdMob</th></tr></thead><tbody>${rows}</tbody></table></div>`
+      :'<p class="sc-note">Is period me is row pe koi unit nahi.</p>')
+    +czUnits(f2,x,i)
+    +'<p class="sc-note">AdMob ka din IST me, GA4 ka UTC me: build ne har GA4 din = 77% us IST din + 23% agla IST din milaya (sirf poore AdMob din). Chhota number = normal (period se pehle).</p>'; }
+// the cause's own unit numbers (the build's, status window W vs normal N): [ui, req/day W, N, fill W, N, show W, N, tie W, N]
+function czUnits(f2,x,i){ const rid=rowId(f2,x,i), row=rid&&f2.rows?f2.rows[rid]:null, U=f2.units||[], us=row&&Array.isArray(row.units)?row.units:[]; if(!us.length) return '';
+  const f2d=v=>ok(v)?(Math.round(v*100)/100).toFixed(2):'—';
+  return `<h4 class="sc-h4">Units in the status window <small class="sc-faint">pichhle 10 final din vs 28 pehle (cause inhi se)</small></h4><div class="sc-tw sc-x"><table class="sc-t"><thead><tr><th>Unit</th><th>Requests / day</th><th>Fill</th><th>Show</th><th>GA4 ÷ AdMob</th></tr></thead><tbody>`
+    +us.map(q=>{ const u=U[q[0]]||[]; return `<tr><td class="sc-nm"><span class="sc-n">${E(u[0]||u[3]||'(unit)')}</span></td><td>${N(q[1])} <small>normal ${N(q[2])}</small></td><td>${P1(q[3])} <small>${P1(q[4])}</small></td><td>${P1(q[5])} <small>${P1(q[6])}</small></td><td>${f2d(q[7])} <small>${f2d(q[8])}</small></td></tr>`; }).join('')+'</tbody></table></div>'; }
+// a layer over [lo, hi] for a display item from the month sums (whole months) and the day shards (the partial edge months,
+// loaded on demand): {it: {dim: [views, inline, full]}, app: {…}, wait, fail, miss}
+function layerPeriod(x,id,i,k,lo,hi){ const L=lOf(id), out={it:{},app:{},wait:[],fail:[],miss:[],big:[],bad:[]}; if(!L) return null; const it=x.items[i], fs=it[1]==='fs', a=apPtr(id);
+  const add=(o,dim,v,il,fl)=>{ const e=o[dim]||(o[dim]=[null,null,null]); if(v!=null) e[0]=(e[0]||0)+(+v); if(il!=null) e[1]=(e[1]||0)+(+il); if(fl!=null) e[2]=(e[2]||0)+(+fl); };
+  const T=x.td, d0=x.d0||lo; let m=lo.slice(0,7); const mEnd=hi.slice(0,7);
+  for(;m<=mEnd;m=monAdd(m,1)){ const ms=m+'-01'<d0?d0:m+'-01', me0=monLastDay(m), me=me0>T?T:me0;
+    if(lo<=ms&&hi>=me){ const rows=((L[{r:'ver_m',c:'cc_m'}[k]]||{})[m]);   // the build's whole-month sums (ver_m / cc_m) if(!Array.isArray(rows)){ out.miss.push(m); continue; }
+      for(const r of rows){ if(+r[1]===i) add(out.it,r[0],r[2],x.allf?(+r[3]||0)+(+r[4]||0):r[3],r[4]); add(out.app,r[0],r[2],r[3],r[4]); } continue; }
+    const ym=m.replace('-',''), v=L.shards&&L.shards[k]?L.shards[k][ym]:null, inL=o=>!!(o&&Array.isArray(o[k])&&o[k].includes(ym));
+    if(v==null){ (inL(L.big)?out.big:inL(L.failed)?out.bad:out.miss).push(m); continue; }
+    const sh=a?fRaw(shName(a,k,ym)):null; if(!sh){ (fErr(shName(a,k,ym))?out.fail:out.wait).push(m); continue; }
+    let J=(sh.items||[]).findIndex(z=>Array.isArray(z)?z[0]===it[0]&&(z[1]==null||z[1]===it[1]):z===it[0]); if(J<0&&!fs) J=i;
+    const dm=sh.dims||[], dn=k=>dm[k]!=null?dm[k]:k;
+    (sh.days||[]).forEach((r,j)=>{ const d=addD(m+'-01',j); if(!r||d<lo||d>hi) return; const V=r.V||{}, A=r.A||{};
+      if(V.st==='w'||V.st==='p') for(const q of V.r||[]){ if(q.length>=3){ if(!fs&&+q[1]===J) add(out.it,dn(q[0]),q[2]); add(out.app,dn(q[0]),q[2]); } else add(out.app,dn(q[0]),q[1]); }
+      if(A.st==='w'||A.st==='p') for(const q of A.r||[]){ if(A.g==='cf'){ if(!fs&&+q[1]===J) add(out.it,dn(q[0]),null,x.allf?(+q[2]||0)+(+q[3]||0)+(+q[4]||0):q[2]); add(out.app,dn(q[0]),null,q[2],q[3]); }
+        else if(A.g==='f') add(out.app,dn(q[0]),null,q[1],q[2]); } }); }
+  return out; }
+function dimName(k,dim){ const s=String(dim==null?'':dim); if(s==='(other)'||s==='other') return 'Other (GA4 grouped)'; if(s===''||s==='(not set)') return 'Not set';
+  if(k==='c'){ let f='', n=s; try{ f=valFlag(s)||''; }catch(e){} try{ n=valCtyName(s)||s; }catch(e){} return E((f?f+' ':'')+n); }
+  if(k==='n') return E(({new:'New',returning:'Returning'})[s]||s); return E(s); }
+function layerTable(x,i,k,lp){ const it=x.items[i], fs=it[1]==='fs', src=fs||!Object.keys(lp.it).length?lp.app:lp.it, q=fs?2:1;
+  const rows=Object.entries(src).sort((a,b)=>(b[1][0]||0)-(a[1][0]||0)).slice(0,60);
+  return `<div class="sc-tw sc-x"><table class="sc-t"><thead><tr><th>${k==='c'?'Country':k==='r'?'Version':'Users'}</th><th>Visits</th><th>${fs?'Full-screen ads':'Inline ads'}</th><th>Ads / 100</th></tr></thead><tbody>`
+    +(rows.map(([d,e])=>`<tr><td class="sc-nm">${dimName(k,d)}</td><td>${N(e[0])}</td><td>${N(e[q])}</td><td><b>${e[0]>0&&e[q]!=null?R(e[q]/e[0]*100):'—'}</b></td></tr>`).join('')||'<tr><td colspan="4" class="sc-faint">Is period ka data nahi</td></tr>')+'</tbody></table></div>'
+    +(!fs&&src===lp.app&&rows.length?'<p class="sc-note">Sirf app level: is period me GA4 ne ye layer screen-wise whole nahi di.</p>':'')
+    +(lp.wait.length?`<p class="sc-note">⏳ Loading ${lp.wait.map(m=>E(fmtMon(m))).join(', ')}…</p>`:'')
+    +(lp.fail.length?`<p class="sc-note">⚠️ ${lp.fail.map(m=>E(fmtMon(m))).join(', ')} load nahi hua. <button type="button" class="sc-lnk" data-sc-shretry="${k}">Try again</button></p>`:'')
+    +(lp.miss.length?`<p class="sc-note">${lp.miss.map(m=>E(fmtMon(m))).join(', ')}: is layer ka data abhi nahi (padha nahi gaya).</p>`:'')
+    +((lp.big||[]).length?`<p class="sc-note">${lp.big.map(m=>E(fmtMon(m))).join(', ')}: din-wise file bahut badi thi (bani nahi) — us mahine ke adhoore din yahan nahi.</p>`:'')
+    +((lp.bad||[]).length?`<p class="sc-note">${lp.bad.map(m=>E(fmtMon(m))).join(', ')}: is build me file nahi ban saki — agle run me.</p>`:''); }
+function shardsFor(x,id,i,k,lo,hi){ const L=lOf(id); if(!L||!L.shards||!L.shards[k]) return; let m=lo.slice(0,7);
+  for(let n=0;m<=hi.slice(0,7)&&n<400;m=monAdd(m,1),n++){ const ms=m+'-01'<(x.d0||lo)?x.d0:m+'-01', me0=monLastDay(m), me=me0>x.td?x.td:me0; if(!(lo<=ms&&hi>=me)) ensureShard(id,k,m.replace('-','')); } }
+// a version's numbers for a display item: its classes' [views, inline, full] (+ the same days vs the previous version:
+// [this views, this inline, previous views, previous inline]); a trigger: the app's (every class + the app-level -1)
+function verOf(e,S,fs){ const t=[0,0,0], sd=[0,0,0,0]; let any=false, anyS=false;
+  for(const [k,r] of Object.entries((e&&e.items)||{})){ if(!r||!(fs||S.has(+k))) continue; any=true; for(let j=0;j<3;j++) t[j]+=+r[j]||0; }
+  if(!fs) for(const [k,r] of Object.entries((e&&e.same_days)||{})){ if(!r||!S.has(+k)) continue; anyS=true; for(let j=0;j<4;j++) sd[j]+=+r[j]||0; }
+  return {t:any?t:null,sd:anyS?sd:null}; }
+function verSec(x,id,i,lo,hi){ const L=lOf(id), f2=f2Of(id); if(!L||!f2) return fileGate(id,'2l'); const it=x.items[i], fs=it[1]==='fs', V=L.ver||{}, S=clsSet(f2,x,i);
+  const ord=Array.isArray(L.ver_order)?L.ver_order.slice().reverse():Object.keys(V).sort((a,b)=>String((V[b]||{}).first||'').localeCompare(String((V[a]||{}).first||'')));
+  const vs=ord.filter(v=>V[v]).map(v=>[v,V[v],verOf(V[v],S,fs)]).filter(z=>z[2].t);
+  const life=vs.map(([v,e,o])=>{ const views=o.t[0], ads=fs?o.t[2]:(x.allf?o.t[1]+o.t[2]:o.t[1]), sd=o.sd;
+    const tr=sd&&sd[0]>0?sd[1]/sd[0]*100:null, pr=sd&&sd[2]>0?sd[3]/sd[2]*100:null;
+    return `<tr><td class="sc-nm">${E(v)}<small>${fdy(e.first)} – ${fdy(e.last)}</small></td><td>${N(views)}</td><td><b>${views>0&&ads!=null?R(ads/views*100):'—'}</b></td><td>${e.prev!=null?E(e.prev):'—'}</td><td>${R(tr)} vs ${R(pr)} <small>${PC(pr,tr)}</small></td></tr>`; }).join('');
+  shardsFor(x,id,i,'r',lo,hi); const lp=layerPeriod(x,id,i,'r',lo,hi);
+  return `<h4 class="sc-h4">This period · by version</h4>${lp?layerTable(x,i,'r',lp):''}`
+    +`<h4 class="sc-h4">Every version · whole life <small class="sc-faint">(picker yahan lagu nahi)</small></h4>`
+    +(life?`<div class="sc-tw sc-x"><table class="sc-t"><thead><tr><th>Version</th><th>Visits</th><th>Ads / 100</th><th>Previous</th><th>Same days: this vs previous</th></tr></thead><tbody>${life}</tbody></table></div>`:'<p class="sc-note">Version data abhi nahi.</p>')
+    +'<p class="sc-note">"Same days" = jin dino dono versions chal rahe the, sirf un dino ka ads / 100 — rollout ka mix nahi milta.</p>'; }
+function ccSec(x,id,i,lo,hi){ const L=lOf(id); if(!L) return fileGate(id,'l'); shardsFor(x,id,i,'c',lo,hi); const lp=layerPeriod(x,id,i,'c',lo,hi);
+  return layerTable(x,i,'c',lp)+'<p class="sc-note">"Other (GA4 grouped)" = GA4 ne chhote countries ek bucket me jod diye; app ke total exact hain.</p>'; }
+// one layer day record's rows (the file 3 day: {id: {st, g, r, …}})
+const rowsOf=t=>Array.isArray(t)?t:(t&&typeof t==='object'?Object.entries(t):[]);
+const lDay=(L,x,d)=>{ const d0=L.d0||x.d0; if(!d0||!Array.isArray(L.days)) return null; const k=dIx({d0},d); return k>=0&&k<L.days.length?L.days[k]:null; };
+function nvrSec(x,id,i,lo,hi){ const L=lOf(id), f2=f2Of(id); if(!L||!f2) return fileGate(id,'2l'); const it=x.items[i], fs=it[1]==='fs', S=clsSet(f2,x,i), lp={it:{},app:{},wait:[],fail:[],miss:[]}; let bad=0, nd=0;
+  const add=(o,dim,v,il,fl)=>{ const e=o[dim]||(o[dim]=[null,null,null]); if(v!=null) e[0]=(e[0]||0)+(+v); if(il!=null) e[1]=(e[1]||0)+(+il); if(fl!=null) e[2]=(e[2]||0)+(+fl); };
+  span(x,lo,hi,(k,d)=>{ nd++; const r=lDay(L,x,d)||{}, V=r.nV, A=r.nA; if(!V||!A||!(V.st==='w'||V.st==='p')||!(A.st==='w'||A.st==='p')) bad++;
+    if(V) for(const q of V.r||[]){ if(V.g==='c'){ if(S.has(+q[1])) add(lp.it,q[0],q[2]); add(lp.app,q[0],q[2]); } else add(lp.app,q[0],q[1]); }
+    if(A) for(const q of A.r||[]){ if(A.g==='cf'){ if(S.has(+q[1])&&(x.allf||inl(q[2]))) add(lp.it,q[0],null,q[3]); add(lp.app,q[0],null,inl(q[2])?q[3]:null,(fs?fmtOf(q[2])===fmtOf(it[2]):FULL.has(fmtOf(q[2])))?q[3]:null); }
+      else if(A.g==='f') add(lp.app,q[0],null,inl(q[1])?q[2]:null,(fs?fmtOf(q[1])===fmtOf(it[2]):FULL.has(fmtOf(q[1])))?q[2]:null); } });
+  return layerTable(x,i,'n',lp)+(bad?`<p class="sc-note">${bad}/${nd} din ye layer GA4 se whole nahi aayi (us din ka hissa nahi gina).</p>`:''); }
+function engSec(x,id,i,lo,hi){ const L=lOf(id), f2=f2Of(id); if(!f2) return fileGate(id,'f2'); const it=x.items[i];
+  if(it[1]==='fs') return '<p class="sc-note">Full-screen trigger ka apna screen nahi — engagement screens ke rows me dekhein.</p>';
+  const S=clsSet(f2,x,i); let v=0,eg=0,ck=0,rw=0,ms=0,ses=0,ur=0,un=0,ckSeen=false;
+  fDays(f2,x,lo,hi,r=>{ if(!r) return; for(const q of r.v||[]) if(S.has(q[0])){ v+=+q[1]||0; eg+=+q[2]||0; } });
+  if(L) span(x,lo,hi,(k,d)=>{ const r=lDay(L,x,d)||{};
+    if(r.k){ for(const q of r.k.r||[]) if(S.has(+q[0])){ if(q[1]==='ad_click') ck+=+q[2]||0; if(q[1]==='ad_reward') rw+=+q[2]||0; } for(const t of rowsOf(r.k.t)) if(t[0]==='ad_click'&&+t[1]>0) ckSeen=true; }
+    if(r.e) for(const q of r.e.r||[]) if(S.has(+q[0])) ms+=+q[1]||0;
+    let uv=0,ua=0,ha=false; if(r.uV) for(const q of r.uV.r||[]) if(S.has(+q[0])){ ses+=+q[1]||0; uv+=+q[2]||0; }
+    if(r.uA&&r.uA.g!=='a') for(const q of r.uA.r||[]) if(S.has(+q[0])){ ua+=+q[1]||0; ha=true; } if(ha&&uv>0){ ur+=ua/uv; un++; } });
+  const ads=sumItem(x,i,lo,hi).a;
+  return `<div class="sc-tiles sc-x">${tile('Time per visit',v>0?secs(eg/v):'—','engagement ÷ visits')}${tile('Ads per minute',eg>0&&ads!=null?(Math.round(ads/(eg/60)*100)/100).toFixed(2):'—','inline ads ÷ minutes')}`
+    +`${tile('Clicks',L?(ckSeen||ck?N(ck):'—'):'⏳',L&&!ckSeen&&!ck?'is period me ad_click log nahi hua':`CTR ${ads>0&&ck!=null?P1(ck/ads):'—'}${rw?' · rewards '+N(rw):''}`)}`
+    +`${tile('Exposure per visit',L&&v>0&&ms>0?secs(ms/v/1000):'—','ad dikhne ka samay ÷ visits')}${tile('Saw ads ÷ users',L&&un?P1(ur/un):'—','har din ka average (users jode nahi ja sakte)')}${tile('Sessions',L?N(ses||null):'⏳','is screen wale sessions')}</div>`
+    +(L?'':'<p class="sc-note">⏳ Clicks / exposure / users aa rahe hain…</p>'); }
+function xSec(x,id,i,lo,hi){ const L=lOf(id), f2=f2Of(id); if(!L||!f2) return fileGate(id,'2l'); const it=x.items[i], fs=it[1]==='fs', S=clsSet(f2,x,i), ev={}, tt={}; let names=new Set(), nd=0, bad=0;
+  span(x,lo,hi,(k,d)=>{ nd++; const r=(lDay(L,x,d)||{}).x; if(!r){ bad++; return; } if(r.st!=='w'&&r.st!=='p') bad++; for(const n of r.ev||[]) names.add(n);
+    for(const q of r.r||[]) if(fs||S.has(+q[0])) ev[q[1]]=(ev[q[1]]||0)+(+q[2]||0); for(const t of rowsOf(r.t)) tt[t[0]]=(tt[t[0]]||0)+(+t[1]||0); });
+  const src=fs?tt:ev, vv=sumItem(x,i,lo,hi).vAll, rows=Object.entries(src).sort((a,b)=>b[1]-a[1]);
+  if(!names.size&&!rows.length) return '<p class="sc-note">App apne khud ke ad events log nahi karta (ya list khaali hai).</p>';
+  return `<div class="sc-tw sc-x"><table class="sc-t"><thead><tr><th>Event</th><th>Count</th><th>Per 100 ${fs?'app ':''}visits</th></tr></thead><tbody>${rows.map(([n,c])=>`<tr><td class="sc-nm">${E(n)}</td><td>${N(c)}</td><td>${vv>0?R(c/vv*100):'—'}</td></tr>`).join('')||'<tr><td colspan="3" class="sc-faint">Is period me koi nahi</td></tr>'}</tbody></table></div>`
+    +(bad?`<p class="sc-note">${bad}/${nd} din whole nahi aaye.</p>`:''); }
+function copyBox(text,key){ const ready=text!=null; const n=ready?String(text).split('\n').length:0;
+  return `<div class="sc-copy"><button type="button" class="sc-back" data-sc-copy="${E(key)}"${ready?'':' disabled'}>${ready?'📋 Copy report':'Loading data…'}</button><span class="sc-cpl" id="sc-cpl-${E(key)}" aria-live="polite">${ready?`${n} lines`:''}</span></div>`
+    +(ready?`<textarea class="sc-ta" id="sc-ta-${E(key)}" readonly rows="10">${E(text)}</textarea>`:''); }
+// a report's Copy control before its file(s) arrive: the same disabled button ("Loading data…") + the reserved status line,
+// so the control keeps its place when the text comes; a failed load → the error + Try again; no file in this build → says so
+function repWait(id,key,need2){ const a=apPtr(id); if(!a) return fileGate(id,'l');
+  const n=need2&&fErr(f2Name(a))?f2Name(a):fErr(lName(a))?lName(a):null; return n?waitHtml(n):copyBox(null,key); }
+function repSec(x,id,i){ const L=lOf(id), f2=f2Of(id); if(!L||!f2) return repWait(id,'row',true); const rid=rowId(f2,x,i), t=L.report&&L.report.rows&&rid?L.report.rows[rid]:null;
+  return t?copyBox(t,'row'):'<p class="sc-note">Is row ka report nahi (sirf Worse / Watch rows ka banta hai).</p>'; }
+// ---- the folds ----
+function fold(k,title,hint,body){ return `<details class="sc-fold" data-sc-fold="${k}"${FOLD[k]?' open':''} ontoggle="SCR.fold('${k}',this.open)"><summary><span class="sc-chev">▸</span><span>${title}</span><span class="sc-fh">${hint}</span></summary><div class="sc-fin" id="sc-f-${k}">${body}</div></details>`; }
+function srcBody(x,id,lo,hi){ const L=lOf(id); if(!L) return fileGate(id,'l'); const by={}; let nd=0,bad=0;
+  span(x,lo,hi,(k,d)=>{ nd++; const r=(lDay(L,x,d)||{}).s; if(!r||(r.st!=='w'&&r.st!=='p')){ bad++; return; } for(const q of r.r||[]){ const f=fmtOf(q[0]), e=by[f]||(by[f]={}); e[q[1]]=(e[q[1]]||0)+(+q[2]||0); } });
+  const fs=Object.keys(by).sort(); if(!fs.length) return '<p class="sc-note">Is period ka ad source data nahi.</p>';
+  return fs.map(f=>{ const e=by[f], t=Object.values(e).reduce((s,v)=>s+v,0); return `<h4 class="sc-h4">${E(FMTN[f]||f)}</h4><div class="sc-tw sc-x"><table class="sc-t"><thead><tr><th>Source</th><th>Ads</th><th>Share</th></tr></thead><tbody>${Object.entries(e).sort((a,b)=>b[1]-a[1]).map(([s,n])=>`<tr><td class="sc-nm">${E(s)}</td><td>${N(n)}</td><td>${P1(t>0?n/t:null)}</td></tr>`).join('')}</tbody></table></div>`; }).join('')
+    +(bad?`<p class="sc-note">${bad}/${nd} din whole nahi aaye (gine nahi).</p>`:''); }
+function verBody(id){ const L=lOf(id); if(!L) return fileGate(id,'l'); const V=L.ver||{};
+  const ord=Array.isArray(L.ver_order)?L.ver_order.slice().reverse():Object.keys(V).sort((a,b)=>String((V[b]||{}).first||'').localeCompare(String((V[a]||{}).first||'')));
+  const vs=ord.filter(v=>V[v]).map(v=>[v,V[v]]);
+  if(!vs.length) return '<p class="sc-note">Version data abhi nahi.</p>';
+  const tot=e=>verOf(e,null,true).t||[null,null,null];
+  return `<p class="sc-note">Har version ki poori life (picker yahan lagu nahi). "Same days" = previous version ke saath chalne wale din.</p><div class="sc-tw sc-x"><table class="sc-t"><thead><tr><th>Version</th><th>Visits</th><th>Inline / 100</th><th>Full-screen / 100</th><th>Previous</th></tr></thead><tbody>`
+    +vs.map(([v,e])=>{ const t=tot(e||{}); return `<tr><td class="sc-nm">${E(v)}<small>${fdy(e&&e.first)} – ${fdy(e&&e.last)}</small></td><td>${N(t[0])}</td><td><b>${t[0]>0?R(t[1]/t[0]*100):'—'}</b></td><td>${t[0]>0?R(t[2]/t[0]*100):'—'}</td><td>${e&&e.prev!=null?E(e.prev):'—'}</td></tr>`; }).join('')+'</tbody></table></div>'; }
+function covBody(x,id,lo,hi){ const f2=f2Of(id), dq=Array.isArray(x.dq)?x.dq:[], notes=f2&&f2.notes&&typeof f2.notes==='object'?f2.notes:null;
+  const rows=PIECES.map(([code,label,ids])=>{ const cv=cover(x,ids,lo,hi), h=histFrom(x,ids), c=cv.c;
+    return `<tr><td class="sc-nm">${E(label)}</td><td>${c.w}</td><td>${c.p}</td><td>${c.o+c.s+c.t+c.x+c['?']}</td><td>${c['-']}</td><td>${h&&h.from?fdy(h.from)+(h.done?' ✓':' ⏳'):'—'}</td><td class="sc-why">${cv.whole?'whole':E(covWhy(x,ids,cv))}</td></tr>`; }).join('');
+  return `<div class="sc-tw sc-x"><table class="sc-t"><thead><tr><th>Piece</th><th>Whole</th><th>Grouped</th><th>Not whole</th><th>Not read</th><th>History from</th><th>Why</th></tr></thead><tbody>${rows}</tbody></table></div>`
+    +(dq.length?`<h4 class="sc-h4">Data quality</h4><ul class="sc-ul">${dq.map(c=>`<li>${E(DQN[c]||c)}</li>`).join('')}</ul>`:'')
+    +(notes?notesHtml(notes,x):''); }
+function notesHtml(n,x){ const o=[];
+  if(n.zone==='assumed') o.push('AdMob account ka time zone nahi mila: report ka zone maana (IST).');
+  if(n.admob==='none') o.push('Is app ka AdMob data (placements) nahi — cause / requests / fill / show nahi.');
+  if(n.allf||x.allf) o.push('Format kam record hota hai (5% se zyada "not set"): screens ke ads sab formats pe gine aur judge hue.');
+  for(const r of Array.isArray(n.runs)?n.runs:[]) if(Array.isArray(r)) o.push(`Duplicate ad_impression ${fdy(r[0])} – ${fdy(r[1])}: ${r[2]?'AdMob se confirm (copy hata di)':'sirf pattern (copy rakhi, "Format not recorded")'}${r[3]?' · abhi chal raha':''}.`);
+  return o.length?`<ul class="sc-ul">${o.map(t=>`<li>${E(t)}</li>`).join('')}</ul>`:''; }
+function repBody(id){ const L=lOf(id); if(!L) return repWait(id,'app',false);
+  const t=L.report&&L.report.app; return t?copyBox(t,'app'):'<p class="sc-note">Is app ka report nahi bana (koi Worse / Watch row ya data-quality item nahi).</p>'; }
+function howBody(x){ const g=(typeof DATA!=='undefined'&&DATA&&DATA.generated_at)||''; let ist='';
+  try{ if(g){ const t=new Date(Date.parse(g)+19800000); if(isFinite(t)) ist=fd(iso(t))+' '+String(t.getUTCHours()).padStart(2,'0')+':'+String(t.getUTCMinutes()).padStart(2,'0')+' IST'; } }catch(e){}
+  return `<p class="sc-note">GA4 din = <b>5:30 AM IST se agle din 5:30 AM IST tak</b> (UTC din). GA4 data till <b>${fdy(x.ft)}</b>; Today / Yesterday abhi final nahi.${ist?` Build: ${ist}.`:''}</p>`
+    +'<p class="sc-note"><b>Visits</b> = screen_view (har Activity). <b>Ads / 100</b> = us screen pe ad_impression ÷ visits × 100: screens pe inline (banner + native); full-screen ads SDK ki apni Activity pe aate hain, isliye unhe <b>trigger</b> (unit ke naam se: Back press, App resume, Splash …) se ginte hain, har 100 app visits pe.</p>'
+    +'<p class="sc-note"><b>Status</b> (period se alag, fixed): pichhle 10 final din vs usse pehle ke 28 final din. Worse = score 80 se kam; Watch = 90 se kam; Better = 110 se upar — teeno me farq itna bada ho ki rozana ka utaar-chadhaav nahi ho sakta (z 3 ya zyada) aur dono 5-din ke hisson me dikhe. Kam data = Too early; GA4 sampled / logging badli / ads nahi = N/A.</p>'
+    +'<p class="sc-note"><b>Score</b> (picked period) = period ka ads / 100 ÷ normal (period se pehle ke max(28, period) final din) × 100; 7 se kam final din = "short period". Jis din GA4 ne koi hissa whole nahi diya (sampled / grouped / rows chhodi), us din ka wo hissa gina nahi jata — Data coverage me har din ki wajah hai. Cause AdMob ke requests / fill / show se (unit-wise, exact split).</p>'; }
+function foldsHtml(x,id,lo,hi){ return fold('src','🗂 Ad sources','format-wise network ka hissa',srcBody(x,id,lo,hi))+fold('ver','🗂 Versions','har version · same din vs previous',verBody(id))
+  +fold('cov','🗂 Data coverage','har piece kitna whole · kyun',covBody(x,id,lo,hi))+fold('rep','📋 Report for developer','copy karke bhejein',repBody(id))+fold('how','❓ How this works','method',howBody(x)); }
+function appHtml(id){ const x=ALL.apps[id], a=Array.isArray(x.app)?x.app:[];
+  const crumb=`<div class="sc-crumb"><button type="button" class="sc-back" data-sc-all="1">← All apps</button><span>${chip(a[0])}${a[1]?` <small>${E(a[1])}</small>`:''} · history ${x.d0?'from '+fdy(x.d0):'not yet'}</span></div>`;
+  if(!x.d0||!(x.vis||[]).length){ const h=histFrom(x,['v'])||{}; return crumb+`<div class="card sc-card"><p class="sc-note">Is app ka Screens data abhi aa raha hai — history bhar rahi hai: ${fdy(x.ft||h.from||'')} tak.</p></div>`; }
+  perLoad(x.d0,x.td); const [lo,hi]=rng(x);
+  return crumb+`<div class="card sc-card sc-stk" id="sc-stk">${perCtl(x)}</div>`+tilesHtml(x,lo,hi)+attnHtml(x)+miniHtml(x)+segHtml(x,lo,hi)+ddHtml(x,id,lo,hi)
+    +`<div class="sc-folds" id="sc-folds">${foldsHtml(x,id,lo,hi)}</div>`; }
+// ---- the chart: ads / 100 visits (line) + visits (bars, second axis) + the normal (dashed), printed: latest + average ----
+function chartModel(days,nrate,ft){ const n=days.length, by=n>540?'m':n>120?'w':'d', B=[];
+  days.forEach((r,k)=>{ const [d,v,a,why]=r, key=by==='m'?d.slice(0,7):by==='w'?Math.floor(k/7):d; let b=B[B.length-1];
+    if(!b||b.key!==key){ b={key,d0:d,d1:d,v:0,vr:0,a:0,n:0,nd:0,nf:false,why:''}; B.push(b); }
+    b.d1=d; b.nd++; if(v!=null) b.v+=v; if(v!=null&&a!=null){ b.vr+=v; b.a+=a; b.n++; } else if(why&&!b.why) b.why=why; if(d>ft) b.nf=true; });
+  B.forEach(b=>{ b.r=b.n&&b.vr>=100?b.a/b.vr*100:null; });
+  let last=null; for(let k=B.length-1;k>=0;k--) if(B[k].r!=null){ last=k; break; }
+  const sv=B.reduce((s,b)=>s+b.vr,0), sa=B.reduce((s,b)=>s+b.a,0), avg=sv>0?sa/sv*100:null;
+  return {by,B,last,avg,norm:ok(nrate)?nrate:null,labels:{last:last!=null?R(B[last].r):null,avg:avg!=null?'Avg '+R(avg):null,norm:ok(nrate)?'Normal '+R(nrate):null}}; }
+function tipText(b,by){ const dd=b.d0===b.d1?fdy(b.d0):fd(b.d0)+' – '+fdy(b.d1);
+  return `<b>${dd}</b>${b.nf?' · not final':''}<br>Visits ${N(b.v)}`+(b.n?`<br>Ads ${N(b.a)} · <b>${R(b.vr>0?b.a/b.vr*100:null)}</b> / 100 visits${b.n<b.nd?` <small>(${b.n}/${b.nd} days)</small>`:''}${b.vr<100?'<br><small>100 se kam visits: point nahi</small>':''}`:`<br>${E(b.why||'ads ka data nahi')}`); }
+function drawChart(){ const box=document.getElementById('sc-chart'); if(!box||!CH) return; const B=CH.B, n=B.length;
+  if(!n){ box.innerHTML='<div class="sc-note">Is period me koi din nahi</div>'; return; }
+  const W=Math.max(280,box.clientWidth||600), H=220, m={t:18,r:64,b:24,l:40}, rs=B.map(b=>b.r).filter(ok); if(CH.norm!=null) rs.push(CH.norm);
+  const ym=Math.max(1,...rs)*1.15, vm=Math.max(1,...B.map(b=>b.v)), X=k=>m.l+(W-m.l-m.r)*(n>1?k/(n-1):0.5), bw=Math.max(1,(W-m.l-m.r)/n*0.7);
+  const Y=v=>m.t+(H-m.t-m.b)*(1-v/ym), YV=v=>H-m.b-(H-m.t-m.b)*0.45*v/vm;
+  let nf=B.findIndex(b=>b.nf); if(nf<0) nf=n;
+  const path=(a,b)=>{ let d='',up=false; for(let k=a;k<b;k++){ const v=B[k].r; if(v==null){ up=false; continue; } d+=(up?'L':'M')+X(k).toFixed(1)+' '+Y(v).toFixed(1)+' '; up=true; } return d; };
+  const grid=[0,0.25,0.5,0.75,1].map(f=>`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(ym*f/1.15)}" y2="${Y(ym*f/1.15)}" class="sc-g"/><text x="${m.l-6}" y="${Y(ym*f/1.15)+4}" text-anchor="end">${R(ym*f/1.15)}</text>`).join('');
+  const ticks=[...new Set([0,Math.floor((n-1)/2),n-1])].map(k=>`<text x="${X(k)}" y="${H-6}" text-anchor="${k===0?'start':k===n-1?'end':'middle'}">${fd(B[k].d0)}</text>`).join('');
+  const bars=B.map((b,k)=>b.v>0?`<rect x="${(X(k)-bw/2).toFixed(1)}" y="${YV(b.v).toFixed(1)}" width="${bw.toFixed(1)}" height="${(H-m.b-YV(b.v)).toFixed(1)}" class="sc-v${b.nf?' sc-nf':''}"/>`:'').join('');
+  const L=CH.last, lb=CH.labels;
+  box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Ads per 100 visits and visits, by day">${grid}${ticks}${bars}<text x="${W-m.r+4}" y="${YV(vm)+4}" class="sc-vl">${N(vm)}</text>`
+    +(CH.norm!=null?`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(CH.norm)}" y2="${Y(CH.norm)}" class="sc-nl"/><text x="${W-m.r+4}" y="${Y(CH.norm)+4}" class="sc-nt">${E(lb.norm)}</text>`:'')
+    +`<path d="${path(0,nf)}" class="sc-r"/><path d="${path(Math.max(0,nf-1),n)}" class="sc-r sc-nf"/>`
+    +(L!=null?`<circle cx="${X(L)}" cy="${Y(B[L].r)}" r="3.5" class="sc-rd"/><text x="${Math.min(X(L)+6,W-m.r-2)}" y="${Y(B[L].r)-6}" class="sc-rl" text-anchor="${X(L)+40>W-m.r?'end':'start'}">${E(lb.last)}</text>`:'')
+    +(lb.avg?`<text x="${m.l+4}" y="${m.t-5}" class="sc-al">${E(lb.avg)}</text>`:'')
+    +`<line class="sc-rule" y1="${m.t}" y2="${H-m.b}" x1="0" x2="0" visibility="hidden"/></svg><div class="sc-tip" hidden></div>`;
+  const svg=box.querySelector('svg'), tip=box.querySelector('.sc-tip'), rule=svg&&svg.querySelector('.sc-rule'); if(!svg||!tip||!rule) return;
+  const at=ev=>{ const r=svg.getBoundingClientRect(); if(!r.width) return; const x=(ev.clientX-r.left)*W/r.width, k=Math.max(0,Math.min(n-1,Math.round((x-m.l)/((W-m.l-m.r)||1)*(n-1)))), b=B[k];
+    rule.setAttribute('x1',X(k)); rule.setAttribute('x2',X(k)); rule.setAttribute('visibility','visible'); tip.innerHTML=tipText(b,CH.by); tip.hidden=false;
+    const px=X(k)*r.width/W; tip.style.left=Math.max(0,Math.min(r.width-tip.offsetWidth,px-tip.offsetWidth/2))+'px'; };
+  svg.addEventListener('pointermove',at); svg.addEventListener('click',at); svg.addEventListener('pointerleave',()=>{ tip.hidden=true; rule.setAttribute('visibility','hidden'); }); }
+// ---- Copy report: the text is prebuilt (scr_l); the clipboard first, then the selected textarea + execCommand ----
+function copy(text,ta,line){ const n=String(text).split('\n').length, put=t=>{ if(line) line.textContent=t; };
+  const fb=()=>{ let done=false; try{ if(ta){ try{ ta.focus({preventScroll:true}); }catch(e){} ta.setSelectionRange(0,String(ta.value||'').length); } done=!!(typeof document!=='undefined'&&document.execCommand&&document.execCommand('copy')); }catch(e){ done=false; }
+    put(done?`✅ Copied (${n} lines)`:'Select karke copy karein'); return done; };
+  try{ const c=typeof navigator!=='undefined'&&navigator&&navigator.clipboard; if(c&&typeof c.writeText==='function'){ const p=c.writeText(String(text)); if(p&&typeof p.then==='function'){ p.then(()=>put(`✅ Copied (${n} lines)`),fb); return 'async'; } put(`✅ Copied (${n} lines)`); return 'sync'; } }catch(e){}
+  return fb()?'fallback':'manual'; }
+// ---- a late file: only the slots that use it are drawn again (the drill-down's body, the folds) ----
+// the files each slot reads: 2 = file 2, l = scr_l, r / c = the version / country day shards
+const SECF={ov:'2',un:'2',ver:'2lr',nvr:'2l',cc:'2lc',eng:'2l',x:'2l',rep:'2l'}, FOLDF={src:'l',ver:'l',cov:'2',rep:'l'};
+// a slot redrawn with its scroll boxes where the reader left them (the 'Every day' box's place, a table scrolled sideways):
+// by position when the slot has the same boxes, else by id
+function reslot(el,html){ let bx=[]; try{ bx=Array.from(el.querySelectorAll('.sc-x')).map(b=>[b.id||'',+b.scrollLeft||0,+b.scrollTop||0]); }catch(e){}
+  el.innerHTML=html;
+  try{ const nb=Array.from(el.querySelectorAll('.sc-x')), same=nb.length===bx.length;
+    bx.forEach((q,j)=>{ const b=same?nb[j]:(q[0]?nb.find(z=>z.id===q[0]):null); if(b&&(q[1]||q[2])){ b.scrollLeft=q[1]; b.scrollTop=q[2]; } }); }catch(e){} }
+function arrive(id,kind){ if(!onScreen()||!ALL||appIdNow()!==id) return; const x=ALL.apps[id]; if(!x||!x.d0) return; const [lo,hi]=rng(x), use=f=>!kind||String(f||'').includes(kind);
+  let drew=false;
+  late(()=>{ const b=document.getElementById('sc-ddb'); if(b&&OPEN!=null&&use(SECF[SEC])){ reslot(b,secHtml(x,id,OPEN,lo,hi)); drew=true; }
+    const fs={src:()=>srcBody(x,id,lo,hi),ver:()=>verBody(id),cov:()=>covBody(x,id,lo,hi),rep:()=>repBody(id)};
+    for(const k in fs){ if(!use(FOLDF[k])) continue; const f=document.getElementById('sc-f-'+k); if(f) reslot(f,fs[k]()); } });
+  if(drew&&SEC==='ov') drawChart(); }
+// ---- events ----
+// the sticky top bar's height (0 when it does not stick)
+function barH(){ try{ const tb=document.querySelector('.topbar'), cs=tb&&typeof getComputedStyle==='function'?getComputedStyle(tb):null; return tb&&cs&&cs.position==='sticky'?+tb.offsetHeight||0:0; }catch(e){ return 0; } }
+function stick(){ const s=EL; if(!s||!s.style||typeof getComputedStyle!=='function') return; try{ s.style.setProperty('--sc-stick',barH()+'px'); }catch(e){} }
+// "Details ▸" in Needs attention: the reader asked to see the row, so the page goes to its drill-down card (it sits after
+// the tables, far below) — just under the top bar + the sticky period strip. A table row's tap stays put (keep).
+function toDd(){ try{ const dd=document.getElementById('sc-dd'); if(!dd||!dd.getBoundingClientRect) return; const stk=document.getElementById('sc-stk');
+  const dy=dd.getBoundingClientRect().top-(barH()+(stk?+stk.offsetHeight||0:0)+8); if(Math.abs(dy)>1) quiet(()=>window.scrollBy(0,dy)); }catch(e){} }
+function setOpen(i){ const was=OPEN; OPEN=i; SEC=i==null?SEC:'ov'; OPENAPP=i==null?null:appIdNow();
+  if(i!=null&&was==null&&phone()&&typeof hbPush==='function') try{ hbPush('scr-dd',()=>{ OPEN=null; if(onScreen()) paint(); }); }catch(e){}
+  if(i==null&&typeof hbDrop==='function') try{ hbDrop('scr-dd'); }catch(e){} }
+function onClick(e){ const t=e.target; if(!t||!t.closest) return; let b;
+  if((b=t.closest('[data-sc-per]'))){ const k=b.dataset.scPer; keep(`[data-sc-per="${k}"]`,()=>{ PER=k; perSave(); paint(); }); return; }
+  if((b=t.closest('[data-sc-cov]'))){ const k=b.dataset.scCov; keep(`[data-sc-cov="${k}"]`,()=>{ COVP=COVP===k?'':k; paint(); }); return; }
+  if((b=t.closest('[data-sc-sort]'))){ const k=b.dataset.scSort; keep(`[data-sc-sort="${k}"]`,()=>{ SORT={k,dir:SORT.k===k?-SORT.dir:(k==='name'||k==='rank'?1:-1)}; paint(); }); return; }
+  if((b=t.closest('[data-sc-tsort]'))){ const k=b.dataset.scTsort; keep(`[data-sc-tsort="${k}"]`,()=>{ TS={k,dir:TS.k===k?-TS.dir:(k==='st'?1:-1)}; paint(); }); return; }
+  if((b=t.closest('[data-sc-seg]'))){ const k=b.dataset.scSeg; keep(`[data-sc-seg="${k}"]`,()=>{ SEG=k; paint(); }); return; }
+  if((b=t.closest('[data-sc-more]'))){ keep('[data-sc-more]',()=>{ MORE=!MORE; paint(); }); return; }
+  if((b=t.closest('[data-sc-sec]'))){ const k=b.dataset.scSec; keep(`[data-sc-sec="${k}"]`,()=>{ SEC=k; paint(); }); return; }
+  if((b=t.closest('[data-sc-close]'))){ let sel=`tr[data-sc-open="${OPEN}"]`; try{ if(!EL.querySelector(sel)) sel='#sc-tcard'; }catch(e){ sel='#sc-tcard'; }
+    keep(sel,()=>{ setOpen(null); paint(); }); return; }
+  if((b=t.closest('[data-sc-open]'))){ const i=+b.dataset.scOpen, tr=b.tagName==='TR'; keep(tr?`tr[data-sc-open="${i}"]`:`#sc-attn [data-sc-open="${i}"]`,()=>{ setOpen(OPEN===i?null:i); paint(); });
+    if(!tr&&OPEN===i) toDd(); return; }
+  if((b=t.closest('[data-sc-copy]'))){ const k=b.dataset.scCopy; copy((document.getElementById('sc-ta-'+k)||{}).value||'',document.getElementById('sc-ta-'+k),document.getElementById('sc-cpl-'+k)); return; }
+  if((b=t.closest('[data-sc-retry]'))){ const n=b.dataset.scRetry, st=FILES[n]; if(st){ st.err=false; st.v=null; } const id=appIdNow(); if(id) ensureApp(id); paint(); return; }
+  if((b=t.closest('[data-sc-shretry]'))){ Object.keys(FILES).forEach(n=>{ if(/^scr_[rc]_/.test(n)&&FILES[n].err){ FILES[n].err=false; FILES[n].v=null; } }); paint(); return; }
+  if(t.closest('[data-sc-allretry]')){ ERR=false; VER=null; ensure(()=>{ if(onScreen()) paint(); }); paint(); return; }
+  if(t.closest('[data-sc-all]')){ try{ setApp(''); }catch(e){} return; }
+  if((b=t.closest('tr[data-sc-app]'))){ try{ setApp(b.dataset.scApp); }catch(e){} } }
+function onChange(e){ const t=e.target; if(!t||!t.closest) return; const f=t.closest('[data-sc-pf]'), to=t.closest('[data-sc-pto]'); if(!f&&!to) return;
+  const v=String(t.value||''); if(!okD(v)) return;
+  keep(f?'[data-sc-pf]':'[data-sc-pto]',()=>{ const x=curX(); const [lo,hi]=x?rng(x):['','']; PF=f?v:(PER==='cus'&&PF?PF:lo); PTO=to?v:(PER==='cus'&&PTO?PTO:hi); PER='cus'; perSave(); paint(); }); }
+function curX(){ const id=appIdNow(); if(id) return ALL.apps[id]; const L=apps(); return L.length?refCal(L):null; }
+function wire(){ const s=EL; if(!s||!s.dataset||s.dataset.scWired) return; s.dataset.scWired='1';
+  if(s.addEventListener){ s.addEventListener('click',onClick); s.addEventListener('change',onChange);
+    s.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ')&&e.target&&e.target.matches&&e.target.matches('tr.sc-clk')){ e.preventDefault&&e.preventDefault(); onClick(e); } }); }
+  if(WIRED||typeof window==='undefined'||!window||!window.addEventListener) return; WIRED=true;
+  let rz=0; window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ if(!onScreen()) return; stick(); if(CH) drawChart(); },150); }); }
+function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector('.screen[data-screen=scr]'); if(!s||typeof DATA==='undefined'||!DATA) return;
+  EL=s; wire(); if(!KEEPING) s.style.minHeight='';
+  const p=ptr();
+  if(!p){ s.innerHTML='<div class="card sc-card"><p class="sc-note">🔌 Screens ka data is build me nahi bana — agle robot run me aayega.</p></div>'; return; }
+  if(!ALL||VER!==p.fv) ensure(()=>{ if(onScreen()) late(()=>paint()); });
+  if(!ALL){ s.innerHTML=`<div class="card sc-card"><p class="sc-note">${ERR?'⚠️ Data load nahi hua. <button type="button" class="sc-lnk" data-sc-allretry="1">Try again</button>':'⏳ Loading…'}</p></div>`; return; }
+  const id=appIdNow();
+  // the drill-down belongs to the app it was opened on (another app — header picker, hub scope — opens closed, with its
+  // Back step gone); "Show more screens" is per app too
+  if(OPEN!=null&&id!==OPENAPP) setOpen(null);
+  if(id!==LASTAPP){ MORE=false; LASTAPP=id; }
+  if(APP&&!id){ s.innerHTML='<div class="card sc-card"><p class="sc-note">Is app ka Screens data nahi.</p><button type="button" class="sc-back" data-sc-all="1">← All apps</button></div>'; return; }
+  if(id) ensureApp(id);
+  CH=null; const boxes={}; try{ s.querySelectorAll('.sc-x[id]').forEach(b=>{ boxes[b.id]=[b.scrollLeft,b.scrollTop]; }); }catch(e){}
+  s.innerHTML=id?appHtml(id):allHtml();
+  try{ for(const k in boxes){ const b=document.getElementById(k); if(b){ b.scrollLeft=boxes[k][0]; b.scrollTop=boxes[k][1]; } } }catch(e){}
+  stick(); if(id&&OPEN!=null&&SEC==='ov') drawChart(); }
+function render(){ const s=screenDiv('scr'); EL=s; return s; }
+function show(){ paint(); }
+// left by the menu / a link: the drill-down's Back step goes (render() shows 'overview' under HUB.hold on every refresh — still
+// on this tab a microtask later: kept)
+function left(){ let has=false; try{ has=typeof HB!=='undefined'&&HB.st.some(z=>z.tag==='scr-dd'); }catch(e){} if(!has) return;
+  Promise.resolve().then(()=>{ if(onScreen()) return; OPEN=null; try{ hbDrop('scr-dd'); }catch(e){} }); }
+return {ptr, ensure, render, paint, show, left, ready:()=>!!ALL&&!!ptr(), fold:(k,o)=>{ FOLD[k]=!!o; },
+  _:{rng, normWin, finals, sumItem, perScore, appSum, appScore, cover, coverAll, covWhy, dayState, apps, topSplit, tableRows, sortItems, sortApps, appRow, dispName, itemName, fmtOf,
+    chartModel, copy, perRestore, perLoad, keep, arrive, allHtml, appHtml, secHtml, ddHtml, foldsHtml, layerPeriod, WDK, RANK, PIECES, SECS, FILES, chip,
+    get:()=>({PER,PF,PTO,OPEN,SEC,SEG,MORE,COVP,SORT,TS,CH,OPENAPP}), set:o=>{ if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o){ OPEN=o.OPEN; OPENAPP=OPEN==null?null:appIdNow(); } if('SEC' in o) SEC=o.SEC;
+      if('SEG' in o) SEG=o.SEG; if('MORE' in o) MORE=o.MORE; if('COVP' in o) COVP=o.COVP; if('PREAD' in o) PREAD=o.PREAD; if('TS' in o) TS=o.TS; if('SORT' in o) SORT=o.SORT; }}};
+})();
+function renderScreens(){ return SCR.render(); }
 // ---- 📈 ROI — a section of the 💸 Install value tab (owner, 13 Oct: "every date wise uska incremental day wise revenue from
 // first day of the app … delta, breakeven, % wise", "dono karo, AdMob matched, sirf google ads", countries "konsa rakhna
 // he konsa nikalna he, konsi me jaldi roi milta he", and "bahot saare tab na ban jaye": no tab of its own). Three views:

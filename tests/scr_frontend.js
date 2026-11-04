@@ -1,0 +1,506 @@
+// 🖼️ Screens tab — the page side, run for real: the SCR module of frontend/index.html (cut out by its own markers, with the
+// page's month-mover helpers) in a node vm with stub page helpers, on SYNTHETIC files made up here in the shape of
+// admob_iq/screens_build.py's (no real names, ids or numbers):
+//   * the picker: every standard key (+ month keys, Custom swapped / clamped) → its GA4 dates (N days end at the last final
+//     day; Today / Yesterday not final), the period's normal = the max(28, length) final days before it, the score muted
+//     under 7 final days and "—" for All time;
+//   * the sums: a row counts only the days whose grain carries its quantity (a day split per screen without the format
+//     has no inline ads), visits on every day beside them;
+//   * the coverage strip: N / M apps whole per piece from the day-state strings (each app on its own calendar);
+//   * the status words → chips (WD keys) and the Worse-first order of apps and rows;
+//   * All apps and an app page (+ every drill-down section and fold, with its lazy files) for a normal app, an app whose ads
+//     by screen are sampled every day, an app with screen-only days, an app with no AdMob placements, an app with no days
+//     yet; a hostile class name escaped everywhere; hidden apps left out;
+//   * the Copy report helper: the clipboard, a rejected clipboard → the selected textarea + execCommand, no API at all,
+//     execCommand failing → "Select karke copy karein";
+//   * the period saved per viewer: bad keys / months / half a Custom ignored, a throwing localStorage harmless;
+//   * the chart's model (daily / weekly / monthly, no point under 100 visits, the printed labels) and its drawing;
+//   * keep(): the tapped control back to its place and its sideways row's scroll kept, the page's height held THROUGH the
+//     repaint (paint() inside a keep() leaves the hold for unholdLater);
+//   * the drill-down belongs to its app: another app opens with it closed (Back step dropped), "Show more" per app;
+//   * "Details ▸" in Needs attention goes to the drill-down card; a table row's tap stays put;
+//   * a late file redraws only the slots that use it, their scroll boxes kept;
+//   * a whole month in the period comes from the build's month sums (ver_m / cc_m), the edge months from the shards;
+//   * labels in simple English (the hints stay Hinglish); the status sort honours its direction; the report's Copy
+//     control keeps its place while its files load (a failed load: Try again); All apps' period sums and coverage strip
+//     kept per (build, period), no date string per day; a day whose store month file could not be read ("x").
+// Prints ONE JSON report; tests/test_scr_frontend.py asserts on it.   usage: node scr_frontend.js <index.html>
+'use strict';
+const fs = require('fs'), vm = require('vm');
+const html = fs.readFileSync(process.argv[2], 'utf8');
+const a = html.indexOf('const SCR=(()=>{'), b = html.indexOf('function renderScreens(){');
+if (a < 0 || b < 0 || b < a) { console.log(JSON.stringify({ errors: ['SCR module not found'] })); process.exit(0); }
+const MON0 = html.indexOf('// ---- the month mover'), MON1 = html.indexOf("// ---- a daily chart's period");
+const MONSRC = MON0 >= 0 && MON1 > MON0 ? html.slice(MON0, MON1) : '';
+const src = MONSRC + html.slice(a, b) + '\nthis.SCR=SCR;';
+const out = {}, errors = [];
+// ── a tiny element ──
+function el(screen) {
+  const e = { _html: '', dataset: screen ? { screen } : {}, style: { setProperty() {} }, isConnected: true, offsetHeight: 900, children: [],
+    get innerHTML() { return e._html; }, set innerHTML(v) { e._html = String(v); },
+    addEventListener(t, f) { e['on' + t] = f; }, querySelectorAll: () => [], querySelector: () => null };
+  return e;
+}
+const SCREEN = el('scr');
+let ON = 'scr', LOADS = [], FAIL = new Set(), SCROLL = [], LS = null, LS_THROW = false, EXEC = [], EXEC_OK = true, PUSHED = [], DROPPED = [];
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const FILES = {};
+const ctx = {
+  console, Math, JSON, Object, Array, String, Number, Set, Map, Promise, isFinite, encodeURIComponent, Error, Date, parseFloat,
+  setTimeout: (f) => { f(); return 0; }, clearTimeout: () => {},
+  DATA: null, APP: '',
+  document: {
+    querySelector: s => s === '.screen.on' ? { dataset: { screen: ON } } : (s === '.screen[data-screen=scr]' ? SCREEN : null),
+    getElementById: () => null,
+    execCommand: c => { EXEC.push(c); return EXEC_OK; },
+  },
+  window: { scrollBy: (x, y) => { SCROLL.push(y); }, innerWidth: 1280, innerHeight: 800, scrollY: 0, addEventListener() {}, removeEventListener() {} },
+  navigator: {},
+  get localStorage() { if (LS_THROW) throw new Error('blocked'); return { getItem: k => (LS && k in LS ? LS[k] : null), setItem: (k, v) => { if (LS) LS[k] = String(v); } }; },
+  SP: { quietly: f => f() },
+  HB: { st: [] }, hbPush: (t) => { PUSHED.push(t); }, hbDrop: (t) => { DROPPED.push(t); },
+  screenDiv: () => SCREEN,
+  fmtD: s => { const p = String(s).split('-'); return (+p[2]) + ' ' + MON[+p[1] - 1]; },
+  fmtMon: k => MON[+String(k).slice(5, 7) - 1] + ' ' + String(k).slice(0, 4),
+  setApp: n => { ctx.APP = n; },
+  hubStChip: k => `<span class="hub-st st-${k}">${k}</span>`,
+  appIconId: (id, name, size) => `<span class="aicon" data-iid="${id}" data-sz="${size}"></span>`,
+  uniVis: id => id !== ID.hidden,
+  appIdOf: name => { const c = (ctx.DATA && ctx.DATA.apps_catalog || []).filter(x => x.app_name === name); return c.length === 1 ? c[0].app_id : ''; },
+  valFlag: cc => '[' + cc + ']', valCtyName: cc => 'Name ' + cc,
+  fetchGzJson: url => { const f = String(url).split('?')[0]; LOADS.push(f); if (FAIL.has(f) || !(f in FILES)) return Promise.reject(new Error('net')); return Promise.resolve(JSON.parse(JSON.stringify(FILES[f]))); },
+};
+vm.createContext(ctx);
+// ── synthetic files ──
+const D0 = '2026-01-01', FT = '2026-03-28', TD = '2026-03-30', ND = 89;
+const day = k => new Date(Date.UTC(2026, 0, 1 + k)).toISOString().slice(0, 10);
+const ID = { a: 'ca-app-pub-0000000000000000~21', b: 'ca-app-pub-0000000000000000~22', c: 'ca-app-pub-0000000000000000~23', d: 'ca-app-pub-0000000000000000~24',
+  e: 'ca-app-pub-0000000000000000~25', h: 'ca-app-pub-0000000000000000~26', hidden: 'ca-app-pub-0000000000000000~27' };
+const KEY = { a: 'a00000000001', b: 'a00000000002', c: 'a00000000003', d: 'a00000000004', e: 'a00000000005', h: 'a00000000006', hidden: 'a00000000007' };
+const HOSTILE = '<img src=x onerror=alert(1)>Activity';
+const READS = ['t', 'v', 'w', 'a', 'nV', 'nA', 'rV', 'rA', 'cV', 'cA', 'k', 'e', 'uV', 'uA', 's', 'x'];
+function items(main) { return [[main || 'x.y.MainActivity', 's', 'inline'], ['x.y.EditorActivity', 's', 'inline'], ['', 'o', 'inline'], ['(not set)', 'ns', 'inline'],
+  ['AdActivity', 'ad', 'inline'], ['(other)', 'g', 'inline'], ['Back press', 'fs', 'interstitial'], ['App resume', 'fs', 'appopen']]; }
+// one app's scr_all entry: views per item, ads (inline on screens, full on triggers); opts: sampled (inline ads null every
+// day, a 's'), cDays (inline null on every 3rd day: GA4 gave the screen without the format), st (read → string)
+function mkAll(o) {
+  const V = [], A = [], vis = [], ta = [];
+  for (let k = 0; k < ND; k++) {
+    const v = [1000 + k, 500, 300, 50, 400, 20, null, null];
+    const low = k >= 79 ? 0.08 : 0.12;
+    let ad = [Math.round((1000 + k) * low), 50, 30, 5, 2, 1, 40, 25];
+    if (o.sampled || (o.cDays && k % 3 === 0)) ad = ad.map((x, i) => i < 6 ? null : x);
+    V.push(v); A.push(ad); vis.push(1000 + k + 500 + 300 + 50 + 20);
+    ta.push([Math.round((1000 + k) * low) + 50 + 30 + 5 + 2 + 1, 65, 0]);
+  }
+  const st = {}; for (const r of READS) st[r] = 'w'.repeat(ND); Object.assign(st, o.st || {});
+  const bf = {}; for (const r of READS) bf[r] = [D0, true]; Object.assign(bf, o.bf || {});
+  return { key: o.key, ft: FT, td: TD, d0: D0, items: items(o.main), vis, V, A, ta, st, bf, status: o.status || {}, app: o.app, dq: o.dq || [] };
+}
+function mkF2(o) {
+  const screens = [[o.main || 'x.y.MainActivity', 's'], ['x.y.EditorActivity', 's'], ['x.y.Other1Activity', 's'], ['(not set)', 'ns'], ['AdActivity', 'ad'], ['(other)', 'g']];
+  const units = [['unit_a', 'banner', ['ca-app-pub-0000000000000000/1001'], 'unit_a', 'name', ''],
+    ['unit_b', 'interstitial', ['ca-app-pub-0000000000000000/1002'], 'unit_b', 'name', 'Back press'],
+    ['unit_c', 'appopen', ['ca-app-pub-0000000000000000/1003'], 'unit_c', 'name', 'App resume'],
+    ['0123456789abcdef', 'native', [], '', '', '']];
+  const days = [], adm = o.noPlace ? {} : { 0: [], 1: [], 2: [] };
+  for (let k = 0; k < ND; k++) {
+    const g = o.cDays && k % 3 === 0 ? 'c' : o.cDays && k % 3 === 1 ? 'f' : 'fu';
+    // the build's a rows: fu [class, unit, n] (the unit's format in units) · f [class, inline, full, notset] · c [class, n]
+    days.push({ v: [[0, 1000 + k, 30000], [1, 500, 9000], [2, 300, 4000], [3, 50, 500], [4, 400, 2000], [5, 20, 100]],
+      a: g === 'fu' ? { g, r: [[0, 0, 100], [1, 0, 50], [4, 1, 30]] } : g === 'f' ? { g, r: [[0, 100, 0, 0], [1, 50, 0, 0], [4, 0, 30, 0]] } : { g, r: [[0, 120], [1, 50]] },
+      w: [[0, 160], [1, 40], [2, 25]], ta: [['banner', 160], ['interstitial', 40], ['app_open', 25]], dup: [0, 0], st: { v: 'w', a: 'w' } });
+    if (!o.noPlace) { adm[0].push([2000, 1800, 165]); adm[1].push(k % 10 ? [100, 80, 41] : null); adm[2].push([60, 50, 25]); }
+  }
+  return { v: 1, key: o.key, app_id: o.id, ft: FT, td: TD, d0: D0, screens, units, trig: [['interstitial', 'Back press', [1]], ['appopen', 'App resume', [2]]], days, adm,
+    rows: { s0: { st: ['Worse', 'gira', 66], z: -4.2, h: [70, 62], W: [10000, 880, 10], N: [28000, 3360, 28], cause: 'Lower fill', terms: { fill: -12.3, req: -3.1, tie: 0.4 },
+      units: [[0, 2000, 2100, 0.9, 0.92, 0.092, 0.095, 0.97, 0.99]], fbd: '2026-03-20' } },
+    notes: { zone: 'assumed', admob: o.noPlace ? 'none' : 'ok', allf: 0, runs: [['2026-02-01', '2026-02-05', 1, 0]], w: ['2026-03-19', FT], n: ['2026-02-19', '2026-03-18'], dq: [] } };
+}
+function mkL(o) {
+  const days = [];
+  for (let k = 0; k < ND; k++) days.push({
+    nV: { st: 'w', g: 'c', r: [['new', 0, 300], ['returning', 0, 700 + k], ['new', 1, 100]] },
+    nA: { st: 'w', g: 'cf', r: [['new', 0, 'banner', 30], ['returning', 0, 'banner', 80], ['new', 1, 'interstitial', 5]] },
+    k: { st: 'w', g: 'c', r: o.noClick ? [] : [[0, 'ad_click', 3], [1, 'ad_reward', 1]], t: o.noClick ? {} : { ad_click: 3 } },
+    e: { st: 'w', g: 'c', r: [[0, 40000]] }, uV: { st: 'w', g: 'c', r: [[0, 900, 800], [1, 400, 350]] }, uA: { st: 'w', g: 'c', r: [[0, 600], [1, 100]] },
+    s: { st: 'w', g: 'fs', r: [['banner', 'Network A', 90], ['banner', 'Network <B>', 10], ['interstitial', 'Network A', 40]] },
+    x: { st: 'w', ev: ['custom_ad_shown'], r: [[0, 'custom_ad_shown', 7]], t: [['custom_ad_shown', 9]] } });
+  return { v: 1, key: o.key, d0: D0, days,
+    // versions: items / same days by file 2's class index (-1 = app level)
+    ver: { '1.0': { first: '2026-01-01', last: '2026-02-20', prev: null, items: { 0: [40000, 4800, 0], 1: [20000, 2000, 0], '-1': [30000, 1200, 3000] }, same_days: {} },
+      '1.1<script>': { first: '2026-02-10', last: TD, prev: '1.0', items: { 0: [30000, 2700, 0], 1: [10000, 1000, 0], '-1': [30000, 2300, 2800] }, same_days: { 0: [5000, 550, 4000, 480] } } },
+    ver_order: ['1.0', '1.1<script>'],
+    ver_m: { '2026-02': [['1.0', 0, 10000, 1200, 0, 0], ['1.0', -1, 30000, 3000, 1200, 0]] },
+    cc_m: { '2026-02': [['XA', 0, 20000, 2400, 0, 0], ['XB', 0, 8000, 800, 0, 0], ['(other)', 0, 500, 40, 0, 0], ['XA', -1, 40000, 4000, 1500, 0]] },
+    shards: { r: {}, c: { 202603: 'cs1' } }, big: { r: [], c: ['202602'] }, failed: { r: ['202603'], c: [] },
+    report: { app: 'App report\nline two\nline three', rows: { s0: 'Row report\nscreen x.y.MainActivity\nline 3\nline 4' } } };
+}
+function mkShard(key) {
+  // the build's shard rows by index: V [dim, item, views] | [dim, views] (app level) · A cf [dim, item, inline, full, notset]
+  const days = []; for (let j = 0; j < 30; j++) days.push({ V: { st: 'w', g: 'c', r: [[0, 0, 600], [1, 0, 300], [0, 1, 200]] }, A: { st: 'w', g: 'cf', r: [[0, 0, 70, 0, 0], [1, 0, 20, 0, 0], [0, 1, 0, 9, 0]] } });
+  return { v: 1, key, m: '2026-03', dims: ['XA', 'XB'], items: [['x.y.MainActivity', 's'], ['x.y.EditorActivity', 's'], ['Other screens', 'o'], ['Not recorded', 'ns'], ['Ad screens', 'ad'], ['GA4 grouped', 'g']], days };
+}
+const S = (w, why, sc, cz) => [w, why, sc, cz];
+const ALLF = { v: 1, apps: {
+  [ID.a]: mkAll({ key: KEY.a, app: ['Worse', '1 screen Worse', 1, 1], status: { 0: S('Worse', 'ads/100 34% gira', 66, 'Lower fill'), 1: S('Normal', '', 99, ''), 2: S('Watch', 'thoda gira', 86, 'Fewer ad requests'), 6: S('Better', '', 118, ''), 7: S('Too early', 'kam data', null, '') } }),
+  [ID.b]: mkAll({ key: KEY.b, sampled: true, app: ['N/A', 'GA4 sampled', 0, 0], status: { 0: S('N/A', 'GA4 sampled', null, '') }, st: { a: 's'.repeat(ND), nA: 's'.repeat(ND), rA: 's'.repeat(ND), cA: 's'.repeat(ND) } }),
+  [ID.c]: mkAll({ key: KEY.c, cDays: true, app: ['Watch', '', 0, 1], status: { 1: S('Watch', '', 85, 'Not measurable (units not split)') },
+    st: { rV: '-'.repeat(60) + 'w'.repeat(29), rA: '-'.repeat(60) + 'w'.repeat(29), cV: '-'.repeat(60) + 'w'.repeat(29), cA: '-'.repeat(60) + 'w'.repeat(29) },
+    bf: { rV: ['2026-03-02', false], rA: ['2026-03-02', false], cV: ['2026-03-02', false], cA: ['2026-03-02', false] } }),
+  [ID.d]: mkAll({ key: KEY.d, app: ['Normal', '', 0, 0], dq: ['ns', 'some_new_code'], st: { e: 'w'.repeat(70) + 'p'.repeat(19) } }),
+  [ID.e]: { key: KEY.e, ft: FT, td: TD, d0: null, items: [], vis: [], V: [], A: [], ta: [], st: {}, bf: { v: ['2026-03-20', false] }, status: {}, app: ['Too early', 'history bhar rahi', 0, 0], dq: [] },
+  [ID.h]: mkAll({ key: KEY.h, main: HOSTILE, app: ['Better', '<b>bold</b>', 0, 0], status: { 0: S('Watch', '<script>x</script>', 88, '<i>cause</i>') } }),
+  [ID.hidden]: mkAll({ key: KEY.hidden, app: ['Worse', '', 5, 0] }),
+} };
+FILES['scr_all.json.gz'] = ALLF;
+for (const k of ['a', 'b', 'c', 'd', 'h']) {
+  const o = { key: KEY[k], id: ID[k], cDays: k === 'c', noPlace: k === 'd', main: k === 'h' ? HOSTILE : null, noClick: k === 'd' };
+  FILES['scr_' + KEY[k] + '.json.gz'] = mkF2(o); FILES['scr_l_' + KEY[k] + '.json.gz'] = mkL(o);
+}
+FILES['scr_c_' + KEY.a + '_202603.json.gz'] = mkShard(KEY.a);
+const CAT = [['a', 'Alpha App'], ['b', 'Beta App'], ['c', 'Gamma App'], ['d', 'Delta App'], ['e', 'Empty App'], ['h', 'Hostile App'], ['hidden', 'Hidden App']]
+  .map(([k, n]) => ({ app_id: ID[k], app_name: n }));
+const PTR = { v: 1, file: 'scr_all.json.gz', fv: 'f1', apps: {} };
+for (const k of ['a', 'b', 'c', 'd', 'e', 'h']) PTR.apps[ID[k]] = { key: KEY[k], v: 'v' + k, vl: 'l' + k, from: D0, ft: FT };
+const tick = async (n = 4) => { for (let i = 0; i < n; i++) await new Promise(r => setImmediate(r)); };
+const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].map(m => m[1]);
+(async () => {
+  try {
+    vm.runInContext(src, ctx);
+    const SCR = ctx.SCR, _ = SCR._;
+    // ── the pointer ──
+    ctx.DATA = {}; out.no_ptr = SCR.ptr() === null;
+    ctx.DATA = { scr: { file: '../x.json.gz', apps: {} } }; out.bad_file = SCR.ptr() === null;
+    ctx.DATA = { scr: { file: 'scr_all.json.gz', fv: 'f1' } }; out.no_apps = SCR.ptr() === null;
+    SCR.render(); ctx.DATA = {}; SCR.paint(); out.no_ptr_note = SCREEN.innerHTML.includes('Screens ka data is build me nahi bana');
+    // ── a failed load, then Try again ──
+    ctx.DATA = { scr: PTR, apps_catalog: CAT, generated_at: '2026-03-30T06:00:00Z' };
+    FAIL.add('scr_all.json.gz'); SCR.paint(); out.loading = SCREEN.innerHTML.includes('⏳ Loading…'); await tick();
+    out.fail_html = SCREEN.innerHTML.includes('data-sc-allretry');
+    FAIL.clear(); SCREEN.onclick({ target: { closest: s => s === '[data-sc-allretry]' ? {} : null } }); await tick();
+    out.loads_all = LOADS.filter(f => f === 'scr_all.json.gz').length;
+    // ── the picker ──
+    const x = ALLF.apps[ID.a], R = (k, f, t) => _.rng(x, k, f || '', t || '');
+    out.rng = { today: R('today'), yday: R('yday'), '7': R('7'), tm: R('tm'), lm: R('lm'), '30': R('30'), '60': R('60'), '90': R('90'), all: R('all'),
+      cus: R('cus', '2026-03-20', '2026-03-10'), cus_clamp: R('cus', '2025-06-01', '2027-01-01'), cus_empty: R('cus'), mon_feb: R('mon:2026-02'), mon_mar: R('mon:2026-03'), bogus: R('zz') };
+    out.notfinal = Object.fromEntries(['today', 'yday', '7', '30', 'tm'].map(k => [k, R(k)[1] > x.ft]));
+    out.norm = { d7: _.normWin(x, '2026-03-22', '2026-03-28'), d30: _.normWin(x, '2026-02-27', '2026-03-28'), today: _.normWin(x, TD, TD), d60: _.normWin(x, '2026-01-28', '2026-03-28') };
+    const ps = (lo, hi, all) => { const p = _.perScore(x, 1, lo, hi, all); return { muted: p.muted, fin: p.fin, score: p.score }; };
+    out.muted = { today: ps(TD, TD), d7: ps('2026-03-22', '2026-03-28'), short: ps('2026-03-25', TD), all: ps(D0, TD, true) };
+    // the sums: Gamma's screen-only days (every 3rd) carry no inline ads
+    const xc = ALLF.apps[ID.c], si = _.sumItem(xc, 1, '2026-02-27', '2026-03-28');
+    out.sum_c = [si.v, si.a, si.n, si.nv, si.nd, si.vAll, si.rate];
+    const sa = _.sumItem(ALLF.apps[ID.b], 0, '2026-02-27', '2026-03-28'); out.sum_sampled = [sa.v, sa.a, sa.n, sa.rate, sa.vAll];
+    const sf = _.sumItem(ALLF.apps[ID.b], 6, '2026-02-27', '2026-03-28'); out.sum_fs = [sf.v, sf.a, sf.n, sf.rate];
+    // ── status words, order ──
+    out.wdk = _.WDK; out.rank = _.RANK;
+    // ── All apps ──
+    ctx.APP = ''; _.set({ PER: '30', PREAD: true }); SCR.paint();
+    let h = SCREEN.innerHTML; out.all_html = h.length;
+    out.all_rows = names(h); out.all_hidden = h.includes('Hidden App');
+    out.all_icons = [...h.matchAll(/data-sc-app="[^"]+"[^>]*><td class="sc-nm"><span class="sc-an"><span class="aicon" data-iid="([^"]+)"/g)].map(m => m[1]);
+    out.all_chips = [...h.matchAll(/<tr class="sc-clk" data-sc-app="[^"]+"[^>]*><td class="sc-nm">.*?<span class="sc-stl"><span class="hub-st st-([a-z]+)">/g)].map(m => m[1]);
+    out.cov = [...h.matchAll(/data-sc-cov="([a-z])"[^>]*><span>([^<]+)<\/span> <b>(\d+)\/(\d+)<\/b>/g)].map(m => [m[1], +m[3], +m[4]]);
+    const L = Object.keys(ALLF.apps).filter(id => id !== ID.hidden).map(id => ({ id, x: ALLF.apps[id], name: id }));
+    out.cov_fn = _.coverAll(L).map(c => [c.code, c.w, c.m]);
+    out.all_hostile_why = h.includes('&lt;b&gt;bold&lt;/b&gt;') && !h.includes('<b>bold</b>');
+    out.all_hist = [...h.matchAll(/<td><span title="[^"]*">([^<]+)<\/span><\/td><\/tr>/g)].map(m => m[1]);   // the History column
+    out.all_period = /30 days \(GA4 · 27 Feb – 28 Mar\)/.test(h);
+    // the coverage chip: the apps not whole with why
+    _.set({ COVP: 'r' }); SCREEN.paint ? 0 : 0; SCR.paint(); h = SCREEN.innerHTML;
+    const covl = h.slice(h.indexOf('id="sc-covl"'));
+    out.cov_list = [...covl.matchAll(/<div class="sc-covr"><span class="sc-an"><span class="aicon" data-iid="([^"]+)"[^>]*><\/span><span>[^<]*<\/span><\/span><small>([^<]*)<\/small>/g)].map(m => [m[1], m[2]]);
+    _.set({ COVP: '' });
+    // sort order: by status (Worse first) and a column
+    out.sort_rank = out.all_rows;
+    _.set({ SORT: { k: 'v', dir: -1 } }); SCR.paint(); out.sort_v = names(SCREEN.innerHTML); _.set({ SORT: { k: 'rank', dir: 1 } });
+    // All time: no score
+    _.set({ PER: 'all' }); SCR.paint(); out.all_time = SCREEN.innerHTML.includes('All time pe normal nahi') && !/score <b/.test(SCREEN.innerHTML); _.set({ PER: '30' });
+    // a row tap opens the app
+    SCREEN.onclick({ target: { closest: s => s === 'tr[data-sc-app]' ? { dataset: { scApp: 'Gamma App' } } : null } });
+    out.row_tap = ctx.APP;
+    // ── app pages: every app, every section, every fold ──
+    const pages = {};
+    for (const k of ['a', 'b', 'c', 'd', 'e', 'h']) {
+      const nm = CAT.find(c => c.app_id === ID[k]).app_name; ctx.APP = nm; _.set({ OPEN: null, SEC: 'ov', SEG: 's', MORE: false });
+      SCR.paint(); await tick(8); SCR.paint();
+      const pg = { html: SCREEN.innerHTML.length, sections: {}, errors: [] };
+      pg.empty = SCREEN.innerHTML.includes('Is app ka Screens data abhi aa raha hai');
+      pg.attn = SCREEN.innerHTML.includes('id="sc-attn"'); pg.ok_all = SCREEN.innerHTML.includes('✅ Sab screens normal');
+      pg.rows = [...SCREEN.innerHTML.matchAll(/<tr class="sc-clk[^"]*" data-sc-open="(\d+)"/g)].map(m => +m[1]);
+      pg.more = (/Show (\d+) more screens/.exec(SCREEN.innerHTML) || [])[1] || null;
+      pg.basis = (/<small>[\d,]+ visits · (\d+\/\d+ [a-z]+)<\/small>/.exec(SCREEN.innerHTML) || [])[1] || null;   // a row's days
+      if (k !== 'e') {
+        for (const seg of ['s', 'f']) for (const i of [0, 1, 2, 3, 6]) for (const [sec] of _.SECS) {
+          _.set({ SEG: seg, OPEN: i, SEC: sec });
+          try { SCR.paint(); await tick(4); SCR.paint(); pg.sections[sec + ':' + i] = SCREEN.innerHTML.slice(SCREEN.innerHTML.indexOf('id="sc-dd"')); }
+          catch (e) { pg.errors.push(sec + ':' + i + ' ' + e.message); }
+        }
+      }
+      pg.loaded = LOADS.filter(f => f.includes(KEY[k]));
+      pages[k] = pg;
+    }
+    out.pages = Object.fromEntries(Object.entries(pages).map(([k, p]) => [k, { html: p.html, empty: p.empty, attn: p.attn, ok_all: p.ok_all, rows: p.rows, more: p.more, basis: p.basis, errors: p.errors, loaded: [...new Set(p.loaded)], n_sections: Object.keys(p.sections).length }]));
+    const sec = (k, s) => pages[k].sections[s] || '';
+    out.alpha = {
+      ov_terms: sec('a', 'ov:0').includes('Lower fill') && sec('a', 'ov:0').includes('−12.3%') && sec('a', 'ov:0').includes('First bad day: <b>20 Mar 2026</b> (us din se rate'),
+      ov_months: [...sec('a', 'ov:0').matchAll(/<td class="sc-nm">([A-Z][a-z]{2} \d{4}) <small>· (\d+)d<\/small>/g)].map(m => [m[1], +m[2]]),
+      ov_days: (sec('a', 'ov:0').match(/<td class="sc-nm[^"]*">\d+ [A-Z][a-z]{2} 2026/g) || []).length,
+      ov_first_day: (/<td class="sc-nm[^"]*">(\d+ [A-Z][a-z]{2} 2026)/.exec(sec('a', 'ov:0').slice(sec('a', 'ov:0').indexOf('id="sc-dtw"'))) || [])[1],
+      un: [...sec('a', 'un:0').matchAll(/<tr><td class="sc-nm"><span class="sc-n">([^<]+)<\/span>/g)].map(m => m[1]),
+      un_cz: (/Units in the status window[\s\S]*?<tr><td class="sc-nm"><span class="sc-n">unit_a<\/span><\/td>(.*?)<\/tr>/.exec(sec('a', 'un:0')) || [])[1] || null,
+      un_fs: [...sec('a', 'un:6').matchAll(/<tr><td class="sc-nm"><span class="sc-n">([^<]+)<\/span>/g)].map(m => m[1]),
+      un_row: (/<tr><td class="sc-nm"><span class="sc-n">unit_a<\/span>.*?<\/tr>/.exec(sec('a', 'un:0')) || [''])[0],
+      ver: sec('a', 'ver:0').includes('1.1&lt;script&gt;') && !sec('a', 'ver:0').includes('1.1<script>') && sec('a', 'ver:0').includes('picker yahan lagu nahi'),
+      ver_same: /10\.0 vs 11\.0 <small>−9%<\/small>|11\.0 vs 12\.0/.test(sec('a', 'ver:0')) ? (/([\d.]+) vs ([\d.]+) <small>([^<]+)<\/small>/.exec(sec('a', 'ver:0')) || []).slice(1) : (/([\d.]+) vs ([\d.]+) <small>([^<]+)<\/small>/.exec(sec('a', 'ver:0')) || []).slice(1),
+      cc_notes: [sec('a', 'cc:0').includes('Feb 2026: din-wise file bahut badi thi'), sec('a', 'ver:0').includes('Mar 2026: is build me file nahi ban saki')],
+      cc: [...sec('a', 'cc:0').matchAll(/<tr><td class="sc-nm">([^<]+)<\/td><td>([^<]+)<\/td><td>([^<]+)<\/td><td><b>([^<]+)<\/b>/g)].map(m => m.slice(1)),
+      nvr: [...sec('a', 'nvr:0').matchAll(/<tr><td class="sc-nm">([^<]+)<\/td><td>([^<]+)<\/td><td>([^<]+)<\/td>/g)].map(m => m.slice(1)),
+      eng: [...sec('a', 'eng:0').matchAll(/<div class="sc-kl">([^<]+)<\/div><div class="sc-kv">([^<]*)<\/div>/g)].map(m => m.slice(1)),
+      x: sec('a', 'x:0').includes('custom_ad_shown'),
+      rep: sec('a', 'rep:0').includes('data-sc-copy="row"') && sec('a', 'rep:0').includes('4 lines') && !/data-sc-copy="row"[^>]*disabled/.test(sec('a', 'rep:0')),
+      rep_none: sec('a', 'rep:1').includes('Is row ka report nahi'),
+    };
+    // labels in simple English (owner rule); the faint hints / why lines stay Hinglish
+    out.labels = {
+      terms: sec('a', 'ov:0').includes('<th>Part of the change</th><th>% of normal rate</th>'),
+      un: sec('a', 'un:0').includes("<th>GA4 ads (this row)</th><th>Share of the unit's ads</th><th>Requests / day</th>")
+        && sec('a', 'un:6').includes('<th>GA4 ads</th><th>Requests / day</th>'),
+      cz: sec('a', 'un:0').includes('<h4 class="sc-h4">Units in the status window <small class="sc-faint">pichhle 10 final din vs 28 pehle (cause inhi se)</small></h4>'),
+      ver: sec('a', 'ver:0').includes('<h4 class="sc-h4">This period · by version</h4>')
+        && sec('a', 'ver:0').includes('<h4 class="sc-h4">Every version · whole life <small class="sc-faint">(picker yahan lagu nahi)</small></h4>')
+        && sec('a', 'ver:0').includes('<th>Same days: this vs previous</th>') && sec('a', 'ver:0').includes('<p class="sc-note">"Same days" = jin dino dono versions'),
+    };
+    out.shard_loads = LOADS.filter(f => /^scr_c_/.test(f));
+    out.delta = { un_noplace: sec('d', 'un:0').includes('AdMob data (placements) nahi'), eng_noclick: sec('d', 'eng:0').includes('ad_click log nahi hua') };
+    out.gamma = { un_split: sec('c', 'un:1').includes('units not split'), ov_why: sec('c', 'ov:1').includes('format not split'),
+      month_days: [...sec('c', 'ov:1').matchAll(/<small>(\d+\/\d+ [a-z]+)<\/small><\/td><\/tr>/g)].map(m => m[1]) };
+    out.beta = { tbl_null: sec('b', 'ov:0').includes('GA4 sampled') };
+    // the app page parts on Alpha (30 days)
+    ctx.APP = 'Alpha App'; _.set({ OPEN: null, SEG: 's', MORE: false, SEC: 'ov', PER: '30' }); SCR.paint(); h = SCREEN.innerHTML;
+    out.a_page = {
+      crumb: h.includes('data-sc-all="1"') && h.includes('history from 1 Jan 2026'),
+      visits_sub: h.includes('<div class="sc-kl">Visits</div><div class="sc-kv">58,245</div><div class="sc-ks">30 days</div>'),
+      tiles: [...h.matchAll(/<div class="sc-kl">([^<]+)<\/div><div class="sc-kv">([^<]*)<\/div>/g)].map(m => m.slice(1)),
+      attn: [...h.slice(h.indexOf('id="sc-attn"'), h.indexOf('Today · Yesterday')).matchAll(/<span class="hub-st st-([a-z]+)">[a-z]+<\/span><span class="sc-atn"[^>]*>([^<]+(?:<wbr>[^<]+)*)<\/span><span class="sc-atr">([^<]+)<\/span>/g)].map(m => [m[1], m[2].replace(/<wbr>/g, ''), m[3]]),
+      mini: h.includes('Today <small>30 Mar</small>') && h.includes('Yesterday <small>29 Mar</small>') && h.includes('<th>Normal <small>28 days before</small></th>')
+        && h.includes('Today aur Yesterday abhi final nahi'),
+      seg: /data-sc-seg="s" aria-pressed="true">Screens <small>6<\/small>/.test(h) && /data-sc-seg="f" aria-pressed="false">Full-screen <small>2<\/small>/.test(h),
+      rows: [...h.matchAll(/<tr class="sc-clk[^"]*" data-sc-open="(\d+)"/g)].map(m => +m[1]),
+      wbr: h.includes('Main</span>') || h.includes('<span class="sc-n">Main</span>'),
+      editor: h.includes('<span class="sc-n">Editor</span>'),
+      title: h.includes('title="x.y.MainActivity"'),
+      unjudged: (h.match(/not judged/g) || []).length,
+      folds: [...h.matchAll(/data-sc-fold="([a-z]+)"/g)].map(m => m[1]),
+      how: h.includes('5:30 AM IST se agle din 5:30 AM IST tak') && h.includes('GA4 data till <b>28 Mar 2026</b>') && h.includes('Build: 30 Mar 11:30 IST'),
+      cov_fold: h.includes('<td class="sc-nm">Visits</td><td>30</td><td>0</td><td>0</td><td>0</td>'),
+      rep_fold: h.includes('data-sc-copy="app"') && h.includes('3 lines'),
+      src_fold: h.includes('Network &lt;B&gt;') && !h.includes('Network <B>'),
+      notes: h.includes('AdMob account ka time zone nahi mila') && h.includes('Duplicate ad_impression 1 Feb 2026 – 5 Feb 2026: AdMob se confirm (copy hata di).'),
+      period: h.includes('30 days (GA4 · 27 Feb – 28 Mar)'),
+      cus_row: h.includes('data-sc-pf="1" aria-label="From" value="2026-02-27"') && h.includes('data-sc-pto="1" aria-label="To" value="2026-03-28"'),
+      mover: [...h.matchAll(/data-sc-per="(mon:[^"]+)" aria-pressed="(true|false)"( disabled)? aria-label="([^"]+)">([^<]+)</g)].map(m => [m[1], m[2], !!m[3], m[5]]),
+      chips: [...h.matchAll(/class="sc-pb" data-sc-per="([^"]+)"/g)].map(m => m[1]),
+    };
+    // Show more / the 90 % split on a screen-heavy period
+    _.set({ MORE: true }); SCR.paint(); out.a_more_rows = [...SCREEN.innerHTML.matchAll(/<tr class="sc-clk[^"]*" data-sc-open="(\d+)"/g)].map(m => +m[1]); _.set({ MORE: false });
+    out.top = [..._.topSplit(_.tableRows(x, '2026-02-27', '2026-03-28', 's'))].sort((p, q) => p - q);
+    // the 90 % split on many screens: 10 screens (5000, 3000, 1000, 500, 200, 100, 4 × 50 views a day) + one Worse far down
+    const many = { ft: FT, td: TD, d0: '2026-03-01', items: [5000, 3000, 1000, 500, 200, 100, 50, 50, 50, 50].map((v, j) => ['x.y.S' + j + 'Activity', 's', 'inline']).concat([['(not set)', 'ns', 'inline']]),
+      vis: [], V: [], A: [], ta: [], st: {}, status: { 9: ['Worse', '', 50, ''] } };
+    for (let k = 0; k < 30; k++) { many.V.push([5000, 3000, 1000, 500, 200, 100, 50, 50, 50, 50, 10]); many.A.push([500, 300, 100, 50, 20, 10, 5, 5, 5, 5, 1]); many.vis.push(10010); many.ta.push([1001, 0, 0]); }
+    out.top_many = [..._.topSplit(_.tableRows(many, '2026-03-01', '2026-03-28', 's'))].sort((p, q) => p - q);
+    ctx.DATA.scr.apps.many = { key: 'a00000000009', v: 'm', vl: 'm', from: D0, ft: FT }; ALLF.apps.many = many;
+    ctx.DATA.scr.fv = 'f2'; ctx.APP = 'many'; _.set({ OPEN: null, SEG: 's', MORE: false, PER: '30' }); SCR.paint(); await tick(); SCR.paint();
+    out.many_less = [[...SCREEN.innerHTML.matchAll(/<tr class="sc-clk[^"]*" data-sc-open="(\d+)"/g)].map(m => +m[1]), (/Show (\d+) more screens/.exec(SCREEN.innerHTML) || [])[1]];
+    SCREEN.onclick({ target: { closest: s => s === '[data-sc-more]' ? {} : null } });
+    out.many_more = [[...SCREEN.innerHTML.matchAll(/<tr class="sc-clk[^"]*" data-sc-open="(\d+)"/g)].map(m => +m[1]).length, SCREEN.innerHTML.includes('Show fewer screens')];
+    _.set({ MORE: false }); delete ALLF.apps.many; delete ctx.DATA.scr.apps.many; ctx.APP = 'Alpha App'; ctx.DATA.scr.fv = 'f3'; SCR.paint(); out.reload_no_loading = !SCREEN.innerHTML.includes('⏳ Loading…') && SCREEN.innerHTML.includes('id="sc-tcard"'); await tick();
+    out.reload_quiet = LOADS.filter(f => f === 'scr_all.json.gz').length;
+    out.sort_items = _.sortItems(_.tableRows(x, '2026-02-27', '2026-03-28', 's')).map(z => z.i);
+    // the short period: muted, Today not final
+    _.set({ PER: 'today' }); SCR.paint(); h = SCREEN.innerHTML;
+    out.today = { line: h.includes('Today (GA4 · 30 Mar) · not final'), muted: h.includes('short period') };
+    _.set({ PER: '30' });
+    // Delta's dq codes: known words, an unknown code as itself (escaped)
+    ctx.APP = 'Delta App'; SCR.paint(); h = SCREEN.innerHTML;
+    out.delta.dq = h.includes('Is app ka AdMob data (placements) nahi') && h.includes('some_new_code');
+    out.delta.cov_exposure = h.includes('<td class="sc-nm">Exposure</td><td>13</td><td>17</td><td>0</td><td>0</td>') && h.includes('GA4 grouped 17 din (57% din)');
+    // the Hostile class name: escaped in the table, the title, the drill-down, the Needs attention row
+    ctx.APP = 'Hostile App'; _.set({ OPEN: 0, SEC: 'ov' }); SCR.paint(); h = SCREEN.innerHTML;
+    out.hostile = { raw: h.includes('<img src=x'), esc: h.includes('&lt;img src=x onerror=alert(1)&gt;'), why: h.includes('&lt;script&gt;x&lt;/script&gt;') && !h.includes('<script>x'),
+      cause: h.includes('&lt;i&gt;cause&lt;/i&gt;') && !h.includes('<i>cause</i>'), disp: _.dispName(HOSTILE), item: _.itemName(['a.b.<x>"y\'Activity', 's', '']) };
+    // a phone opens the drill-down with a Back step; the empty app says so
+    ctx.window.innerWidth = 375; _.set({ OPEN: null }); SCREEN.onclick({ target: { closest: s => s === '[data-sc-open]' ? { tagName: 'TR', dataset: { scOpen: '1' } } : null } });
+    out.phone_push = PUSHED.slice(); out.open_after = _.get().OPEN; ctx.window.innerWidth = 1280;
+    SCREEN.onclick({ target: { closest: s => s === '[data-sc-close]' ? {} : null } }); out.closed = _.get().OPEN;
+    ctx.APP = 'Empty App'; SCR.paint(); out.empty_msg = (/Is app ka Screens data abhi aa raha hai — history bhar rahi hai: ([^<]+)\./.exec(SCREEN.innerHTML) || [])[1] || null;
+    // an app not in the file
+    ctx.APP = 'Hidden App'; SCR.paint(); out.hidden_page = SCREEN.innerHTML.includes('Is app ka Screens data nahi');
+    // ── Copy report ──
+    const ta = { value: 'a\nb\nc', focus(o) { ta.f = o; }, setSelectionRange(p, q) { ta.sel = [p, q]; } }, line = { textContent: '' };
+    ctx.navigator = {}; EXEC = []; EXEC_OK = true; out.copy_noapi = [_.copy('a\nb\nc', ta, line), line.textContent, EXEC.slice(), ta.sel, ta.f];
+    ctx.navigator = { clipboard: { writeText: () => Promise.reject(new Error('denied')) } }; EXEC = []; line.textContent = '';
+    const r1 = _.copy('a\nb\nc', ta, line); await tick(); out.copy_reject = [r1, line.textContent, EXEC.slice()];
+    ctx.navigator = { clipboard: { writeText: () => Promise.resolve() } }; EXEC = []; line.textContent = '';
+    const r2 = _.copy('a\nb', ta, line); await tick(); out.copy_ok = [r2, line.textContent, EXEC.length];
+    ctx.navigator = {}; EXEC_OK = false; line.textContent = ''; out.copy_manual = [_.copy('a', ta, line), line.textContent];
+    ctx.navigator = { get clipboard() { throw new Error('blocked'); } }; EXEC_OK = true; line.textContent = ''; out.copy_throw = [_.copy('a', ta, line), line.textContent];
+    // ── the period saved per viewer ──
+    const PR = (raw) => _.perRestore(raw, D0, TD);
+    out.per = { bogus: PR('{"k":"bogus"}'), notjson: PR('{oops'), old_mon: PR('{"k":"mon:2025-12"}'), future_mon: PR('{"k":"mon:2026-05"}'), mon: PR('{"k":"mon:2026-02"}'),
+      half: PR('{"k":"cus","f":"2026-03-10"}'), bad_date: PR('{"k":"cus","f":"2026-3-1","t":"2026-03-10"}'), cus: PR('{"k":"cus","f":"2026-03-20","t":"2025-12-01"}'),
+      cus_hi: PR('{"k":"cus","f":"2026-03-01","t":"2027-01-01"}'), ok90: PR('{"k":"90"}'), num: PR('{"k":7}'), nul: PR('null'), arr: PR('[1]') };
+    // lazily read on the first paint; a throwing localStorage is harmless, a bad stored key is ignored
+    _.set({ PER: '30', PREAD: false }); LS_THROW = true; ctx.APP = 'Alpha App'; SCR.paint(); out.per_throw = [_.get().PER, SCREEN.innerHTML.includes('30 days (GA4')]; LS_THROW = false;
+    _.set({ PER: '30', PREAD: false }); LS = { scr_per_v1: '{"k":"mon:2020-01"}' }; SCR.paint(); out.per_badkey = _.get().PER;
+    _.set({ PER: '30', PREAD: false }); LS = { scr_per_v1: '{"k":"60"}' }; SCR.paint(); out.per_good = _.get().PER;
+    // a tap saves it
+    SCREEN.onclick({ target: { closest: s => s === '[data-sc-per]' ? { dataset: { scPer: '7' } } : null } }); out.per_saved = LS.scr_per_v1;
+    _.set({ PER: '30' });
+    // ── the chart ──
+    const days = n => Array.from({ length: n }, (_x, k) => [day(k), k === 2 ? 50 : 1000, k === 2 ? 5 : (k === 3 ? null : 100), k === 3 ? 'GA4 sampled' : '']);
+    const m1 = _.chartModel(days(30), 12.34, day(27)), m2 = _.chartModel(days(200), 10, day(197)), m3 = _.chartModel(days(600), null, day(597));
+    out.chart = { d: [m1.by, m1.B.length, m1.B[2].r, m1.B[3].r, m1.B[3].why, m1.B[29].nf, m1.B[27].nf, m1.labels], w: [m2.by, m2.B.length, m2.B[0].v, m2.B[0].a, Math.round(m2.B[0].r * 100) / 100],
+      m: [m3.by, m3.B.length, m3.labels.norm] };
+    // drawing it into a box: the printed labels in the SVG
+    const box = { clientWidth: 600, _h: '', set innerHTML(v) { box._h = v; }, get innerHTML() { return box._h; },
+      querySelector: s => ({ querySelector: () => ({ setAttribute() {} }), addEventListener() {}, getBoundingClientRect: () => ({ width: 600, left: 0 }), setAttribute() {}, style: {}, hidden: true }) };
+    ctx.document.getElementById = id => id === 'sc-chart' ? box : null;
+    ctx.APP = 'Alpha App'; _.set({ OPEN: 0, SEC: 'ov', PER: '30' }); SCR.paint();
+    out.chart_svg = { normal: /class="sc-nt">Normal [\d.]+<\/text>/.test(box._h), last: /class="sc-rl"[^>]*>[\d.]+<\/text>/.test(box._h), avg: /class="sc-al">Avg [\d.]+<\/text>/.test(box._h), bars: (box._h.match(/<rect /g) || []).length };
+    ctx.document.getElementById = () => null;
+    // ── keep(): the tapped control back to its place, its sideways row's scroll kept ──
+    let top = 300; const ROW = { scrollLeft: 140 }; const BTN = { getBoundingClientRect: () => ({ top }), closest: s => s === '.sc-x' ? ROW : null };
+    SCREEN.querySelector = s => s === '[data-sc-per="90"]' ? BTN : null; SCROLL = [];
+    _.keep('[data-sc-per="90"]', () => { top = 360; ROW.scrollLeft = 0; });
+    out.keep = { dy: SCROLL.slice(), row: ROW.scrollLeft, minh: SCREEN.style.minHeight };
+    // the real taps repaint inside keep(): the hold must survive paint() (it starts by clearing a stale hold)
+    SCREEN.style.minHeight = ''; top = 300; SCROLL = []; let heldIn = null;
+    _.keep('[data-sc-per="90"]', () => { _.set({ PER: '90' }); SCR.paint(); heldIn = SCREEN.style.minHeight; top = 280; });
+    out.keep_paint = { held_in: heldIn, held_after: SCREEN.style.minHeight, dy: SCROLL.slice() };
+    SCR.paint(); out.keep_paint.plain_paint = SCREEN.style.minHeight;          // a paint outside keep() drops a stale hold
+    SCREEN.querySelector = () => null; _.set({ PER: '30' });
+    // ── the drill-down belongs to its app ──
+    ctx.APP = 'Alpha App'; _.set({ OPEN: null, SEC: 'ov', MORE: false }); SCR.paint(); DROPPED = []; PUSHED = [];
+    ctx.window.innerWidth = 375;
+    SCREEN.onclick({ target: { closest: s => s === '[data-sc-open]' ? { tagName: 'TR', dataset: { scOpen: '3' } } : null } });
+    ctx.window.innerWidth = 1280; _.set({ SEC: 'cc', MORE: true }); SCR.paint();
+    out.switch = { same: [_.get().OPEN, _.get().SEC, _.get().MORE, SCREEN.innerHTML.includes('id="sc-dd"'), _.get().OPENAPP], pushed: PUSHED.slice() };
+    ctx.APP = 'Beta App'; SCR.paint(); h = SCREEN.innerHTML;
+    out.switch.other = [_.get().OPEN, _.get().MORE, h.includes('id="sc-dd"'), / sc-on"/.test(h), DROPPED.slice()];
+    ctx.APP = 'Alpha App'; SCR.paint(); out.switch.back = [_.get().OPEN, SCREEN.innerHTML.includes('id="sc-dd"')];
+    ctx.APP = ''; _.set({ OPEN: 2 }); ctx.APP = 'Alpha App'; SCR.paint(); out.switch.from_all = _.get().OPEN;   // opened nowhere → closed
+    _.set({ OPEN: null, SEC: 'ov', MORE: false });
+    // ── "Details ▸" in Needs attention goes to the drill-down; a table row's tap stays put ──
+    const STK = { offsetHeight: 60 }, DD = { getBoundingClientRect: () => ({ top: 1500 }) }, AT = { getBoundingClientRect: () => ({ top: 200 }), closest: () => null };
+    ctx.document.getElementById = id => id === 'sc-dd' ? DD : id === 'sc-stk' ? STK : null;
+    SCREEN.querySelector = s => /data-sc-open="2"/.test(s) ? AT : null; SCROLL = [];
+    SCREEN.onclick({ target: { closest: s => s === '[data-sc-open]' ? { tagName: 'BUTTON', dataset: { scOpen: '2' } } : null } });
+    out.attn = { open: [_.get().OPEN, SCROLL.slice()] }; SCROLL = [];
+    SCREEN.onclick({ target: { closest: s => s === '[data-sc-open]' ? { tagName: 'BUTTON', dataset: { scOpen: '2' } } : null } });
+    out.attn.close = [_.get().OPEN, SCROLL.slice()]; SCROLL = [];
+    SCREEN.onclick({ target: { closest: s => s === '[data-sc-open]' ? { tagName: 'TR', dataset: { scOpen: '2' } } : null } });
+    out.attn.row = [_.get().OPEN, SCROLL.slice()];
+    SCREEN.querySelector = () => null; _.set({ OPEN: null });
+    // ── a late file: only the slots using it, their scroll boxes kept ──
+    const mkBoxes = () => [{ id: 'sc-dtw', scrollLeft: 0, scrollTop: 0 }, { id: '', scrollLeft: 0, scrollTop: 0 }];
+    const slot = () => { const o = { boxes: mkBoxes(), writes: 0, _h: '', set innerHTML(v) { o._h = v; o.writes++; o.boxes = mkBoxes(); }, get innerHTML() { return o._h; },
+      querySelectorAll: q => q === '.sc-x' ? o.boxes : [] }; return o; };
+    const SL = { 'sc-ddb': slot(), 'sc-f-src': slot(), 'sc-f-ver': slot(), 'sc-f-cov': slot(), 'sc-f-rep': slot() };
+    ctx.document.getElementById = id => SL[id] || null;
+    ctx.APP = 'Alpha App'; _.set({ OPEN: 0, SEC: 'ov', PER: '30' });
+    SL['sc-ddb'].boxes[0].scrollTop = 300; SL['sc-ddb'].boxes[1].scrollLeft = 50; SL['sc-f-cov'].boxes[1].scrollLeft = 25;
+    const w = () => Object.fromEntries(Object.entries(SL).map(([k, o]) => [k, o.writes]));
+    _.arrive(ID.a, '2');
+    out.arrive = { f2: w(), kept: [SL['sc-ddb'].boxes[0].scrollTop, SL['sc-ddb'].boxes[1].scrollLeft, SL['sc-f-cov'].boxes[1].scrollLeft], dd: SL['sc-ddb']._h.includes('id="sc-chart"') };
+    _.set({ SEC: 'ver' }); _.arrive(ID.a, 'c'); out.arrive.c_on_ver = w();
+    _.arrive(ID.a, 'r'); out.arrive.r_on_ver = w();
+    _.arrive(ID.a, 'l'); out.arrive.l_on_ver = w();
+    ctx.document.getElementById = () => null; _.set({ OPEN: null, SEC: 'ov' });
+    // ── a whole month: the build's month sums (cc_m / ver_m), no "not read" note ──
+    const rowsOf = hh => [...hh.matchAll(/<tr><td class="sc-nm">([^<]+)<\/td><td>([^<]+)<\/td><td>([^<]+)<\/td><td><b>([^<]+)<\/b>/g)].map(m => m.slice(1));
+    ctx.APP = 'Alpha App'; _.set({ PER: 'lm', OPEN: 0, SEC: 'cc' }); SCR.paint(); h = SCREEN.innerHTML.slice(SCREEN.innerHTML.indexOf('id="sc-dd"'));
+    out.month = { cc: rowsOf(h), cc_miss: h.includes('abhi nahi (padha nahi gaya)') };
+    _.set({ PER: 'mon:2026-02', SEC: 'ver' }); SCR.paint(); h = SCREEN.innerHTML.slice(SCREEN.innerHTML.indexOf('id="sc-dd"'));
+    out.month.ver = rowsOf(h.slice(0, h.indexOf('whole life'))); out.month.ver_miss = h.includes('abhi nahi (padha nahi gaya)');
+    const lp = _.layerPeriod(ALLF.apps[ID.a], ID.a, 0, 'r', '2026-02-01', '2026-02-28');
+    out.month.lp_r = { it: lp.it, app: lp.app, miss: lp.miss };
+    const lc = _.layerPeriod(ALLF.apps[ID.a], ID.a, 0, 'c', '2026-02-01', '2026-03-28');
+    out.month.lp_c_mixed = { XA: lc.it.XA, miss: lc.miss, wait: lc.wait };
+    _.set({ PER: '30', OPEN: null, SEC: 'ov' });
+    // ── the Screens table's default sort (status) honours its direction: a second tap on its header reverses it ──
+    ctx.APP = 'Alpha App'; _.set({ OPEN: null, SEG: 's', MORE: false, PER: '30', TS: { k: 'st', dir: 1 } }); SCR.paint();
+    const tRows = () => [...SCREEN.innerHTML.matchAll(/<tr class="sc-clk[^"]*" data-sc-open="(\d+)"/g)].map(m => +m[1]);
+    const tAria = () => (/<th aria-sort="([a-z]+)"><button type="button" data-sc-tsort="st">/.exec(SCREEN.innerHTML) || [])[1] || null;
+    const tTap = () => SCREEN.onclick({ target: { closest: s => s === '[data-sc-tsort]' ? { dataset: { scTsort: 'st' } } : null } });
+    out.tsort = { asc: [tRows(), tAria()] }; tTap(); out.tsort.desc = [tRows(), tAria()]; tTap(); out.tsort.back = [tRows(), tAria()];
+    _.set({ TS: { k: 'st', dir: -1 } }); out.sort_items_desc = _.sortItems(_.tableRows(x, '2026-02-27', '2026-03-28', 's')).map(z => z.i);
+    _.set({ TS: { k: 'st', dir: 1 } });
+    // ── the report before its files arrive: the same disabled Copy button + reserved line (the control keeps its place);
+    // a failed load: the error + Try again; no file in this build: says so ──
+    const FL = _.FILES, nL = 'scr_l_' + KEY.a + '.json.gz', n2 = 'scr_' + KEY.a + '.json.gz', xa0 = ALLF.apps[ID.a], keepL = FL[nL], keep2 = FL[n2];
+    const repAt = id => { _.set({ SEC: 'rep', OPEN: 0 }); return _.secHtml(xa0, id || ID.a, 0, '2026-02-27', '2026-03-28'); };
+    const foldRep = () => { const f = _.foldsHtml(xa0, ID.a, '2026-02-27', '2026-03-28'); return f.slice(f.indexOf('data-sc-fold="rep"'), f.indexOf('data-sc-fold="how"')); };
+    const rep = {}, ready = repAt();
+    rep.ready_head = ready.slice(0, ready.indexOf('<textarea'));
+    try {
+      FL[nL] = { busy: true }; rep.l_loading = repAt(); rep.fold_loading = foldRep();
+      FL[nL] = { err: true, v: 'la' }; rep.l_err = repAt(); rep.fold_err = foldRep();
+      FL[nL] = keepL; FL[n2] = { busy: true }; rep.f2_loading = repAt();
+      FL[n2] = { err: true, v: 'va' }; rep.f2_err = repAt();
+    } finally { FL[nL] = keepL; FL[n2] = keep2; }
+    rep.nofile = repAt('ca-app-pub-0000000000000000~99'); rep.after = repAt() === ready;
+    out.rep = rep; _.set({ SEC: 'ov', OPEN: null });
+    // ── a section needing both files when file 2 failed but scr_l came: the error + Try again, never "Loading" for good;
+    // a section needing scr_l only is drawn ──
+    const secAt = s => { _.set({ SEC: s, OPEN: 0 }); return _.secHtml(xa0, ID.a, 0, '2026-02-27', '2026-03-28'); }, gate = {};
+    try {
+      FL[n2] = { err: true, v: 'va' }; for (const s of ['ver', 'nvr', 'x', 'cc']) gate[s] = secAt(s);
+      FL[n2] = { busy: true }; gate.ver_loading = secAt('ver');
+      FL[n2] = keep2; FL[nL] = { err: true, v: 'la' }; gate.nvr_l_err = secAt('nvr');
+    } finally { FL[nL] = keepL; FL[n2] = keep2; }
+    out.gate = Object.fromEntries(Object.entries(gate).map(([k, v]) => [k, [(/data-sc-retry="([^"]+)">Try again<\/button>/.exec(v) || [])[1] || null,
+      v.includes('⏳ Loading data…'), v.includes('<table')]]));
+    // ── a unit GA4 logs that AdMob does not have: "Not in AdMob" under its name ──
+    const f2a = FL[n2].raw, dday = f2a.days[84];                                      // 26 Mar, inside the period
+    dday.a.r.push([0, 3, 7]);
+    try { out.not_in_admob = (/<span class="sc-n">0123456789abcdef<\/span>(<small[^>]*>[^<]*<\/small>)<\/td>/.exec(secAt('un')) || [])[1] || null; }
+    finally { dday.a.r.pop(); }
+    _.set({ SEC: 'ov', OPEN: null });
+    // ── All apps: the period sums and the coverage strip are kept per (build, period) — a sort tap, a chip tap and the
+    // refresh reuse them; a new period / a new build's data counts again (same numbers); no date string per day ──
+    ctx.APP = ''; _.set({ PER: '30', COVP: '', SORT: { k: 'rank', dir: 1 } }); SCR.paint();
+    const LA = _.apps(), C1 = _.coverAll(LA);
+    SCREEN.onclick({ target: { closest: s => s === '[data-sc-sort]' ? { dataset: { scSort: 'v' } } : null } });
+    SCREEN.onclick({ target: { closest: s => s === '[data-sc-cov]' ? { dataset: { scCov: 'r' } } : null } });
+    SCR.paint();
+    const C2 = _.coverAll(_.apps());
+    _.set({ PER: '7' }); const C7 = _.coverAll(_.apps()); _.set({ PER: '30' }); const C30 = _.coverAll(_.apps());
+    const xa = LA[0].x, xcopy = JSON.parse(JSON.stringify(xa)), CL2 = _.coverAll(LA.map((r, j) => j ? r : { id: r.id, x: xcopy, name: r.name }));
+    const A1 = _.appSum(xa, '2026-02-27', '2026-03-28'), A2 = _.appSum(xcopy, '2026-02-27', '2026-03-28');
+    let isoN = 0; const isoReal = Date.prototype.toISOString, iso = [];
+    Date.prototype.toISOString = function () { isoN++; return isoReal.call(this); };
+    try {
+      isoN = 0; _.cover(xcopy, ['v', 'a'], '2026-02-27', '2026-03-28'); iso.push(isoN);
+      isoN = 0; _.appSum(JSON.parse(JSON.stringify(xa)), '2026-02-27', '2026-03-28'); iso.push(isoN);
+      isoN = 0; _.sumItem(xcopy, 0, '2026-02-27', '2026-03-28'); iso.push(isoN);                // (reads each day's date)
+    } finally { Date.prototype.toISOString = isoReal; }
+    out.memo = { same_build: C2 === C1, new_period: C7 !== C1 && C30 !== C7 && JSON.stringify(C30) === JSON.stringify(C1),
+      new_data: CL2 !== C30 && JSON.stringify(CL2) === JSON.stringify(C30),
+      sum_same: _.appSum(xa, '2026-02-27', '2026-03-28') === A1, sum_period: _.appSum(xa, '2026-03-01', '2026-03-28') !== A1,
+      sum_data: A2 !== A1 && JSON.stringify(A2) === JSON.stringify(A1), iso };
+    _.set({ SORT: { k: 'rank', dir: 1 }, COVP: '' });
+    // ── a day the build could not read (its store month file: "x") and any other unknown state ──
+    const xs = { key: 'a00000000008', ft: FT, td: TD, d0: '2026-03-01', items: [], vis: Array(30).fill(100), V: [], A: [], ta: [],
+      st: { v: 'w'.repeat(10) + 'x'.repeat(5) + 'z'.repeat(2) + 'w'.repeat(13), a: 'w'.repeat(30) }, bf: {}, status: {}, app: ['Normal', '', 0, 0], dq: [] };
+    const cvx = _.cover(xs, ['v'], '2026-03-01', '2026-03-30'), fx = _.foldsHtml(xs, 'nope', '2026-03-01', '2026-03-30');
+    out.xstate = { c: [cvx.c.x, cvx.c['?'], cvx.c.w, cvx.nd, cvx.whole], why: _.covWhy(xs, ['v'], cvx),
+      day: [_.dayState(xs, ['v', 'a'], 12), _.dayState(xs, ['v'], 15), _.dayState(xs, ['v'], 0)],
+      vrow: (/<td class="sc-nm">Visits<\/td>(.*?)<\/tr>/.exec(fx) || [])[1] || null };
+    // hub card none: the pointer alone never loads a file
+    out.ready = SCR.ready();
+  } catch (e) { errors.push(String(e && e.stack || e)); }
+  console.log(JSON.stringify({ errors, out }));
+})();
