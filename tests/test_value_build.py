@@ -609,6 +609,41 @@ def test_fx_series_one_call_a_day(tmp_path):
     assert vb.update_fx_series(data, "USD", "2026-09-01", date(2026, 9, 4), get=down) == 0
 
 
+def test_fx_series_falls_back_to_the_ecb_feed(tmp_path):
+    """Both frankfurter hosts down (4 Nov 2026: 522 for hours) → the ECB's own reference rates, frankfurter's source:
+    USD per 1 INR = the day's USD rate ÷ its INR rate (EUR based), 6 places; only first … today; an old gap reads the full
+    history file. SYNTHETIC rates."""
+    xml = (b'<?xml version="1.0" encoding="UTF-8"?><gesmes:Envelope xmlns:gesmes="http://www.gesmes.org/xml/2002-08-01" '
+           b'xmlns="http://www.ecb.int/vocabulary/2002-08-01/eurofxref"><Cube>'
+           b'<Cube time="2026-09-04"><Cube currency="USD" rate="1.2"/><Cube currency="INR" rate="100.0"/></Cube>'
+           b'<Cube time="2026-09-03"><Cube currency="USD" rate="1.1"/><Cube currency="INR" rate="99.0"/></Cube>'
+           b'<Cube time="2026-09-02"><Cube currency="USD" rate="1.0"/><Cube currency="INR" rate="90.0"/></Cube>'
+           b'</Cube></gesmes:Envelope>')
+    asked = []
+
+    class R:
+        content = xml
+
+    def get(url, timeout=None):
+        asked.append(url)
+        if "frankfurter" in url:
+            raise OSError("522")
+        return R()
+    data = str(tmp_path)
+    data_path = os.path.join(data, vb.FX_FILE)
+    with open(data_path, "w") as f:
+        json.dump({"INR": {"2026-09-02": 0.011111}, "_ts": 1}, f)
+    assert vb.update_fx_series(data, "INR", "2026-09-01", date(2026, 9, 4), get=get, now=1_800_000_000) == 2
+    with open(data_path) as f:
+        ser = json.load(f)["INR"]
+    assert ser == {"2026-09-02": 0.011111, "2026-09-03": round(1.1 / 99.0, 6), "2026-09-04": 0.012}
+    assert [u.split("/")[2] for u in asked] == ["api.frankfurter.dev", "api.frankfurter.app", "www.ecb.europa.eu"]
+    assert asked[-1].endswith("eurofxref-hist-90d.xml")
+    old = vb._ecb_rates(get, "INR", date(2026, 1, 1), date(2026, 9, 4))           # an older gap: the full history
+    assert asked[-1].endswith("eurofxref-hist.xml") and old["2026-09-02"] == round(1.0 / 90.0, 6)
+    assert vb._ecb_rates(get, "EUR", date(2026, 9, 3), date(2026, 9, 4)) == {"2026-09-03": 1.1, "2026-09-04": 1.2}
+
+
 def test_settings_defaults_and_names(monkeypatch):
     s = settings()
     assert s["ga4_value"] is False and s["value_payback_days"] == 90 and s["gads_geo"] is False   # rollout step 3

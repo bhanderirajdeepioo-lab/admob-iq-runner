@@ -41,6 +41,11 @@ GEO_FILE = "roas_geo_cache.json"
 FX_EVERY_SEC = 20 * 3600                  # the FX range call: at most once a ~day
 FX_HOSTS = ("https://api.frankfurter.dev/v1/%s..%s?from=%s&to=USD",
             "https://api.frankfurter.app/%s..%s?from=%s&to=USD")
+# the European Central Bank's own reference rates — frankfurter's source, so the same numbers — when both frankfurter hosts
+# fail (4 Nov 2026: api.frankfurter.dev answered 522 for hours and .app redirects to it; the build's fx step failed every
+# run). EUR based: USD per 1 unit = the day's USD rate ÷ its rate. The 90-day file, the full one for an older gap.
+FX_ECB = ("https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml",
+          "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml")
 GEO_DAYS = 120                            # country cost days kept for the engine (≥ the 12-week country window)
 GEO_TOL_CELLS = 250                       # the geo cache's countries a store-week at most (≈ every country / territory)
 
@@ -672,9 +677,27 @@ def files(dashboard):
 
 # ── the dated FX series (build_static's ROAS step; best effort) ──────────────────────────────────
 
+def _ecb_rates(get, ccy, first, today):
+    """{day: USD per 1 ccy} first … today from the ECB's reference-rate XML (FX_ECB: the 90-day file, the full history for a
+    gap older than ~85 days), rounded as frankfurter gives them (6 places). A day without both rates is left out."""
+    import xml.etree.ElementTree as ET
+    url = FX_ECB[0] if (today - first).days <= 85 else FX_ECB[1]
+    root = ET.fromstring(get(url, timeout=30).content)
+    out = {}
+    for cube in root.iter():
+        day = cube.attrib.get("time") if cube.tag.endswith("Cube") else None
+        if not day or not (first.isoformat() <= day <= today.isoformat()):
+            continue
+        r = {c.attrib.get("currency"): float(c.attrib.get("rate")) for c in cube if c.attrib.get("currency")}
+        usd, unit = r.get("USD"), (1.0 if ccy == "EUR" else r.get(ccy))
+        if usd and unit:
+            out[day] = round(usd / unit, 6)
+    return out
+
+
 def update_fx_series(data_dir, ccy, start, today, get=None, now=None):
     """Extend data/fx_series.json {ccy: {day: USD per unit}} from its last stored day (else `start`) to `today` with
-    ONE frankfurter range call, at most once every ~20 h. Weekends / holidays are simply absent (the engine takes the
+    ONE frankfurter range call (both hosts down: the ECB's own feed, _ecb_rates), at most once every ~20 h. Weekends / holidays are simply absent (the engine takes the
     previous business day). → the number of days added (0: nothing to do). Raises on a failed call (the caller
     prints the error type only)."""
     if not ccy or ccy == "USD" or not start:
@@ -700,6 +723,11 @@ def update_fx_series(data_dir, ccy, start, today, get=None, now=None):
             rates = (r.json() or {}).get("rates") or {}
             got = {d: float(v["USD"]) for d, v in rates.items() if isinstance(v, dict) and v.get("USD")}
             break
+        except Exception as e:
+            err = e
+    if got is None:
+        try:
+            got = _ecb_rates(get, ccy, first, today)
         except Exception as e:
             err = e
     if got is None:
