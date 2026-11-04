@@ -1103,7 +1103,8 @@ def test_stage_names_and_the_wiring():
     assert "SCREENS_STAGED_DIR:   _private/ga4_screens_bf" in wf and "GA4_SCREENS_BUDGET_SEC:" in wf
     bf = open(os.path.join(root, ".github", "workflows", "screens-backfill.yml"), encoding="utf-8").read()
     assert "workflow_dispatch" in bf and "contents: read" in bf and "--backfill" in bf and "timeout-minutes: 350" in bf
-    assert "x-access-token:$DATA_REPO_TOKEN@" not in bf and "schedule" not in bf
+    assert "x-access-token:$DATA_REPO_TOKEN@" not in bf
+    assert 'cron: "47 */6 * * *"' in bf and "group: screens-backfill" in bf and "cancel-in-progress: false" in bf
 
 
 def test_merge_staged_never_undoes_a_reset_of_xs_history(tmp_path):

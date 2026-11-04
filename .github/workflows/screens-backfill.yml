@@ -14,6 +14,11 @@
 name: screens-backfill
 
 on:
+  # every 6 hours as well: a run goes on from where the last one stopped (its 5.5 h clock, the quota floors) — the
+  # biggest apps' day-by-day history takes several runs — and ends within minutes once every app's history is complete
+  # (a new app's history is then filled within hours, not over days of hourly builds). Runs never overlap (concurrency).
+  schedule:
+    - cron: "47 */6 * * *"
   workflow_dispatch:
     inputs:
       apps:
