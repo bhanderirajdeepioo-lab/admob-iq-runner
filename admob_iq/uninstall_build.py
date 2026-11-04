@@ -356,6 +356,16 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                       file=sys.stderr)
         except Exception as e:
             print("ga4 cube skipped: %s" % type(e).__name__, file=sys.stderr)
+    if s.get("ga4_screens"):                            # 🖼️ Screens (GA4_SCREENS): views and ad impressions per screen
+        try:                                            # class per day, every layer — AFTER every other GA4 step (it
+            from .fetch import ga4_screens as gsn       # takes only what they leave: stricter quota floors); own store,
+            with _sc.stage("ga4_screens"):              # a failure costs that step only
+                print(gsn.log_line(gsn.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                                   budget=s.get("ga4_screens_budget_sec") or gsn.BUDGET_SEC,
+                                                   staged_dir=s.get("screens_staged_dir") or None)),
+                      file=sys.stderr)
+        except Exception as e:
+            print("ga4 screens skipped: %s" % type(e).__name__, file=sys.stderr)
     state = gu.load_state(data_dir)
     os.makedirs(out_dir, exist_ok=True)
     details, rows, no_ga4, files = [], [], [], [ASSET]

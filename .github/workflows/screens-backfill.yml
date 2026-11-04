@@ -1,0 +1,72 @@
+# The Screens tab's HISTORY in one run (owner, 4 Nov 2026: "aaj hi" — tonight, not over days of hourly builds): the same
+# GA4 reads, shapes, whole checks, grain and store format as the hourly build's Screens fetch, for the FINAL days only
+# (older than its recent window), 12 properties side by side for up to 5.5 h. See admob_iq/fetch/ga4_screens.py
+# (backfill_all, main).
+# It writes ONLY the private repo's ga4_screens_bf/ (same layout as data/ga4_screens/): the hourly build's push replaces
+# all of data/ and site/ every run, so anything another job wrote there would be lost. The hourly build merges it into
+# data/ga4_screens (SCREENS_STAGED_DIR in refresh.yml). Every 10 min, and at the end, that folder alone is committed on
+# top of the private repo's newest main and pushed (retried on a race; never a force).
+# Quota: a property at the job's floors (65 % of an hourly token bucket — above the 50 % where the hourly build's other
+# GA4 steps stop —, 40 % of the day's, 60 potentially thresholded requests) or answering 429 waits for the next clock
+# hour while the job goes on with the others.
+# This repo's Actions log is PUBLIC: a counts-only heartbeat and ONE counts-only result line; stderr is hidden, and the
+# inputs are read by the job from the event file only — never put into a step's env or script.
+name: screens-backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      apps:
+        description: "only these apps: comma list of 12-hex file keys (empty = all)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read                 # this repo is never written to
+
+concurrency:
+  group: screens-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    # PINNED as refresh.yml: a new runner image is a deliberate change (1 Nov 2026: the zone names Google sends went
+    # missing on ubuntu-latest); tzdata in requirements.txt is the second guard
+    runs-on: ubuntu-24.04
+    # the job starts no GA4 call 19,800 s (5.5 h) after it starts, then saves and pushes what it has; before it: setup
+    # (~3 min) + the clone (capped at 10 min below)
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -q -r requirements.txt
+      - name: Clone the PRIVATE data (routes, the build's store, the staged history)
+        env:
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+        run: |
+          test -n "$DATA_REPO"       || { echo "::error::DATA_REPO secret missing"; exit 1; }
+          test -n "$DATA_REPO_TOKEN" || { echo "::error::DATA_REPO_TOKEN secret missing"; exit 1; }
+          # the token goes in a header for this one command only: never into a URL, a file or .git/config (the job's
+          # own pushes send it the same way, command by command)
+          auth=$(printf 'x-access-token:%s' "$DATA_REPO_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          timeout 600 git -c http.extraheader="AUTHORIZATION: basic $auth" clone -q --depth=1 \
+            "https://github.com/$DATA_REPO.git" _private > /dev/null 2>&1 \
+            || { echo "::error::could not clone the private data repo"; exit 1; }
+          echo "private data: cloned"
+      - name: Run
+        env:
+          GA4_REFRESH_TOKENS: ${{ secrets.GA4_REFRESH_TOKENS }}
+          GA4_REFRESH_TOKEN: ${{ secrets.GA4_REFRESH_TOKEN }}
+          GA4_CLIENT_ID: ${{ secrets.GA4_CLIENT_ID }}
+          GA4_CLIENT_SECRET: ${{ secrets.GA4_CLIENT_SECRET }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+          SCREENS_DATA_DIR: _private
+          PYTHONUNBUFFERED: "1"
+        run: python -m admob_iq.fetch.ga4_screens --backfill 2>/tmp/screens.err || { echo "::error::screens backfill failed (details kept off the public log)"; exit 1; }

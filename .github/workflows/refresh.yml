@@ -209,6 +209,14 @@ jobs:
           GA4_CUBE_U_C_SEC:     ${{ vars.GA4_CUBE_U_C_SEC }}
           GA4_CUBE_U_C_CAP:     ${{ vars.GA4_CUBE_U_C_CAP }}
           GA4_CUBE_U_APP_CALLS: ${{ vars.GA4_CUBE_U_APP_CALLS }}
+          # 🖼️ Screens (admob_iq/fetch/ga4_screens.py; data/ga4_screens/ in the private repo, kept for good): GA4 views and
+          # ad impressions per screen class per day with every layer, read AFTER every other GA4 step under stricter
+          # quota floors. GA4_SCREENS=false stops the reads without a code push; GA4_SCREENS_BUDGET_SEC = its seconds per
+          # build (empty: 150). SCREENS_STAGED_DIR: the history job's folder (screens-backfill.yml writes ONLY
+          # ga4_screens_bf/ in the private repo, since the push below replaces data/), merged into data/ga4_screens first
+          GA4_SCREENS:          ${{ vars.GA4_SCREENS || 'true' }}
+          GA4_SCREENS_BUDGET_SEC: ${{ vars.GA4_SCREENS_BUDGET_SEC }}
+          SCREENS_STAGED_DIR:   _private/ga4_screens_bf
           ROI_TAB:              ${{ vars.ROI_TAB || 'true' }}
           # 🔮 Forecast engine (inside the ROI section): vd = the forecast tournament's winner (default); FORECAST_ENGINE=v0
           # (repo variable) rolls back to the earlier engine without a code push (each app re-made by it within a day)
@@ -237,6 +245,8 @@ jobs:
           SOURCE_TAB:           ${{ vars.SOURCE_TAB || 'true' }}
           # 📈 eCPM · first session vs returning (nvr_<key>.json.gz, the eCPM tab's app page): NVR_TAB=false turns it off
           NVR_TAB:              ${{ vars.NVR_TAB || 'true' }}
+          # 🖼️ Screens tab (scr_*.json.gz): SCREENS_TAB=false turns it off without a code push
+          SCREENS_TAB:          ${{ vars.SCREENS_TAB || 'true' }}
           # Daily App Review (Review tab): REVIEW_ENABLED=true (repo variable) starts the daily card snapshots — set it
           # only after the Review API (Worker) is live; REVIEW_READY_IST = when the day's cards freeze (IST, empty: 09:00);
           # REVIEW_REBUILD_DAY=<YYYY-MM-DD> rebuilds TODAY's cards once (any other day is ignored).

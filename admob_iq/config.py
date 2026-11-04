@@ -91,6 +91,9 @@ def settings() -> dict:
         "source_tab": _env("SOURCE_TAB", "true").lower() == "true",
         # 📈 eCPM · first session vs returning (a section of the eCPM tab's app page): NVR_TAB=false
         "nvr_tab": _env("NVR_TAB", "true").lower() == "true",
+        # 🖼️ Screens tab (scr_*.json.gz: visits and ad impressions per screen, per app): SCREENS_TAB=false removes its
+        # files and pointer without a code push
+        "screens_tab": _env("SCREENS_TAB", "true").lower() == "true",
         # 🗂 Review Studio: the Review tab's Studio (review/studio/<day>.json.gz, one lazy file per review day, frozen with
         # that day's cards; never an alert) — off: no file, no pointer, the older Review tab exactly as before
         "review_studio": _env("REVIEW_STUDIO", "true").lower() == "true",
@@ -178,6 +181,14 @@ def settings() -> dict:
         # GA4_CUBE_BUDGET_SEC = its own seconds per build (no read is started past it)
         "ga4_cube": _env("GA4_CUBE", "false").lower() == "true",
         "ga4_cube_budget_sec": _int_env(("GA4_CUBE_BUDGET_SEC",), 150),
+        # 🖼️ Screens: GA4 views and ad impressions per screen class per day, every layer (fetch.ga4_screens: the recent
+        # days every 3 / 12 hours, the history newest first; runs after every other GA4 step, stricter quota floors).
+        # Off: nothing of it is read, written or printed; GA4_SCREENS_BUDGET_SEC = its own seconds per build (unset: 0 →
+        # the module's BUDGET_SEC); SCREENS_STAGED_DIR = the history job's folder in the private clone, merged first
+        # (unset: no merge)
+        "ga4_screens": _env("GA4_SCREENS", "false").lower() == "true",
+        "ga4_screens_budget_sec": _int_env(("GA4_SCREENS_BUDGET_SEC",), 0),
+        "screens_staged_dir": _env("SCREENS_STAGED_DIR", ""),
         # 📈 ROI in the Install value tab (roi_<key>.json.gz + roi.json.gz): day-wise ROI, countries keep / cut,
         # lifetime P/L — off: no file, no pointer (the tab exactly as before)
         "roi_tab": _env("ROI_TAB", "true").lower() == "true",
