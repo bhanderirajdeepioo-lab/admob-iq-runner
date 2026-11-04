@@ -61,12 +61,14 @@ class FakeGA:
     with the screen class and the ad unit over > N days loses the native unit on every day; drift: days after F grow 5 %
     with every report; cty_drop: reads with countryId and date lose one class in one country; pub: publisher
     impressions = events × pub; views_range=N: a views read by date and screen class over > N days loses the splash
-    screen's views on every day; fail(dims, metrics, days) → an error text to raise (e.g. a 429)."""
+    screen's views on every day; fail(dims, metrics, days) → an error text to raise (e.g. a 429); meta_fail: the
+    metadata GET answers that error text."""
 
     def __init__(self, refuse=None, refuse_mets=(), custom=(), fold=None, fold_label="(other)", fold_today=False,
                  sample=None, age=None, age_fmt=False, range_days=None, drift=False, no_views=False, no_custom=False,
-                 cty_drop=False, pub=1.0, views_range=None, fail=None):
+                 cty_drop=False, pub=1.0, views_range=None, fail=None, meta_fail=None):
         self.refuse, self.refuse_mets, self.custom = refuse or (lambda dims, mets: False), set(refuse_mets), custom
+        self.meta_fail = meta_fail
         self.fold, self.fold_label, self.fold_today, self.sample = fold, fold_label, fold_today, sample
         self.age, self.age_fmt, self.range_days, self.drift, self.cty_drop, self.pub = (age, age_fmt, range_days, drift,
                                                                                          cty_drop, pub)
@@ -131,6 +133,8 @@ class FakeGA:
                 return {"eventDataRetention": "FOURTEEN_MONTHS", "userDataRetention": "FOURTEEN_MONTHS"}
             assert url == "%s/properties/%s/metadata" % (ga4.DATA, PID)
             self.other.append("META")
+            if self.meta_fail:
+                raise RuntimeError(self.meta_fail)
             return {"dimensions": [{"apiName": x} for x in ("date", "eventName") + ac.META_DIMS]
                     + [{"apiName": "customEvent:" + p, "customDefinition": True} for p in self.custom],
                     "metrics": [{"apiName": x} for x in ac.META_METS if x not in self.refuse_mets]}
@@ -419,7 +423,11 @@ def test_format_shares_are_over_the_format_truth_and_every_full_screen_code():
     rw = out["rewarded"]
     assert (rw["on_unset"], rw["on_like"], rw["on_host"], rw["lost"]) == (0.5, 0.1, 0.4, 0.0)
     assert out["banner"]["lost"] == 1.0                                       # F has it, the split shows nothing
+    assert it["split"] == "whole" and out["banner"]["split"] == "whole"
+    gone = ac.fmt_facts(fm, ftot, {}, set(), split="refused")["interstitial"]
+    assert gone["share"] == 0.1 and gone["lost"] is None and gone["on_ad"] is None and gone["split"] == "refused"
     base = {"share": 0.1, "lost": 0.0, "on_ad": 0.0, "on_like": 0.0, "on_unset": 0.0}
+    assert ac.fs_code(gone) == "unknown" and ac.fs_code(dict(gone, share=0.004)) == "small"
     assert ac.fs_code(dict(base, share=0.004, lost=0.5)) == "small"
     assert ac.fs_code(dict(base, lost=0.03, on_ad=0.97)) == "lost"
     assert ac.fs_code(dict(base, on_ad=0.95)) == "sdk"
@@ -436,6 +444,7 @@ def test_format_shares_are_over_the_format_truth_and_every_full_screen_code():
 
 def test_ad_screens_obfuscation_and_ad_events_are_named_generically():
     for c in ("AdActivity", "com.google.android.gms.ads.AdActivity", "AudienceNetworkActivity", "AdUnitActivity",
+              "AdUnitTransparentActivity", "com.x.AdUnitSoftwareActivity", "InneractiveFullscreenAdActivity",
               "AppLovinFullscreenActivity", "TTFullScreenVideoActivity", "MBRewardVideoActivity",
               "FullScreenWebViewDisplay", "com.x.y.FullScreenWebViewDisplay", "XyzInterstitialActivity"):
         assert ac.is_ad_screen(c), c
@@ -472,6 +481,12 @@ def test_a_refused_class_x_format_moves_the_ad_reads_to_the_page_path(monkeypatc
     assert {k for k, why in _skips(b).items() if why == "no_shape"} == pair
     assert not [d for d in fake.calls if any(x in d for x in SCREEN) and "adFormat" in d][2:]   # AF + AFP only
     assert b["complete"] and b["verdict"]["word"] == "check" and rep["counts"]["skipped"] == len(_skips(b))
+    # no screen × format split answered: where a format lands is UNKNOWN, never "100 % lost"
+    fm = b["facts"]["fmt"]
+    assert fm["interstitial"]["share"] == round(40 / IMPS, 4) and fm["interstitial"]["split"] == "refused"
+    assert all(fm[f]["lost"] is None and fm[f]["on_ad"] is None for f in fm)
+    assert b["verdict"]["fs"] == {"appopen": "unknown", "interstitial": "unknown", "rewarded": "unknown"}
+    assert rep["summary"]["fs"]["interstitial"] == {"unknown": 1}
 
 
 # ── sampling, the daily store, AUD1 / AUDS / AUP ─────────────────────────────────────────────
@@ -490,6 +505,9 @@ def test_a_sampled_read_is_never_whole_and_the_one_day_read_decides(monkeypatch)
     assert v["daily"] == "day1" and not v["imps_whole"] and v["word"] == "build-split"
     assert a["win"]["Ba"] == ["2026-01-01", "2026-01-07"] and r["OA"]["state"] == "whole"
     assert a["facts"]["hist"]["cause"]["ads"] == "range" and _skips(a)["OAS"] == "whole"
+    # AUDH is sampled: its days tie on scaled numbers, so it names no "whole from" day; VDH (no ad dimension) does
+    assert r["AUDH"]["sampled"] and a["facts"]["hist"]["ads_from"] is None
+    assert a["facts"]["hist"]["views_from"] == "2026-01-01"
     c = rep["counts"]
     assert c["sampled"] == sum(1 for x in r.values() if x.get("sampled")) and c["reads"] + c["skipped"] == len(r)
     _, b = _run(monkeypatch, FakeGA(fold={"mode": "drop", "units": {"unit-native-PRIVATE"}}))
@@ -497,6 +515,26 @@ def test_a_sampled_read_is_never_whole_and_the_one_day_read_decides(monkeypatch)
     assert rb["AUD"]["state"] == "lossy" and b["win"]["d*"] == "2026-10-10" and rb["AUD1"]["state"] == "lossy"
     assert rb["AUDS"]["state"] == "whole" and rb["AUP"]["state"] == "lossy" and b["verdict"]["daily"] == "no-units"
     assert b["verdict"]["word"] == "build-split" and b["facts"]["daily"]["aud_days_lossy"] == W
+
+
+def test_without_a_screen_x_unit_daily_shape_class_x_format_is_still_measured(monkeypatch):
+    # the unit refused with the screen class AND the page path: AUD cannot exist, AUDS is the only daily store
+    _, a = _run(monkeypatch, FakeGA(refuse=lambda dims, mets: "adUnitName" in dims and any(d in dims for d in SCREEN)))
+    r = a["reads"]
+    assert r["AU"]["err"]["http"] == 400 and r["AUP"]["err"]["http"] == 400 and r["CC"]["ok"] and a["sca"] == "SC"
+    assert _skips(a)["AUD"] == "no_shape" and r["AUDS"]["state"] == "whole" and _skips(a)["AUD1"] == "no_shape"
+    v = a["verdict"]
+    assert v["daily"] == "no-units" and v["word"] == "build-split" and not v["imps_whole"]
+    # only the DAILY screen × unit shape refused: AU (28 days as one) holds, AUD is refused, AUDS decides
+    _, b = _run(monkeypatch, FakeGA(refuse=lambda dims, mets: "date" in dims and "adUnitName" in dims
+                                    and any(d in dims for d in SCREEN)))
+    rb = b["reads"]
+    assert rb["AU"]["state"] == "whole" and rb["AUD"]["err"]["http"] == 400 and rb["AUDS"]["state"] == "whole"
+    assert _skips(b)["AUD1"] == "no_base" and b["verdict"]["imps_whole"] and b["verdict"]["daily"] == "no-units"
+    assert b["verdict"]["word"] == "build-split" and b["facts"]["daily"]["auds_rows_day"] == 5.0
+    # AUD whole or only sampled: AUDS is not asked
+    _, c = _run(monkeypatch, FakeGA())
+    assert _skips(c)["AUDS"] == "whole"
 
 
 # ── the history ─────────────────────────────────────────────────────────────────────────────
@@ -567,6 +605,10 @@ def test_conditional_reads_run_only_when_needed(monkeypatch):
     assert r["CVD"]["state"] == "lossy" and r["CV"]["state"] == "whole" and r["CAD"]["state"] == "lossy"
     assert r["CA"]["state"] == "whole" and c["verdict"]["layers"]["country"] == "window"
     assert r["CVD"]["keys"]["screenPageViews"]["w2"] == round(1 - 4 * 120 / (7 * VIEWS), 4)
+    # META refused: PV's input is unknown ("no_base"), not "not registered"; every other read goes on
+    rep, d = _run(monkeypatch, FakeGA(custom=("firebase_previous_class",), meta_fail="HTTP 403: PERMISSION_DENIED: x"))
+    assert d["reads"]["META"]["err"] == {"http": 403, "status": "PERMISSION_DENIED"} and _skips(d)["PV"] == "no_base"
+    assert d["complete"] and d["reads"]["T"]["ok"] and rep["counts"]["refused"] == 1
 
 
 def test_refused_reads_are_kept_and_every_other_read_goes_on(monkeypatch):
@@ -597,6 +639,35 @@ def test_a_429_stops_the_property_and_a_bug_costs_one_read_only(monkeypatch):
     _, b = _run(monkeypatch, FakeGA())
     assert b["complete"] and b["reads"]["AUD"]["bug"] == "ZeroDivisionError" and b["reads"]["AUD"]["state"] == "whole"
     assert b["reads"]["AUDH"]["state"] == "whole" and b["verdict"]["word"] == "build"
+    # a bug while an accepted read is judged keeps that read's record (the call is spent), never a bare {"ok": False}
+    post = ac.post
+
+    def post_boom(c, kind, rec, rows):
+        if kind == "AU":
+            raise KeyError("PRIVATE")
+        return post(c, kind, rec, rows)
+    monkeypatch.setattr(ac, "post", post_boom)
+    _, e = _run(monkeypatch, FakeGA())
+    au = e["reads"]["AU"]
+    assert au["ok"] and au["bug"] == "KeyError" and au["rows"] == 5 and au["calls"] == 1 and e["complete"]
+    assert ac._state(au) == "unknown" and not e["verdict"]["imps_whole"] and e["reads"]["AUD"]["state"] == "whole"
+
+
+def test_a_stopped_app_reads_as_unknown_never_as_low_or_no(monkeypatch, tmp_path):
+    # a quota stop before F / EV / V (the spec expects it on a big property's later apps), WITH an AdMob clone: the
+    # portfolio summary must count it as unknown, never as "GA4 low against AdMob" or "no ad clicks"
+    adm = ac.load_admob(_clone(tmp_path, ADMOB_ROWS), [unit()], now=NOW)
+    fake = FakeGA(fail=lambda dims, mets, days: "HTTP 429: RESOURCE_EXHAUSTED: x" if not dims and "eventCount" in mets
+                  else None)                                                         # T: the first report
+    rep, a = _run(monkeypatch, fake, admob=adm)
+    v = a["verdict"]
+    assert a["stopped"] == "quota_429" and set(a["reads"]) == {"META", "T"} and not a["complete"]
+    assert v["trust"] == {"imps": "unknown", "rev": "unknown"} and v["clicks"] is None and v["fs"] == {}
+    assert a["admob"]["state"] == "ok" and "all" not in a["admob"] and "units" not in a["admob"]
+    assert a["facts"]["adcheck"]["ad_views"] is None and a["facts"]["adcheck"]["ad_views_per_fs_imp"] is None
+    s = rep["summary"]
+    assert s["admob"] == {"unknown": 1} and s["admob_rev"] == {"unknown": 1} and s["clicks"] == {}
+    assert s["words"] == {"check": 1} and s["fs"]["interstitial"] == {}
 
 
 # ── the verdict ─────────────────────────────────────────────────────────────────────────────
@@ -671,7 +742,7 @@ def _admob_ctx():
                    {"date": "20260913", "eventName": "ad_impression", "eventCount": 140, "totalAdRevenue": 0.1},
                    {"date": "20260914", "eventName": "ad_impression", "eventCount": 99, "totalAdRevenue": 0.04},
                    {"date": "20260914", "eventName": "screen_view", "eventCount": 1000, "totalAdRevenue": 0}]}
-    return _ctx(p, got, ok=("EV", "HD0"))
+    return _ctx(p, got, ok=("F", "U", "FD", "EV", "HD0"))
 
 
 def test_admob_is_read_offline_and_compared_on_the_same_days(tmp_path):
@@ -705,6 +776,12 @@ def test_admob_is_read_offline_and_compared_on_the_same_days(tmp_path):
     assert te["units"][0][6] is None and te["month"][0][5] is None
     assert ac.admob_tie({"state": "absent"}, u, _admob_ctx()) == {"state": "absent"}
     assert ac.load_admob(str(tmp_path / "nope"), [u]) == {"state": "absent"}
+    # the GA4 side not read (an app stopped before F / U / FD / EV / HD0): no ratio at all, never "GA4 = 0 → low"
+    p = {"a": date(2026, 9, 13), "F": date(2026, 9, 14), "days": 2, "h0": date(2026, 8, 1)}
+    gone = ac.admob_tie(adm, u, _ctx(p, {}))
+    assert gone["state"] == "ok" and not any(k in gone for k in ("fmt", "all", "rev", "all_rev", "units", "day",
+                                                                  "clicks", "month"))
+    assert gone["ga4_read"] == {"F": False, "U": False, "FD": False, "EV": False, "HD0": False}
 
 
 # ── the run, the public log, the size guard, the workflow ───────────────────────────────────
@@ -736,6 +813,22 @@ def test_main_writes_privately_and_prints_one_counts_only_line(monkeypatch, caps
     assert e.value.code == 1
     last = capsys.readouterr().out.strip().splitlines()[-1]
     assert last.startswith("activity probe: apps 1,") and last.endswith(", saved no")
+
+    def write_boom(path, text, msg):                 # e.g. the private repo's settings missing (a KeyError)
+        raise KeyError("DATA_REPO")
+    monkeypatch.setattr(ac.pr, "write_private", write_boom)
+    with pytest.raises(SystemExit) as e:
+        ac.main(env, now=NOW, clock=lambda: float(next(tick)))
+    assert e.value.code == 1
+    out = capsys.readouterr().out.strip().splitlines()
+    assert [ln for ln in out if ln.startswith("activity probe:")][-1].endswith(", saved no")
+
+    def state_boom(root):
+        raise ValueError("PRIVATE")
+    monkeypatch.setattr(ac.sp, "load_state", state_boom)
+    with pytest.raises(SystemExit) as e:
+        ac.main(env, now=NOW, clock=lambda: float(next(tick)))
+    assert isinstance(e.value.code, str) and "PRIVATE" not in e.value.code and capsys.readouterr().out == ""
 
 
 def test_the_size_guard_drops_the_biggest_data_first_then_the_long_day_maps():

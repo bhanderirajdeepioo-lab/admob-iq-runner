@@ -101,11 +101,13 @@ FULL = frozenset(("interstitial", "rewarded", "rewardedinterstitial", "appopen")
 FMT_ALIASES = (("rewardedinter", "rewardedinterstitial"), ("rewarded", "rewarded"), ("appopen", "appopen"),
                ("interstitial", "interstitial"), ("banner", "banner"), ("native", "native"))
 # the ad SDKs' own full-screen Activities (generic SDK names, never an app's), ANCHORED on the simple name: the First open
-# fetch's looser pattern also matches ordinary app screens (a download / read / thread screen), so it is not reused
-AD_SCREEN = re.compile(r"(?:^|\.)(?:AdActivity|AdUnitActivity|AudienceNetworkActivity|AppLovin\w*Activity|"
+# fetch's looser pattern also matches ordinary app screens (a download / read / thread screen), so it is not reused.
+# AdUnit\w*Activity: the Unity SDK shows its full-screen ads in several AdUnit…Activity variants (transparent /
+# software-rendered), not only AdUnitActivity; Inneractive\w*Activity: the DT Exchange SDK's full-screen Activity
+AD_SCREEN = re.compile(r"(?:^|\.)(?:AdActivity|AdUnit\w*Activity|AudienceNetworkActivity|AppLovin\w*Activity|"
                        r"InMobiAdActivity|VungleActivity|CBImpressionActivity|MBRewardVideoActivity|MBCommonActivity|"
-                       r"TTFullScreen\w*Activity|TTReward\w*Activity|TTAppOpenAd\w*Activity|FullScreenWebViewDisplay|"
-                       r"\w*InterstitialActivity)$", re.I)
+                       r"TTFullScreen\w*Activity|TTReward\w*Activity|TTAppOpenAd\w*Activity|Inneractive\w*Activity|"
+                       r"FullScreenWebViewDisplay|\w*InterstitialActivity)$", re.I)
 # an app's own ad-like event (a review list, never an ad count): snake_case tokens or camelCase pieces of ad words
 AD_EVENT_RE = re.compile(r"(?:^|_)(?:ads?|inter|interstitial|rewarded|reward|banner|native|app_?open|aoa|full_?screen)"
                          r"(?:_|$)|interstitial|rewarded|appopen|nativead|bannerad|interad|rewardad", re.I)
@@ -152,7 +154,7 @@ READS = (
     Read("FD", "P2", "W", ("date", FMT), EVM, IMP, None),
     Read("AUD", "P2", "W", ("date", SCA, FMT, UNIT), EVM, IMP, None),
     Read("AUD1", "P2", "D*", ("date", SCA, FMT, UNIT), EVM, IMP, "AUD lossy or sampled"),
-    Read("AUDS", "P2", "W", ("date", SCA, FMT), EVM, IMP, "AUD lossy"),
+    Read("AUDS", "P2", "W", ("date", SCA, FMT), EVM, IMP, "AUD lossy, refused, or impossible (no screen × unit shape)"),
     Read("RV0", "P2", "R", ("date",), VDM, None, None),
     Read("RV", "P2", "R", ("date", SC), VDM, None, None),
     Read("RV0b", "P2", "R", ("date",), VDM, None, None),
@@ -900,14 +902,20 @@ def skip_of(kind, c):
     if kind == "XC":
         return "no_base" if not c.ok("EV") else None if c.xc_events else "no_events"
     if kind == "PV":
-        return None if c.prev else "not_registered"
-    if kind in ("AUD1", "AUDS"):
+        return None if c.prev else "not_registered" if c.ok("META") else "no_base"
+    if kind == "AUDS":
+        aud = c.recs.get("AUD") or {}
+        # class × format without units is the daily store's fallback: asked when AUD is lossy, and ALSO when AUD could
+        # not be asked at all — GA4 refused it, or no screen × ad unit shape exists (AU and AUP refused): for those
+        # apps it is the only daily store there can be
+        if c.st("AUD") == "lossy" or _refused(aud) or (aud.get("skip") == "no_shape" and c.no_unit):
+            return None
+        return "whole" if c.st("AUD") in ("whole", "sampled") else "no_base"
+    if kind == "AUD1":
         s = c.st("AUD")
         if s in ("absent", "skip", "refused", "error", "unknown"):
             return "no_base"                         # AUD was not read, or its truth (T / FD) was not whole
-        if kind == "AUD1":
-            return None if s in ("lossy", "sampled") and c.dstar else "whole"
-        return None if s == "lossy" else "whole"
+        return None if s in ("lossy", "sampled") and c.dstar else "whole"
     if kind in ("OV", "OA"):
         return c.block_skip.get(kind, "no_base")
     if kind in ("OAS", "OAP0", "OAP"):
@@ -1038,11 +1046,11 @@ def do_read(c, kind):
                              p_rows(dims, SPEC[kind].mets, kind in KEEP))
         if tuple(dims) != SPEC[kind].dims:
             rec["dims"] = list(dims)
-        if rec.get("ok"):
+        c.recs[kind] = rec                           # first: a bug in what follows still keeps the spent read's record
+        if rec.get("ok") and isinstance(rows, list):
             rec.update(pr._safely(page_meta, ga, rows, fallback={}))
             c.got[kind] = _norm(rows, c.prev)
             post(c, kind, rec, c.got[kind])
-        c.recs[kind] = rec
     after(kind, c)
 
 
@@ -1057,7 +1065,7 @@ def base(c):
         users[k] = users.get(k, 0.0) + _num(r.get("activeUsers"))
         eng[k] = eng.get(k, 0.0) + _num(r.get("userEngagementDuration"))
     imps, rev = _by(c.rows("A") or [], SC, "eventCount"), _by(c.rows("A") or [], SC, "totalAdRevenue")
-    fm = {}
+    fm, split = {}, c.st(c.role("AF"))              # the screen × format read's state: whole | lossy | sampled | …
     for r in c.rows(c.role("AF")) or []:
         e = fm.setdefault(_cls(r), {})
         f = _fmt(r.get(FMT))
@@ -1076,7 +1084,7 @@ def base(c):
         if t > 0 and fs / t >= 0.9 and (not views.get(k) or fs / views[k] >= 0.5):
             like.add(k)
     return {"views": views, "users": users, "eng": eng, "imps": imps, "rev": rev, "fm": fm, "ftot": ftot,
-            "frev": frev, "raw": raw, "like": like}
+            "frev": frev, "raw": raw, "like": like, "split": split}
 
 
 def _kind_of(k, b):
@@ -1159,13 +1167,22 @@ def f_obf(c, b):
     return pr._ratio(sum(v for k, v in b["views"].items() if is_obf(k)), tot)
 
 
-def fmt_facts(fm, ftot, raw, like):
+NO_SPLIT = frozenset(("absent", "skip", "refused", "error"))     # a split read that never answered
+
+
+def fmt_facts(fm, ftot, raw, like, split="whole"):
     """Per format f, over F(f) (the format's truth): its share of the app, on ad screens / ad-like / "(not set)" / host
-    screens, lost = the rest (folded or missing in the split), the top host [class, share] and GA4's spellings."""
+    screens, lost = the rest (folded or missing in the split), the top host [class, share], GA4's spellings and the
+    split read's state. When the screen × format read never answered (refused on the class and the page path, or not
+    read: a stop), where a format lands is UNKNOWN — every on_* / lost is None, never "100 % lost"."""
     all_ = sum(ftot.values())
     out = {}
     for f, t in sorted(ftot.items()):
         if t <= 0:
+            continue
+        if split in NO_SPLIT:
+            out[f] = {"share": pr._ratio(t, all_), "on_ad": None, "on_like": None, "on_unset": None, "on_host": None,
+                      "lost": None, "top_host": None, "raw": sorted(raw.get(f) or ()), "split": split}
             continue
         on, hosts = {"ad": 0.0, "like": 0.0, "unset": 0.0, "host": 0.0}, {}
         for k, fx in fm.items():
@@ -1185,21 +1202,23 @@ def fmt_facts(fm, ftot, raw, like):
         out[f] = {"share": pr._ratio(t, all_), "on_ad": pr._ratio(on["ad"], t), "on_like": pr._ratio(on["like"], t),
                   "on_unset": pr._ratio(on["unset"], t), "on_host": pr._ratio(on["host"], t),
                   "lost": round(1 - sum(on.values()) / t, 4), "top_host": [top[0], pr._ratio(top[1], t)] if top else None,
-                  "raw": sorted(raw.get(f) or ())}
+                  "raw": sorted(raw.get(f) or ()), "split": split}
     return out
 
 
 def f_fmt(c, b):
-    return fmt_facts(b["fm"], b["ftot"], b["raw"], b["like"])
+    return fmt_facts(b["fm"], b["ftot"], b["raw"], b["like"], b["split"])
 
 
 def fs_code(x):
-    """A full-screen format's verdict, the first that applies: small (< 0.5 % of the app) | lost (> 2 % not placed) |
-    sdk (≥ 95 % on the SDK's own screen) | host (≤ 5 % off the app's screens) | unset (≥ 50 % "(not set)") | check
-    (≥ 5 % on ad-like classes) | mixed."""
+    """A full-screen format's verdict, the first that applies: small (< 0.5 % of the app) | unknown (no screen × format
+    split answered) | lost (> 2 % not placed) | sdk (≥ 95 % on the SDK's own screen) | host (≤ 5 % off the app's
+    screens) | unset (≥ 50 % "(not set)") | check (≥ 5 % on ad-like classes) | mixed."""
     if not x or x.get("share") is None or x["share"] < 0.005:
         return "small"
-    if (x.get("lost") or 0) > 0.02:
+    if x.get("lost") is None:
+        return "unknown"
+    if x["lost"] > 0.02:
         return "lost"
     ad, like, unset = x.get("on_ad") or 0, x.get("on_like") or 0, x.get("on_unset") or 0
     if ad >= 0.95:
@@ -1218,6 +1237,8 @@ def f_like(c, b):
 
 
 def f_adcheck(c, b):
+    if not c.ok("V"):                                # views per class not read: unknown, never "0 ad-screen views"
+        return {"ad_views": None, "ad_views_per_fs_imp": None, "ret_max": None, "ad_eng_per_view": None}
     adv = sum(v for k, v in b["views"].items() if is_ad_screen(k))
     other = sum(v for k, v in b["views"].items() if _named(k) and not is_ad_screen(k))
     fs = sum(v for f, v in b["ftot"].items() if f in FULL)
@@ -1373,7 +1394,8 @@ def f_layers(c, b):
     if c.ok("AR"):
         users = {}
         for r in c.rows("AR") or []:
-            users[(_cls(r), _fmt(r.get(FMT)))] = _num(r.get("activeUsers"))
+            k = (_cls(r), _fmt(r.get(FMT)))          # two GA4 spellings of one format: users never add up, the
+            users[k] = max(users.get(k, 0.0), _num(r.get("activeUsers")))   # larger is the floor
         reach = {}
         for f in sorted(b["ftot"]):
             top = sorted(((k, fx.get(f, 0.0)) for k, fx in b["fm"].items() if fx.get(f)), key=lambda kv: -kv[1])[:5]
@@ -1477,8 +1499,8 @@ def prop_edge(c):
 
 def from_day(rec, h0, f, edge=None, rev=False):
     """The earliest day from which every day to F is within (a day neither side has is 0 = 0: within); never before a
-    property truncation's date."""
-    if not _ok(rec) or "day" not in rec:
+    property truncation's date. None for a SAMPLED read: its days tie on scaled numbers, so no day of it is whole."""
+    if not _ok(rec) or "day" not in rec or rec.get("sampled"):
         return None
     day, d, first = rec["day"], f, None
     while d >= h0:
@@ -1673,22 +1695,26 @@ def admob_tie(adm, u, c):
         return sum(v[i] for d, v in (byd or {}).items() if d in wd)
     mob = {f: win(byd, 0) for f, byd in fa.items()}
     mrev = {f: win(byd, 2) / 1e6 for f, byd in fa.items()}
-    g, grev = {}, {}
-    for r in c.rows("F") or []:
-        f = _fmt(r.get(FMT))
-        g[f] = g.get(f, 0.0) + _num(r.get("eventCount"))
-        grev[f] = grev.get(f, 0.0) + _num(r.get("totalAdRevenue"))
     out = {"state": "ok", "tz_admob": adm.get("tz"), "tz_ga4": u.get("tz"), "ids": me.get("ids"), "days": len(wd),
            "admob_days": len({d for byd in fa.values() for d in byd if d in wd}), "cur": me.get("cur") or [],
            "raw": me.get("raw") or {},
-           "fmt": {f: [int(g.get(f, 0.0)), int(mob.get(f, 0)), dp.tie(g.get(f, 0.0), mob.get(f, 0))]
-                   for f in sorted(set(g) | set(mob))},
-           "all": dp.tie(sum(g.values()), sum(mob.values()))}
-    if usd:
-        out["rev"] = {f: [round(grev.get(f, 0.0), 4), round(mrev.get(f, 0.0), 4), dp.tie(grev.get(f, 0.0),
-                                                                                         mrev.get(f, 0.0))]
-                      for f in sorted(set(grev) | set(mrev))}
-        out["all_rev"] = dp.tie(sum(grev.values()), sum(mrev.values()))
+           # a GA4 side that was not read (refused, or the app stopped first: a quota stop on a property's later apps)
+           # is never compared as 0 — that would read as "GA4 low"; its ratios are simply absent
+           "ga4_read": {k: c.ok(k) for k in ("F", "U", "FD", "EV", "HD0")}}
+    if c.ok("F"):
+        g, grev = {}, {}
+        for r in c.rows("F") or []:
+            f = _fmt(r.get(FMT))
+            g[f] = g.get(f, 0.0) + _num(r.get("eventCount"))
+            grev[f] = grev.get(f, 0.0) + _num(r.get("totalAdRevenue"))
+        out["fmt"] = {f: [int(g.get(f, 0.0)), int(mob.get(f, 0)), dp.tie(g.get(f, 0.0), mob.get(f, 0))]
+                      for f in sorted(set(g) | set(mob))}
+        out["all"] = dp.tie(sum(g.values()), sum(mob.values()))
+        if usd:
+            out["rev"] = {f: [round(grev.get(f, 0.0), 4), round(mrev.get(f, 0.0), 4), dp.tie(grev.get(f, 0.0),
+                                                                                             mrev.get(f, 0.0))]
+                          for f in sorted(set(grev) | set(mrev))}
+            out["all_rev"] = dp.tie(sum(grev.values()), sum(mrev.values()))
     if c.ok("EV"):
         gc, mc = _ev_counts(c).get("ad_click", 0.0), sum(win(byd, 1) for byd in fa.values())
         out["clicks"] = [int(gc), int(mc), dp.tie(gc, mc)]
@@ -1707,7 +1733,7 @@ def admob_tie(adm, u, c):
                         s[i] += v[i]
         return s
     units, seen = [], set()
-    for r in c.rows("U") or []:
+    for r in (c.rows("U") or []) if c.ok("U") else []:
         nm, f, n, rv = str(r.get(UNIT) or ""), _fmt(r.get(FMT)), _num(r.get("eventCount")), _num(r.get("totalAdRevenue"))
         uids, how = by_name.get(nm.lower()), "name"
         if not uids and nm in um:
@@ -1717,7 +1743,7 @@ def admob_tie(adm, u, c):
         units.append([nm, f, int(n), s[0] if s else None, dp.tie(n, s[0]) if s else None, round(rv, 4),
                       round(s[2] / 1e6, 4) if s and usd else None, dp.tie(rv, s[2] / 1e6) if s and usd else None,
                       s[3] if s else None, s[4] if s else None, how if uids else None, bool(uids and len(uids) > 1)])
-    for uid, x in sorted(um.items()):
+    for uid, x in sorted(um.items()) if c.ok("U") else ():
         if uid in seen:
             continue
         s = agg([uid])
@@ -1725,15 +1751,17 @@ def admob_tie(adm, u, c):
             units.append([x.get("name") or uid, x.get("fmt"), 0, s[0], dp.tie(0, s[0]), 0.0,
                           round(s[2] / 1e6, 4) if usd else None, dp.tie(0, s[2] / 1e6) if usd else None, s[3], s[4],
                           "admob_only", len(by_name.get((x.get("name") or "").lower()) or []) > 1])
-    units.sort(key=lambda z: (-max(z[2], z[3] or 0), str(z[0])))
-    out["units"] = units[:UNITS_MAX]
-    gd = _by(c.rows("FD") or [], "date", "eventCount")
-    ad = {}
-    for byd in fa.values():
-        for d, v in byd.items():
-            ad[d] = ad.get(d, 0) + v[0]
-    rs = [gd.get(d.replace("-", ""), 0.0) / ad[d] for d in sorted(wd) if ad.get(d)]
-    out["day"] = {"n": len(rs), "p10": sp._pct(rs, 0.1), "p50": sp._pct(rs, 0.5), "p90": sp._pct(rs, 0.9)}
+    if c.ok("U"):
+        units.sort(key=lambda z: (-max(z[2], z[3] or 0), str(z[0])))
+        out["units"] = units[:UNITS_MAX]
+    if c.ok("FD"):
+        gd = _by(c.rows("FD") or [], "date", "eventCount")
+        ad = {}
+        for byd in fa.values():
+            for d, v in byd.items():
+                ad[d] = ad.get(d, 0) + v[0]
+        rs = [gd.get(d.replace("-", ""), 0.0) / ad[d] for d in sorted(wd) if ad.get(d)]
+        out["day"] = {"n": len(rs), "p10": sp._pct(rs, 0.1), "p50": sp._pct(rs, 0.5), "p90": sp._pct(rs, 0.9)}
     if c.ok("HD0"):
         h0, f_ = _iso(p["h0"]), _iso(p["F"])
         gm = {}
@@ -1843,12 +1871,17 @@ def verdict(c, fx, adm, res):
     v["eng_ok"] = eng.get("tie") is not None and abs(eng["tie"] - 1) <= 0.02 and (eng.get("unset") or 0) <= 0.02
     v["eng_attr"] = "n/a" if (adc.get("ad_views") or 0) < 100 else \
         "ad-screen-time" if (adc.get("ad_eng_per_view") or 0) >= 1 else "no-ad-screen-time"
-    ok_adm = (adm or {}).get("state") == "ok"
-    v["trust"] = {"imps": trust(adm.get("all")) if ok_adm else "absent",
-                  "rev": trust(adm.get("all_rev")) if ok_adm else "absent"}
+    st_adm = (adm or {}).get("state") or "absent"
+    ok_adm = st_adm == "ok"
+
+    def _trust(k):                                   # absent = no clone; unknown = a clone, but no ratio to judge
+        if st_adm == "absent":                       # (the GA4 side not read, AdMob 0 in W, not all USD, an error)
+            return "absent"
+        return trust(adm.get(k)) if ok_adm and adm.get(k) is not None else "unknown"
+    v["trust"] = {"imps": _trust("all"), "rev": _trust("all_rev")}
     ev = fx.get("ev") or {}
     v["trust_note"] = [k for k in ("ev_vs_imps", "rev_on_imp") if ev.get(k) is not None and abs(ev[k] - 1) > 0.02]
-    v["clicks"] = "yes" if _ev_counts(c).get("ad_click") else "no"
+    v["clicks"] = ("yes" if _ev_counts(c).get("ad_click") else "no") if c.ok("EV") else None
     ct = (adm or {}).get("clicks") if ok_adm else None
     v["click_tie"] = ct[2] if ct else None
     v["click_ok"] = v["click_tie"] is not None and 0.8 <= v["click_tie"] <= 1.25
@@ -2038,7 +2071,8 @@ def run_probe(units, cid, sec, tokens, opts, now=None, clock=time.monotonic, wor
     c = pr._safely(counts, out, run, fallback={"apps": len(out), "calls": run.calls, "seconds": run.elapsed()})
     adm_state = (opts.get("admob") or {}).get("state") or "absent"
     return {"v": 2, "probe": "ga4_activity", "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "rules": rules(adm_state), "counts": c, "summary": pr._safely(summary, out, per_prop, fallback={}),
+            "rules": pr._safely(rules, adm_state, fallback={}), "counts": c,
+            "summary": pr._safely(summary, out, per_prop, fallback={}),
             "apps": out}
 
 
@@ -2073,14 +2107,20 @@ def main(env=None, now=None, clock=time.monotonic):
         sys.exit("GA4 client or refresh tokens missing")
     want = ap.wanted(ap.event_inputs(env).get("apps") or env.get("ACTIVITY_APPS"))
     root = env.get("ACTIVITY_DATA_DIR") or DATA_DIR
-    units = cp.units_from_state(sp.load_state(root))
+    try:
+        units = cp.units_from_state(sp.load_state(root))
+    except Exception:                                # a broken or unreadable state: a documented exit (stderr only)
+        sys.exit("the GA4 app routes could not be read from the private state")
     if want:
         units = [u for u in units if ap.matches(u, want) or u["key"] in want]
     if not units:
         sys.exit("no GA4 app routes in the private state (or none matched)")
     adm = pr._safely(load_admob, root, units, now, fallback={"state": "error"})
     report = run_probe(units, cid, sec, tokens, {"app_calls": APP_CALLS, "admob": adm}, now=now, clock=clock)
-    saved = bool(pr.write_private(OUT_PATH, dump_guarded(report), "ga4 activity probe"))
+    try:
+        saved = bool(pr.write_private(OUT_PATH, dump_guarded(report), "ga4 activity probe"))
+    except Exception:                                # e.g. the private repo's settings missing: "saved no", never a
+        saved = False                                # traceback without the result line
     print(public_line(report.get("counts"), saved), flush=True)
     if not saved:
         sys.exit(1)                                  # the workflow says "failed"; details stay off the public log
