@@ -10,7 +10,10 @@ const fs = require('fs'), vm = require('vm');
 const html = fs.readFileSync(process.argv[2], 'utf8');
 const a = html.indexOf('const NVR=(()=>{'), b = html.indexOf('// the Install value page: 📈 ROI first');
 if (a < 0 || b < 0 || b < a) { console.log(JSON.stringify({ errors: ['NVR module not found'] })); process.exit(0); }
-const src = html.slice(a, b) + '\nthis.NVR=NVR;';
+// the page's shared month-mover helpers (the owner's standard picker, 4 Nov 2026) — every period picker calls them
+const MON0 = html.indexOf('// ---- the month mover'), MON1 = html.indexOf("// ---- a daily chart's period");
+const MONSRC = MON0 >= 0 && MON1 > MON0 ? html.slice(MON0, MON1) : '';
+const src = MONSRC + html.slice(a, b) + '\nthis.NVR=NVR;';
 const out = {}, errors = [];
 // ROW: the period chips' row (it scrolls sideways on a phone); a repaint draws it at its left end again (scrollLeft 0)
 const ROW = { scrollLeft: 0 };
@@ -93,6 +96,9 @@ const tbl = (title) => { const i = h().indexOf(`<h3>${title}</h3>`); return i < 
     out.chips = [...h().matchAll(/data-nvr-per="([^"]+)"[^>]*>([^<]*)</g)].map(m => m[1] + ':' + m[2]);
     // a chip tapped far right in the scrolled row (a phone): the row keeps its sideways place, the chip stays in sight
     ROW.scrollLeft = 140; per('90'); out.row_kept = ROW.scrollLeft;
+    // the month mover: a month picked = its whole month; ‹ steps back one; the picked month is the pressed one
+    const oct = per('mon:2026-10'), sep = per('mon:2026-09');
+    out.month = [oct, sep, h().includes('data-nvr-per="mon:2026-09" aria-pressed="true"')];
     out.scroll = SCROLL;
     // Custom: from / to (reversed → swapped)
     change('[data-nvr-pf]', '2026-10-20'); change('[data-nvr-pto]', '2026-10-11');

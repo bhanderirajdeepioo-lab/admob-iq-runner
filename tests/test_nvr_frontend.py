@@ -55,7 +55,9 @@ def test_periods_custom_and_currency(out):
                                    "from90": True}
     # the owner's standard picker, in his order (3 Nov 2026)
     assert out["chips"] == ["today:Today", "yday:Yesterday", "7:7 days", "tm:This month", "lm:Last month", "30:30 days",
-                            "60:60 days", "90:90 days", "all:All time", "cus:Custom"]
+                            "60:60 days", "90:90 days", "all:All time", "cus:Custom",
+                            "mon:2026-09:‹", "mon:2026-10:Oct 2026", "mon:2026-11:›"]   # + the month mover (4 Nov 2026)
+    assert out["month"] == ["1 Oct 2026 – 31 Oct 2026 · GA4", "1 Sep 2026 – 30 Sep 2026 · GA4", True]
     assert out["row_kept"] == 140                                                  # the chip row did not slide back
     assert out["all_miss"] and out["scroll"] == 0
     assert out["custom"] == ["11 Oct 2026 – 20 Oct 2026 · GA4", True, "$2.00"]

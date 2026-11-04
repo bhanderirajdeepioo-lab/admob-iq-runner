@@ -8,7 +8,10 @@ const fs = require('fs'), vm = require('vm');
 const html = fs.readFileSync(process.argv[2], 'utf8');
 const a = html.indexOf('const SRC=(()=>{'), b = html.indexOf('// the Install value page: 📈 ROI first');
 if (a < 0 || b < 0 || b < a) { console.log(JSON.stringify({ errors: ['SRC module not found'] })); process.exit(0); }
-const src = html.slice(a, b) + '\nthis.SRC=SRC;';
+// the page's shared month-mover helpers (the owner's standard picker, 4 Nov 2026) — every period picker calls them
+const MON0 = html.indexOf('// ---- the month mover'), MON1 = html.indexOf("// ---- a daily chart's period");
+const MONSRC = MON0 >= 0 && MON1 > MON0 ? html.slice(MON0, MON1) : '';
+const src = MONSRC + html.slice(a, b) + '\nthis.SRC=SRC;';
 const out = {}, errors = [];
 const ROOT = { dataset: { aid: '' }, _html: '', get innerHTML() { return this._html; }, set innerHTML(v) { this._html = String(v); },
   querySelector: () => ({ getBoundingClientRect: () => ({ top: 100 }) }) };

@@ -395,10 +395,15 @@ def test_the_owners_standard_picker_renders_every_choice(report):
     month = the install weeks their days fall in; 90 days = 12 weeks; All time = every week, its compare reads — (no week
     before it); nothing renders NaN / Infinity / undefined."""
     r = J(report, "stdper")
-    assert r["order"] == ["today", "yday", "7", "14", "tm", "lm", "30", "60", "90", "all", "c"]
+    # + the month mover (4 Nov 2026): today 21 Sep → Last month (Aug) shown, ‹ Jul, › Sep
+    assert r["order"] == ["today", "yday", "7", "14", "tm", "lm", "30", "60", "90", "all", "c", "mon:2026-07", "mon:2026-08",
+                          "mon:2026-09"]
+    m = r["mon:2026-08"]
+    assert m["bad"] is False and m["pressed"] == "mon:2026-08" and not m["empty"]
     for k in ("7", "today", "yday", "tm", "lm", "90", "all"):
         assert r[k]["bad"] is False and r[k]["pressed"] == k, k
     assert r["today"]["empty"] and r["yday"]["empty"] and not any(r[k]["empty"] for k in ("7", "tm", "lm", "90", "all"))
     assert r["90"]["W"]["L"] == 12 and r["90"]["W"]["i1"] == r["7"]["W"]["i1"]
     assert r["tm"]["W"]["i1"] == r["7"]["W"]["i1"] and r["lm"]["W"]["i1"] <= r["tm"]["W"]["i0"] + 1
     assert r["all"]["nc"] and r["all"]["W"]["i0"] == 0 and r["all"]["W"]["cL"] == 0
+    assert m["W"] == dict(r["lm"]["W"], empty=False, nc=False) or m["W"]["i0"] == r["lm"]["W"]["i0"]   # August = Last month's weeks

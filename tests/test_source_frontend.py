@@ -56,7 +56,7 @@ def test_one_app(out):
     s = out["app"]
     assert "Total $580 5,800 sessions" in s and "Notification $145 25%" in s
     assert "Is period ke 1 din ka data abhi aa raha hai" in s
-    assert s.index("Oct 2026 so far") < s.index("Sep 2026")
+    assert s.index("Oct 2026 so far") < s.index("Sep 2026", s.index("Month by month"))
     assert "Today so far $20 $10" in s and "Yesterday ≈ $20 $10" in s
     assert "≈" in out["app_html"]
     assert "Channels load ho rahe hain" in out["app_loading_channels"]

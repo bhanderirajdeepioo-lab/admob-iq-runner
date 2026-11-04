@@ -179,6 +179,10 @@
   .banner.empty{background:var(--panel);color:var(--muted);border:1px solid var(--line2)}
   .banner.fault{background:var(--bad-b);color:var(--bad);border:1px solid var(--bad)}
   .std-cus{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:6px 0 8px}
+  .rng-mon{gap:2px;padding-left:4px;padding-right:4px}
+  .rng-mon button{background:none;border:0;color:var(--ink2);font:inherit;font-weight:700;padding:2px 6px;border-radius:6px;cursor:pointer}
+  .rng-mon button[aria-pressed="true"]{background:rgba(61,208,240,.16);color:#fff}
+  .rng-mon button[disabled]{opacity:.35;cursor:default}
   .std-cus input{background:var(--panel);border:1px solid var(--line2);color:var(--ink);border-radius:7px;padding:4px 8px;font:inherit;font-size:12px;color-scheme:dark}
   .std-cus button{border:1px solid var(--cyan);background:rgba(61,208,240,.14);color:#fff;font:inherit;font-weight:650;font-size:12px;padding:5px 11px;border-radius:8px;cursor:pointer}
   .lgd{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:8px}.lgd span{display:inline-flex;align-items:center;gap:6px}.dot{width:9px;height:9px;border-radius:3px;display:inline-block}
@@ -4191,6 +4195,7 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
       <span class="ctrl" id="smp-pick" title="Yahan Period picker lagu nahi — har section ki dates us section me likhi hain">📅 Dates: in each section</span>
       <label class="ctrl" id="rangectl" style="cursor:pointer;gap:6px" title="Time period — poora dashboard isi window ka data dikhata hai"><span class="cx">🗓<span class="tb-w"> Period:</span></span><select id="rangesel" style="background:transparent;border:none;color:var(--ink);font:inherit;font-weight:700;cursor:pointer;outline:none"><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7d">7 days</option><option value="month">This month</option><option value="lastmonth">Last month</option><option value="30d">30 days</option><option value="60d">60 days</option><option value="90d">90 days</option><option value="all">All time</option><option value="custom">Custom…</option></select></label>
       <span class="ctrl" id="rangecustom" style="display:none;gap:6px"><input type="date" id="rc-from" style="background:transparent;border:none;color:var(--ink);font:inherit;color-scheme:dark;outline:none"><span class="cx">→</span><input type="date" id="rc-to" style="background:transparent;border:none;color:var(--ink);font:inherit;color-scheme:dark;outline:none"><span class="lnk" style="cursor:pointer;color:var(--cyan);font-weight:700" onclick="applyRangeCustom()">Apply</span></span>
+      <span class="ctrl rng-mon" id="rangemon" title="Ek poora mahina — ‹ › se pichhla / agla"></span>
       <button class="ctrl" id="curtoggle" onclick="toggleCur()" title="Currency badlo — poora dashboard USD ⇄ INR" style="cursor:pointer;font:inherit;font-weight:700;color:var(--ink)">💱 <span id="cur-lbl">USD</span><span id="fx-rate" style="font-weight:600;color:var(--muted);font-size:11px;margin-left:7px;white-space:nowrap"></span></button>
       </div>
       <span class="live" id="freshness" title="Data kab update hua"><span class="dot-live"></span> <span id="fresh-txt">Live</span></span>
@@ -4651,6 +4656,7 @@ function windowDates(axis, range, cf, ct){
   if(range==='custom'){ const a=cf||"", b=ct||""; return axis.filter(d=>(!a||d>=a)&&(!b||d<=b)); }
   const comp = T ? axis.filter(d=>d!==T) : axis.slice();     // complete days = axis minus partial today
   if(range==='all')   return comp;
+  const ms=monSpan(range,T); if(ms) return (ms[1]===T?comp:axis).filter(d=>d>=ms[0]&&d<=ms[1]);
   if(range==='month'){ const mo=(L||(comp.length?comp[comp.length-1]:"")).slice(0,7); return comp.filter(d=>d.slice(0,7)===mo); }
   // Last month = the calendar month before the one we are IN, whole (1st to last day), so
   // month-on-month comparisons are apples-to-apples instead of "30 days back from today".
@@ -4666,6 +4672,25 @@ function windowDates(axis, range, cf, ct){
   const n = range==='7d'?7:range==='30d'?30:range==='60d'?60:range==='90d'?90:7;
   return comp.slice(-n);
 }
+// ---- the month mover ‹ Oct 2026 › (owner, 4 Nov 2026: "picker me ak aur chiz add kro — month move <>"): every period picker
+// has it after its chips. A period key 'mon:YYYY-MM' = that calendar month (the current month: its 1st … today). The middle
+// picks the month it shows; ‹ › pick the month before / after (‹ off at the data's first month, › off at the current month).
+// This month shows its month; any other choice shows Last month (not picked).
+const MON_RE=/^mon:(\d{4}-\d{2})$/;
+function monOf(k){ const m=MON_RE.exec(String(k==null?'':k)); return m?m[1]:null; }
+function monAdd(ym,k){ let y=+ym.slice(0,4), m=+ym.slice(5,7)-1+k; y+=Math.floor(m/12); m=((m%12)+12)%12; return y+'-'+String(m+1).padStart(2,'0'); }
+function monLastDay(ym){ return ym+'-'+String(new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5,7),0)).getUTCDate()).padStart(2,'0'); }
+function monName(ym){ return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+ym.slice(5,7)-1]+' '+ym.slice(0,4); }
+// a month key's days [1st, its last day — the current month: today (T)] or null for any other key
+function monSpan(key,T){ const m=monOf(key); if(!m) return null; const l=monLastDay(m); return [m+'-01',T&&T<l?T:l]; }
+// the mover in a picker's own button style: b(key, label, picked, disabled, aria label) → one button. key: the picker's
+// choice; T: its today; first: its data's first day (‹ stops at that month)
+function monMover(key,T,first,b,last){ const cur=String(T||'').slice(0,7); if(!/^\d{4}-\d{2}$/.test(cur)) return '';
+  const hi=last&&last<cur?last:cur;                       // last: the newest month offered (a view of whole months only)
+  let ym=monOf(key)||((key==='tm'||key==='month')?cur:monAdd(cur,-1)); if(ym>hi) ym=hi;
+  const lo=String(first||'').slice(0,7)||ym, p=monAdd(ym,-1), n=monAdd(ym,1);
+  return b('mon:'+p,'‹',false,p<lo,'Previous month: '+monName(p))+b('mon:'+ym,monName(ym),monOf(key)===ym,false,'Pick '+monName(ym))
+    +b('mon:'+n,'›',false,n>hi,'Next month: '+monName(n)); }
 // ---- a daily chart's period (the owner's standard picker, 3 Nov 2026: Today · Yesterday · 7 days · This month · Last month ·
 // 30 / 60 / 90 days · All time · Custom, in his order) on the chart's own sorted dates: Today / Yesterday = that day on the AdMob
 // calendar (DATA.today_date); This / Last month = its calendar month; N days = the chart's last N dates; All time = every
@@ -4683,9 +4708,10 @@ function stdSpan(dates,key,cf,ct,extra){ const n=(dates||[]).length; if(!n) retu
   if(key==='month') return inR(T.slice(0,8)+'01',T);
   if(key==='lastmonth'){ const l=iso(Date.parse(T.slice(0,8)+'01T00:00:00Z')-DAY); return inR(l.slice(0,8)+'01',l); }
   if(key==='custom') return inR(cf||dates[0],ct||dates[n-1]);
+  const ms=monSpan(key,T); if(ms) return inR(ms[0],ms[1]);
   return [0,n-1]; }
 // the period's words for a chart line (its dates follow): '' for N days / All time / Custom (their line says them already)
-function stdWord(key){ return ({today:'Today',yesterday:'Yesterday',month:'This month',lastmonth:'Last month'})[key]||''; }
+function stdWord(key){ return monOf(key)?monName(monOf(key)):(({today:'Today',yesterday:'Yesterday',month:'This month',lastmonth:'Last month'})[key]||''); }
 // Custom's two dates + Show for a chart (inputs id-f / id-t inside the chart's first … last date; apply(from, to))
 function stdCusBox(id,d0,dN,f,t,apply){ return `<div class="std-cus"><input type="date" id="${id}-f" aria-label="From" min="${d0}" max="${dN}" value="${f||d0}"><span class="faint">se</span><input type="date" id="${id}-t" aria-label="To" min="${d0}" max="${dN}" value="${t||dN}"><button type="button" onclick="${apply}(document.getElementById('${id}-f').value,document.getElementById('${id}-t').value)">Show</button></div>`; }
 function sumDaily(daily, winSet){
@@ -4697,7 +4723,7 @@ function sumDaily(daily, winSet){
           // AdMob's own ratio, so no 100% cap (an ad matched one day and shown the next can pass it)
           show: ma? im/ma : 0, ctr: im? ck/im : 0};
 }
-function pRangeLabel(r){return {today:'Today',yesterday:'Yesterday','7d':'7 days','30d':'30 days','60d':'60 days','90d':'90 days',month:'This month',lastmonth:'Last month',all:'All time',custom:'Custom'}[r]||r;}
+function pRangeLabel(r){if(monOf(r)) return monName(monOf(r)); return {today:'Today',yesterday:'Yesterday','7d':'7 days','30d':'30 days','60d':'60 days','90d':'90 days',month:'This month',lastmonth:'Last month',all:'All time',custom:'Custom'}[r]||r;}
 // portfolio calendar axis (all placement dates), cached; invalidated each render()
 function gAxis(){ if(window.__ax) return window.__ax; window.__ax=[...new Set((DATA.placements||[]).flatMap(p=>(p.daily||[]).map(r=>r[0])))].sort(); return window.__ax; }
 function curWinArr(){ const ax=gAxis(); let cf=RCUSTOM.from,ct=RCUSTOM.to;
@@ -4774,6 +4800,7 @@ function render(){
   appSelSync();
   const rsel=document.getElementById('rangesel'); if(rsel) rsel.value=RANGE;
   const rcust=document.getElementById('rangecustom'); if(rcust) rcust.style.display=(RANGE==='custom'?'inline-flex':'none');
+  syncRangeMon();
   if(!window.__wired){            // attach static listeners once (survives auto-refresh re-renders)
     window.__wired=true;
     document.querySelectorAll('.nav button[data-screen]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.screen)));   // (the hub's nav has its own)
@@ -4858,8 +4885,15 @@ async function refreshData(){
     }finally{ HB.mute--; REFRESH_SILENT=false; }
   }catch(e){ updateFreshness(); }                                          // network blip: keep last good data
 }
+// the top bar's month mover + the select's own option for a picked month ("Oct 2026"), kept in step with RANGE
+function syncRangeMon(){ const sel=document.getElementById('rangesel'), box=document.getElementById('rangemon');
+  if(sel){ let o=sel.querySelector('option[data-mon]'); const m=monOf(RANGE);
+    if(m){ if(!o){ o=document.createElement('option'); o.setAttribute('data-mon','1'); sel.appendChild(o); } o.value=RANGE; o.textContent=monName(m); }
+    else if(o) o.remove();
+    sel.value=RANGE; }
+  if(box){ const ax=gAxis(); box.innerHTML=monMover(RANGE,(DATA&&DATA.today_date)||ax[ax.length-1]||'',ax[0]||'',(k,l,on,dis,ar)=>`<button type="button" aria-pressed="${on}" aria-label="${ar}"${dis?' disabled':` onclick="setRange('${k}')"`}>${l}</button>`); } }
 function setRange(r){
-  RANGE=r;
+  RANGE=r; syncRangeMon();
   const sel=document.getElementById('rangesel'); if(sel) sel.value=r;
   const cust=document.getElementById('rangecustom');
   if(r==='custom'){                     // reveal date inputs, prefill, and wait for Apply
@@ -5180,7 +5214,7 @@ function hubOv(s){ if(!HUB.on||!APP||!s) return s;
   return s; }
 function hubDay(){ return (DATA&&DATA.latest_complete)||''; }
 // the top bar's Period, as a caption: "Today" / "Yesterday" / "Last 7 days" … (a one-day custom range: its Today / Yesterday)
-function hubPerName(){ if(RANGE==='custom'){ const w=curWinArr(); return (w.length===1&&relDay(w[0]))||'Custom'; }
+function hubPerName(){ if(monOf(RANGE)) return monName(monOf(RANGE)); if(RANGE==='custom'){ const w=curWinArr(); return (w.length===1&&relDay(w[0]))||'Custom'; }
   return {today:'Today',yesterday:'Yesterday','7d':'Last 7 days','30d':'Last 30 days','60d':'Last 60 days','90d':'Last 90 days',month:'This month',lastmonth:'Last month',all:'All time'}[RANGE]||'Period'; }
 // the app's AdMob day: revenue / impressions on `day`, and its usual (the 7 complete days before it, per day)
 function hubRev(name){ const L=hubDay(), T=(DATA&&DATA.today_date)||''; const ax=gAxis().filter(d=>d!==T&&d<L).slice(-7), ws=new Set(ax);
@@ -5998,7 +6032,7 @@ function ecChartCard(){ const W=EC.W||ecWin(), dm=ecChartDm(), first=EC.app?ecFi
   const facts=S.last>=0?`<b>${dl}</b> · latest <b>${cm(pts[S.last].ec)}</b> · avg <b>${S.avg!=null?cm(S.avg):'—'}</b> · min <b>${cm(pts[S.min].ec)}</b> (${mo?bMon(pts[S.min].k):fmtD(pts[S.min].k)}) · max <b>${cm(pts[S.max].ec)}</b> (${mo?bMon(pts[S.max].k):fmtD(pts[S.max].k)})`:(EC.r==='today'?'Aaj ka din abhi chal raha hai — chart sirf poore din dikhata hai; aaj ka live eCPM upar Today tile me hai.':'Is range me data nahi.');
   const hist=first&&W.L?`Poori history: <b>${ecYear(first)}</b> se <b>${ecYear(W.L)}</b> tak (${W.comp.filter(d=>d>=first).length.toLocaleString()} din) — <b>All time</b> pe sab.`:'';
   return `<div class="ct"><h3>📈 ${mo?'Monthly':'Daily'} eCPM · ${hAttr(nm)}</h3><span class="faint" style="font-size:11.5px">hover / tap = us ${mo?'mahine':'din'} ke numbers</span></div>
-    <div class="ec-ctl">${seg(EC.r,'ecSetR',EC_RS)}${seg(EC.g,'ecSetG',[['day','Day'],['month','Month']])}</div>${EC.r==='custom'?stdCusBox('ec-cus',first||W.comp[0]||'',W.L||'',EC.cf,EC.ct,'ecSetCus'):''}
+    <div class="ec-ctl">${seg(EC.r,'ecSetR',EC_RS)}<div class="ec-seg" role="group" aria-label="Month">${monMover(EC.r,W.T||W.L||'',first||W.comp[0]||'',(k,l,on,dis,ar)=>`<button type="button" class="${on?'on':''}" aria-pressed="${on}" aria-label="${ar}"${dis?' disabled':` onclick="ecSetR('${k}')"`}>${l}</button>`)}</div>${seg(EC.g,'ecSetG',[['day','Day'],['month','Month']])}</div>${EC.r==='custom'?stdCusBox('ec-cus',first||W.comp[0]||'',W.L||'',EC.cf,EC.ct,'ecSetCus'):''}
     <div class="ec-chw" id="ec-chw"><div class="ec-svgw"></div><div class="ec-tip" role="status" aria-live="polite"></div></div>
     <div class="ec-lg"><span><i style="background:#3dd0f0"></i>eCPM</span><span><i class="ec-la"></i>range avg</span><span><i class="ec-lb"></i>impressions (faint)</span><span><i style="background:#34d99a"></i>max</span><span><i style="background:#ff6b6b"></i>min</span></div>
     <div class="ec-note">${facts}</div>
@@ -6035,7 +6069,7 @@ function ecWire(){ if(EC.wired) return; EC.wired=true;
     if(ecOn()&&w&&EC.ch&&Math.abs((w.clientWidth||0)-(EC.ch.cw||0))>2) ecDraw(); },120); }); }
 function ecPaint(){ const s=(EC.el&&EC.el.isConnected!==false)?EC.el:document.querySelector('.screen[data-screen=ecpm]'); if(!s||!DATA) return;
   if(!EC.booted){ EC.booted=true; let sv=null; try{ sv=JSON.parse(localStorage.getItem('ecpmview')||'null'); }catch(e){}   // a reload / restored tab: the same view
-    if(sv){ if(EC_RS.some(o=>o[0]===sv.r)) EC.r=sv.r; if(sv.g==='month'||sv.g==='day') EC.g=sv.g;
+    if(sv){ if(EC_RS.some(o=>o[0]===sv.r)||monOf(sv.r)) EC.r=sv.r; if(sv.g==='month'||sv.g==='day') EC.g=sv.g;
       if(typeof sv.cf==='string'&&typeof sv.ct==='string'){ EC.cf=sv.cf; EC.ct=sv.ct; } }
     EC.hdr=APP; EC.app=APP||((sv&&sv.app&&ecAgg().apps[sv.app])?sv.app:''); }
   if(EC.hdr!==APP){ EC.hdr=APP; EC.app=APP||''; }       // the header App picker drives the view
@@ -6809,6 +6843,7 @@ function perEnds(a,ad){ const T=addD(a.final_till,2); return [[a.first_day,ad&&a
 function perRange(a,ad){ const [first,T]=perEnds(a,ad), Y=addD(T,-1), m0=T.slice(0,8)+'01';
   if(PER==='today') return [T,T]; if(PER==='yday') return [Y,Y]; if(PER==='30') return [addD(a.final_till,-29),a.final_till];
   if(PER==='60') return [addD(a.final_till,-59),a.final_till]; if(PER==='90') return [addD(a.final_till,-89),a.final_till];
+  const ms=monSpan(PER,T); if(ms) return ms;
   if(PER==='tm') return [m0,T]; if(PER==='lm'){ const l=addD(m0,-1); return [l.slice(0,8)+'01',l]; }
   if(PER==='all') return [first,T];
   if(PER==='cus'){ let f=PF||first, t=PTO||T; if(f>t) [f,t]=[t,f]; return [f,t]; }
@@ -7015,7 +7050,7 @@ function ccGapNote(d){ const m=+d.missing||0, ft=d.final_till; if(!(m>0)||!ft) r
 // Every day card: the board's note leaves both out there)
 function perCtl(a,ad){ const L=[['today','Today'],['yday','Yesterday'],['7','7 days'],['tm','This month'],['lm','Last month'],['30','30 days'],['60','60 days'],['90','90 days'],['all','All time'],['cus','Custom']];   // the owner's standard picker (3 Nov 2026)
   const [first,T]=perEnds(a,ad), [lo,hi]=perRange(a,ad);
-  return `<div class="fo-per" role="group" aria-label="Period">${L.map(([k,l])=>`<button type="button" class="fo-pb" data-fo-per="${k}" aria-pressed="${PER===k}">${l}</button>`).join('')}</div>`
+  return `<div class="fo-per" role="group" aria-label="Period">${L.map(([k,l])=>`<button type="button" class="fo-pb" data-fo-per="${k}" aria-pressed="${PER===k}">${l}</button>`).join('')}${monMover(PER,T,first,(k,l,on,dis,ar)=>`<button type="button" class="fo-pb" data-fo-per="${k}" aria-pressed="${on}"${dis?' disabled':''} aria-label="${ar}">${l}</button>`)}</div>`
     +(PER==='cus'?`<div class="fo-cus"><label>From <input type="date" data-fo-pf="1" value="${lo}" min="${first}" max="${T}"></label><label>To <input type="date" data-fo-pto="1" value="${hi}" min="${first}" max="${T}"></label></div>`:''); }
 function ccBoard(a,d){ const S=d.summary||[], c=k=>S.filter(x=>x.status===k).length, ad=adsData(a), p=adsPtr(a), [lo,hi]=perRange(a,ad), T=addD(a.final_till,2);
   const lim=[];   // what the period reaches before a part's first day — said once, with that day
@@ -7921,7 +7956,8 @@ function dvName(D,m){ const n=(D.names||{})[m]||[], b=n[0]&&n[0]!=='(not set)'?n
 function devView(d){ const D=d.dev;
   if(!D||D.v!==2) return `<div class="roi-card"><p class="roi-note">📱 Devices ka data aa raha hai — GA4 se har build me thoda thoda (pehli baar kuch ghante lagenge).</p></div>`;
   const ccs=D.cc||[]; if(DVCC&&!ccs.some(c=>c[0]===DVCC)) DVCC='';
-  const pers=D.periods||[]; if(!pers.some(p=>p[0]===DVPER)) DVPER='30';
+  const pers=D.periods||[], mons=Object.keys(D.P||{}).filter(k=>monOf(k)).sort();   // + the build's calendar months (the mover)
+  if(!pers.some(p=>p[0]===DVPER)&&!(monOf(DVPER)&&(D.P||{})[DVPER])) DVPER='30';
   const PP=(D.P||{})[DVPER]||{}, L=DVCC?((PP.by||{})[DVCC]||{rows:[],rest:{},tot:{}}):PP, Vm=DVCC?((D.Vc||{})[DVCC]||{}):(D.V||{});
   const rows=(L.rows||[]).map(r=>{ const v=Vm[r[0]]||['Too little data',null,null,false];
     const pk=r[6]!=null?r[6]:r[2];                    // paid installs of the days whose Google Ads cost is known: the CPI's base
@@ -7934,7 +7970,8 @@ function devView(d){ const D=d.dev;
   rows.sort((a,b)=>DVSORT.dir*(key(a)-key(b))||(b.n-a.n));
   const th=(k,l)=>`<th aria-sort="${DVSORT.k===k?(DVSORT.dir>0?'ascending':'descending'):'none'}"><button type="button" data-roi-dvsort="${k}">${l}</button></th>`;
   const pc=v=>ok(v)?`<span class="${roasCls(v)}">${Math.round(v*100)}%</span>`:'—';
-  const perBtns=`<span class="roi-mini" role="group" aria-label="Period">${pers.map(([k,l])=>`<button type="button" data-roi-dvper="${k}" aria-pressed="${DVPER===k}">${E(l)}</button>`).join('')}</span>`;
+  const perBtns=`<span class="roi-mini" role="group" aria-label="Period">${pers.map(([k,l])=>`<button type="button" data-roi-dvper="${k}" aria-pressed="${DVPER===k}">${E(l)}</button>`).join('')}</span>`
+    +(mons.length?`<span class="roi-mini" role="group" aria-label="Month">${monMover(DVPER,D.today||'',monOf(mons[0])+'-01',(k,l,on,dis,ar)=>`<button type="button" data-roi-dvper="${k}" aria-pressed="${on}"${dis||!(D.P||{})[k]?' disabled':''} aria-label="${E(ar)}">${E(l)}</button>`)}</span>`:'');
   const sel=`<label class="roi-note" style="display:inline-flex;align-items:center;gap:6px;margin:0">Country <select data-roi-dvcc aria-label="Country">`
     +`<option value=""${DVCC?'':' selected'}>All countries</option>`+ccs.map(([c,n])=>`<option value="${E(c)}"${DVCC===c?' selected':''}>${E(valCtyName(c))} · ${N(n)}</option>`).join('')+`</select></label>`;
   const chips=`<div class="roi-chips">${['Loss','Slow','Profit','No ads','Too little data'].filter(k=>cnt(k)).map(k=>`<span class="roi-cc">${dvChip(k)} <b>${cnt(k)}</b></span>`).join('')}</div>`;
@@ -8028,9 +8065,9 @@ function cpSum(rs,i0,i1,ar){ const lo=cpBis(rs,i0,false), hi=cpBis(rs,i1,true); 
   if(!n&&!sp&&!R.some(v=>v)) return null;
   const out=[n,nk,sp,so?spi:null,u1,nu1]; let k=na; while(k&&!(Nn[k-1]||S[k-1]||R[k-1])) k--; for(let j=0;j<k;j++) out.push(R[j],S[j],Nn[j]); return out; }
 // the period on screen → {lo, hi, ar, c} (a button: the build's; Custom: summed here from the days file) or the days file's state
-function cpPer(d,cp){ if(CPER!=='cus') return cp.P[CPER]||cp.P.all;
+function cpPer(d,cp){ const ms=monSpan(CPER,cp.thru); if(CPER!=='cus'&&!ms) return cp.P[CPER]||cp.P.all;
   const st=cpGet(d,true); if(!st||!st.j) return st||{err:true}; const D=st.j;
-  let lo=CPF, hi=CPTO; if(lo>hi) [lo,hi]=[hi,lo]; const key=(cpMeta(d)||{}).dv+'|'+lo+'|'+hi; if(CPC.k===key) return CPC.v;
+  let lo=ms?ms[0]:CPF, hi=ms?ms[1]:CPTO; if(lo>hi) [lo,hi]=[hi,lo]; const key=(cpMeta(d)||{}).dv+'|'+lo+'|'+hi; if(CPC.k===key) return CPC.v;
   const i0=dDiff(D.from,lo), i1=dDiff(D.from,hi), ar=new Array(D.A.length).fill(null), c={};
   Object.keys(D.c).forEach(cc=>{ const s=cpSum(D.c[cc],i0,i1,ar); if(s) c[cc]=s; });
   while(ar.length&&!ar[ar.length-1]) ar.pop();
@@ -8074,7 +8111,8 @@ function cpNow(c,cdc){ const rows=c.rows||[]; if(!rows.length) return '';
 function cpCtl(cp){ const f=cp.first||cp.from, t=cp.thru;
   const btn=CP_PERS.filter(([k])=>k==='cus'||cp.P[k]).map(([k,l])=>`<button type="button" data-roi-cper="${k}" aria-pressed="${CPER===k}">${E(l)}</button>`).join('');
   const cus=CPER==='cus'?`<span class="roi-cus"><input type="date" data-roi-cpf aria-label="From" min="${E(f)}" max="${E(t)}" value="${E(CPF)}"><span>–</span><input type="date" data-roi-cpto aria-label="To" min="${E(f)}" max="${E(t)}" value="${E(CPTO)}"></span>`:'';
-  return `<div class="roi-cpctl"><span class="roi-mini" role="group" aria-label="Period">${btn}</span>${cus}</div>`; }
+  const mv=monMover(CPER,t,f,(k,l,on,dis,ar)=>`<button type="button" data-roi-cper="${k}" aria-pressed="${on}"${dis?' disabled':''} aria-label="${E(ar)}">${E(l)}</button>`);
+  return `<div class="roi-cpctl"><span class="roi-mini" role="group" aria-label="Period">${btn}</span><span class="roi-mini" role="group" aria-label="Month">${mv}</span>${cus}</div>`; }
 function cpCard(head,ctl,inner){ return `<div class="roi-card" id="roi-cpb"><div class="roi-ct"><h3>Countries · rakhna ya hatana</h3>${head||''}</div>${ctl||''}${inner}</div>`; }
 function ctyView(d){ const m=cpMeta(d); if(!m) return ctyOld(d);
   const c=d.cty||{}, cdc=cdOf(d), H=c.H||90, top=cpNow(c,cdc), st=cpGet(d,false);
@@ -8083,10 +8121,10 @@ function ctyView(d){ const m=cpMeta(d); if(!m) return ctyOld(d);
   if(st.err) return top+cpCard('','',msg('Countries ka period data load nahi hua.',1));
   if(st.stale) return top+cpCard('','',ccReload(d,cdc)?msg('Naya data aa raha hai…'):msg('Naya data abhi poora nahi pahuncha — thodi der me.',1));
   const cp=st.j;
-  if(!CP_PERS.some(p=>p[0]===CPER)||(CPER!=='cus'&&!cp.P[CPER])) CPER='all';
+  if(!monOf(CPER)&&(!CP_PERS.some(p=>p[0]===CPER)||(CPER!=='cus'&&!cp.P[CPER]))) CPER='all';
   if(CPER==='cus'&&(!CPF||!CPTO)){ const q=cp.P['30']||cp.P.all; CPF=CPF||q.lo; CPTO=CPTO||q.hi; }
   const ctl=cpCtl(cp), p=cpPer(d,cp);
-  if(!p||p.busy) return top+cpCard('',ctl,msg('Custom ke liye har din ka data load ho raha hai…'));
+  if(!p||p.busy) return top+cpCard('',ctl,msg((monOf(CPER)?monName(monOf(CPER)):'Custom')+' ke liye har din ka data load ho raha hai…'));
   if(p.err) return top+cpCard('',ctl,msg('Custom ka data load nahi hua.',1));
   if(p.stale) return top+cpCard('',ctl,ccReload(d,cdc)?msg('Naya data aa raha hai…'):msg('Naya data abhi poora nahi pahuncha — thodi der me.',1));
   const A=cp.A, all=Object.entries(p.c||{}).map(([cc,s])=>cpJudge(cpRow(cc,s,A),H));
@@ -8974,6 +9012,7 @@ function rng(a,per){ const n=(a.rev||[]).length, at=d=>Math.round((t0(d)-t0(a.d0
   else if(per==='tm'){ i0=at(m1); i1=ti; }
   else if(per==='lm'){ const e=t0(m1)-DAY, s=iso(e).slice(0,8)+'01'; i0=at(s); i1=at(iso(e)); }
   else if(per==='cus'){ const [f,t]=cusRange(a.d0,a.today); i0=at(f); i1=at(t); }
+  else if(monOf(per)){ const ms=monSpan(per,a.today); i0=at(ms[0]); i1=at(ms[1]); }
   else { i0=0; i1=n-1; }
   return [Math.max(0,i0), Math.min(n-1,i1)]; }
 function cusRange(mn,mx){ let f=PF||mn, t=PTO||mx; if(f>t) [f,t]=[t,f]; return [f,t]; }
@@ -8990,7 +9029,7 @@ function perLabel(a,per){ const [i0,i1]=rng(a,per); if(i1<i0) return ''; const d
 const cell=(v,t,b)=>`<td>${b?'<b>':''}${MV(v)}${b?'</b>':''}<small> ${P(v,t)}</small></td>`, tcell=v=>`<td><b>${MV(v)}</b></td>`;   // the Total column: no "100%"
 // the period buttons (+ Custom's from / to, bounded by the first day … today: mn / mx)
 function chips(mn,mx){ const [f,t]=cusRange(mn,mx);
-  return `<div class="roi-ctl"><span class="roi-mini" role="group" aria-label="Period">${PERS.map(([k,l])=>`<button type="button" data-src-per="${k}" aria-pressed="${PER===k}">${l}</button>`).join('')}</span></div>`
+  return `<div class="roi-ctl"><span class="roi-mini" role="group" aria-label="Period">${PERS.map(([k,l])=>`<button type="button" data-src-per="${k}" aria-pressed="${PER===k}">${l}</button>`).join('')}</span><span class="roi-mini" role="group" aria-label="Month">${monMover(PER,mx,mn,(k,l,on,dis,ar)=>`<button type="button" data-src-per="${k}" aria-pressed="${on}"${dis?' disabled':''} aria-label="${ar}">${l}</button>`)}</span></div>`
     +(PER==='cus'?`<div class="src-cus"><label>From <input type="date" data-src-pf="1" value="${E(f)}" min="${E(mn)}" max="${E(mx)}"></label><label>To <input type="date" data-src-pto="1" value="${E(t)}" min="${E(mn)}" max="${E(mx)}"></label></div>`:''); }
 function groupsNote(){ const gs=(ALL&&ALL.groups)||[];
   const part=(i,def)=>{ const g=gs[i]; const l=g&&g[2]&&g[2].length?g[2]:def; return `<b>${G[i][0]}</b> = ${E(l.join(' + '))}`; };
@@ -9115,8 +9154,8 @@ function xCtyIn(aid){
   const PZ=xGet(cc.file,cc.v); if(!PZ) return hd+(XERR[cc.file]?xMsg('Countries ka source data load nahi hua.',1):xMsg('Countries ka source data load ho raha hai…'));
   const ctl=chipsX(PZ.d0,PZ.today);
   let c, lo, hi, miss;
-  if(XPER==='cus'){ const D=xGet(cc.days,cc.dv); if(!D) return hd+ctl+(XERR[cc.days]?xMsg('Custom ke din load nahi hue.',1):xMsg('Custom ke liye har din ka data load ho raha hai…'));
-    [lo,hi]=cusX(PZ.d0,PZ.today); if(lo<PZ.d0) lo=PZ.d0; if(hi>PZ.today) hi=PZ.today;   // only the app's own days
+  if(XPER==='cus'||monOf(XPER)){ const D=xGet(cc.days,cc.dv); if(!D) return hd+ctl+(XERR[cc.days]?xMsg('Custom ke din load nahi hue.',1):xMsg('Custom ke liye har din ka data load ho raha hai…'));
+    [lo,hi]=monOf(XPER)?monSpan(XPER,PZ.today):cusX(PZ.d0,PZ.today); if(lo<PZ.d0) lo=PZ.d0; if(hi>PZ.today) hi=PZ.today;   // only the app's own days
     if(lo>hi) return hd+ctl+`<p class="roi-note">Is period me data nahi.</p>`;
     const r=xSumDays(D,lo,hi); c=r.c; miss=r.miss; }
   else { const x=(PZ.P||{})[XPER]; if(!x) return hd+ctl+`<p class="roi-note">Is period me data nahi.</p>`; c=x.c; lo=x.lo; hi=x.hi; miss=x.miss; }
@@ -9139,7 +9178,7 @@ function xDevIn(aid){
   const D=xGet(dv.file,dv.v); if(!D) return hd+(XERR[dv.file]?xMsg('Phones ka source data load nahi hua.',1):xMsg('Phones ka source data load ho raha hai…'));
   if(!(D.w||{})[XWIN]) XWIN=(XWINS.find(([k])=>(D.w||{})[k])||['30'])[0];
   const w=(D.w||{})[XWIN];
-  const ctl=`<div class="roi-ctl"><span class="roi-mini" role="group" aria-label="Period">${XWINS.filter(([k])=>(D.w||{})[k]).map(([k,l])=>`<button type="button" data-srcx-win="${k}" aria-pressed="${XWIN===k}">${l}</button>`).join('')}</span></div>`;
+  const ctl=`<div class="roi-ctl"><span class="roi-mini" role="group" aria-label="Period">${XWINS.filter(([k])=>(D.w||{})[k]).map(([k,l])=>`<button type="button" data-srcx-win="${k}" aria-pressed="${XWIN===k}">${l}</button>`).join('')}</span>${(()=>{ const ms=Object.keys(D.w||{}).filter(k=>monOf(k)).sort(); if(!ms.length) return ''; return `<span class="roi-mini" role="group" aria-label="Month">${monMover(XWIN,(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||monLastDay(monOf(ms[ms.length-1])),monOf(ms[0])+'-01',(k,l,on,dis,ar)=>`<button type="button" data-srcx-win="${k}" aria-pressed="${on}"${dis||!(D.w||{})[k]?' disabled':''} aria-label="${E(ar)}">${E(l)}</button>`,monOf(ms[ms.length-1]))}</span>`; })()}</div>`;
   if(!w) return hd+`<p class="roi-note">Abhi koi period nahi.</p>`;
   const nm=m=>{ const n=(D.names||{})[m]||[], b=n[0]&&n[0]!=='(not set)'?n[0]:'', k=n[1]&&n[1]!=='(not set)'?n[1]:''; return b&&k?b+' '+k:b?b+' '+m:k||m; };
   const unk=k=>k==='(other)'||k==='(not set)';
@@ -9151,7 +9190,7 @@ function xDevIn(aid){
     +(tb.tot>0&&tb.oth/tb.tot>=0.005?`<p class="roi-note">⚠️ Is period ki <b>${P(tb.oth,tb.tot)}</b> kamai GA4 ne "(other)" / bina phone ke di — wo upar ke phones me nahi, apni alag row me hai (GA4 ki limit; bade app pe hoti hai).</p>`:'')
     +`<p class="roi-note">Har phone ki <b>us period me hui</b> GA4 kamai (Total revenue), session ke channel ke hisaab se. Sirf pichhla mahina / 30 din / 60 din / 90 din / All time: chhote period (Today, 7 din, Custom) pe GA4 bade app ke phones ka bada hissa "(other)" me daal deta hai, isliye wo yahan nahi.</p>`; }
 function chipsX(mn,mx){ const [f,t]=cusX(mn,mx);
-  return `<div class="roi-ctl"><span class="roi-mini" role="group" aria-label="Period">${PERS.map(([k,l])=>`<button type="button" data-srcx-per="${k}" aria-pressed="${XPER===k}">${l}</button>`).join('')}</span></div>`
+  return `<div class="roi-ctl"><span class="roi-mini" role="group" aria-label="Period">${PERS.map(([k,l])=>`<button type="button" data-srcx-per="${k}" aria-pressed="${XPER===k}">${l}</button>`).join('')}</span><span class="roi-mini" role="group" aria-label="Month">${monMover(XPER,mx,mn,(k,l,on,dis,ar)=>`<button type="button" data-srcx-per="${k}" aria-pressed="${on}"${dis?' disabled':''} aria-label="${ar}">${l}</button>`)}</span></div>`
     +(XPER==='cus'?`<div class="src-cus"><label>From <input type="date" data-srcx-pf="1" value="${E(f)}" min="${E(mn)}" max="${E(mx)}"></label><label>To <input type="date" data-srcx-pto="1" value="${E(t)}" min="${E(mn)}" max="${E(mx)}"></label></div>`:''); }
 function xCty(aid){ wire(); return `<div class="roi-card" id="srcx-root" data-kind="cty" data-aid="${E(aid||'')}">${xCtyIn(aid)}</div>`; }
 function xDev(aid){ wire(); return `<div class="roi-card" id="srcx-root" data-kind="dev" data-aid="${E(aid||'')}">${xDevIn(aid)}</div>`; }
@@ -9231,6 +9270,7 @@ function rng(d){ const ft=d.final_till, T=addD(ft,2), m0=T.slice(0,8)+'01';
   if(PER==='today') return [T,T]; if(PER==='yday') return [addD(T,-1),addD(T,-1)];
   if(PER==='7') return [addD(ft,-6),ft]; if(PER==='30') return [addD(ft,-29),ft];
   if(PER==='60') return [addD(ft,-59),ft]; if(PER==='90') return [addD(ft,-89),ft];
+  const ms=monSpan(PER,T); if(ms) return ms;
   if(PER==='tm') return [m0,T]; if(PER==='lm'){ const l=addD(m0,-1); return [l.slice(0,8)+'01',l]; }
   if(PER==='all') return [d.first_day,T];
   let f=PF||d.first_day, t=PTO||T; if(f>t) [f,t]=[t,f]; return [f,t]; }
@@ -9245,7 +9285,7 @@ function sums(d,lo,hi){ const t=[0,0,0,0,0,0], s=[0,0,0,0], u={}, c={}; let n=0,
     for(const k in r[4]){ const e=c[k]||(c[k]=[0,0,0,0]); for(let j=0;j<4;j++) e[j]+=+r[4][k][j]||0; } }
   return {t,s,u,c,n,miss,nf}; }
 function perCtl(d){ const [lo,hi]=rng(d), T=addD(d.final_till,2);
-  return `<div class="roi-ctl"><span class="roi-mini nvr-per" role="group" aria-label="Period">${PERS.map(([k,l])=>`<button type="button" data-nvr-per="${k}" aria-pressed="${PER===k}">${l}</button>`).join('')}</span></div>`
+  return `<div class="roi-ctl"><span class="roi-mini nvr-per" role="group" aria-label="Period">${PERS.map(([k,l])=>`<button type="button" data-nvr-per="${k}" aria-pressed="${PER===k}">${l}</button>`).join('')}${monMover(PER,T,d.first_day,(k,l,on,dis,ar)=>`<button type="button" data-nvr-per="${k}" aria-pressed="${on}"${dis?' disabled':''} aria-label="${ar}">${l}</button>`)}</span></div>`
     +(PER==='cus'?`<div class="nvr-cus"><label>From <input type="date" data-nvr-pf="1" value="${lo}" min="${d.first_day}" max="${T}"></label><label>To <input type="date" data-nvr-pto="1" value="${hi}" min="${d.first_day}" max="${T}"></label></div>`:''); }
 function tiles(x){ const c=CC?x.c[CC]:null, t=c?[c[0],c[1],c[2],c[3],0,0]:x.t, en=EC(t[0],t[1]), er=EC(t[2],t[3]), rv=t[0]+t[2];
   const tile=(l,v,sub,cls)=>`<div class="roi-k${cls?' '+cls:''}"><div class="roi-kl">${l}</div><div class="roi-kv">${v}</div><div class="roi-ks">${sub}</div></div>`;
@@ -9482,7 +9522,7 @@ function adBack(){ hbDrop('appdetail'); show(AD_ORIGIN||'overview'); }   // retu
 // so whatever was picked in Overview is the default here, and a change here sticks everywhere.
 function adSetRange(r){
   if(r==='custom'){ setRange('custom'); return; }         // reveal the top-bar date inputs; Apply re-renders
-  RANGE=r; const sel=document.getElementById('rangesel'); if(sel) sel.value=r;
+  RANGE=r; syncRangeMon(); const sel=document.getElementById('rangesel'); if(sel) sel.value=r;
   adRedraw();
 }
 let AD_ORIGIN="overview";                 // the screen an app was opened FROM, so ← Back returns there
@@ -9511,8 +9551,8 @@ function openAppDetail(name){
 
   // ----- period chip bar (drives the GLOBAL range) -----
   const PERIODS=[['today','Today'],['yesterday','Yesterday'],['7d','7 days'],['month','This month'],['lastmonth','Last month'],['30d','30 days'],['60d','60 days'],['90d','90 days'],['all','All time'],['custom','Custom']];
-  const perBar=PERIODS.map(([v,t])=>{const on=RANGE===v;
-    return `<button onclick="adSetRange('${v}')" style="border:1px solid ${on?'var(--cyan)':'var(--line2)'};background:${on?'rgba(61,208,240,.16)':'var(--panel)'};color:${on?'#fff':'var(--ink2)'};font:inherit;font-weight:${on?650:400};font-size:12.5px;padding:5px 12px;border-radius:8px;cursor:pointer">${t}</button>`;}).join('');
+  const pB=(v,t,on,dis,ar)=>`<button ${dis?'disabled':`onclick="adSetRange('${v}')"`}${ar?` aria-label="${ar}"`:''} style="border:1px solid ${on?'var(--cyan)':'var(--line2)'};background:${on?'rgba(61,208,240,.16)':'var(--panel)'};color:${on?'#fff':'var(--ink2)'};font:inherit;font-weight:${on?650:400};font-size:12.5px;padding:5px 12px;border-radius:8px;cursor:${dis?'default':'pointer'};${dis?'opacity:.4':''}">${t}</button>`;
+  const perBar=PERIODS.map(([v,t])=>pB(v,t,RANGE===v,false,'')).join('')+(()=>{ const ax=gAxis(); return monMover(RANGE,DATA.today_date||ax[ax.length-1]||'',ax[0]||'',pB); })();
 
   // ----- view switch (ad-units ↔ countries) -----
   const seg=(v,txt)=>{const on=ADVIEW===v;
@@ -9639,7 +9679,8 @@ function adDailyPanel(appName){
   const idx=adDailyWin(S.d); const days=idx.map(i=>S.d[i]);
   const spanYr=bSpansYears(days[0],days[days.length-1]);   // ≥11 months showing → the axis / tooltip / label need the year
   const RGS=STD_KEYS;   // the owner's standard picker
-  const rgChips=RGS.map(([w,lab])=>`<button onclick="adDWin('${w}')" style="border:1px solid ${ADRANGE===w?'var(--cyan)':'var(--line2)'};background:${ADRANGE===w?'rgba(61,208,240,.16)':'var(--panel)'};color:${ADRANGE===w?'#fff':'var(--ink2)'};font:inherit;font-size:12px;font-weight:${ADRANGE===w?650:400};padding:5px 11px;border-radius:8px;cursor:pointer">${lab}</button>`).join('');
+  const adB=(w,lab,on,dis,ar)=>`<button ${dis?'disabled':`onclick="adDWin('${w}')"`}${ar?` aria-label="${ar}"`:''} style="border:1px solid ${on?'var(--cyan)':'var(--line2)'};background:${on?'rgba(61,208,240,.16)':'var(--panel)'};color:${on?'#fff':'var(--ink2)'};font:inherit;font-size:12px;font-weight:${on?650:400};padding:5px 11px;border-radius:8px;cursor:${dis?'default':'pointer'};${dis?'opacity:.4':''}">${lab}</button>`;
+  const rgChips=RGS.map(([w,lab])=>adB(w,lab,ADRANGE===w,false,'')).join('')+monMover(ADRANGE,(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||S.d[S.d.length-1],S.d[0],adB);
   const d0=S.d[0], dN=S.d[S.d.length-1];
   const customBox=ADRANGE==='custom'?`<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px">
       <input id="adcf" type="date" min="${d0}" max="${dN}" value="${ADCUSTOM.from||''}" style="background:var(--panel);border:1px solid var(--line2);color:var(--ink);border-radius:7px;padding:4px 8px;font:inherit;font-size:12px">
@@ -9885,7 +9926,7 @@ function goPlacement(id){
   // Period-aware country table from acd (lazy). First open shows lifetime instantly, then acd loads
   // in the background and this re-renders windowed. Only bother loading for recent (current-month)
   // periods — All-time / 90d fall back to the lifetime mix anyway.
-  const _recentPeriod=['today','yesterday','7d','30d','month','custom'].includes(RANGE);
+  const _recentPeriod=['today','yesterday','7d','30d','month','custom'].includes(RANGE)||monOf(RANGE)===String(DATA.today_date||'').slice(0,7);
   if(ACD===null && !ACDLOADING && _recentPeriod){ loadACD(()=>{ if(PPID===id) goPlacement(id); }); }
   const geo=placementGeo(p);
   const vcls=p.verdict==='strong'?'g':p.verdict==='declining'?'r':'y';
@@ -10120,7 +10161,8 @@ const _dedBackBtn=(lbl)=>`<button class="lnk" onclick="dedBack()" style="backgro
 
 function dedPeriodBar(){   // deduction window quick-pick, at the top of the tab (the owner's standard picker). "All time" = full history.
   const opts=[['today','Today'],['yesterday','Yesterday'],['7d','7 days'],['month','This month'],['lastmonth','Last month'],['30d','30 days'],['60d','60 days'],['90d','90 days'],['all','All time'],['custom','Custom']];
-  const btns=opts.map(([v,t])=>{const on=RANGE===v;return `<button onclick="setRange('${v}')" style="border:1px solid ${on?'var(--cyan)':'var(--line2)'};background:${on?'rgba(61,208,240,.14)':'var(--panel)'};color:${on?'#fff':'var(--ink2)'};font:inherit;font-weight:650;font-size:12.5px;padding:6px 13px;border-radius:8px;cursor:pointer">${t}</button>`;}).join('');
+  const dB=(v,t,on,dis,ar)=>`<button ${dis?'disabled':`onclick="setRange('${v}')"`}${ar?` aria-label="${ar}"`:''} style="border:1px solid ${on?'var(--cyan)':'var(--line2)'};background:${on?'rgba(61,208,240,.14)':'var(--panel)'};color:${on?'#fff':'var(--ink2)'};font:inherit;font-weight:650;font-size:12.5px;padding:6px 13px;border-radius:8px;cursor:${dis?'default':'pointer'};${dis?'opacity:.4':''}">${t}</button>`;
+  const btns=opts.map(([v,t])=>dB(v,t,RANGE===v,false,'')).join('')+(()=>{ const ax=gAxis(); return monMover(RANGE,DATA.today_date||ax[ax.length-1]||'',ax[0]||'',dB); })();
   return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px"><span class="muted" style="font-size:12px;font-weight:600">🗓 Deduction period:</span>${btns}</div>`;
 }
 function renderDeductions(){
@@ -10511,7 +10553,8 @@ function bDailyPanel(u){
   const fromAlert=bDailyDefaults(u), isAlertDef=fromAlert.every(k=>BDMETS.includes(k))&&BDMETS.length===fromAlert.length&&(u.approved&&fromAlert.some(k=>['above','below'].includes((u.status||{})[k])));
   // time-range chips
   const RGS=STD_KEYS;   // the owner's standard picker
-  const rgChips=RGS.map(([w,lab])=>`<button onclick="bDWin('${w}')" style="border:1px solid ${BDRANGE===w?'var(--cyan)':'var(--line2)'};background:${BDRANGE===w?'rgba(61,208,240,.16)':'var(--panel)'};color:${BDRANGE===w?'#fff':'var(--ink2)'};font:inherit;font-size:12px;font-weight:${BDRANGE===w?650:400};padding:5px 11px;border-radius:8px;cursor:pointer">${lab}</button>`).join('');
+  const bdB=(w,lab,on,dis,ar)=>`<button ${dis?'disabled':`onclick="bDWin('${w}')"`}${ar?` aria-label="${ar}"`:''} style="border:1px solid ${on?'var(--cyan)':'var(--line2)'};background:${on?'rgba(61,208,240,.16)':'var(--panel)'};color:${on?'#fff':'var(--ink2)'};font:inherit;font-size:12px;font-weight:${on?650:400};padding:5px 11px;border-radius:8px;cursor:${dis?'default':'pointer'};${dis?'opacity:.4':''}">${lab}</button>`;
+  const rgChips=RGS.map(([w,lab])=>bdB(w,lab,BDRANGE===w,false,'')).join('')+((rec.d||[]).length?monMover(BDRANGE,(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||rec.d[rec.d.length-1],rec.d[0],bdB):'');
   const d0=rec.h0||rec.d[0], dN=rec.d[rec.d.length-1];   // min reaches the TRUE first day (h0) — the owner's "no trim"
   const customBox=BDRANGE==='custom'?`<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px">
       <input id="bdcf" type="date" min="${d0}" max="${dN}" value="${BDCUSTOM.from||''}" style="background:var(--panel);border:1px solid var(--line2);color:var(--ink);border-radius:7px;padding:4px 8px;font:inherit;font-size:12px">
@@ -12159,7 +12202,8 @@ const KW_N={'7':7,'14':14,'30':30,'60':60,'90':90};
 // GA4 runs 2–3 days behind, so Today / Yesterday (and This month on its first days) have no GA4 day yet: an empty window,
 // said as such, never the newest data day passed off as "Today"
 const KW_CAL={today:1,yday:1,tm:1,lm:1,all:1};
-function kwCal(k){ const T=(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||''; if(!T||!KW_CAL[k]) return null;
+function kwCal(k){ const T=(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||''; const ms=T?monSpan(k,T):null; if(ms) return {from:ms[0],to:ms[1]};
+  if(!T||!KW_CAL[k]) return null;
   const m0=T.slice(0,8)+'01';
   if(k==='today') return {from:T,to:T};
   if(k==='yday'){ const y=uniAdd(T,-1); return {from:y,to:y}; }
@@ -12167,13 +12211,13 @@ function kwCal(k){ const T=(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||'
   if(k==='lm'){ const l=uniAdd(m0,-1); return {from:l.slice(0,8)+'01',to:l}; }
   return {from:'0000-01-01',to:T}; }
 // the shared choice's name as its button says it (a fixed label, never data)
-function kwLabel(){ const o=KW_OPTS.find(x=>x[0]===KWIN); return o?o[1].replace('📅 ',''):'Period'; }
+function kwLabel(){ if(monOf(KWIN)) return monName(monOf(KWIN)); const o=KW_OPTS.find(x=>x[0]===KWIN); return o?o[1].replace('📅 ',''):'Period'; }
 // a Studio button's value for the shared choice (KWIN): 'c' = Custom, the N of an N-day choice, else the calendar key
-function kwStudioR(){ return KWIN==='custom'?'c':(KW_N[KWIN]?String(KW_N[KWIN]):(KW_CAL[KWIN]&&kwCal(KWIN)?KWIN:'7')); }
+function kwStudioR(){ return KWIN==='custom'?'c':(KW_N[KWIN]?String(KW_N[KWIN]):((KW_CAL[KWIN]||monOf(KWIN))&&kwCal(KWIN)?KWIN:'7')); }
 const KW_MAXDAYS=365;
 const KW_NONE={from:'',to:'',days:0,empty:true};
 function kwLoad(){ try{ const j=JSON.parse(localStorage.getItem('kwin_v1')||'null'); if(!j||typeof j!=='object') return;
-    if(Object.prototype.hasOwnProperty.call(KW_N,j.win)||Object.prototype.hasOwnProperty.call(KW_CAL,j.win)||j.win==='custom') KWIN=j.win;
+    if(Object.prototype.hasOwnProperty.call(KW_N,j.win)||Object.prototype.hasOwnProperty.call(KW_CAL,j.win)||monOf(j.win)||j.win==='custom') KWIN=j.win;
     if(j.custom&&typeof j.custom==='object') KWCUSTOM={from:String(j.custom.from||''),to:String(j.custom.to||'')};
     if(['prev','month','custom'].includes(j.cmp)) KCMP=j.cmp;
     if(j.cmpCustom&&typeof j.cmpCustom==='object') KCMPCUSTOM={from:String(j.cmpCustom.from||''),to:String(j.cmpCustom.to||'')};
@@ -12323,7 +12367,7 @@ function kwRateAvgLine(curV,curDays,cmpV,cmpW,fmt){
   return `${fmt(cmpV)} → ${fmt(curV)}${pct==null?'':' ('+signed(pct)+')'}`;
 }
 // default dates to PREFILL an empty custom box with (never mutates state — Apply still needs a tap)
-function kwDefCustom(hs,till){ const w=KWIN!=='custom'&&kwCal(KWIN)?kwWin(hs,till):null; if(w&&!w.empty) return {from:w.from,to:w.to};
+function kwDefCustom(hs,till){ const w=KWIN!=='custom'&&kwCal(KWIN)?kwWin(hs,till):null;   // (a month too) if(w&&!w.empty) return {from:w.from,to:w.to};
   const t=till||'', f0=t?uniAdd(t,-(kwDays()-1)):'', f=(f0&&hs&&f0<hs)?hs:f0; return {from:f,to:t}; }
 // the selector itself: period chips + (when custom) its date boxes, the Compare dropdown + (when custom) its own
 // date boxes, and the one grey note. tag = 'uni' | 'act' | 'val' (keeps element ids unique — all three screens'
@@ -12332,7 +12376,9 @@ function kwDefCustom(hs,till){ const w=KWIN!=='custom'&&kwCal(KWIN)?kwWin(hs,til
 // element ids are TAG-prefixed ('uni-kw-…' / 'act-kw-…' / 'val-kw-…'), matching each tab's own id convention
 // (tests assert every id in a tab's markup starts with its own prefix)
 function kwBar(tag,hs,till){
-  const main=KW_OPTS.map(([v,l])=>`<span class="chip${KWIN===v?' on':''}" onclick="kwSet('${v}','${tag}')">${l}</span>`).join('');
+  const main=KW_OPTS.map(([v,l])=>`<span class="chip${KWIN===v?' on':''}" onclick="kwSet('${v}','${tag}')">${l}</span>`).join('')
+    +monMover(KWIN,(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||till,hs,(k,l,on,dis,ar)=>dis?`<span class="chip" aria-disabled="true" style="opacity:.4;cursor:default" title="${ar}">${l}</span>`
+      :`<span class="chip${on?' on':''}" onclick="kwSet('${k}','${tag}')" title="${ar}">${l}</span>`);
   const defC=kwDefCustom(hs,till);
   const cstBox=KWIN==='custom'?`<div class="kw-cst"><input type="date" id="${tag}-kw-f" value="${hAttr(KWCUSTOM.from||defC.from)}" min="${hAttr(hs||'')}" max="${hAttr(till||'')}"><span class="cx">→</span><input type="date" id="${tag}-kw-t" value="${hAttr(KWCUSTOM.to||defC.to)}" min="${hAttr(hs||'')}" max="${hAttr(till||'')}"><span class="lnk" onclick="kwApply('${tag}')">Apply</span></div>`:'';
   const err=KWERR?`<div class="kw-err">⚠️ ${hAttr(KWERR)}</div>`:'';
@@ -12812,12 +12858,16 @@ function winHtml(){ const firstK=dAdd(M.settled,1);
   const kd=W.t>M.settled?`<span class="us-prov">⏳ ${span(firstK>W.f?firstK:W.f,W.t)} not final · final on ${fd(dAdd(W.t,M.late+M.lag))}</span>`:'<span class="us-good">✓ All days final</span>';
   return `<span>📅 <b>${span(W.f,W.t)}</b> (${W.L} days) <span class="us-faint">vs</span> ${W.nc?'<b>—</b> <span class="us-faint">(is period se pehle GA4 data nahi)</span>':`<b>${span(W.cf,W.ct)}</b>${W.cL!==W.L?' ('+W.cL+' days)':''}`}</span>`
     +`<span>All ${A.length} apps: GA4 data till <b>${fd(M.E)}</b> (same day)</span>${kd}<span class="us-faint">Numbers = daily average<span class="us-kb"> · ⌨ <span class="us-kbd">7</span> <span class="us-kbd">1</span> <span class="us-kbd">3</span> <span class="us-kbd">6</span> <span class="us-kbd">9</span></span></span>`; }
+// the range buttons (the owner's standard picker + 14 days) and the month mover ‹ Oct 2026 › after them — drawn again by
+// renderTop on every change (a month step changes the mover's labels)
+function rngInner(){ const r0=String(rangeOf()); const rb=(v,l,k)=>`<button data-r="${v}" aria-pressed="${r0===v}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`; const rd=(k,l,on,dis,ar)=>`<button data-r="${k}" aria-pressed="${r0===k}" title="${ar}"${dis?' disabled':''}>${l}</button>`;
+  return `${rb('today','Today','')}${rb('yday','Yesterday','')}${rb('7','7 days','7')}${rb('14','14','1')}${rb('tm','This month','')}${rb('lm','Last month','')}${rb('30','30','3')}${rb('60','60','6')}${rb('90','90','9')}${rb('all','All time','')}${rb('c','Custom','')}`+monMover(KWIN,(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||M.E,H0(),rd); }
 function topHtml(){ const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
   const rb=(v,l,k)=>`<button data-r="${v}" aria-pressed="${r0===v}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`;
   const iv=(id,v,lab)=>`<input type="date" id="${id}" aria-label="${lab}" value="${v}" min="${pickMin()}" max="${M.E}">`;
   return `<div class="us-top-in"><div class="us-brand"><span class="us-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18"><rect x="4" y="1.5" width="10" height="15" rx="2.2" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M9 5.5v6m-2.6-2.4L9 11.7l2.6-2.6" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`
     +`<div><div class="us-bn">Uninstall Studio</div><div class="us-sub">All apps · ${A.length} apps${NOGA.length?' + '+NOGA.length+' without GA4':''}</div></div></div>`
-    +`<div class="us-ctrls"><div class="us-seg" id="us-rng" role="group" aria-label="Range">${rb('today','Today','')}${rb('yday','Yesterday','')}${rb('7','7 days','7')}${rb('14','14','1')}${rb('tm','This month','')}${rb('lm','Last month','')}${rb('30','30','3')}${rb('60','60','6')}${rb('90','90','9')}${rb('all','All time','')}${rb('c','Custom','')}</div>`
+    +`<div class="us-ctrls"><div class="us-seg" id="us-rng" role="group" aria-label="Range">${rngInner()}</div>`
     +`<label class="us-sel" for="us-cmp"><span>vs</span><select id="us-cmp"><option value="prev"${c0==='prev'?' selected':''}>Previous same days</option><option value="month"${c0==='month'?' selected':''}>Same days last month</option><option value="c"${c0==='c'?' selected':''}>Custom range…</option></select></label>`
     +`<div class="us-seg" id="us-cur" role="group" aria-label="Currency"><button data-c="INR" aria-pressed="${cur==='INR'}">₹</button><button data-c="USD" aria-pressed="${cur==='USD'}">$</button></div></div></div>`
     +`<div class="us-custom" id="us-customRow"${(r0==='c'||c0==='c')?'':' hidden'}><span class="us-grp" id="us-cgA"${r0==='c'?'':' hidden'}>Range ${iv('us-cf1',W.f,'Range from')} – ${iv('us-ct1',W.t,'Range to')}</span>`
@@ -12825,7 +12875,8 @@ function topHtml(){ const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
     +`<div class="us-winline" id="us-winline">${winHtml()}</div>`; }
 function renderTop(){ const el=$('us-top'); if(!el) return;   // in place: the focused control keeps its focus
   const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
-  el.querySelectorAll('#us-rng button').forEach(b=>b.setAttribute('aria-pressed',String(r0===b.dataset.r)));
+  { const rg=$('us-rng'); if(rg){ const fa=document.activeElement, fr=fa&&fa.closest&&fa.closest('#us-rng')?fa.dataset.r:null; rg.innerHTML=rngInner();
+    if(fr){ const b=rg.querySelector(`[data-r="${fr}"]`)||rg.querySelector('[aria-pressed="true"]'); if(b&&b.focus) b.focus({preventScroll:true}); } } }
   el.querySelectorAll('#us-cur button').forEach(b=>b.setAttribute('aria-pressed',String(cur===b.dataset.c)));
   const cm=$('us-cmp'); if(cm) cm.value=c0;
   const cr=$('us-customRow'); if(cr) cr.hidden=!(r0==='c'||c0==='c'); const ga=$('us-cgA'), gb=$('us-cgB'); if(ga) ga.hidden=r0!=='c'; if(gb) gb.hidden=c0!=='c';
@@ -14187,6 +14238,7 @@ function uniDailyCard(a){
   const sp=stdSpan(own,UNIDRANGE,UNIDCUS.from,UNIDCUS.to), i0=sp?lo+sp[0]:lo, i1=sp?lo+sp[1]:lo-1, dates=[]; for(let i=i0;i<=i1;i++) dates.push(uniAdd(D.start,i));
   const sl=arr=>(arr||[]).slice(i0,i1+1);
   const chips=STD_KEYS.map(([v,l])=>`<span class="chip${UNIDRANGE===v?' on':''}" onclick="uniDR('${v}')">${l}</span>`).join('')
+    +monMover(UNIDRANGE,(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||own[own.length-1],own[0],(k,l,on,dis,ar)=>dis?`<span class="chip" aria-disabled="true" title="${ar}" style="opacity:.4;cursor:default">${l}</span>`:`<span class="chip${on?' on':''}" title="${ar}" onclick="uniDR('${k}')">${l}</span>`)
     +(UNIDRANGE==='custom'?stdCusBox('uni-dcus',own[0],own[own.length-1],UNIDCUS.from,UNIDCUS.to,'uniDCus'):'');
   const inc=uniIncDays(a).filter(d=>dates.length&&d>=dates[0]&&d<=dates[dates.length-1]);
   const marks=[...(a.alerts||[]),...(a.alerts_closed||[])].filter(z=>/^rate/.test(z.family||'')&&(z.day||z.since)).map(z=>({x:z.day||z.since,color:'#ffd479',label:'⚠'}))
@@ -16343,13 +16395,17 @@ function winHtml(){ const pv=W.t>M.settled, firstK=dAdd(M.settled,1);
   const kd=pv?`<span class="as-prov" data-tk="prov:0">⏳ ${span(firstK>W.f?firstK:W.f,W.t)} not final · final on ${fd(dAdd(W.t,M.actLate+M.lag))}</span>`:'<span class="as-good">✓ All days final</span>';
   return `<span>📅 <b>${span(W.f,W.t)}</b> (${W.L} days) <span class="as-faint">vs</span> ${W.nc?'<b>—</b> <span class="as-faint">(is period se pehle GA4 data nahi)</span>':`<b>${span(W.cf,W.ct)}</b>${W.cL!==W.L?' ('+W.cL+' days)':''}`}</span>`
     +`<span>All ${A.length} apps: GA4 data till <b>${fd(M.E)}</b> (same day)</span>${kd}<span>Users vs normal: <b>${W.sL?'final days '+pakkaSpan():'—'}</b> vs 4 weeks before</span><span class="as-faint">Numbers = daily average<span class="as-kb"> · ⌨ <span class="as-kbd">7</span> <span class="as-kbd">1</span> <span class="as-kbd">3</span> <span class="as-kbd">6</span> <span class="as-kbd">9</span></span></span>`; }
+// the range buttons (the owner's standard picker + 14 days) and the month mover ‹ Oct 2026 › after them — drawn again by
+// renderTop on every change (a month step changes the mover's labels)
+function rngInner(){ const r0=String(rangeOf()); const rb=(v,l,k)=>`<button data-r="${v}" aria-pressed="${r0===v}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`; const rd=(k,l,on,dis,ar)=>`<button data-r="${k}" aria-pressed="${r0===k}" title="${ar}"${dis?' disabled':''}>${l}</button>`;
+  return `${rb('today','Today','')}${rb('yday','Yesterday','')}${rb('7','7 days','7')}${rb('14','14','1')}${rb('tm','This month','')}${rb('lm','Last month','')}${rb('30','30','3')}${rb('60','60','6')}${rb('90','90','9')}${rb('all','All time','')}${rb('c','Custom','')}`+monMover(KWIN,(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||M.E,H0(),rd); }
 function topHtml(){ const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
   const rb=(v,l,k)=>`<button data-r="${v}" aria-pressed="${r0===v}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`;
   const iv=(id,v,lab)=>`<input type="date" id="${id}" aria-label="${lab}" value="${v}" min="${pickMin()}" max="${M.E}">`;
   return `<div class="as-top-in"><div class="as-brand"><span class="as-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18"><circle cx="6.4" cy="6" r="2.6" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M1.8 15.2c.5-2.7 2.3-4.3 4.6-4.3s4.1 1.6 4.6 4.3" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><path d="M12.2 3.6a2.5 2.5 0 0 1 0 4.9M13.3 10.9c1.6.4 2.6 1.9 2.9 4.3" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg></span>`
     +(MODE==='page'?(()=>{ const o=pgO(); return `<div><div class="as-bn">Active users Studio</div><div class="as-sub"><button class="as-backb" data-back="1">← All apps</button> · ${o?ic(o.a,16,'ail')+esc(o.a.store)+' · '+esc(o.a.acc):''}</div></div></div>`; })()
       :`<div><div class="as-bn">Active users Studio</div><div class="as-sub">All apps · ${A.length} apps${NOGA.length?' + '+NOGA.length+' without GA4':''}</div></div></div>`)
-    +`<div class="as-ctrls"><div class="as-seg" id="as-rng" role="group" aria-label="Range">${rb('today','Today','')}${rb('yday','Yesterday','')}${rb('7','7 days','7')}${rb('14','14','1')}${rb('tm','This month','')}${rb('lm','Last month','')}${rb('30','30','3')}${rb('60','60','6')}${rb('90','90','9')}${rb('all','All time','')}${rb('c','Custom','')}</div>`
+    +`<div class="as-ctrls"><div class="as-seg" id="as-rng" role="group" aria-label="Range">${rngInner()}</div>`
     +`<label class="as-sel" for="as-cmp"><span>vs</span><select id="as-cmp"><option value="prev"${c0==='prev'?' selected':''}>Previous same days</option><option value="month"${c0==='month'?' selected':''}>Same days last month</option><option value="c"${c0==='c'?' selected':''}>Custom range…</option></select></label>`
     +`<div class="as-seg" id="as-cur" role="group" aria-label="Currency"><button data-c="INR" aria-pressed="${cur==='INR'}">₹</button><button data-c="USD" aria-pressed="${cur==='USD'}">$</button></div></div></div>`
     +`<div class="as-custom" id="as-customRow"${(r0==='c'||c0==='c')?'':' hidden'}><span class="as-grp" id="as-cgA"${r0==='c'?'':' hidden'}>Range ${iv('as-cf1',W.f,'Range from')} – ${iv('as-ct1',W.t,'Range to')}</span>`
@@ -16357,7 +16413,8 @@ function topHtml(){ const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
     +`<div class="as-winline" id="as-winline">${winHtml()}</div>`; }
 function renderTop(){ const el=$('as-top'); if(!el) return;   // in place: the focused control keeps its focus
   const r0=String(rangeOf()), c0=cmpOf(), cur=curView();
-  el.querySelectorAll('#as-rng button').forEach(b=>b.setAttribute('aria-pressed',String(r0===b.dataset.r)));
+  { const rg=$('as-rng'); if(rg){ const fa=document.activeElement, fr=fa&&fa.closest&&fa.closest('#as-rng')?fa.dataset.r:null; rg.innerHTML=rngInner();
+    if(fr){ const b=rg.querySelector(`[data-r="${fr}"]`)||rg.querySelector('[aria-pressed="true"]'); if(b&&b.focus) b.focus({preventScroll:true}); } } }
   el.querySelectorAll('#as-cur button').forEach(b=>b.setAttribute('aria-pressed',String(cur===b.dataset.c)));
   const cm=$('as-cmp'); if(cm) cm.value=c0;
   const cr=$('as-customRow'); if(cr) cr.hidden=!(r0==='c'||c0==='c'); const ga=$('as-cgA'), gb=$('as-cgB'); if(ga) ga.hidden=r0!=='c'; if(gb) gb.hidden=c0!=='c';
@@ -17450,6 +17507,7 @@ function actChart(X,i0,vals,o){ const e=actE(X), dates=[]; for(let i=i0;i<e;i++)
 function actRangeChips(X){ const L=STD_KEYS.slice(0,8).concat([['1y','1 year']],STD_KEYS.slice(8));   // + 1 year before All time
   const own=X&&X.n?[uniAdd(X.st,ACTPRE?0:Math.min(Math.max(0,X.n-1),X.iL)),uniAdd(X.st,X.n-1)]:null;
   return L.map(([v,l])=>`<span class="chip${ACTRANGE===v?' on':''}" onclick="actR('${v}')">${l}</span>`).join('')
+    +(own?monMover(ACTRANGE,(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||own[1],own[0],(k,l,on,dis,ar)=>dis?`<span class="chip" aria-disabled="true" title="${ar}" style="opacity:.4;cursor:default">${l}</span>`:`<span class="chip${on?' on':''}" title="${ar}" onclick="actR('${k}')">${l}</span>`):'')
     +(ACTRANGE==='custom'&&own?stdCusBox('act-dcus',own[0],own[1],ACTDCUS.from,ACTDCUS.to,'actDCus'):''); }
 function actSmChips(){ return [['7d','7-day average'],['day','Every day']].map(([v,l])=>`<span class="chip${ACTSMOOTH===v?' on':''}" onclick="actSm('${v}')">${l}</span>`).join(''); }
 const actLg=(c,t,dash)=>`<span><i style="display:inline-block;width:14px;height:0;border-top:2px ${dash?'dashed':'solid'} ${c}"></i>${t}</span>`;
@@ -18016,6 +18074,7 @@ function actPfCard(rows){ const P=actPfPtr(); if(!P) return '';
   const chips=ev.length?`<div class="act-pfcs">${sh.map(x=>{ const k=ACT_PF_CK[x.k]||ACT_PF_CK.gap; return `<span class="act-pfc" data-k="${x.k}" data-day="${uniAdd(S.from,x.i)}" title="${hAttr((x.ps.length>2?actPfNames(x.ps,40)+' — ':'')+k[2])}">${k[0]} ${x.s>0?'+ ':(x.s<0?'− ':'')}${x.ps.length>2?x.ps.length+' apps':x.ps.map(p=>appIconId(p.id,p.name,14,'ail')+hAttr(p.name)).join(', ')} · ${k[1]} · ${evd(x)}</span>`; }).join('')}`
     +(ev.length>ev.filter((x,j)=>j<MX||x.big).length?`<span class="lnk" style="font-size:11.5px;align-self:center" onclick="actPfMX()">${ACTPFMK?'Show fewer':'+'+(ev.length-sh.length)+' more'}</span>`:'')+'</div>':'';
   const rng=STD_KEYS.slice(0,8).concat([['180d','6 months']],STD_KEYS.slice(8)).map(([v,l])=>`<span class="chip${ACTPFR===v?' on':''}" onclick="actPfR('${v}')">${l}</span>`).join('')
+    +monMover(ACTPFR,(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||uniAdd(S.from,S.n-1),uniAdd(S.from,0),(k,l,on,dis,ar)=>dis?`<span class="chip" aria-disabled="true" title="${ar}" style="opacity:.4;cursor:default">${l}</span>`:`<span class="chip${on?' on':''}" title="${ar}" onclick="actPfR('${k}')">${l}</span>`)
     +(ACTPFR==='custom'?stdCusBox('act-pfcus',uniAdd(S.from,0),uniAdd(S.from,S.n-1),ACTPFCUS.from,ACTPFCUS.to,'actPfCus'):'');
   const inW=i=>i>=i0&&i<pfs[1];
   const anyPv=S.pv.some((x,i)=>x&&inW(i)), anyRg=S.pv.some((x,i)=>inW(i)&&S.ap[i]>0&&!actPfRetOk(S,i)&&S.rtn[i]>0);
@@ -18693,12 +18752,16 @@ function winHtml(){ if(W.empty) return `<span>📦 <b>${kwLabel()}</b>: is perio
   if(!kd) kd='<span class="vs-good">✓ All weeks final</span>';
   return `<span>📦 Installs <b>${wkSpan(W.i0,W.i1)}</b> (${W.L} ${W.L===1?'week':'weeks'}) <span class="vs-faint">vs</span> ${W.nc?'<b>—</b> <span class="vs-faint">(is range se pehle koi install week nahi)</span>':`<b>${wkSpan(W.c0,W.c1)}</b>${W.cL!==W.L?' ('+W.cL+' wk)':''}`}</span>`
     +`<span>🎯 Target: money back in <b>${H} days</b></span>${kd}<span class="vs-faint">Install-day data till ${fd(M.settled)} · Google Ads till ${fd(M.spendTill)}<span class="vs-kb"> · ⌨ <span class="vs-kbd">7</span> <span class="vs-kbd">1</span> <span class="vs-kbd">3</span> <span class="vs-kbd">6</span> <span class="vs-kbd">9</span></span></span>`; }
+// the range buttons (the owner's standard picker + 14 days) and the month mover ‹ Oct 2026 › after them — drawn again by
+// renderTop on every change (a month step changes the mover's labels)
+function rngInner(){ const r0=String(rangeOf()); const rb=(v,l,k,t)=>`<button data-r="${v}" aria-pressed="${r0===v}" title="${t}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`; const rd=(k,l,on,dis,ar)=>`<button data-r="${k}" aria-pressed="${r0===k}" title="${ar}"${dis?' disabled':''}>${l}</button>`;
+  return `${rb('today','Today','','Aaj ka install week')}${rb('yday','Yesterday','','Kal ka install week')}${rb('7','7 days','7','1 install week')}${rb('14','14','1','2 install weeks')}${rb('tm','This month','','Is mahine ke install weeks')}${rb('lm','Last month','','Pichhle mahine ke install weeks')}${rb('30','30','3','4 install weeks')}${rb('60','60','6','8 install weeks')}${rb('90','90','9','12 install weeks')}${rb('all','All time','','Har install week')}${rb('c','Custom','','Custom install weeks')}`+monMover(KWIN,(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||M.E,pickMin(),rd); }
 function topHtml(){ const r0=rangeOf(), c0=cmpOf(), cur=curView();
   const rb=(v,l,k,t)=>`<button data-r="${v}" aria-pressed="${r0===v}" title="${t}">${l}${k?`<kbd>${k}</kbd>`:''}</button>`;
   const iv=(id,v,lab)=>`<input type="date" id="${id}" aria-label="${lab}" value="${v}" min="${pickMin()}" max="${wE(NW-1)}">`;
   return `<div class="vs-top-in"><div class="vs-brand"><span class="vs-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18"><rect x="4" y="1.5" width="10" height="15" rx="2.2" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M9 5v8.2M11.2 6.6c-.4-.7-1.2-1.1-2.2-1.1-1.3 0-2.2.7-2.2 1.7 0 2.3 4.5 1.2 4.5 3.6 0 1-1 1.8-2.3 1.8-1.1 0-2-.5-2.4-1.3" fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`
     +`<div><div class="vs-bn">Value Studio</div><div class="vs-sub">${MODE==='p'&&AI[PGID]?ic(AI[PGID],16,'ail')+esc(AI[PGID].store)+' · '+esc(AI[PGID].acc):'All apps · '+A.length+' apps'+(NOGA.length?' + '+NOGA.length+' without GA4':'')}</div></div></div>`
-    +`<div class="vs-ctrls"><div class="vs-seg" id="vs-rng" role="group" aria-label="Install weeks">${rb('today','Today','','Aaj ka install week')}${rb('yday','Yesterday','','Kal ka install week')}${rb('7','7 days','7','1 install week')}${rb('14','14','1','2 install weeks')}${rb('tm','This month','','Is mahine ke install weeks')}${rb('lm','Last month','','Pichhle mahine ke install weeks')}${rb('30','30','3','4 install weeks')}${rb('60','60','6','8 install weeks')}${rb('90','90','9','12 install weeks')}${rb('all','All time','','Har install week')}${rb('c','Custom','','Custom install weeks')}</div>`
+    +`<div class="vs-ctrls"><div class="vs-seg" id="vs-rng" role="group" aria-label="Install weeks">${rngInner()}</div>`
     +`<label class="vs-sel" for="vs-cmp"><span>vs</span><select id="vs-cmp"><option value="prev"${c0==='prev'?' selected':''}>Previous same weeks</option><option value="month"${c0==='month'?' selected':''}>4 weeks before (last month)</option><option value="c"${c0==='c'?' selected':''}>Custom weeks…</option></select></label>`
     +`<div class="vs-seg" id="vs-cur" role="group" aria-label="Currency"><button data-c="INR" aria-pressed="${cur==='INR'}">₹</button><button data-c="USD" aria-pressed="${cur!=='INR'}">$</button></div></div></div>`
     +`<div class="vs-custom" id="vs-customRow"${(r0==='c'||c0==='c')?'':' hidden'}><span class="vs-grp" id="vs-cgA"${r0==='c'?'':' hidden'}>Install weeks ${iv('vs-cf1',wS(W.i0),'Range from')} – ${iv('vs-ct1',wE(W.i1),'Range to')}</span>`
@@ -18706,7 +18769,8 @@ function topHtml(){ const r0=rangeOf(), c0=cmpOf(), cur=curView();
     +`<div class="vs-winline" id="vs-winline">${winHtml()}</div>`; }
 function renderTop(){ const el=$('vs-top'); if(!el) return;   // in place: the focused control keeps its focus
   const r0=rangeOf(), c0=cmpOf(), cur=curView();
-  el.querySelectorAll('#vs-rng button').forEach(b=>b.setAttribute('aria-pressed',String(r0===b.dataset.r)));
+  { const rg=$('vs-rng'); if(rg){ const fa=document.activeElement, fr=fa&&fa.closest&&fa.closest('#vs-rng')?fa.dataset.r:null; rg.innerHTML=rngInner();
+    if(fr){ const b=rg.querySelector(`[data-r="${fr}"]`)||rg.querySelector('[aria-pressed="true"]'); if(b&&b.focus) b.focus({preventScroll:true}); } } }
   el.querySelectorAll('#vs-cur button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c==='INR'?cur==='INR':cur!=='INR')));
   const cm=$('vs-cmp'); if(cm) cm.value=c0;
   const cr=$('vs-customRow'); if(cr) cr.hidden=!(r0==='c'||c0==='c'); const ga=$('vs-cgA'), gb=$('vs-cgB'); if(ga) ga.hidden=r0!=='c'; if(gb) gb.hidden=c0!=='c';

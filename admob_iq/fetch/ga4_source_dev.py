@@ -37,6 +37,7 @@ STORE_V = 1
 MODEL = "mobileDeviceModel"
 METS = ("sessions", "totalRevenue")
 WINDOWS = ("30", "lm", "60", "90", "all")
+MONTHS_MAX = 12                     # the month mover's whole calendar months (newest first; each read once — final)
 LATE = gu.IDAY_LATE                 # F = today − LATE: the newest day GA4 no longer changes
 MAX_CALLS = 10                      # per app per run (5 windows + their pages)
 BUDGET_SEC = 120
@@ -50,6 +51,14 @@ def windows(today, hs):
     lm_hi = f if (f + timedelta(days=1)).day == 1 else f.replace(day=1) - timedelta(days=1)
     out = {"30": (f - timedelta(days=29), f), "lm": (lm_hi.replace(day=1), lm_hi), "60": (f - timedelta(days=59), f),
            "90": (f - timedelta(days=89), f), "all": (hs or f, f)}
+    # the month mover (owner, 4 Nov 2026): every WHOLE calendar month (its last day ≤ F: final) — "mon:YYYY-MM", newest
+    # MONTHS_MAX, none wholly before the history start (the current month never: a short window folds, as Today / 7 days)
+    m_hi = lm_hi
+    for _ in range(MONTHS_MAX):
+        if hs and m_hi < hs:
+            break
+        out["mon:%04d-%02d" % (m_hi.year, m_hi.month)] = (m_hi.replace(day=1), m_hi)
+        m_hi = m_hi.replace(day=1) - timedelta(days=1)
     res = {}
     for k, (lo, hi) in out.items():
         lo = max(lo, hs) if hs else lo
@@ -84,12 +93,17 @@ def step_app(ga, store, today, hs, now):
     for k in list(w):
         if k not in want:
             w.pop(k)
-    for k in WINDOWS:
+    for k in list(WINDOWS) + sorted((x for x in want if x.startswith("mon:")), reverse=True):
         if k not in want:
             continue
         lo, hi = want[k]
         cur = w.get(k) or {}
         if cur.get("lo") == lo.isoformat() and cur.get("hi") == hi.isoformat():
+            continue
+        same = next((x for x in w.values() if x and x.get("lo") == lo.isoformat() and x.get("hi") == hi.isoformat()), None)
+        if same:                                       # a month = Last month's read (the same days): no second call
+            w[k] = dict(same)
+            did = True
             continue
         rows = read(ga, lo, hi)
         w[k] = {"lo": lo.isoformat(), "hi": hi.isoformat(), "at": now_iso, "rows": rows}
@@ -211,7 +225,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
                 st.update(last_try=now_iso, fail=gu._fail_kind(e))
                 out["apps"][aid] = "failed"
             finally:
-                if ga.calls:
+                if ga.calls or out["apps"].get(aid) == "fetched":   # (a month copied from Last month: no call)
                     store.update(v=STORE_V, app_id=aid, package=a["package"], property_id=pid, stream_id=r["stream_id"],
                                  time_zone=tz)
                     os.makedirs(os.path.dirname(path), exist_ok=True)

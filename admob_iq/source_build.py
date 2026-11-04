@@ -248,7 +248,7 @@ def dv_file(data_dir, out_dir, aid):
         return None
     key = gu.file_key(aid)
     w, used = {}, set()
-    for k in gsd.WINDOWS:
+    for k in list(gsd.WINDOWS) + sorted(k for k in (st.get("w") or {}) if k.startswith("mon:")):   # + the whole months
         x = (st.get("w") or {}).get(k)
         if not x:
             continue

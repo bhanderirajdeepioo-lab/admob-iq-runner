@@ -156,7 +156,7 @@ def test_countries_period_board(out):
     assert j["thin"][0] == "Watch" and j["thin"][4] == "7,30,90"      # 180 / 360 too thin to count: never the decision
     b = out["cp_board"]
     assert b["loading"] and b["asked"] == ["roi_aaaaaaaaaaaa_cp.json.gz?v=cpv000000000"]   # only the small file first
-    assert b["buttons"] == ["lm", "30", "all*", "cus"]                # the build's buttons + Custom (the owner's order);
+    assert b["buttons"] == ["lm", "30", "all*", "cus", "mon:2026-08", "mon:2026-09", "mon:2026-10"]   # + the month mover;
     #                                                                   All time by default
     assert b["head"] == "installs 1 Jan 26–13 Oct 26 ·"
     assert b["rows"][0] == "roi-tot" and b["rows"][-2:] == ["roi-un", "roi-un"] and len(b["rows"]) == 28   # 25 + All + 2

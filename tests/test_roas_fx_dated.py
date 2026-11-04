@@ -334,3 +334,21 @@ def test_a_daily_charts_period_and_the_ecpm_chart_points(page):
     ec = page["wd"]["ec"]
     assert ec["lmDay"] == 31 and ec["lmMon"] == ["2026-10"] and ec["d60"] == 60 and ec["today"] == 0 and ec["all"] == 99
     assert ec["mon"] == ["2026-11"]
+
+
+def test_the_month_mover_on_every_picker(page):
+    """The month mover ‹ Oct 2026 › (owner, 4 Nov 2026: "picker me ak aur chiz add kro — month move <>"), by hand: the month
+    steps across years; a month's days are its 1st … last day, the current one … today; the mover shows Last month unless a
+    month (or This month) is picked; ‹ stops at the data's first month, › at the current month (or a view's own last month);
+    the dashboard Period's month = its days (the current month: its complete days), a chart's month the same, the eCPM
+    chart's month by day (31) and by month (1)."""
+    m = page["wd"]["mon"]
+    assert m["add"] == ["2025-12", "2027-01", "2025-09"] and m["last"] == ["2026-02-28", "2028-02-29", "2026-10-31"]
+    assert m["span"] == ["2026-11-01", "2026-11-04"] and m["past"] == ["2026-10-01", "2026-10-31"] and m["none"] is None
+    assert m["mvLast"] == "mon:2026-09|‹|0|0;mon:2026-10|Oct 2026|0|0;mon:2026-11|›|0|0;"
+    assert m["mvPicked"] == "mon:2026-07|‹|0|1;mon:2026-08|Aug 2026|1|0;mon:2026-09|›|0|0;"   # the data's first month: ‹ off
+    assert m["mvTm"] == "mon:2026-10|‹|0|0;mon:2026-11|Nov 2026|0|0;mon:2026-12|›|0|1;"      # This month: ›  off
+    assert m["mvCap"] == "mon:2026-08|‹|0|0;mon:2026-09|Sep 2026|0|0;mon:2026-10|›|0|1;"     # a view's last month: Sep
+    assert m["win10"] == [31, "2026-10-01", "2026-10-31"] and m["win11"] == [7, "2026-11-01", "2026-11-07"]
+    assert m["chart"] == ["2026-09-01", "2026-09-30"] and m["word"] == m["label"] == "Sep 2026"
+    assert m["ecDay"] == 31 and m["ecMon"] == ["2026-10"]

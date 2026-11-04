@@ -139,8 +139,15 @@ def test_phone_windows_read_whole_and_again_when_they_move():
     assert gsd.windows(TODAY, date(2026, 1, 1))["60"] == (date(2026, 8, 30), date(2026, 10, 28))
     assert gsd.windows(date(2026, 11, 3), date(2026, 1, 1))["lm"] == (date(2026, 10, 1), date(2026, 10, 31))
     assert gsd.windows(date(2026, 9, 10), date(2026, 9, 15)) == {}                  # nothing whole yet
+    # the month mover (4 Nov 2026): every WHOLE month (last day ≤ F), from the history start; the current month never
+    assert w["mon:2026-09"] == w["lm"] and not any(k.startswith("mon:2026-10") for k in w)
+    full = gsd.windows(TODAY, date(2026, 1, 1))
+    assert sorted(k for k in full if k.startswith("mon:")) == ["mon:2026-%02d" % m for m in range(1, 10)]
+    assert full["mon:2026-02"] == (date(2026, 2, 1), date(2026, 2, 28))
     ga, store = FakeGA(), {"v": gsd.STORE_V}
-    assert gsd.step_app(ga, store, TODAY, date(2026, 1, 1), NOW) == "fetched" and ga.calls == 5
+    # 5 windows + 9 whole months (Jan–Sep); September = Last month's days: copied, no second call
+    assert gsd.step_app(ga, store, TODAY, date(2026, 1, 1), NOW) == "fetched" and ga.calls == 13
+    assert store["w"]["mon:2026-09"]["rows"] == store["w"]["lm"]["rows"]
     assert [x["name"] for x in ga.asked[0]["dimensions"]] == ["mobileDeviceModel", "sessionDefaultChannelGroup"]
     assert store["w"]["lm"]["lo"] == "2026-09-01" and store["w"]["all"]["lo"] == "2026-01-01"
     assert store["w"]["30"]["rows"]["XP-1"]["Mobile Push Notifications"] == [10, 1.0]
@@ -197,7 +204,7 @@ def test_phone_file_rows_biggest_first_with_names(tmp_path):
     p = sb.dv_file(str(data), str(out), AID)
     with gzip.open(out / p["file"], "rt", encoding="utf-8") as f:
         D = json.load(f)
-    assert set(D["w"]) == {"30", "lm", "60", "90", "all"}
+    assert set(D["w"]) == {"30", "lm", "60", "90", "all"} | {"mon:2026-%02d" % m for m in range(1, 10)}
     assert D["w"]["30"]["rows"] == [["XP-1", 4.0, 1.0, 0, 0, 50], ["XP-2", 0, 0, 2.0, 0, 30], ["(other)", 0, 0, 0, 0.5, 5]]
     assert D["names"] == {"XP-1": ["XBrand", "Phone One"]}
 

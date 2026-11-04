@@ -879,7 +879,11 @@ def test_the_owners_standard_picker_renders_every_choice(report):
     yet — never the newest data day shown as "Today"; This / Last month = their days with data; All time = every day, its
     compare reads — (no day before it); nothing renders NaN / Infinity / undefined."""
     r = J(report, "stdper")
-    assert r["order"] == ["today", "yday", "7", "14", "tm", "lm", "30", "60", "90", "all", "c"]
+    # + the month mover (4 Nov 2026): today 21 Sep → Last month (Aug) shown, ‹ Jul, › Sep
+    assert r["order"] == ["today", "yday", "7", "14", "tm", "lm", "30", "60", "90", "all", "c", "mon:2026-07", "mon:2026-08",
+                          "mon:2026-09"]
+    m = r["mon:2026-08"]
+    assert m["bad"] is False and m["pressed"] == "mon:2026-08" and not m["empty"]
     for k in ("7", "today", "yday", "tm", "lm", "90", "all"):
         assert r[k]["bad"] is False and r[k]["pressed"] == k, k
     assert r["today"]["empty"] and r["yday"]["empty"] and not any(r[k]["empty"] for k in ("7", "tm", "lm", "90", "all"))
@@ -887,3 +891,4 @@ def test_the_owners_standard_picker_renders_every_choice(report):
     assert (r["lm"]["W"]["f"], r["lm"]["W"]["t"], r["lm"]["W"]["L"]) == ("2026-08-01", "2026-08-31", 31)
     assert r["90"]["W"]["L"] == 90 and r["90"]["W"]["t"] == "2026-09-19" and not r["90"]["nc"]
     assert r["all"]["nc"] and r["all"]["W"]["cL"] == 0 and r["all"]["W"]["t"] == "2026-09-19"
+    assert (m["W"]["f"], m["W"]["t"], m["W"]["L"]) == ("2026-08-01", "2026-08-31", 31)              # a picked month: all of it

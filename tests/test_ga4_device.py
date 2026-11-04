@@ -151,6 +151,14 @@ def test_dev_block_periods_rows_kpis_verdicts():
     xd = sorted(store["x"])
     assert blk["P"]["all"]["from"] == xd[0] and blk["P"]["all"]["to"] == TODAY.isoformat()      # All time: the store's first day
     assert blk["P"]["60"]["from"] == (TODAY - timedelta(days=60)).isoformat() and blk["P"]["60"]["days"] <= 60
+    # the month mover (4 Nov 2026): every calendar month of the store as its own period — the current one up to today
+    mons = sorted(k for k in blk["P"] if k.startswith("mon:"))
+    first_m = date.fromisoformat(xd[0]).replace(day=1)
+    assert mons[0] == "mon:%04d-%02d" % (first_m.year, first_m.month) and mons[-1] == "mon:%04d-%02d" % (TODAY.year, TODAY.month)
+    cur = blk["P"][mons[-1]]
+    assert cur["from"] == TODAY.replace(day=1).isoformat() and cur["to"] == TODAY.isoformat()
+    assert all(blk["P"][k]["from"].endswith("-01") for k in mons) and len(mons) <= dvb.MONTHS_MAX
+    assert [p for p, _ in blk["periods"]] == ["today", "yday", "7", "tm", "lm", "30", "60", "90", "all"]   # months: the mover only
     p30 = blk["P"]["30"]
     assert p30["days"] == 30 and p30["from"] == (TODAY - timedelta(days=30)).isoformat()
     t = p30["tot"]

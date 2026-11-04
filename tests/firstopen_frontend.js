@@ -34,7 +34,10 @@ const fs = require('fs'), vm = require('vm');
 const html = fs.readFileSync(process.argv[2], 'utf8');
 const a = html.indexOf('const FO=(()=>{'), b = html.indexOf('function renderFirstOpen(){');
 if (a < 0 || b < 0) { console.log(JSON.stringify({ errors: ['FO module not found'] })); process.exit(0); }
-const src = html.slice(a, b) + '\nthis.FO=FO;';
+// the page's shared month-mover helpers (the owner's standard picker, 4 Nov 2026) — every period picker calls them
+const MON0 = html.indexOf('// ---- the month mover'), MON1 = html.indexOf("// ---- a daily chart's period");
+const MONSRC = MON0 >= 0 && MON1 > MON0 ? html.slice(MON0, MON1) : '';
+const src = MONSRC + html.slice(a, b) + '\nthis.FO=FO;';
 const out = {}, errors = [];
 // ── a tiny element: innerHTML + the attributes the module reads ──
 function el(screen) {
@@ -248,7 +251,7 @@ async function byCountry() {
   R.board_period = board.includes('<h3>By country · 21 Sep 2026 – 27 Sep 2026</h3>') && board.includes('data-fo-per="7" aria-pressed="true">7 days</button>')
     && ['today', 'yday', '30', '60', '90', 'tm', 'lm', 'all', 'cus'].every(k => board.includes(`data-fo-per="${k}" aria-pressed="false"`))
     // the owner's standard picker, in his order (3 Nov 2026)
-    && [...board.matchAll(/data-fo-per="([^"]+)"/g)].map(m => m[1]).join(',') === 'today,yday,7,tm,lm,30,60,90,all,cus'
+    && [...board.matchAll(/data-fo-per="([^"]+)"/g)].map(m => m[1]).join(',') === 'today,yday,7,tm,lm,30,60,90,all,cus,mon:2026-07,mon:2026-08,mon:2026-09'
     && board.includes('Google Ads installs ka data abhi nahi bana');
   R.board_chips = [...board.matchAll(/data-fo-ccfilt="([^"]+)"[^>]*><span>[^<]*<\/span> <b>(\d+)<\/b>/g)].map(m => [m[1], +m[2]]);
   R.board_cells_xa = board.includes('<small>7 din 50% · usual 60% · −10 pts</small></td><td>—</td><td>—</td><td>—</td><td>—</td><td>3,500</td><td><b>50%</b></td><td>80%</td><td>42%</td></tr>');

@@ -78,6 +78,15 @@ try {
     const dm={}; cx.forEach(d=>{ dm[d]=[1e6,1000]; }); const W={comp:cx,L:cx[98]};
     o.ec={lmDay:ecPts(dm,W,'','lastmonth','day').length, lmMon:ecPts(dm,W,'','lastmonth','month').map(p=>p.k), d60:ecPts(dm,W,'','60','day').length,
       today:ecPts(dm,W,'','today','day').length, all:ecPts(dm,W,'','all','day').length, mon:ecPts(dm,W,'','month','month').map(p=>p.k)};
+    // the month mover (4 Nov 2026): its helpers, the dashboard Period's month windows, a chart's month, the eCPM chart's month
+    const bt=(k,l,on,dis)=>k+'|'+l+'|'+(on?1:0)+'|'+(dis?1:0)+';';
+    o.mon={add:[monAdd('2026-01',-1),monAdd('2026-12',1),monAdd('2026-11',-14)], last:[monLastDay('2026-02'),monLastDay('2028-02'),monLastDay('2026-10')],
+      span:monSpan('mon:2026-11','2026-11-04'), past:monSpan('mon:2026-10','2026-11-04'), none:monSpan('7d','2026-11-04'),
+      mvLast:monMover('7d','2026-11-08','2026-08-01',bt), mvPicked:monMover('mon:2026-08','2026-11-08','2026-08-01',bt),
+      mvTm:monMover('month','2026-11-08','2026-08-01',bt), mvCap:monMover('mon:2026-10','2026-11-08','2026-08-01',bt,'2026-09'),
+      win10:(w=>[w.length,w[0],w[w.length-1]])(windowDates(ax,'mon:2026-10','','')), win11:(w=>[w.length,w[0],w[w.length-1]])(windowDates(ax,'mon:2026-11','','')),
+      chart:(q=>[cx[q[0]],cx[q[1]]])(stdSpan(cx,'mon:2026-09','','')), word:stdWord('mon:2026-09'), label:pRangeLabel('mon:2026-09'),
+      ecDay:ecPts(dm,W,'','mon:2026-10','day').length, ecMon:ecPts(dm,W,'','mon:2026-10','month').map(p=>p.k)};
     DATA=keep; return JSON.stringify(o); })()`));
 } catch (e) { errors.push('wd: ' + (e.stack || e.message)); }
 process.stdout.write(JSON.stringify({ errors, out, other, wd }));

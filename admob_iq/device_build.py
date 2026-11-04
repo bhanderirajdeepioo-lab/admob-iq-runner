@@ -186,7 +186,9 @@ def status(e30, e90, r30, r90, curve):
 PERIODS = (("today", "Today"), ("yday", "Yesterday"), ("7", "7 days"), ("tm", "This month"), ("lm", "Last month"),
            ("30", "30 days"), ("60", "60 days"), ("90", "90 days"), ("all", "All time"))
 ROW_MIN = {"today": 5, "yday": 5, "7": 20}          # installs for a model's own row in a period (else MIN_ROW)
+MONTHS_MAX = 12                                     # the month mover's calendar months (newest first)
 MAX_ROWS, MAX_ROWS_CC = 800, 150                    # rows a period's list keeps (the rest summed in "rest")
+MAX_ROWS_MON, MAX_ROWS_CC_MON = 300, 60             # … a calendar month's (12 of them: the file stays small)
 
 
 def periods(today, first=None):
@@ -195,10 +197,20 @@ def periods(today, first=None):
     m1 = today.replace(day=1)
     lm_end = m1 - timedelta(days=1)
     one = timedelta(days=1)
-    return {"today": (today, today), "yday": (today - one, today - one), "7": (today - 7 * one, today - one),
-            "30": (today - 30 * one, today - one), "60": (today - 60 * one, today - one), "tm": (m1, today),
-            "lm": (lm_end.replace(day=1), lm_end), "90": (today - 90 * one, today - one),
-            "all": (min(first, today) if first else today - 90 * one, today)}
+    out = {"today": (today, today), "yday": (today - one, today - one), "7": (today - 7 * one, today - one),
+           "30": (today - 30 * one, today - one), "60": (today - 60 * one, today - one), "tm": (m1, today),
+           "lm": (lm_end.replace(day=1), lm_end), "90": (today - 90 * one, today - one),
+           "all": (min(first, today) if first else today - 90 * one, today)}
+    # the month mover (owner, 4 Nov 2026: "picker me … month move <>"): every calendar month of the store, the newest
+    # MONTHS_MAX ("mon:YYYY-MM" = its 1st … its last day; the current month: … today)
+    m = m1
+    for _ in range(MONTHS_MAX):
+        if first and m < first.replace(day=1):
+            break
+        nxt = (m + timedelta(days=32)).replace(day=1)
+        out["mon:%04d-%02d" % (m.year, m.month)] = (m, min(nxt - one, today))
+        m = (m - one).replace(day=1)
+    return out
 
 
 def _plist(acc, keep, min_row, cap, d1n):
@@ -290,10 +302,11 @@ def dev_block(store, cost, unk, kmon, curve):
     out_p, used = {}, set()
     for pid, (acc, days, known, d1n) in Pacc.items():
         mr = ROW_MIN.get(pid, MIN_ROW)
-        rows, rest, tot = _plist(acc, lambda c: True, mr, MAX_ROWS, d1n)
+        mon = pid.startswith("mon:")
+        rows, rest, tot = _plist(acc, lambda c: True, mr, MAX_ROWS_MON if mon else MAX_ROWS, d1n)
         by = {}
         for cc in ccs:
-            r, rs, tt = _plist(acc, lambda c, cc=cc: c == cc, mr, MAX_ROWS_CC, d1n)
+            r, rs, tt = _plist(acc, lambda c, cc=cc: c == cc, mr, MAX_ROWS_CC_MON if mon else MAX_ROWS_CC, d1n)
             by[cc] = {"rows": r, "rest": rs, "tot": tt}
             used.update(x[0] for x in r)
         used.update(x[0] for x in rows)

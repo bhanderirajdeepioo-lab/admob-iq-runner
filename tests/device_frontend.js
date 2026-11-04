@@ -7,7 +7,10 @@ const fs = require('fs'), vm = require('vm');
 const html = fs.readFileSync(process.argv[2], 'utf8');
 const END = '</details>`; }', a = html.indexOf('const ROI=(()=>{'), b = html.indexOf(END, html.indexOf('function roiWrap(html,aid)')) + END.length - 1;
 if (a < 0 || b < 0) { console.log(JSON.stringify({ errors: ['ROI module not found'] })); process.exit(0); }
-const src = html.slice(a, b + 1) + '\nthis.ROI=ROI;';
+// the page's shared month-mover helpers (the owner's standard picker, 4 Nov 2026) — every period picker calls them
+const MON0 = html.indexOf('// ---- the month mover'), MON1 = html.indexOf("// ---- a daily chart's period");
+const MONSRC = MON0 >= 0 && MON1 > MON0 ? html.slice(MON0, MON1) : '';
+const src = MONSRC + html.slice(a, b + 1) + '\nthis.ROI=ROI;';
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const ctx = {
   console, Math, JSON, Object, Array, String, Number, Set, Map, Promise, isFinite, encodeURIComponent, Error, Date, parseFloat,
