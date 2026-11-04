@@ -1135,3 +1135,36 @@ def test_merge_staged_never_undoes_a_reset_of_xs_history(tmp_path):
     gs.Store(staged, KEY, sm).save_meta()
     gs.merge_staged(data, staged, {"fetch": {}})
     assert gs.load_meta(data, KEY)["reads"]["x"]["oldest"] == "2026-09-01"
+
+
+def test_a_long_merge_never_eats_the_builds_ga4_time(monkeypatch, tmp_path):
+    apps = [{"app_id": AID, "package": "com.example.alpha", "pid": "111"}]
+    _patch_routes(monkeypatch, apps)
+    _http(monkeypatch, Model())
+    t = [0.0]
+
+    def slow_merge(data_dir, staged_dir, state=None):        # a first merge longer than the whole budget
+        t[0] += 10 * gs.BUDGET_SEC
+        return {"merged": 0, "not_whole": 0, "bad": 0}
+    monkeypatch.setattr(gs, "merge_staged", slow_merge)
+    cfg = {"client_id": "c", "client_secret": "s", "refresh_tokens": json.dumps({"o": "rt"})}
+    out = gs.refresh_all(cfg, str(tmp_path / "data"), [dict(a) for a in apps], NOW, clock=lambda: t[0],
+                         staged_dir=str(tmp_path / "bf"))
+    assert out["apps"] == {AID: "fetched"} and out["counts"]["deferred"] == 0
+
+
+def test_the_history_job_leaves_its_last_word_on_each_app(monkeypatch, tmp_path):
+    apps = [{"app_id": AID, "package": "com.example.alpha", "pid": "111"},
+            {"app_id": AID2, "package": "com.example.beta", "pid": "112"}]
+    _patch_routes(monkeypatch, apps)
+    low = {"tokensPerHour": {"consumed": 30000, "remaining": 10000}}
+    _http(monkeypatch, Model(), quota=lambda pid, n: low if pid == "111" else None)
+    data, staged = str(tmp_path / "data"), str(tmp_path / gs.BF_DIR)
+    cfg = {"client_id": "c", "client_secret": "s", "refresh_tokens": json.dumps({"o": "rt"})}
+    gs.backfill_all(cfg, data, staged, [dict(a) for a in apps], NOW, clock=lambda: 0.0, budget=600, workers=1,
+                    wall=lambda: datetime(2026, 11, 4, 6, 30, tzinfo=timezone.utc), tick=0.01)
+    paused = gs._read_gz(gs.meta_path(staged, KEY))["bf"]
+    assert paused["state"] == "paused" and paused["why"] and paused["n"]["paused"] >= 1
+    assert paused["q"]["tokensPerHour"] == 0.25 and paused["type"] is None
+    done = gs._read_gz(gs.meta_path(staged, gu.file_key(AID2)))["bf"]
+    assert done["state"] == "done B" and done["n"] == {"done A": 1, "done B": 1}

@@ -1364,7 +1364,8 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
         if staged_dir:
             mg = merge_staged(data_dir, staged_dir, state)
             counts["merged"], counts["merged_nw"], counts["staged_bad"] = mg["merged"], mg["not_whole"], mg["bad"]
-        by_prop = _select(cfg, data_dir, apps, now, state, counts, out, clock=clock)
+        t0 = clock()                                    # the merge is not GA4 time: the passes' clock starts here (a
+        by_prop = _select(cfg, data_dir, apps, now, state, counts, out, clock=clock)   # long first merge never eats it)
         now_iso = gu._now_iso(now)
         props = {pid: {"quota": None, "stop": None, "stops": 0} for pid in by_prop}
         jobs, res = {}, {}
@@ -1509,6 +1510,27 @@ def _next_hour(t):
     return t.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
 
 
+def _bf_note(job, state, why, typ, prop, at):
+    """The history job's last word on an app, kept in its staged meta ("bf") so a stalled app can be read from the
+    private repo while the job still runs: what happened (done A/B, paused, stopped, error), why (a quota floor, a
+    fail kind), the exception TYPE only, how often each happened, and the property's hourly buckets' remaining share."""
+    if job is None:
+        return
+    try:
+        b = job.meta.setdefault("bf", {})
+        b.update(at=gu._now_iso(at), state=state)
+        b["why"], b["type"] = why, typ
+        n = b.setdefault("n", {})
+        n[state] = _i(n.get(state)) + 1
+        q = (prop or {}).get("quota") or {}
+        b["q"] = {k: round(_i((q.get(k) or {}).get("remaining")) / float(max(cap, _i((q.get(k) or {}).get("consumed")) +
+                                                                               _i((q.get(k) or {}).get("remaining")))), 3)
+                  for k, cap in (("tokensPerHour", 40000), ("tokensPerProjectPerHour", 14000), ("tokensPerDay", 200000))
+                  if isinstance(q.get(k), dict)}
+    except Exception:
+        pass
+
+
 def backfill_all(cfg, data_dir, staged_dir, apps, now=None, clock=time.monotonic, budget=BF_BUDGET_SEC,
                  workers=BF_WORKERS, push=None, push_sec=PUSH_SEC, say=None, wall=None, sleep=time.sleep,
                  tick=TICK_SEC):
@@ -1589,15 +1611,19 @@ def backfill_all(cfg, data_dir, staged_dir, apps, now=None, clock=time.monotonic
                     discover(job)                       # (once a day; a stop before it is caught up here)
                     backfill(job, (job.final_end - timedelta(days=TARGET_DAYS - 1)) if ph == "A" else
                              (job.hs or job.final_end))
+                    _bf_note(job, "done " + ph, None, None, prop, wall())
                     if ph == "B":
                         with lock:
                             res[aid] = "done"
                 except gf.Stop as e:
+                    _bf_note(jobs.get(aid), "paused" if prop.get("stop") else "stopped",
+                             prop.get("stop") or (e.args or [""])[0], None, prop, wall())
                     if prop.get("stop"):
                         return "paused"
                     if (e.args or [""])[0] == "budget":
                         return "budget"
-                except Exception:                       # a 5xx after ga4._call's one retry, a timeout, a dropped
+                except Exception as e:                  # a 5xx after ga4._call's one retry, a timeout, a dropped
+                    _bf_note(jobs.get(aid), "error", gu._fail_kind(e), type(e).__name__, prop, wall())
                     with lock:                          # connection: the property rests BF_RETRY_SEC and the app is
                         fails[aid] = fails.get(aid, 0) + 1   # tried again (progress is saved per chunk); "failed" only
                         if fails[aid] >= BF_FAIL_MAX:   # after BF_FAIL_MAX errors in this run
