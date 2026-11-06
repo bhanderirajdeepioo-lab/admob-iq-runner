@@ -64,8 +64,9 @@ function build() {
   // money lost on the default window [t − 13, t] (the build's own numbers: Σ cost − D0 value ÷ B, ₹ as billed / $ dated)
   const def0 = addD(T, -13);
   const lostOf = k => { const G = EP[k].filter(e => e.fam === 'ROAS_G' && e.c <= T && (!e.closed || e.closed >= def0)); if (!G.length) return null;
-    let inr = 0, usd = 0; for (const e of G) for (const x of days(e.c > def0 ? e.c : def0, e.closed && e.closed < T ? e.closed : T)) { const m = M[k](x); const l = m.sp - m.sp * m.d0 / e.base; inr += l; usd += l * fxd(x); }
-    return { inr: r2(inr), usd: r2(usd), from: G.map(e => e.c).sort()[0] }; };
+    let inr = 0, usd = 0, si = 0, su = 0; for (const e of G) for (const x of days(e.c, e.closed && e.closed < T ? e.closed : T)) { const m = M[k](x); const l = m.sp - m.sp * m.d0 / e.base;
+      si += l; su += l * fxd(x); if (x >= def0) { inr += l; usd += l * fxd(x); } }
+    return { inr: r2(inr), usd: r2(usd), from: G.map(e => e.c).sort()[0], sc: { inr: r2(si), usd: r2(su) }, fam: 'ROAS_G' }; };   // sc: the same from c (the "since c" line)
   // ---- the per-app files ----
   const FILES = {}, apps = {}, allApps = {};
   const hOf = k => { const cpi = [], ecpm = [], roas = [];

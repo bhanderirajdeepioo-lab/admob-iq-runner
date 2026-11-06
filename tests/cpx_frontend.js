@@ -58,6 +58,7 @@ try { vm.runInContext(src, ctx); } catch (e) { console.log(JSON.stringify({ erro
 const CPX = ctx.CPX, _ = CPX._, ID = FX.IDS, KEY = FX.KEYS;
 const tick = () => new Promise(r => setImmediate(r));
 const strip = h => String(h).replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+const by_id = rows => Object.fromEntries(rows.map(r => [r.id, r]));
 const reset = () => { for (const k in _.FILES) delete _.FILES[k]; Object.assign(_.ALLF, { raw: null, v: null, busy: false, err: false }); _.set({ PER: '14', PF: '', PTO: '', OPEN: null, TAB: 'ch', DN: 30, PREAD: true }); ctx.APP = ''; };
 const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fam, nrm: Object.fromEntries(Object.entries(r.nrm).map(([k, v]) => [k, v ? [v.v, v.b] : null])),
   s: { sp: r.s.sp, spi: r.s.spi, n: r.s.n, cpi: r.s.cpi, cpiV: r.s.cpiV, ecpm: r.s.ecpm, roas: r.s.roas, k: r.s.k, last3: r.s.last3 },
@@ -190,6 +191,57 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     out.classes = [...new Set(all.join('').match(/class="[^"]*"/g).flatMap(c => c.slice(7, -1).split(/\s+/)).filter(Boolean))];
     out.ids = [...new Set(all.join('').match(/\sid="[^"]*"/g).map(c => c.trim()))];
     out.bad_words = ['undefined', 'NaN', '[object Object]', 'Infinity'].filter(w => all.concat([H0]).some(h => strip(h).includes(w)));
+    // ── review round (owner decisions D1–D4 + the minors) ──
+    const det2 = h => { const i = h.indexOf('class="cpx-det"'); return i < 0 ? '' : h.slice(i); };
+    const paintP = async (o) => { reset(); _.set(o); CPX.paint(); await tick(); await tick(); CPX.paint(); return strip(SCREEN.innerHTML); };
+    const rowT = (txt, nm) => { const i = txt.indexOf(nm); return i < 0 ? '' : txt.slice(i, i + 230); };
+    // D1: a settled episode counts as open until its close — B on [opened, closed), then H; skipped only when closed by the period's end
+    await paintP({ PER: '7' });
+    const A1 = _.ALLF.raw.apps[ID.a], se = (closed) => [{ fam: 'CPI', opened: '2026-03-01', closed, why: 'settled', c: '2026-02-20', base: 99 }];
+    out.d1 = { open: _.normal('CPI', se('2026-03-28'), A1, '2026-03-15', '2026-03-20'), on_close: _.normal('CPI', se('2026-03-20'), A1, '2026-03-15', '2026-03-20'),
+      closed: _.normal('CPI', se('2026-03-18'), A1, '2026-03-15', '2026-03-20') };
+    // D2: money ONLY from the D0 ROAS episodes — an AdMob install-day (ROAS_C0) alarm and a pointer number of that line give none
+    reset(); const gA = FX.FILES['cpi.json.gz'].apps[ID.c].ep, gF = FX.FILES['cpi_' + KEY.c + '.json.gz'].ep, lB = FX.DATA.cpi.apps[ID.b].lost;
+    FX.FILES['cpi.json.gz'].apps[ID.c].ep = [['ROAS_C0', 'DRIFT', 'ALERT', '2026-03-10', '2026-03-14', null, null, 0.5]];
+    FX.FILES['cpi_' + KEY.c + '.json.gz'].ep = [{ kind: 'app', id: ID.c, app: ID.c, fam: 'ROAS_C0', opener: 'DRIFT', tier: 'ALERT', c: '2026-03-10', opened: '2026-03-14', closed: null, why: null, base: 0.5 }];
+    FX.DATA.cpi.apps[ID.b].lost = { inr: 999, usd: 12, from: '2026-03-12', fam: 'ROAS_C0', sc: { inr: 999, usd: 12 } };
+    const t2 = await paintP({ PER: '7', OPEN: ID.c }); const g2 = _.rows(..._.rng('7')).find(r => r.id === ID.c), b2 = _.rows(..._.rng('14')).find(r => r.id === ID.b);
+    out.d2 = { gamma: { st: g2.st, lost: g2.lost }, beta_def: b2.lost, sum: (t2.match(/Money lost: [^·]*/) || [''])[0].trim(), money_line: _.moneyLine(g2) };
+    FX.FILES['cpi.json.gz'].apps[ID.c].ep = gA; FX.FILES['cpi_' + KEY.c + '.json.gz'].ep = gF; FX.DATA.cpi.apps[ID.b].lost = lB;
+    // D3: All time / an early Custom / a period before H exists never turns every app "New"; the cell says which normal it is
+    const t3a = await paintP({ PER: 'all' }), r3a = by_id(_.rows(..._.rng('all')));
+    const t3b = await paintP({ PER: 'cus', PF: '2025-10-01', PTO: '2025-11-15' }), r3b = by_id(_.rows(..._.rng('cus', '2025-10-01', '2025-11-15')));
+    const t3c = await paintP({ PER: 'cus', PF: '2025-10-01', PTO: '2025-10-20' }), r3c = by_id(_.rows(..._.rng('cus', '2025-10-01', '2025-10-20')));
+    out.d3 = { all: { st: Object.fromEntries(Object.entries(r3a).map(([k, v]) => [k, v.st])), nrm: r3a[ID.c].nrm, a: r3a[ID.a].nrm, cell: rowT(t3a, 'Gamma App'), verdict: strip(_.verdict(r3a[ID.c])) },
+      early: { st: Object.fromEntries(Object.entries(r3b).map(([k, v]) => [k, v.st])), nrm: r3b[ID.c].nrm, cell: rowT(t3b, 'Gamma App') },
+      pre: { st: Object.fromEntries(Object.entries(r3c).map(([k, v]) => [k, v.st])), cell: rowT(t3c, 'Gamma App'), verdict: strip(_.verdict(r3c[ID.c])) },
+      h: _.hLvl([null, null, 5, 6], '2025-10-01', '2025-10-01', '2025-10-04', 1), h0: _.hLvl([5, 6, 7, 8], '2025-10-01', '2025-10-03', '2025-10-04', 1),
+      h_none: _.hLvl([null, null], '2025-10-01', '2025-10-01', '2025-10-02', 1), h_after: _.hLvl([5, 6, 7], '2025-10-01', '2025-10-09', '2025-10-10', 1) };
+    // D4: a period that runs past t counts D0 ROAS on the days ≤ t only and says "till <t>"; one with no final day says so
+    const sTm = _.sums(..._.rng('tm'))['Alpha App'], sTd = _.sums(..._.rng('today'))['Alpha App'], s14 = _.sums(..._.rng('14'))['Alpha App'];
+    const t4 = await paintP({ PER: 'tm' }), t4n = await paintP({ PER: 'today' }), t4d = await paintP({ PER: '14' });
+    out.d4 = { tm: { roas: sTm.roas, till: sTm.till, nf: sTm.nf, sp1: sTm.sp1 }, today: { roas: sTd.roas, till: sTd.till, nf: sTd.nf }, d14: { till: s14.till, nf: s14.nf },
+      text_tm: rowT(t4, 'Alpha App'), text_today: rowT(t4n, 'Alpha App'), till_in_14: rowT(t4d, 'Alpha App').includes('till 28 Mar') };
+    // since: "N din se" only while the since-episode is open at the period's end; else its span
+    const t5 = await paintP({ PER: 'cus', PF: '2025-12-01', PTO: '2025-12-31' }), r5 = by_id(_.rows(..._.rng('cus', '2025-12-01', '2025-12-31')))[ID.a];
+    const t5o = await paintP({ PER: 'cus', PF: '2025-12-01', PTO: '2025-12-10' }), r5o = by_id(_.rows(..._.rng('cus', '2025-12-01', '2025-12-10')))[ID.a];
+    out.since = { closed: { since: r5.since, open: r5.sinceOpen, to: r5.sinceTo, text: rowT(t5, 'Alpha App'), din: t5.includes('din se'), verdict: strip(_.verdict(r5)) },
+      open_at_b: { open: r5o.sinceOpen, text: rowT(t5o, 'Alpha App'), verdict: strip(_.verdict(r5o)) } };
+    reset(); const pG = FX.DATA.cpi.apps[ID.c]; FX.DATA.cpi.apps[ID.c] = Object.assign({}, pG, { st: 'alarm', since: '2026-03-20', open: [] });   // a closed alarm the pointer still shows
+    CPX.paint(); out.since.def_closed = { text: rowT(strip(SCREEN.innerHTML), 'Gamma App'), n: CPX.alarmN() }; FX.DATA.cpi.apps[ID.c] = pG;
+    // the pointer's lost.sc is the default view's "since c" line
+    reset(); const pA = FX.DATA.cpi.apps[ID.a]; FX.DATA.cpi.apps[ID.a] = Object.assign({}, pA, { lost: Object.assign({}, pA.lost, { sc: { inr: 111111, usd: 1333.33 } }) });
+    CPX.paint(); out.sc = strip(SCREEN.innerHTML).includes('since 10 Mar: ≈₹1.1 L'); FX.DATA.cpi.apps[ID.a] = pA;
+    // the nav badge / Alerts note: an OPEN ALERT episode in the pointer counts; a closed one the window still touches does not
+    reset(); const pB = FX.DATA.cpi.apps[ID.b]; FX.DATA.cpi.apps[ID.c] = Object.assign({}, pG, { st: 'alarm', since: '2026-03-20', open: [] });
+    out.alarm0 = CPX.alarmN(); FX.DATA.cpi.apps[ID.b] = Object.assign({}, pB, { open: pB.open.concat([['ROAS_G', 'SUDDEN', 'ALERT', '2026-03-20', '2026-03-23', 0.3]]) });
+    out.alarm1 = { n: CPX.alarmN(), note: CPX.alertNote() }; ctx.APP = 'Beta App'; out.alarm1.note_beta = CPX.alertNote(); ctx.APP = ''; FX.DATA.cpi.apps[ID.b] = pB; FX.DATA.cpi.apps[ID.c] = pG;
+    // Loss math: the AdMob baseline by the same normal rule (open at the end, else H the day before / the first known inside); Ratio right after Month
+    const lm = async (o) => strip(det2(await (async () => { await paintP(Object.assign({ OPEN: ID.a, TAB: 'lm' }, o)); return SCREEN.innerHTML; })()));
+    out.lm = { feb: await lm({ PER: 'mon:2026-02' }), early: await lm({ PER: 'cus', PF: '2025-10-01', PTO: '2025-12-31' }), def: await lm({ PER: '14' }) };
+    out.lm_head = SCREEN.innerHTML.includes('<th>Month</th><th>Ratio</th><th>Days</th>');
+    // the history's money: D0 ROAS episodes only
+    out.hist = await lm({ PER: '14', TAB: 'hi' });
   } catch (e) { errors.push(String(e && e.stack || e)); }
   console.log(JSON.stringify({ errors, out }));
 })();

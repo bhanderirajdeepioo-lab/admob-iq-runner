@@ -157,13 +157,89 @@ def test_other_periods_are_judged_by_the_page(out):
 
 def test_normal_and_status_rules(out):
     n = out["normal"]
-    assert n["open"] == {"v": 33, "b": 1, "c": "2026-02-20"}                            # open at the period's end: its baseline
-    assert n["settled"] == {"v": 20, "b": 0} and n["closed"] == {"v": 20, "b": 0}       # settled / closed by then: H the day before
-    assert n["later"] == {"v": 20, "b": 0}                                              # opened after the period: not yet
-    assert n["h"] == {"v": 6, "b": 0} and n["after_t"] == {"v": 6, "b": 0}              # after t: the last shipped day
+    assert n["open"] == {"v": 33, "b": 1, "c": "2026-02-20", "src": "B"}                # open at the period's end: its baseline
+    assert n["settled"] == {"v": 99, "b": 1, "c": "2026-02-20", "src": "B"}             # D1: a settled one counts as open until its close
+    assert n["closed"] == {"v": 20, "b": 0, "src": "H0", "on": None}                    # closed by then: H the day before
+    assert n["later"] == {"v": 20, "b": 0, "src": "H0", "on": None}                     # opened after the period: not yet
+    assert n["h"] == {"v": 6, "b": 0, "src": "H0", "on": None} and n["after_t"] == {"v": 6, "b": 0, "src": "H0", "on": None}   # after t: the last shipped day
     j = out["judge"]
-    assert j["line"] == {"w": None, "since": None, "fam": None}                          # a LINE never sets the status
-    assert j["two"] == {"w": 0, "since": "2026-03-05", "fam": "GAP"}                     # the worst tier; its earliest change start
+    assert j["line"]["w"] is None and j["line"]["since"] is None and j["line"]["fam"] is None and j["line"]["e"] is None   # a LINE never sets the status
+    assert (j["two"]["w"], j["two"]["since"], j["two"]["fam"]) == (0, "2026-03-05", "GAP")  # the worst tier; its earliest change start
+    assert j["two"]["e"]["fam"] == "GAP" and j["two"]["e"]["closed"] == "2026-03-10"         # … and the episode itself
+
+
+def test_d1_settled_is_open_until_its_close(out):
+    d = out["d1"]
+    assert d["open"] == {"v": 99, "b": 1, "c": "2026-02-20", "src": "B"}                # closes after the period's end: B on the whole period
+    assert d["on_close"]["b"] == 0 and d["on_close"]["v"] == 20                        # closed by the period's end (on that day): skipped → H
+    assert d["closed"]["b"] == 0 and d["closed"]["v"] == 20
+
+
+def test_d2_money_only_from_the_d0_roas_episodes(out):
+    d = out["d2"]
+    assert d["gamma"]["st"] == "alarm" and d["gamma"]["lost"] is None                   # an AdMob install-day alarm: a status, no money
+    assert d["beta_def"] is None                                                        # a pointer number of that line: not shown
+    assert d["sum"].startswith("Money lost: ≈₹87.5k") and d["money_line"] == ""         # only Alpha's D0 ROAS days (7 × ₹12,500)
+    assert "lossC0" not in _page()                                                      # the AdMob loss lives only in the Loss math tab
+    lm = out["lm"]["def"]
+    assert "AdMob D0 pe: loss = $6,590 − $1,779 ÷ 50.0% = ≈$3,031" in lm and "list / summary / sort me sirf Google D0 ka nuksaan" in lm
+    h = out["hist"]
+    assert "≈₹10.3 L" in h and "≈₹2.4 L" in h                                           # the D0 ROAS rows' money (the AdMob line shows "—")
+    assert "Install-day ROAS D0 (AdMob) down Slow drift Open Line 11 Mar 2026 22 Mar 2026 — 50.0% −20% —" in h
+
+
+def test_d3_normal_never_turns_every_app_new(out):
+    d = out["d3"]
+    st = d["all"]["st"]                                                                 # All time: H(a−1) does not exist → the first known H inside
+    assert [st[k] for k in (A, B, C_, E_, Z, D)] == ["alarm", "watch", "ok", "ok", "ok", "new"]    # only the truly new app is New
+    assert d["all"]["nrm"]["CPI"] == {"v": 20, "b": 0, "src": "Hin", "on": "2025-10-29"}
+    assert d["all"]["a"]["ROAS_G"]["b"] == 1 and d["all"]["a"]["ROAS_G"]["src"] == "B"   # an episode open at the end: its baseline
+    assert "normal = 29 Oct level" in d["all"]["cell"]                                  # the cell says which normal it is
+    assert d["all"]["verdict"].startswith("Sab normal ke andar: CPI ₹20.0 → ₹20.0")
+    e = d["early"]                                                                      # an early Custom (starts at day0)
+    assert set(e["st"].values()) == {"ok"} and e["nrm"]["ROAS_G"]["src"] == "Hin" and "normal = 29 Oct level" in e["cell"]
+    p = d["pre"]                                                                        # a period that ends before any healthy level exists
+    assert set(p["st"].values()) == {"new"} and "no normal yet" in p["cell"]
+    assert "history kam hai" not in p["verdict"] and p["verdict"].startswith("Normal nahi bana — period ke end tak")
+    assert d["h"] == {"v": 5, "b": 0, "src": "Hin", "on": "2025-10-03"}                 # first known inside [a, b]
+    assert d["h0"]["src"] == "H0" and d["h0"]["v"] == 6 and d["h_none"] is None and d["h_after"]["v"] == 7
+
+
+def test_d4_d0_roas_now_counts_days_up_to_t(out):
+    d = out["d4"]
+    # This month (1 Mar … today): D0 ROAS on 1–28 Mar only: (9 × 40 % + 19 × 30 %) of ₹50,000 a day ÷ 28 days
+    assert d["tm"]["roas"] == pytest.approx((9 * 0.4 + 19 * 0.3) / 28) and d["tm"]["till"] == "2026-03-28" and not d["tm"]["nf"]
+    assert d["tm"]["sp1"] == pytest.approx(28 * 50000 * 0.012 * 1e6)                    # (the spend of those 28 days only)
+    assert "33.2% −17% vs 40.0% till 28 Mar" in d["text_tm"]
+    assert d["today"]["roas"] is None and d["today"]["nf"] and "— not final yet" in d["text_today"]
+    assert d["d14"] == {"till": None, "nf": False} and not d["till_in_14"]              # a period ending at t: no note
+
+
+def test_since_n_din_only_while_open_at_the_period_end(out):
+    s = out["since"]
+    c = s["closed"]                                                                     # December: the alarm closed on 20 Dec
+    assert c["since"] == "2025-12-01" and not c["open"] and c["to"] == "2025-12-20" and not c["din"]
+    assert "spend ₹15.5 L · 1 Dec – 20 Dec" in c["text"] and "1 Dec – 20 Dec Alarm" in c["text"]
+    assert c["verdict"].startswith("D0 ROAS 1 Dec – 20 Dec normal se neeche rahi (ab band). Is period me 36.6% (normal 40.0%)")
+    o = s["open_at_b"]                                                                  # 1–10 Dec: still open on the last day → "N din se"
+    assert o["open"] and "since 1 Dec (10 din)" in o["text"] and "1 Dec 10 din se" in o["text"]
+    assert o["verdict"].startswith("D0 ROAS 1 Dec se normal se neeche: 33.0% (normal 40.0%)")
+    assert "20 Mar – closed" in s["def_closed"]["text"] and "din se" not in s["def_closed"]["text"].split("Alarm")[0]   # the pointer lists open ones only
+    assert s["def_closed"]["n"] == 1 and out["sc"]                                      # (a closed alarm is not an open Alarm) · the pointer's lost.sc is the default "since c"
+
+
+def test_nav_badge_and_alerts_note_count_open_alert_episodes(out):
+    assert out["alarm0"] == 1                                                           # a closed alarm the window still touches: not counted
+    a = out["alarm1"]
+    assert a["n"] == 2 and "<b>2 alarm</b>" in a["note"] and "<b>1 alarm</b>" in a["note_beta"]   # an open ALERT episode on another app: counted
+
+
+def test_loss_math_baseline_and_ratio_column(out):
+    lm = out["lm"]
+    assert "÷ 36.0% = ≈$0.00 (normal period se ek din pehle ka healthy level" in lm["feb"]            # no open C0 episode: H the day before
+    assert "÷ 36.0% = ≈$1,573 (normal period ka pehla healthy level, 29 Oct" in lm["early"]          # before H exists: the first known inside
+    assert "÷ 50.0% = ≈$3,031 (normal alarm se pehle ka" in lm["def"]                                 # an episode open at the end: its baseline
+    assert out["lm_head"]                                                                             # Ratio right after Month
 
 
 def test_file_states(out):
@@ -195,7 +271,8 @@ def test_details_and_every_tab(out):
     assert [z[:2] for z in dw["first"]] == [["2026-03-30", True], ["2026-03-29", True], ["2026-03-28", False], ["2026-03-27", False]]
     assert dw["rows"] == [31, 61, 60]                                                   # 30 rows (+ head), Show 30 more
     assert [f["fam"] for f in dw["t"]["fams"]] == ["ROAS_G", "CPI", "ECPM"]             # the open families that day
-    assert "Rest 5%" in tb["cc"]["text"] and "⚠️ CPI up · since 12 Mar" in tb["cc"]["text"]
+    assert "Rest 5% ₹35.0k — —" in tb["cc"]["text"] and "≈ app installs" not in tb["cc"]["text"]   # the Rest row: its spend and share only
+    assert "⚠️ CPI up · since 12 Mar" in tb["cc"]["text"]
     assert "tROAS · target 55.0%" in tb["cp"]["text"] and "tCPA · target not known" in tb["cp"]["text"]
     assert "1 campaign ka is period me spend nahi" in tb["cp"]["text"]
     assert "Same country mix pe (normal span ke weights) price ka badlaav: −17%" in tb["ek"]["text"]
@@ -276,6 +353,23 @@ def test_wiring():
             assert w.startswith("cpx-") or w in ("card", "ct", "note", "lnk"), w        # (the Alerts note uses the page's own)
     assert m.index("localStorage") > m.index("function perLoad")
     assert "window.__DEV_VIEW__" in m
+
+
+def test_list_layout_fits_every_width():
+    p = _page()
+    m = p[p.index("/* ---- 📉 CPI vs eCPM (CPX)"):p.index("/* ---------- 👥 Audience")]
+    # the screen is its own container: the list lays itself out by the room it has (the sidebar takes 220 px of a wide window)
+    assert re.search(r'\.screen\[data-screen="cpx"\]\{[^}]*container:cpx/inline-size', m)
+    base = m[m.index(".cpx-row{display:grid"):m.index("@container cpx")]
+    assert 'grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"app loss" "m m"' in base   # the default = the 2-line card
+    q = m[m.index("@container cpx (min-width:900px)"):m.index("@media (max-width:760px)")]
+    tracks = re.search(r"grid-template-columns:([^;]+);grid-template-areas:none", q).group(1)
+    assert "minmax(0,1.9fr) repeat(3,minmax(0,1fr))" in tracks                           # shrinkable tracks: nothing can push Money lost out
+    assert not re.search(r"minmax\(\d+px", tracks)                                        # … no fixed minimum
+    px = sum(int(x) for x in re.findall(r"(?<![\d.(,])(\d+)px", tracks))
+    assert px + 7 * 10 + 28 + 100 + 4 * 95 <= 900                                       # fixed tracks + gaps + padding + 4 flexible columns ≥ 95 px fit 900 px
+    assert "@media (min-width:761px){.cpx-mob" not in m                                  # (the old viewport rule that cut the Money column)
+    assert "grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))" in m     # the charts: 3 / 2 / 1 across by the room
 
 
 def test_no_owner_data_in_the_fixture():
