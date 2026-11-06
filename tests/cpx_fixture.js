@@ -112,15 +112,18 @@ function build() {
       notes: { clock: 'IST', ga4_sampled: [], admob_cty_from: '2025-11-01', troas_from: '2026-02-15' } };
     allApps[id] = { h: hh, ep: EP[k].map(tup) };
     const open = EP[k].filter(e => !e.closed).map(e => [e.fam, e.opener, e.tier, e.c, e.opened, e.base]);
+    // the build's rule: an episode still open at T → alarm (ALERT) / watch (WATCH); else an ALERT that closed inside the window → fixed
     const w = EP[k].filter(e => (e.tier === 'ALERT' || e.tier === 'WATCH') && e.c <= T && (!e.closed || e.closed >= def0));
-    const st = w.some(e => e.tier === 'ALERT') ? 'alarm' : w.length ? 'watch' : k === 'e' ? 'paused' : k === 'd' ? 'new' : 'ok';
-    const top = w.filter(e => e.tier === (st === 'alarm' ? 'ALERT' : 'WATCH')).map(e => e.c).sort()[0] || null;
+    const live = w.filter(e => !e.closed || e.closed > T);
+    const st = live.some(e => e.tier === 'ALERT') ? 'alarm' : live.length ? 'watch' : w.some(e => e.tier === 'ALERT') ? 'fixed'
+      : k === 'e' ? 'paused' : k === 'd' ? 'new' : 'ok';
+    const top = (st === 'fixed' ? w.filter(e => e.tier === 'ALERT') : live.filter(e => e.tier === (st === 'alarm' ? 'ALERT' : 'WATCH'))).map(e => e.c).sort()[0] || null;
     const ix = nD(DAY0, addD(def0, -1)) - 1, nv = (f, s) => { const o = EP[k].find(e => e.fam === f && !e.closed); if (o) return o.base; const v = hh[f][ix]; return v == null ? null : v / s; };
     apps[id] = { name: NAMES[k], key, file, v: 'v' + key.slice(-6), st, since: top, open,
       nrm: { CPI: nv('CPI', 100), ECPM: nv('ECPM', 10000), ROAS_G: nv('ROAS_G', 10000) }, lost: lostOf(k) };
   }
   FILES['cpi.json.gz'] = { v: 1, t: T, day0: DAY0, apps: allApps };
-  const counts = { alarm: 0, watch: 0, ok: 0, new: 0, paused: 0 }; Object.values(apps).forEach(a => { counts[a.st]++; });
+  const counts = { alarm: 0, watch: 0, fixed: 0, ok: 0, new: 0, paused: 0 }; Object.values(apps).forEach(a => { counts[a.st]++; });
   const cpi = { v: 1, t: T, at: '2026-03-30T05:22:00Z', day0: DAY0, till: { spend: T, d0: T, admob: addD(TODAY, -1), ga4: addD(T, -1) },
     file: 'cpi.json.gz', fv: 'f00000000001', apps, counts, unlinked: { inr: 12345.6, usd: 148.15, n: 3 }, alerts: [], closed: [] };
   const DATA = { currency: 'USD', usd_inr: 1 / FX1, today_date: TODAY, latest_complete: addD(TODAY, -1), generated_at: '2026-03-30T05:22:00Z',

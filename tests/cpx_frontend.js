@@ -104,7 +104,9 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
       later: _.normal('CPI', [{ fam: 'CPI', opened: '2026-03-25', closed: null, why: null, c: '2026-03-20', base: 33 }], A, '2026-03-15', '2026-03-20'),
       h: _.normal('ECPM', [], A, '2026-02-01', '2026-02-28'), after_t: _.normal('ECPM', [], A, FX.TODAY, FX.TODAY) };
     out.judge = { line: _.judge([{ fam: 'ROAS_C0', tier: 'LINE', c: '2026-03-01', closed: null }], '2026-03-15', '2026-03-28'),
-      two: _.judge([{ fam: 'CPI', tier: 'WATCH', c: '2026-03-01', closed: null }, { fam: 'ROAS_G', tier: 'ALERT', c: '2026-03-12', closed: null }, { fam: 'GAP', tier: 'ALERT', c: '2026-03-05', closed: '2026-03-10' }], '2026-03-01', '2026-03-28') };
+      two: _.judge([{ fam: 'CPI', tier: 'WATCH', c: '2026-03-01', closed: null }, { fam: 'ROAS_G', tier: 'ALERT', c: '2026-03-12', closed: null }, { fam: 'GAP', tier: 'ALERT', c: '2026-03-05', closed: '2026-03-10' }], '2026-03-01', '2026-03-28'),
+      fixed: _.judge([{ fam: 'GAP', tier: 'ALERT', c: '2026-03-05', opened: '2026-03-07', closed: '2026-03-10' }, { fam: 'ECPM', tier: 'WATCH', c: '2026-03-02', opened: '2026-03-04', closed: '2026-03-08' }], '2026-03-01', '2026-03-28'),
+      late: _.judge([{ fam: 'CPI', tier: 'ALERT', c: '2026-03-20', opened: '2026-03-30', closed: null }], '2026-03-01', '2026-03-28') };
     // the all file fails: the default view keeps working; another period says so + Try again
     reset(); FAIL.add('cpi.json.gz'); _.set({ PER: '30' }); CPX.paint(); await tick(); await tick(); CPX.paint();
     out.all_fail = { text: strip(SCREEN.innerHTML), retry: SCREEN.innerHTML.includes('data-cpx-allretry') };

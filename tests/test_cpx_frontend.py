@@ -141,7 +141,7 @@ def test_other_periods_are_judged_by_the_page(out):
     assert p7[E_]["st"] == "paused" and p7[D]["st"] == "new" and p7[C_]["st"] == "ok"
     # December: the old D0 ROAS alarm (closed 20 Dec) — Dec 1–15 at 33 % vs B 40 %, then normal again
     dec = by(out["pdec"])
-    assert dec[A]["st"] == "alarm" and dec[A]["since"] == "2025-12-01" and not dec[A]["lost"]["pre"]
+    assert dec[A]["st"] == "fixed" and dec[A]["since"] == "2025-12-01" and not dec[A]["lost"]["pre"]   # closed inside the month
     assert dec[A]["nrm"]["ROAS_G"] == [0.4, 0]                                          # closed by the period's end: the healthy level
     assert dec[A]["lost"]["inr"] == pytest.approx(15 * (50000 - 50000 * 0.33 / 0.4))
     usd = by(out["pdec_usd"])[A]["lost"]["usd"]
@@ -164,8 +164,12 @@ def test_normal_and_status_rules(out):
     assert n["h"] == {"v": 6, "b": 0, "src": "H0", "on": None} and n["after_t"] == {"v": 6, "b": 0, "src": "H0", "on": None}   # after t: the last shipped day
     j = out["judge"]
     assert j["line"]["w"] is None and j["line"]["since"] is None and j["line"]["fam"] is None and j["line"]["e"] is None   # a LINE never sets the status
-    assert (j["two"]["w"], j["two"]["since"], j["two"]["fam"]) == (0, "2026-03-05", "GAP")  # the worst tier; its earliest change start
-    assert j["two"]["e"]["fam"] == "GAP" and j["two"]["e"]["closed"] == "2026-03-10"         # … and the episode itself
+    # Alarm / Watch need an episode still OPEN at the period's end: the open D0 ROAS alarm, not the closed GAP one
+    assert (j["two"]["w"], j["two"]["since"], j["two"]["fam"]) == (0, "2026-03-12", "ROAS_G")
+    assert j["two"]["e"]["fam"] == "ROAS_G" and j["two"]["e"]["closed"] is None             # … and the episode itself
+    # an ALERT that closed inside the period → Fixed (grade 2) with its own change start; a closed WATCH says nothing
+    assert (j["fixed"]["w"], j["fixed"]["since"], j["fixed"]["fam"]) == (2, "2026-03-05", "GAP")
+    assert j["late"]["w"] is None                                     # opened after the period's end: not known then
 
 
 def test_d1_settled_is_open_until_its_close(out):
@@ -219,7 +223,7 @@ def test_since_n_din_only_while_open_at_the_period_end(out):
     s = out["since"]
     c = s["closed"]                                                                     # December: the alarm closed on 20 Dec
     assert c["since"] == "2025-12-01" and not c["open"] and c["to"] == "2025-12-20" and not c["din"]
-    assert "spend ₹15.5 L · 1 Dec – 20 Dec" in c["text"] and "1 Dec – 20 Dec Alarm" in c["text"]
+    assert "spend ₹15.5 L · 1 Dec – 20 Dec" in c["text"] and "1 Dec – 20 Dec Fixed" in c["text"]
     assert c["verdict"].startswith("D0 ROAS 1 Dec – 20 Dec normal se neeche rahi (ab band). Is period me 36.6% (normal 40.0%)")
     o = s["open_at_b"]                                                                  # 1–10 Dec: still open on the last day → "N din se"
     assert o["open"] and "since 1 Dec (10 din)" in o["text"] and "1 Dec 10 din se" in o["text"]

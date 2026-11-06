@@ -251,7 +251,7 @@ def test_run_writes_files_pointer_and_removes_stale(built):
         assert re.fullmatch(r"[0-9a-f]{12}", a["v"])
     st = {k: p["apps"][IDS[k]]["st"] for k in "abde"}
     assert st == {"a": "alarm", "b": "ok", "d": "new", "e": "paused"}
-    assert p["counts"] == {"alarm": 1, "watch": 0, "ok": 1, "new": 1, "paused": 1}
+    assert p["counts"] == {"alarm": 1, "watch": 0, "fixed": 0, "ok": 1, "new": 1, "paused": 1}
     a = p["apps"][IDS["a"]]
     assert C <= a["since"] <= addd(C, 3)
     fams = {o[0]: o for o in a["open"]}
@@ -669,3 +669,20 @@ def test_money_lost_comes_from_the_d0_roas_alarm_only():
     m = cb.money_lost([g, c0], s, [0.01] * n, d0, "2026-01-17", "2026-01-30", "2026-01-30")
     assert m["fam"] == "ROAS_G" and m["inr"] == pytest.approx(14 * (1000 - 300 / 0.4))
     assert m["sc"]["inr"] == pytest.approx(21 * (1000 - 300 / 0.4)) and m["from"] == "2026-01-10"
+
+
+def test_an_alarm_that_closed_inside_the_period_is_fixed_not_alarm():
+    """Alarm / Watch need an episode still open at the period's end; an ALERT that closed inside the period is "fixed"
+    (shown with its span); a closed WATCH leaves the row ok; an episode opened after the period's end is not known then."""
+    d0 = date(2026, 1, 1)
+    s = {"sp_inr": [100.0] * 60}
+    nrm = {"CPI": 10.0, "ROAS_G": 0.4}
+    shut = {"tier": "ALERT", "fam": "ROAS_G", "c": "2026-02-01", "opened": "2026-02-04", "closed": "2026-02-10"}
+    watch = {"tier": "WATCH", "fam": "ECPM", "c": "2026-02-02", "opened": "2026-02-05", "closed": None}
+    late = {"tier": "ALERT", "fam": "CPI", "c": "2026-02-12", "opened": "2026-02-20", "closed": None}
+    a, b, t = "2026-02-01", "2026-02-14", "2026-02-28"
+    assert cb.status_of([shut], s, nrm, d0, a, b, t) == ("fixed", "2026-02-01")
+    assert cb.status_of([shut, watch], s, nrm, d0, a, b, t) == ("watch", "2026-02-02")      # open Watch beats Fixed
+    assert cb.status_of([shut, watch, late], s, nrm, d0, a, b, t) == ("watch", "2026-02-02")  # late: not opened by b
+    assert cb.status_of([shut, watch, late], s, nrm, d0, a, "2026-02-28", t) == ("alarm", "2026-02-12")
+    assert cb.status_of([dict(watch, closed="2026-02-09")], s, nrm, d0, a, b, t) == ("ok", None)

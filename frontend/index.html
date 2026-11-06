@@ -8238,8 +8238,8 @@ const CHD={};   // chart id → its points (the tooltip reads them)
 const PERS=[['today','Today'],['yday','Yesterday'],['7','Last 7 days'],['14','Last 14 days'],['tm','This month'],['lm','Last month'],['30','Last 30 days'],['60','Last 60 days'],['90','Last 90 days'],['all','All time'],['cus','Custom']];
 const PERK=new Set(PERS.map(p=>p[0])), NDAYS={'7':7,'14':14,'30':30,'60':60,'90':90}, PER_LS='cpx_per_v1';
 // the status words (the build's st) → label, class, sort rank
-const ST={alarm:['Alarm','cpx-bad',0],watch:['Watch','cpx-wat',1],ok:['OK','cpx-good',2],new:['New','cpx-fnt',3],paused:['Paused','cpx-fnt',4]};
-const STK={alarm:'bigda',watch:'dhyan',ok:'normal',new:'jaldi',paused:'lagu'};   // → the hub's status chips (WD keys)
+const ST={alarm:['Alarm','cpx-bad',0],watch:['Watch','cpx-wat',1],fixed:['Fixed','cpx-good',2],ok:['OK','cpx-good',3],new:['New','cpx-fnt',4],paused:['Paused','cpx-fnt',5]};
+const STK={alarm:'bigda',watch:'dhyan',fixed:'behtar',ok:'normal',new:'jaldi',paused:'lagu'};   // → the hub's status chips (WD keys)
 const TABS=[['ch','📈 Chart'],['dw','📅 Day-wise'],['cc','🌍 Countries'],['cp','🎯 Campaigns'],['ek','❓ eCPM kyun'],['lm','💸 Loss math'],['hi','🕘 History']];
 const FAMW={CPI:'CPI',ECPM:'eCPM',ROAS_G:'D0 ROAS',GAP:'Ads to pay back an install',IPU:'Ads per user',ROAS_C0:'Install-day ROAS D0 (AdMob)',
   ROAS_C1:'Install-day ROAS D1 (AdMob)',ROAS_C7:'Install-day ROAS D7 (AdMob)',SPEND:'Spend'};
@@ -8341,11 +8341,13 @@ function epOf(x){ if(Array.isArray(x)) return x.length===6?{fam:x[0],opener:x[1]
 const eps=L=>(Array.isArray(L)?L:[]).map(epOf).filter(e=>e&&typeof e.fam==='string'&&okD(e.c));
 // an episode's span [c, closed or t] overlaps [lo, hi] (one still open runs on to the period's end)
 function over(e,lo,hi){ const t=ptr().t, end=e.closed||(hi>t?hi:t); return e.c<=hi&&end>=lo; }
-// status of [lo, hi]: the worst tier among the overlapping episodes (ALERT → Alarm, WATCH → Watch; a LINE never sets it); since =
-// the earliest change start of that tier; e = that episode (its close date says whether the problem is still open)
+// status of [lo, hi] from the overlapping episodes opened by hi (a LINE never sets it): one still OPEN at hi → Alarm (ALERT) /
+// Watch (WATCH); else an ALERT one that closed by hi → Fixed (the problem was in this period and is over); since = the earliest
+// change start of that grade; e = that episode (its close date says whether the problem is still open)
 function judge(L,lo,hi){ let w=null, since=null, fam=null, ep=null;
-  for(const e of L){ const r=e.tier==='ALERT'?0:e.tier==='WATCH'?1:null; if(r==null||!over(e,lo,hi)) continue;
-    if(w==null||r<w||(r===w&&e.c<since)){ w=r; since=e.c; fam=e.fam; ep=e; } }
+  for(const e of L){ const r=e.tier==='ALERT'?0:e.tier==='WATCH'?1:null; if(r==null||!over(e,lo,hi)||e.opened>hi) continue;
+    const k=!(e.closed&&e.closed<=hi)?r:r===0?2:null; if(k==null) continue;   // (a WATCH that closed by hi: nothing to say)
+    if(w==null||k<w||(k===w&&e.c<since)){ w=k; since=e.c; fam=e.fam; ep=e; } }
   return {w,since,fam,e:ep}; }
 // the healthy level (H) for [lo, hi] from a per-day array h (values / sc; index 0 = d0; null = unknown) — D3: H on the day before
 // the period (a period after the last shipped day: the last shipped one); when that is unknown (the period starts before H
@@ -8387,7 +8389,7 @@ function rowOf(id,a,s,lo,hi){ const p=ptr(), def=isDef(lo,hi), A=ALLF.raw&&ALLF.
   else if(A){ j=judge(L,lo,hi); r.fam=j.fam; r.since=j.since;
     ['CPI','ECPM','ROAS_G'].forEach(f=>{ r.nrm[f]=normal(f,L,A,lo,hi); });
     // D3: New = no healthy level and no open episode (truly new) — never because the period starts before H exists
-    r.st=j.w===0?'alarm':j.w===1?'watch':hi===p.t&&!(s.last3>0)?'paused':!r.nrm.CPI&&!r.nrm.ROAS_G?'new':'ok'; }
+    r.st=j.w===0?'alarm':j.w===1?'watch':j.w===2?'fixed':hi===p.t&&!(s.last3>0)?'paused':!r.nrm.CPI&&!r.nrm.ROAS_G?'new':'ok'; }
   else { r.wait=ALLF.err||!allName(p)?'err':true; r.st=ST[a.st]?a.st:'ok'; }   // (sorted by the default status while cpi.json.gz loads)
   // is the problem the row says "since" still open at the period's end? (D1) — one found among the episodes by its change start;
   // the default view's pointer carries the open ones only, so one it does not find has closed
@@ -8462,12 +8464,12 @@ function istAt(s){ try{ const t=new Date(Date.parse(s)+19800000); if(!isFinite(t
 function headHtml(){ const p=ptr();
   return `<h2 class="cpx-h">CPI vs eCPM</h2><p class="cpx-d">Google Ads ka CPI vs AdMob eCPM aur D0 ROAS — har app ek line.</p>`
     +`<p class="cpx-dt">Data till ${fdy(p.t)} (final)${p.at&&istAt(p.at)?` · Last check ${istAt(p.at)}`:''}</p>`; }
-function sumHtml(L){ const n={alarm:0,watch:0,ok:0}, w=L.some(r=>r.wait), q=k=>w?'…':n[k]; let li=0, lu=0, any=false;
+function sumHtml(L){ const n={alarm:0,watch:0,fixed:0,ok:0}, w=L.some(r=>r.wait), q=k=>w?'…':n[k]; let li=0, lu=0, any=false;
   L.forEach(r=>{ if(!r.wait&&n[r.st]!=null) n[r.st]++; if(r.lost&&!r.lost.na){ li+=r.lost.inr; lu+=r.lost.usd; any=true; } });
-  return `<div class="cpx-sum" id="cpx-sum"><span class="cpx-bad">● ${q('alarm')} Alarm</span><span class="cpx-wat">● ${q('watch')} Watch</span><span class="cpx-good">● ${q('ok')} OK</span>`
+  return `<div class="cpx-sum" id="cpx-sum"><span class="cpx-bad">● ${q('alarm')} Alarm</span><span class="cpx-wat">● ${q('watch')} Watch</span>${n.fixed?`<span class="cpx-good">● ${q('fixed')} Fixed</span>`:''}<span class="cpx-good">● ${q('ok')} OK</span>`
     +`<span>· Money lost: <b class="${any?'cpx-bad':''}">${any?'≈'+fM(li,lu):'—'}</b></span></div>`; }
 function footHtml(){ const p=ptr(), u=p.unlinked;
-  return `<p class="cpx-ft"><b>Alarm</b> = kharch ke mukable kamai normal se kaafi neeche — paisa ja raha hai · <b>Watch</b> = CPI, eCPM ya ads per user normal se bahar, par paise ka nuksaan abhi saaf nahi · <b>OK</b> = sab normal ke andar. <b>Normal</b> = alarm khula ho to uske pehle ka level, warna period se ek din pehle ka healthy level (wo na ho to period ka pehla healthy level — cell me "normal = &lt;date&gt; level" likha aata hai). D0 ROAS "now" sirf final din (data till) tak ka hota hai. CPI = Google Ads spend ÷ Google Ads installs (ads only), ₹ me judge hota hai. Money lost (≈) = cost − D0 value ÷ normal D0 ROAS.</p>`
+  return `<p class="cpx-ft"><b>Alarm</b> = kharch ke mukable kamai normal se kaafi neeche — paisa ja raha hai · <b>Watch</b> = CPI, eCPM ya ads per user normal se bahar, par paise ka nuksaan abhi saaf nahi · <b>Fixed</b> = is period me alarm tha, ab band (theek) ho gaya · <b>OK</b> = sab normal ke andar. <b>Normal</b> = alarm khula ho to uske pehle ka level, warna period se ek din pehle ka healthy level (wo na ho to period ka pehla healthy level — cell me "normal = &lt;date&gt; level" likha aata hai). D0 ROAS "now" sirf final din (data till) tak ka hota hai. CPI = Google Ads spend ÷ Google Ads installs (ads only), ₹ me judge hota hai. Money lost (≈) = cost − D0 value ÷ normal D0 ROAS.</p>`
     +(u&&ok(+u.inr)&&+u.n>0?`<p class="cpx-ft">Not linked spend: <b>${fM(+u.inr,+u.usd)}</b> (${+u.n} store ${+u.n===1?'id':'ids'}) — <button type="button" class="cpx-lnk" data-cpx-roas="1">Marketing ROAS me</button></p>`:''); }
 function listHtml(L,lo,hi,one){ const p=ptr(), nf=!allName(p)&&!isDef(lo,hi);
   let note=''; if(!isDef(lo,hi)&&!ALLF.raw) note=ALLF.err||nf?`<p class="cpx-note">⚠️ Data load nahi hua. <button type="button" class="cpx-lnk" data-cpx-allretry="1">Try again</button></p>`:'<p class="cpx-note">⏳ Loading… (normal aur status is period ke liye)</p>';
@@ -8479,7 +8481,7 @@ function listHtml(L,lo,hi,one){ const p=ptr(), nf=!allName(p)&&!isDef(lo,hi);
 function verdict(r){ const m=now3(r), nw=f=>m[f].n==null?`<b>${fmtF(f,m[f].v)}</b> (no normal yet)`:`${fmtF(f,m[f].n)} → <b>${fmtF(f,m[f].v)}</b>`;
   if(r.wait) return r.wait==='err'?'⚠️ Is period ka normal / status load nahi hua (upar Try again).':'⏳ Loading…';
   const all3=`CPI ${nw('CPI')}, eCPM ${nw('ECPM')}, D0 ROAS ${nw('ROAS_G')}.`;
-  if(r.st==='alarm'||r.st==='watch'){ const f=r.fam, w=FAMW[f]||f||'—', dir=UP[f]?'upar':'neeche';
+  if(r.st==='alarm'||r.st==='watch'||r.st==='fixed'){ const f=r.fam, w=FAMW[f]||f||'—', dir=UP[f]?'upar':'neeche';
     const o=m[f]?['CPI','ECPM','ROAS_G'].filter(z=>z!==f).map(z=>`${z==='ROAS_G'?'D0 ROAS':z==='ECPM'?'eCPM':'CPI'} ${nw(z)}`).join(', '):'';
     if(!r.sinceOpen){ const sp=fd(r.since)+' – '+(r.sinceTo?fd(r.sinceTo):'closed');   // the problem is over by the period's end: its span, not "N se"
       return `${E(w)} <b>${E(sp)}</b> normal se ${dir} rahi (ab band).`+(m[f]?` Is period me <b>${fmtF(f,m[f].v)}</b> (normal ${m[f].n==null?'—':fmtF(f,m[f].n)}). ${o}.`:` ${all3}`); }
@@ -8779,7 +8781,7 @@ function alertNote(){ const n=alarmIds(true).length; if(!n) return '';
 function card(name){ const p=ptr(); if(!p) return null; const id=Object.keys(p.apps).find(k=>p.apps[k]&&p.apps[k].name===name); if(!id) return {st:'lagu',line:'Is app ka Google Ads spend nahi'};
   const a=p.apps[id], [lo,hi]=[addD(p.t,-13),p.t], s=sums(lo,hi)[name]||{}, r=rowOf(id,a,s,lo,hi), m=now3(r);
   const pc=f=>m[f].d!=null?` (${fP(m[f].d)})`:'';
-  const head=r.st==='alarm'||r.st==='watch'?`<b>${ST[r.st][0]}</b>${r.since?' since '+fd(r.since):''} · `:'';
+  const head=r.st==='alarm'||r.st==='watch'?`<b>${ST[r.st][0]}</b>${r.since?' since '+fd(r.since):''} · `:r.st==='fixed'?`<b>Fixed</b>${r.since?' '+fd(r.since)+(r.sinceTo?' – '+fd(r.sinceTo):''):''} · `:'';
   return {st:STK[r.st]||'lagu',line:`${head}CPI ${fmtF('CPI',m.CPI.v)}${pc('CPI')} · eCPM ${fE(m.ECPM.v)}${pc('ECPM')} · D0 ROAS ${fR(m.ROAS_G.v)}${pc('ROAS_G')}${r.lost&&!r.lost.na?` · ≈${fM(r.lost.inr,r.lost.usd)} lost`:''}`}; }
 return {ptr, render, paint, show:showMe, left, alarmN, alertNote, card,
   _:{rng, isDef, sums, rows, rowOf, judge, normal, hLvl, lossG, epOf, eps, now3, perRestore, perLoad, keep, cal, fI, fU, fP, series, dayRows, verdict, moneyLine, tabBody, ALLF, FILES, CHD,

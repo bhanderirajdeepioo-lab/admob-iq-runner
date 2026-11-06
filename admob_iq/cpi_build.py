@@ -70,7 +70,7 @@ ROWS = ("sp_inr", "sp_usd", "inst", "d0_inr", "rev", "imp", "dau", "fs_rev", "fs
         "rt_u", "c_n", "c_sp", "c_r0", "c_r1", "c_r7")
 ENG = ("sp_usd", "sp_inr", "inst", "d0_inr", "rev", "imp", "dau", "c_n", "c_sp", "c_r0", "c_r1", "c_r7")
 INT_ROWS = ("imp", "dau", "fs_imp", "fs_u", "rt_imp", "rt_u", "c_n")
-ST_ORDER = {"alarm": 0, "watch": 1, "ok": 2, "new": 3, "paused": 4}
+ST_ORDER = {"alarm": 0, "watch": 1, "fixed": 2, "ok": 3, "new": 4, "paused": 5}
 FAM_TXT = {"CPI": "CPI", "ECPM": "eCPM", "GAP": "ads to pay back one install", "IPU": "ads per user",
            "ROAS_G": "D0 ROAS", "ROAS_C0": "install-day ROAS (AdMob)", "ROAS_C1": "D1 ROAS (AdMob)",
            "ROAS_C7": "D7 ROAS (AdMob)", "SPEND": "spend"}
@@ -749,12 +749,18 @@ def money_lost(eps, s, R, D0, a, b, t):
 
 
 def status_of(eps, s, nrm, D0, a, b, t):
-    """SPEC §1.2: the worst tier among the app's episodes overlapping [a, b] (ALERT → alarm, WATCH → watch; LINE never),
-    else ok — new without a normal for CPI and ROAS, paused when b = t and no spend on t−2 … t. → (status, since)."""
+    """SPEC §1.2 as shipped: of the app's episodes overlapping [a, b] and opened by b (a LINE never counts), one still open
+    at b → alarm (ALERT) / watch (WATCH); else an ALERT one that closed by b → fixed (the problem was in the period and is
+    over); else ok — new without a normal for CPI and ROAS, paused when b = t and no spend on t−2 … t. since = the
+    earliest change start of that grade. → (status, since)."""
+    seen = [ep for ep in eps if ep["tier"] in ("ALERT", "WATCH") and ep["opened"] <= b and _overlaps(ep, a, b, t)]
     for tier, st in (("ALERT", "alarm"), ("WATCH", "watch")):
-        hit = [ep for ep in eps if ep["tier"] == tier and _overlaps(ep, a, b, t)]
+        hit = [ep for ep in seen if ep["tier"] == tier and not (ep["closed"] and ep["closed"] <= b)]
         if hit:
             return st, min(ep["c"] for ep in hit)
+    done = [ep for ep in seen if ep["tier"] == "ALERT"]
+    if done:
+        return "fixed", min(ep["c"] for ep in done)
     if b == t:
         i = (_d(t) - D0).days
         if not any(s["sp_inr"][j] for j in range(max(0, i - 2), i + 1) if s["sp_inr"][j] is not None):
