@@ -21,6 +21,7 @@ import pytest
 
 from admob_iq import build_static as bs
 from admob_iq import cpi_build as cb
+from admob_iq import health
 from admob_iq.config import settings
 from admob_iq.db import write_json_gz_stable
 from admob_iq.deploy_guard import HEADERS_MAX_RULES, headers_cover, headers_rule_count
@@ -407,7 +408,8 @@ def test_unknown_days_after_the_last_good_fetch_stay_null(tmp_path):
     dash2 = copy.deepcopy(dash)
     dash2["roas"]["d0"] = {}
     assert cb.run(dash2, data, site, {}, NOW) == [] and "cpi" not in dash2
-    assert not [x for x in os.listdir(site) if x.startswith("cpi")] and cb.pop_line() == "cpi: apps 0"
+    assert not [x for x in os.listdir(site) if x.startswith("cpi")] and cb.pop_line() == "cpi skipped: NoDataDay"
+    assert health.SKIP.search("cpi skipped: NoDataDay")                         # (the red banner reads it)
 
 
 def test_the_troas_target_from_the_archive(tmp_path):

@@ -1259,10 +1259,14 @@ def compute(dashboard, data_dir, out_dir, s, now, counts=None):
     if not roas.get("configured", bool(roas.get("by_app"))) or not roas.get("by_app"):
         return None
     t, till = data_day(dashboard, data_dir, s, now)
-    if t is None:
+    if t is None:                                        # Google Ads is set up but a side of the data day is unknown:
+        if counts is not None:                           # a failure the health banner must show, never a quiet no-tab
+            counts["why"] = "NoDataDay"
         return None
     got = gather(dashboard, data_dir, out_dir, s, t, counts)
     if not got:
+        if counts is not None:
+            counts["why"] = "NoSpendCache"
         return None
     D, apps, camps, ctys, extra = got
     ents = entities(apps, camps, ctys, D)
@@ -1291,13 +1295,13 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
         got = compute(dashboard, data_dir, out_dir, s, now, counts)
         if not got:
             _remove(out_dir)
-            LINE = "cpi: apps 0"
+            LINE = ("cpi skipped: %s" % counts["why"]) if counts.get("why") else "cpi: apps 0"
             return []
         ptr, allb, files, apps, D, res = got
         raw = _raw(allb)
         if not _fits(raw):
             _remove(out_dir)
-            LINE = "cpi: too big (%d kb), not written" % (len(gzip.compress(raw, 6, mtime=0)) // 1024)
+            LINE = "cpi skipped: TooBig"
             return []
         os.makedirs(out_dir, exist_ok=True)
         for fn, body in sorted(files.items()):
