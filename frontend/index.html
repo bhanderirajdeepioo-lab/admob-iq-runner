@@ -8363,17 +8363,27 @@ function hLvl(h,d0,lo,hi,sc){ if(!Array.isArray(h)||!okD(d0)) return null;
 function openAt(f,L,hi){ let o=null;
   for(const e of L){ if(e.fam!==f||e.opened>hi||(e.closed&&e.closed<=hi)) continue; if(!o||e.opened>o.opened) o=e; }
   return o; }
-// normal(f, [lo, hi]): the frozen baseline B of the episode open at hi (D1), else the healthy level (hLvl; cpi.json.gz h)
+// H on the day before `day` (else the last known before it) from a per-day array h (cpi.json.gz; values / sc) — null: none
+function hBefore(h,d0,day,sc){ if(!Array.isArray(h)||!okD(d0)||!okD(day)) return null;
+  for(let k=Math.min(nD(d0,day)-2,h.length-1);k>=0;k--) if(h[k]!=null&&ok(+h[k])) return +h[k]/sc;
+  return null; }
+// the baseline an open episode is shown against (the row's normal and its money — the build's base_of): its frozen B, unless B
+// was more than 25 % better than the healthy level before the change (the 14 days before it were a peak) — then that H ('Bpk')
+const PEAK=1.25;
+function baseOf(e,A){ const B=+e.base, sc=SCALE[e.fam], H=sc&&A&&A.h?hBefore(A.h[e.fam],ALLF.raw&&ALLF.raw.day0,e.c,sc):null;
+  if(ok(B)&&ok(H)&&H>0&&(UP[e.fam]?B*PEAK<H:B>H*PEAK)) return {v:H,pk:1};
+  return {v:B,pk:0}; }
+// normal(f, [lo, hi]): the baseline (baseOf) of the episode open at hi (D1), else the healthy level (hLvl; cpi.json.gz h)
 function normal(f,L,A,lo,hi){ const o=openAt(f,L,hi);
-  if(o&&ok(+o.base)) return {v:+o.base,b:1,c:o.c,src:'B'};
+  if(o&&ok(+o.base)){ const q=baseOf(o,A); return {v:q.v,b:1,c:o.c,src:q.pk?'Bpk':'B'}; }
   return hLvl(A&&A.h&&A.h[f],ALLF.raw&&ALLF.raw.day0,lo,hi,SCALE[f]); }
 // money lost on [lo, hi] (≈: measured cost and D0 value, the frozen baseline B): per day of [lo, hi] ∩ [c, closed or t] of every
 // D0 ROAS episode, cost − D0 value ÷ B (₹ as billed; $ at each day's own rate); sc* = the same from c (the "since c" line). Days
 // after t are left out (their D0 value is not final yet)
-function lossG(nm,L,lo,hi){ const d=DD(), p=ptr(), e0=d&&d.roas&&d.roas.by_app&&d.roas.by_app[nm]; if(!e0) return null;
+function lossG(nm,L,lo,hi,A){ const d=DD(), p=ptr(), e0=d&&d.roas&&d.roas.by_app&&d.roas.by_app[nm]; if(!e0) return null;
   const G=L.filter(e=>e.fam==='ROAS_G'&&+e.base>0&&over(e,lo,hi)); if(!G.length) return null;
   const one=e0.daily||{}, dt=e0.daily_dated||one, cv=e0.convval_day1_daily||{}, r={inr:0,usd:0,sinr:0,susd:0,cost:0,val:0,scost:0,sval:0,from:null,B:null,nd:0};
-  for(const e of G){ const B=+e.base, end=e.closed&&e.closed<p.t?e.closed:p.t; if(!r.from||e.c<r.from){ r.from=e.c; r.B=B; }
+  for(const e of G){ const B=baseOf(e,A).v, end=e.closed&&e.closed<p.t?e.closed:p.t; if(!r.from||e.c<r.from){ r.from=e.c; r.B=B; }
     for(let x=e.c;x<=end&&x<=hi;x=addD(x,1)){ const v=+one[x]||0, w=(+cv[x]||0)*1e6, k=v>0?(+dt[x]||0)/v:inr(d,1e6)>0?1/inr(d,1e6):0;   // k: dated $ per one-rate $
       const ci=inr(d,v), vi=inr(d,w), cu=v/1e6*k, vu=w/1e6*k, li=ci-vi/B, lu=cu-vu/B;
       r.sinr+=li; r.susd+=lu; r.scost+=VIN()?ci:cu; r.sval+=VIN()?vi:vu; if(x>=lo){ r.inr+=li; r.usd+=lu; r.cost+=VIN()?ci:cu; r.val+=VIN()?vi:vu; r.nd++; } } }
@@ -8385,7 +8395,8 @@ function rowOf(id,a,s,lo,hi){ const p=ptr(), def=isDef(lo,hi), A=ALLF.raw&&ALLF.
   const r={id,a,name:a.name,s,lo,hi,def,L,wait:false,st:null,since:null,fam:null,ep:null,sinceOpen:false,sinceTo:null,nrm:{},lost:null};
   let j=null;
   if(def){ r.st=ST[a.st]?a.st:'ok'; r.since=okD(a.since)?a.since:null; const n=a.nrm||{}; j=judge(L,lo,hi); r.fam=j.fam;
-    ['CPI','ECPM','ROAS_G'].forEach(f=>{ const o=L.find(e=>e.fam===f&&!e.closed); r.nrm[f]=ok(n[f])?{v:+n[f],b:o?1:0,c:o?o.c:null,src:o?'B':'H0'}:null; }); }
+    ['CPI','ECPM','ROAS_G'].forEach(f=>{ const o=L.find(e=>e.fam===f&&!e.closed), pk=o&&ok(+o.base)&&Math.abs(+n[f]-+o.base)>1e-6*Math.max(1,Math.abs(+o.base));
+      r.nrm[f]=ok(n[f])?{v:+n[f],b:o?1:0,c:o?o.c:null,src:o?(pk?'Bpk':'B'):'H0'}:null; }); }   // (the build's normal ≠ the episode's B: B was a peak)
   else if(A){ j=judge(L,lo,hi); r.fam=j.fam; r.since=j.since;
     ['CPI','ECPM','ROAS_G'].forEach(f=>{ r.nrm[f]=normal(f,L,A,lo,hi); });
     // D3: New = no healthy level and no open episode (truly new) — never because the period starts before H exists
@@ -8397,7 +8408,7 @@ function rowOf(id,a,s,lo,hi){ const p=ptr(), def=isDef(lo,hi), A=ALLF.raw&&ALLF.
     r.sinceOpen=ep?!(ep.closed&&ep.closed<=hi):!def; r.sinceTo=ep&&ep.closed&&ep.closed<=hi?ep.closed:null; }
   // money (D2: ONLY the D0 ROAS episodes — never the AdMob install-day line, never a CPI / eCPM "extra paid"): computed from DATA
   // on the episodes; the default view falls back on the build's own number and takes its "since c" line from the pointer's lost.sc
-  if(!r.wait){ const pl=def&&a.lost&&a.lost.fam!=='ROAS_C0'&&ok(+a.lost.inr)?a.lost:null, g=lossG(r.name,L,lo,hi);
+  if(!r.wait){ const pl=def&&a.lost&&a.lost.fam!=='ROAS_C0'&&ok(+a.lost.inr)?a.lost:null, g=lossG(r.name,L,lo,hi,A);
     if(g) r.lost=g; else if(pl) r.lost={inr:+pl.inr,usd:+pl.usd,from:okD(pl.from)?pl.from:null,pre:okD(pl.from)&&pl.from<lo,ptr:1};
     if(pl&&r.lost){ if(!r.lost.ptr){ r.lost.inr=+pl.inr; r.lost.usd=+pl.usd; }   // (the build's period number wins)
       const sc=pl.sc; if(sc&&ok(+sc.inr)&&ok(+sc.usd)){ r.lost.sinr=+sc.inr; r.lost.susd=+sc.usd; } } }
@@ -8423,7 +8434,8 @@ function cell(r,f,m){ const x=m[f], n=r.nrm[f], nt=[]; let sub;
   else if(x.n==null) sub='<span class="cpx-nv">no normal yet</span>';
   else sub=`<span class="cpx-dl ${dCls(f,x.d)}">${fP(x.d)}</span> <span class="cpx-nv">vs ${fmtF(f,x.n)}</span>`;
   if(!r.wait){ if(f==='ROAS_G'&&r.s.till&&!r.s.nf) nt.push('till '+fd(r.s.till));   // D4: Google D0 is final only up to t
-    if(n&&n.src==='Hin'&&n.on) nt.push('normal = '+fd(n.on)+' level'); }               // D3: which healthy level the normal is
+    if(n&&n.src==='Hin'&&n.on) nt.push('normal = '+fd(n.on)+' level');                 // D3: which healthy level the normal is
+    if(n&&n.src==='Bpk') nt.push('normal = healthy level (alarm se pehle peak tha)'); }
   return `<div class="cpx-v">${fmtF(f,x.v)}</div><div class="cpx-s">${sub}</div>`+nt.map(z=>`<div class="cpx-s cpx-nv">${E(z)}</div>`).join(''); }
 const stw=r=>r.wait?[r.wait==='err'?'—':'⏳','cpx-fnt']:(ST[r.st]||ST.ok);
 // the "since" of a row: the date + "N din se" only while that problem is still open at the period's end (D1), else its span

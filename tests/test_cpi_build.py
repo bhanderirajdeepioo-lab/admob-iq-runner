@@ -686,3 +686,24 @@ def test_an_alarm_that_closed_inside_the_period_is_fixed_not_alarm():
     assert cb.status_of([shut, watch, late], s, nrm, d0, a, b, t) == ("watch", "2026-02-02")  # late: not opened by b
     assert cb.status_of([shut, watch, late], s, nrm, d0, a, "2026-02-28", t) == ("alarm", "2026-02-12")
     assert cb.status_of([dict(watch, closed="2026-02-09")], s, nrm, d0, a, b, t) == ("ok", None)
+
+
+def test_a_baseline_that_was_a_peak_gives_way_to_the_healthy_level():
+    """An open episode is shown against its frozen B unless B was more than 25 % better than the healthy level before
+    the change (the 14 days before it were a peak) — then that H, for the row's normal and its money alike."""
+    d0 = date(2026, 1, 1)
+    h = {"ECPM": [9.0] * 90, "CPI": [20.0] * 90, "ROAS_G": [0.40] * 90}
+    peak = {"fam": "ECPM", "c": "2026-02-20", "opened": "2026-02-24", "closed": None, "base": 20.0}
+    fine = dict(peak, base=10.5)
+    assert cb.base_of(peak, h, d0) == 9.0 and cb.base_of(fine, h, d0) == 10.5
+    assert cb.base_of(dict(peak, fam="CPI", base=14.0), h, d0) == 20.0           # CPI: a cheap fortnight was a peak too
+    assert cb.base_of(dict(peak, fam="CPI", base=17.0), h, d0) == 17.0
+    assert cb.normal_at("ECPM", [peak], h, d0, "2026-03-01", "2026-03-14") == 9.0
+    roas = dict(peak, fam="ROAS_G", base=0.60, tier="ALERT")                        # money against H, not the peak
+    n = 31
+    s = {"sp_inr": [1000.0] * n, "sp_usd": [10.0] * n, "d0_inr": [380.0] * n}
+    m = cb.money_lost([roas], s, [0.01] * n, d0, "2026-01-18", "2026-01-31", "2026-01-31", h, d0)
+    assert m is None                                                               # (c after b: nothing overlaps)
+    roas2 = dict(roas, c="2026-01-20", opened="2026-01-23")
+    m = cb.money_lost([roas2], s, [0.01] * n, d0, "2026-01-18", "2026-01-31", "2026-01-31", h, d0)
+    assert m["inr"] == pytest.approx(12 * (1000 - 380 / 0.40))

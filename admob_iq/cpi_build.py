@@ -692,13 +692,36 @@ def _overlaps(ep, a, b, t):
     return ep["c"] <= b and _span_end(ep, t) >= a
 
 
+UP_BAD = frozenset(("CPI", "GAP"))      # families where higher is worse (the rest: lower is worse)
+PEAK = 1.25                              # a baseline more than 25 % better than the healthy level was a peak (the engine's band)
+
+
+def _h_before(h, D0, day):
+    """H on the day before `day`, else the last known H before it (None: none known)."""
+    h = h or []
+    for k in range(min((_d(day) - D0).days - 1, len(h) - 1), -1, -1):
+        if h[k] is not None:
+            return h[k]
+    return None
+
+
+def base_of(ep, healthy, D0):
+    """The baseline an open episode is shown against (the row's normal and its money): its frozen B — unless B was more
+    than 25 % better than the healthy level before the change (the 14 days before it were a peak), then that H."""
+    B = ep["base"]
+    H = _h_before((healthy or {}).get(ep["fam"]), D0, ep["c"]) if ep.get("c") else None
+    if B and H and (B * PEAK < H if ep["fam"] in UP_BAD else B > H * PEAK):
+        return H
+    return B
+
+
 def normal_at(fam, eps, healthy, D0, a, b):
-    """SPEC §1.2: the frozen B of an app episode of `fam` open at b (open until its close, whatever the close reason —
-    settled too, as the engine's own normal), else H on the day before a; H not known there (a period that starts
-    before the app's healthy level exists) → the first known H inside [a, b]."""
+    """SPEC §1.2: the baseline (base_of) of an app episode of `fam` open at b (open until its close, whatever the close
+    reason — settled too, as the engine's own normal), else H on the day before a; H not known there (a period that
+    starts before the app's healthy level exists) → the first known H inside [a, b]."""
     for ep in eps:
         if ep["fam"] == fam and ep["opened"] <= b and (ep["closed"] is None or ep["closed"] > b):
-            return ep["base"]
+            return base_of(ep, healthy, D0)
     h = healthy.get(fam) or []
     i = (_d(a) - D0).days - 1
     if 0 <= i < len(h) and h[i] is not None:
@@ -722,11 +745,11 @@ def day_rate(s, R):
     return out
 
 
-def money_lost(eps, s, R, D0, a, b, t):
+def money_lost(eps, s, R, D0, a, b, t, healthy=None, e0=None):
     """SPEC §1.2: Σ (cost − D0 value ÷ B) over the days of [a, b] inside the app's ROAS_G episodes (₹ as billed, $ at
     each day's own rate) — the one money number of the list, the summary and the alerts. The AdMob install-day version
     (ROAS_C0) is only beside it in the details' Loss math. → {"inr", "usd", "from": the earliest c, "sc": the same sum
-    from c to b, "fam"} or None."""
+    from c to b, "fam"} or None. The baseline is base_of's (healthy / e0: the app's H arrays and their index 0)."""
     rate = day_rate(s, R)
     hit = [ep for ep in eps if ep["fam"] == "ROAS_G" and ep["base"] and _overlaps(ep, a, b, t)]
     if not hit:
@@ -735,6 +758,7 @@ def money_lost(eps, s, R, D0, a, b, t):
     since = [0.0, 0.0]
     c0 = min(ep["c"] for ep in hit)
     for ep in hit:
+        B = base_of(ep, healthy, e0) if healthy is not None and e0 is not None else ep["base"]
         for lo, acc in ((max(a, ep["c"]), per), (ep["c"], since)):
             hi = min(b, _span_end(ep, t))
             i0, i1 = (_d(lo) - D0).days, (_d(hi) - D0).days
@@ -742,8 +766,8 @@ def money_lost(eps, s, R, D0, a, b, t):
                 sp, v, su = s["sp_inr"][i], s["d0_inr"][i], s["sp_usd"][i]
                 if sp is None or v is None:
                     continue
-                acc[0] += sp - v / ep["base"]
-                acc[1] += (su or 0.0) - v * rate[i] / ep["base"]
+                acc[0] += sp - v / B
+                acc[1] += (su or 0.0) - v * rate[i] / B
     return {"inr": _r(per[0]), "usd": _r(per[1]), "from": c0, "sc": {"inr": _r(since[0]), "usd": _r(since[1])},
             "fam": "ROAS_G"}
 
@@ -818,8 +842,19 @@ def _app_file(a, D, lo, res, camps, ctys, eps_by, extra, t):
     if e_d0 is not None:
         e0 = _d(extra["day0"][aid])
         off = (D.d0 + timedelta(days=lo) - e0).days
+        hl = res["healthy"].get(key) or {}
         for fam in CA.OUT_FAMS:
-            arr = e_d0.get(fam) or []
+            arr = list(e_d0.get(fam) or [])
+            for ep in eps_by.get(key, []):                # an episode whose B was a peak: its days drawn at base_of's level
+                if ep["fam"] != fam or not ep["base"]:
+                    continue
+                v = base_of(ep, hl, e0)
+                if v == ep["base"]:
+                    continue
+                i0 = (_d(ep["opened"]) - e0).days
+                i1 = (_d(ep["closed"]) - e0).days if ep["closed"] else len(arr)
+                for i in range(max(0, i0), min(i1, len(arr))):
+                    arr[i] = v
             nrm[fam] = [_r6(x) for x in arr[off:]] if off >= 0 else [None] * (-off) + [_r6(x) for x in arr]
     cl = []
     for cid, c in sorted(camps.items()):
@@ -889,7 +924,7 @@ def build_files(dashboard, D, apps, camps, ctys, extra, res, now):
         hl = res["healthy"].get(("app", aid)) or {}
         nrm = {f: normal_at(f, eps, hl, e0, a_iso, b_iso) for f in ("CPI", "ECPM", "ROAS_G")}
         st, since = status_of(eps, a["s"], nrm, D.d0, a_iso, b_iso, ts)
-        lost = money_lost(eps, a["s"], extra["R"], D.d0, a_iso, b_iso, ts)
+        lost = money_lost(eps, a["s"], extra["R"], D.d0, a_iso, b_iso, ts, hl, e0)
         w = window(a["s"], D.d0, a_iso, b_iso)
         if w["sp_inr"] > 0:
             counts[st] += 1
