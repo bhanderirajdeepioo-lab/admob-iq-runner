@@ -104,7 +104,11 @@ function build() {
     const share = { IN: 0.6, US: 0.25, BR: 0.1 };
     const ctys = Object.keys(share).map(cc => { const q = share[cc], pr = cc === 'US' ? 1.6 : cc === 'BR' ? 0.6 : 0.9;
       return { cc, from: f0, d: { sp_inr: d.sp_inr.map(v => r2(v * q)), sp_usd: d.sp_usd.map(v => r2(v * q)), dl: d.inst.map(v => r2(v * q * (cc === 'BR' && k === 'a' ? 0.8 : 1))),
-        rev: d.rev.map(v => r2(v * q * pr)), imp: d.imp.map(v => Math.round(v * q)) },
+        rev: d.rev.map(v => r2(v * q * pr)), imp: d.imp.map(v => Math.round(v * q)),
+        // the country's AdMob-matched D0 (its share of the app's c_r0: US 1.2 × its spend share, IN 0.9 ×); BR: none in this build
+        ...(cc === 'BR' ? {} : { r0: d.c_r0.map(v => v == null ? null : r2(v * q * (cc === 'US' ? 1.2 : 0.9))) }) },
+      // its normal per day (CPI ₹, eCPM $, D0 ROAS AdMob-matched): the build's (its own B while open, else H)
+      nrm: Object.assign({ CPI: FD.map((x, i) => i < 28 ? null : 20), ECPM: FD.map((x, i) => i < 28 ? null : r6(6 * pr)) }, cc === 'BR' ? {} : { ROAS: FD.map((x, i) => i < 28 ? null : (cc === 'US' ? 0.432 : 0.324)) }),
         ep: cc === 'BR' && k === 'a' ? [tup(ep({ kind: 'country', id: id + '|BR', app: id, fam: 'CPI', tier: 'LINE', c: '2026-03-12', opened: '2026-03-16', base: 20 }))] : [] }; });
     const src = [{ name: 'AdMob Network', from: f0, d: { rev: d.rev.map(v => r2(v * 0.7)), imp: d.imp.map(v => Math.round(v * 0.6)) } },
       { name: 'Synth Ads', from: f0, d: { rev: d.rev.map(v => r2(v * 0.3)), imp: d.imp.map(v => Math.round(v * 0.4)) } }];

@@ -645,3 +645,37 @@ def test_cards_merge_touching_episodes():
     cs = E.cards(eps)
     assert [(c["open"], c["close"], len(c["episodes"])) for c in cs] == [("2024-03-01", "2024-03-20", 2),
                                                                          ("2024-05-01", None, 1)]
+
+
+# ── country lines: their own healthy level / normal (the Chart tab's country view) ──────────────────────────────────
+def test_country_healthy_and_normal_per_day():
+    app = synth()
+    us, kr = synth(seed=3, sp=300.0), synth(seed=4, sp=20.0)         # a big line (eligible) and a 2 % one (not)
+    mul(us, "inst", 300, N, 1 / 1.4)                                  # the big line's CPI steps up 40 % on day 300
+    cty = lambda cc, s: E.Ent("country", APP + "|" + cc, APP, cc, DAY0,
+                              {k: s[k] for k in ("sp_usd", "sp_inr", "inst", "rev", "imp")})
+    r = E.run([ent(app), cty("US", us), cty("KR", kr)], E.P_PROD, T)
+    kU, kK = ("country", APP + "|US"), ("country", APP + "|KR")
+    for k in (kU, kK):
+        assert set(r["healthy"][k]) == set(r["normal"][k]) == {"CPI", "ECPM"}
+        assert all(len(v) == N for v in list(r["healthy"][k].values()) + list(r["normal"][k].values()))
+    ep = [x for x in r["episodes"] if x["kind"] == "country" and x["id"] == APP + "|US" and x["fam"] == "CPI"][0]
+    hU, nU = r["healthy"][kU], r["normal"][kU]
+    o = ix(ep["opened"])
+    assert hU["CPI"][o - 1] == pytest.approx(94.5 * 0.2, rel=0.02)            # ₹ per download, the old level
+    assert all(x == ep["base"] for x in nU["CPI"][o:(ix(ep["closed"]) if ep["closed"] else N)])   # B while open
+    assert hU["ECPM"][N - 1] == pytest.approx(5.0, rel=0.02) and nU["ECPM"][N - 1] == hU["ECPM"][N - 1]
+    # the line the eligibility rule leaves out: no episode, state "na", but its H (no span: normal = H)
+    assert not [x for x in r["episodes"] if x["id"] == APP + "|KR"]
+    assert set(r["state"][kK].values()) == {"na"}
+    assert r["healthy"][kK]["CPI"][N - 1] == pytest.approx(94.5 * 0.2, rel=0.02)
+    assert r["normal"][kK] == r["healthy"][kK]
+    # a line without AdMob rows: eCPM not applicable → all None; campaigns still get no levels
+    r2 = E.run([ent(app), E.Ent("country", APP + "|BR", APP, "BR", DAY0,
+                                 {k: us[k] for k in ("sp_usd", "sp_inr", "inst")})], E.P_PROD, T)
+    assert r2["healthy"][("country", APP + "|BR")]["ECPM"] == [None] * N
+    assert r2["healthy"][("country", APP + "|BR")]["CPI"][200] == pytest.approx(94.5 * 0.2, rel=0.02)
+    # the app's own episodes and levels are the same as without its country lines
+    alone = E.run([ent(app)], E.P_PROD, T)
+    assert [x for x in r["episodes"] if x["kind"] == "app"] == alone["episodes"]
+    assert r["healthy"][("app", APP)] == alone["healthy"][("app", APP)]

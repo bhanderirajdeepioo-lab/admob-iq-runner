@@ -57,6 +57,7 @@ FAMS_BY_KIND = {"app": ["CPI", "ECPM", "GAP", "IPU", "ROAS_G", "ROAS_C0", "ROAS_
                 "country": ["CPI", "ECPM", "GAP", "SPEND"]}
 MONEY_FAMS = ("ROAS_G", "ROAS_C0", "ROAS_C1", "ROAS_C7")
 OUT_FAMS = ("CPI", "ECPM", "ROAS_G", "GAP", "IPU", "ROAS_C0")      # the per-day normal / healthy of app entities
+CTY_OUT_FAMS = ("CPI", "ECPM")                                       # … of country entities (the Chart tab's country view)
 CTX_FAMS = ("CPI", "ECPM", "GAP", "IPU", "ROAS_G", "ROAS_C0", "SPEND")
 
 GATE = {"min_inst_day": 10.0, "min_sp_day": 10.0, "min_imp_day": 10000.0, "min_dau_day": 500.0,
@@ -861,8 +862,10 @@ def run(ents, P, t):
     {"episodes": [Episode dict …], "normal": {(kind, id): {fam: list[float|None]}},   # B while open, else H
      "healthy": {(kind, id): {fam: list[float|None]}},                                 # H per day, all spans known at t
      "state": {(kind, id): {fam: "open"|"arming"|"gated"|"warm"|"na"|"ok"}}}
-    normal / healthy are produced for app entities and fams CPI, ECPM, ROAS_G, GAP, IPU, ROAS_C0 (index = day index
-    from the entity's day0, 0..t). Inputs are never modified."""
+    normal / healthy are produced for app entities and fams CPI, ECPM, ROAS_G, GAP, IPU, ROAS_C0, and for country
+    entities and fams CPI, ECPM (index = day index from the entity's day0, 0..t). A country line the eligibility rule
+    leaves out is not replayed (no episode, state "na") but still gets its healthy level (no span to leave out: its
+    normal = H). Inputs are never modified."""
     episodes, normal, healthy, state = [], {}, {}, {}
     apps = {e.id: e for e in ents if e.kind == "app"}
     for e in ents:
@@ -873,12 +876,11 @@ def run(ents, P, t):
         state[key] = st
         if n <= 0:
             continue
-        if e.kind == "country" and P.get("country_elig") and not _country_ok(e, n, apps, P["country_elig"], t):
-            continue
+        elig = not (e.kind == "country" and P.get("country_elig") and not _country_ok(e, n, apps, P["country_elig"], t))
         ser = _Ser(e, n, P)
         t1 = n - 1
         res = {}
-        if ser.first is not None:
+        if elig and ser.first is not None:
             t0 = max(ser.first + 21, 28)
             for fam in fams:
                 if not ser.applicable(fam):
@@ -892,14 +894,16 @@ def run(ents, P, t):
                     episodes.append(_episode(e, ser, x, P, t1))
         if e.kind == "app":
             normal[key], healthy[key] = _levels(ser, res, t1)
+        elif e.kind == "country":
+            normal[key], healthy[key] = _levels(ser, res, t1, CTY_OUT_FAMS)
     return {"episodes": episodes, "normal": normal, "healthy": healthy, "state": state}
 
 
-def _levels(ser, res, t1):
+def _levels(ser, res, t1, fams=OUT_FAMS):
     """Per day: H (the healthy level with every span known at t) and the normal (B while an episode is open)."""
     nrm, hl = {}, {}
     n = t1 + 1
-    for fam in OUT_FAMS:
+    for fam in fams:
         if not (ser.first is not None and ser.applicable(fam)):
             nrm[fam] = [None] * n
             hl[fam] = [None] * n

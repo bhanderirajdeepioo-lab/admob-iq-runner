@@ -394,3 +394,47 @@ def test_no_owner_data_in_the_fixture():
     ids = set(re.findall(r"ca-app-pub-\d{16}~\d+", src))
     assert ids and all(i.startswith("ca-app-pub-0000000000000000~") for i in ids)
     assert set(re.findall(r"com\.[a-z0-9_.]+", src)) <= {"com.synth."}
+
+
+def test_chart_country_picker_drives_the_same_three_charts(out):
+    c = out["cty"]
+    # All countries first (default): the app's three charts exactly as before; the file's countries by the period's spend share
+    assert c["all"]["opts"] == [["", True, "All countries"], ["IN", False, "[IN] Name IN · 60%"], ["US", False, "[US] Name US · 25%"],
+                                ["BR", False, "[BR] Name BR · 10%"]]
+    assert c["list"] == [["IN", 0.6], ["US", 0.25], ["BR", 0.1]] and c["ls_read"]
+    assert c["all"]["titles"] == ["CPI ₹ (cost ÷ installs)", "eCPM $ (AdMob)", "D0 ROAS (Google D0 ÷ cost)"]
+    assert c["all"]["labels"] == out["tabs"]["ch"]["labels"] and c["all"]["svgs"] == 3
+    # a country: the SAME three charts (never a fourth) from its own lines, its own normal printed; remembered per app
+    us = c["us"]
+    assert us["svgs"] == 3 and us["titles"] == ["CPI ₹ (cost ÷ downloads)", "eCPM $ (AdMob country)", "D0 ROAS (AdMob-matched)"]
+    assert us["labels"] == ["₹20.0", "₹31.3", "normal ₹20.0", "$9.60", "$8.00", "normal $9.60", "43.2%", "32.4%", "normal 43.2%"]
+    assert [o[0] for o in us["opts"] if o[1]] == ["US"] and "Teeno chart sirf is country ke" in us["text"]
+    assert json.loads(c["ls"]) == {A: "US"} and json.loads(c["ls2"]) == {}
+    assert "AdMob-matched" in us["text"] and "sirf matured din" in us["text"] and "1 Nov 2025 se" in us["text"]
+    # the 14-day sums = hand math on the country's own arrays (D0 ROAS: r0 ÷ $ cost; unknown r0 → no point, the normal kept)
+    for x, v, n, h in c["us_roas"]:
+        assert n == 0.432 and (v is None) == (h is None) and (v is None or v == pytest.approx(h, rel=1e-9))
+    assert [r[1] for r in c["us_roas"]][-3:] == [None] * 3 and c["us_roas"][5][1] == pytest.approx(0.324)
+    assert all(v == pytest.approx(h) and n == 20 for _, v, n, h in c["us_cpi"]) and c["us_cpi"][0][1] == pytest.approx(31.25)
+    assert c["us_ecpm"][0][1] == pytest.approx(c["us_ecpm"][0][3]) and c["us_ecpm"][0][2] == 9.6
+    (x, v, n, (hv, hn)), = c["us_cpi_usd"]                    # $ view: dated $ ÷ downloads; the ₹ normal × the window's own rate
+    assert v == pytest.approx(hv) and n == pytest.approx(hn)
+    # a country without its D0 in this build: two charts + a note (never a chart of zeros); its own LINE episode shaded
+    assert c["br"]["svgs"] == 2 and "country-wise install-day revenue nahi" in c["br"]["text"] and c["br"]["shade"] == 1
+    assert c["bad"] == "BR"                                   # a code the file does not have: refused
+    assert c["back"]["titles"] == c["all"]["titles"] and c["back"]["labels"] == c["all"]["labels"]
+    # read once per viewer; a code the file no longer has → All countries; a throwing storage never breaks the charts
+    assert c["read"] == ["IN", ""]
+    assert c["throw"]["titles"] == c["all"]["titles"] and not c["throw"]["err"] and c["throw"]["after"] == us["titles"]
+    # no page jump: the picker goes back to its place; an app file with no country: no picker, the charts as before
+    assert c["keep"] == {"dy": [52], "cty": "US"}
+    assert c["none"]["opts"] == [] and c["none"]["titles"] == c["all"]["titles"]
+
+
+def test_country_picker_wiring_literals():
+    src = _page()
+    a, b = src.index("const CPX=(()=>{"), src.index("function renderCpx(){")
+    m = src[a:b]
+    assert "CTY_LS='cpx_cty_v1'" in m and "data-cpx-cty" in m and "keep('[data-cpx-cty]'" in m
+    assert m.count("try{ localStorage.setItem(CTY_LS") == 1 and "localStorage.getItem(CTY_LS)" in m
+    assert ".cpx-ctyp{" in src and "class=\"chip" not in m

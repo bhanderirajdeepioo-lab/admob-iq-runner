@@ -19,7 +19,10 @@ engine.cpi_alarm (P_PROD) to the data day t, nothing trimmed:
                            closed, why, base], …] every app episode, all history}}}  (any period besides the default)
   site/cpi_<key>.json.gz  {"v", "app_id", "name", "key", "t", "day0" (the app's first spend − 28 days), "d": {days},
                            "nrm": {fam: normal per day}, "camps": [...], "ctys": [...], "src": [], "ep": [Episode, …],
-                           "notes": {...}}  (the details of one app)
+                           "notes": {...}}  (the details of one app). A country line (ctys[]): {"cc", "from", "d":
+                           {sp_inr, sp_usd, dl, rev, imp, r0}, "nrm": {"CPI" ₹, "ECPM" $, "ROAS"}, "ep"} — r0 = its
+                           AdMob-matched install-day revenue at age 0 (USD; the cohort cube's country share of the app's
+                           c_r0: cty_d0, GA4_CUBE on only), nrm = the Chart tab's country normal per day
   dashboard["cpi"]        the pointer: per app the default view (Last 14 days ending t: status, since, normal, money
                            lost), counts, not linked spend (per day: the page sums the period picked), alerts (sent once:
                            data/cpi/state.json) and closed.
@@ -484,6 +487,105 @@ def _cty_admob(D, rows):
     return rv, im
 
 
+def _cube_d0(D, data_dir, aid, lo):
+    """The cohort cube's install-day revenue at age 0 per country (fetch.ga4_cube "e": {cc: {X: [u0, r0, …]}}, X's own
+    month file, a hot day's record while it is not folded) → ({cc: {i: micros}}, {i: the day carried "(other)"
+    loss}) on D's index from lo on; i is in the second map only for an install day the cube holds (folded or hot) —
+    every other day is unknown. None: no cube for the app."""
+    from .fetch import ga4_cube as gcu
+    h = gcu.load_head(data_dir, aid)
+    if not h:
+        return None
+    m0 = _iso(D.d0, lo)[:7]
+    r0, known = {}, {}
+
+    def take(days, e, M=None):
+        for X, led in days.items():
+            i = D.ix.get(X)
+            if i is not None and i >= lo and (M is None or X[:7] == M):
+                known[i] = bool(isinstance(led, dict) and (led.get("loss") or 0) > 0)
+        for cc, xs in (e or {}).items():
+            for X, arr in (xs or {}).items():
+                i = D.ix.get(X)
+                if i is None or i < lo or i not in known or (M is not None and X[:7] != M):
+                    continue                              # (age 0 of X is in X's own month only)
+                v = arr[1] if isinstance(arr, list) and len(arr) > 1 else 0
+                if v:
+                    g = r0.setdefault(cc, {})
+                    g[i] = g.get(i, 0) + int(v)
+    for M, f in gcu.months(data_dir, aid, h.get("stream_id")):
+        if m0 <= M <= D.t.isoformat()[:7]:
+            take(f.get("days") or {}, f.get("e"), M)
+    for X, rec in sorted((h.get("d") or {}).items()):
+        i = D.ix.get(X)
+        if isinstance(rec, dict) and i is not None and i not in known:
+            take({X: rec}, {cc: {X: (xs or {}).get(X)} for cc, xs in (rec.get("e") or {}).items()
+                            if (xs or {}).get(X)})
+    return r0, known
+
+
+def cty_d0(D, s, cube, ccs):
+    """Each country's AdMob-matched install-day revenue at age 0 (USD per install day X): the cube's GA4 r0 of (cc, X)
+    × k_X, k_X = the app's AdMob-matched c_r0(X) ÷ Σ every cube country's r0(X) — so the countries ("(not set)" and the
+    ones not shipped included) add up to the app's c_r0 on every day. Null where c_r0 is not matured, the cube does not
+    hold X, or the cube has no revenue on X while AdMob has (nothing to split it by). → ({cc: [USD|None]}, notes)."""
+    r0, known = cube
+    tot = {}
+    for g in r0.values():
+        for i, v in g.items():
+            tot[i] = tot.get(i, 0) + v
+    out = {cc: D.nones() for cc in ccs}
+    n_loss = 0
+    first = None
+    for i in sorted(known):
+        a = s["c_r0"][i]
+        if a is None:
+            continue
+        g = tot.get(i, 0)
+        if g <= 0 and a:
+            continue
+        k = a / (g / 1e6) if g > 0 else 0.0
+        first = i if first is None else first
+        n_loss += 1 if known[i] else 0
+        for cc in ccs:
+            out[cc][i] = (r0.get(cc) or {}).get(i, 0) / 1e6 * k
+    return out, {"from": _iso(D.d0, first) if first is not None else None, "loss_days": n_loss}
+
+
+def roas_h(num, den, n_win=11, need=4):
+    """The healthy rule of the engine for a ratio the engine does not replay (a country's AdMob-matched D0 ROAS): per day
+    d the median of the 14-day windows ending d−14, d−21 … d−84 (Σnum ÷ Σden, every day of the window known, spend ≥
+    the engine's $10 a day), ≥ 4 of them; no span to leave out (a country has no D0 ROAS alarm)."""
+    n = len(den)
+    V = [None] * n
+    pn, pd, pk = [0.0], [0.0], [0]
+    for i in range(n):
+        ok = num[i] is not None and den[i] is not None
+        pn.append(pn[-1] + (num[i] if ok else 0.0))
+        pd.append(pd[-1] + (den[i] if ok else 0.0))
+        pk.append(pk[-1] + (1 if ok else 0))
+    gate = CA.GATE["min_sp_day"] * 14
+    for b in range(13, n):
+        if pk[b + 1] - pk[b - 13] == 14:
+            sd = pd[b + 1] - pd[b - 13]
+            if sd >= gate:
+                V[b] = (pn[b + 1] - pn[b - 13]) / sd
+    H = [None] * n
+    for d in range(n):
+        vals = []
+        for j in range(n_win):
+            b = d - 14 - 7 * j
+            if b < 13:
+                break
+            if V[b] is not None:
+                vals.append(V[b])
+        if len(vals) >= need:
+            vals.sort()
+            m = len(vals)
+            H[d] = vals[m // 2] if m % 2 else 0.5 * (vals[m // 2 - 1] + vals[m // 2])
+    return H
+
+
 def _archive(data_dir):
     """{campaign id: {"troas": [[day, ratio], …], "bid", "status", "name"}} from data/ads_archive: the daily snapshots'
     versions and the change events' old → new tROAS (an event's old value held before its day, from the first event day
@@ -685,6 +787,16 @@ def gather(dashboard, data_dir, out_dir, s, t, counts=None):
         ctys[a["app_id"]] = sel
         firsts = [str(r[0][0])[:10] for r in (cd.get(a["name"]) or {}).values() if r]
         a["notes"]["admob_cty_from"] = min(firsts) if firsts else None
+        if sel and (s or {}).get("ga4_cube"):      # GA4_CUBE off: the store unread (the countries without D0 ROAS)
+            try:                                 # a cube that cannot be read costs the countries' D0 ROAS only
+                lo = _first_spend(a["s"]["sp_usd"])
+                cube = _cube_d0(D, data_dir, a["app_id"], max(0, (lo or 0) - FILE_LEAD))
+                if cube is not None:
+                    r0, a["notes"]["cty_r0"] = cty_d0(D, a["s"], cube, sorted(sel))
+                    for cc, c in sel.items():
+                        c["r0"] = r0[cc]
+            except Exception as e:
+                print("cpi country d0 skipped: %s" % type(e).__name__, file=sys.stderr)
     try:
         arch, troas_from = _archive(data_dir)
     except Exception as e:
@@ -856,6 +968,23 @@ def _cut(arr, lo, n_row):
     return out
 
 
+def _shown(arr, fam, eps, hl, e0):
+    """The engine's normal per day with a B that was a peak drawn at base_of's level on its days (the baseline every
+    place shows)."""
+    arr = list(arr or [])
+    for ep in eps:
+        if ep["fam"] != fam or not ep["base"]:
+            continue
+        v = base_of(ep, hl, e0)
+        if v == ep["base"]:
+            continue
+        i0 = (_d(ep["opened"]) - e0).days
+        i1 = (_d(ep["closed"]) - e0).days if ep["closed"] else len(arr)
+        for i in range(max(0, i0), min(i1, len(arr))):
+            arr[i] = v
+    return arr
+
+
 def _app_file(a, D, lo, res, camps, ctys, eps_by, extra, t):
     """One app → its details file body (every day from its first spend − 28 days to t)."""
     aid = a["app_id"]
@@ -873,17 +1002,7 @@ def _app_file(a, D, lo, res, camps, ctys, eps_by, extra, t):
         off = (D.d0 + timedelta(days=lo) - e0).days
         hl = res["healthy"].get(key) or {}
         for fam in CA.OUT_FAMS:
-            arr = list(e_d0.get(fam) or [])
-            for ep in eps_by.get(key, []):                # a B that was a peak: its days drawn at base_of's level
-                if ep["fam"] != fam or not ep["base"]:
-                    continue
-                v = base_of(ep, hl, e0)
-                if v == ep["base"]:
-                    continue
-                i0 = (_d(ep["opened"]) - e0).days
-                i1 = (_d(ep["closed"]) - e0).days if ep["closed"] else len(arr)
-                for i in range(max(0, i0), min(i1, len(arr))):
-                    arr[i] = v
+            arr = _shown(e_d0.get(fam), fam, eps_by.get(key, []), hl, e0)
             nrm[fam] = [_r6(x) for x in arr[off:]] if off >= 0 else [None] * (-off) + [_r6(x) for x in arr]
     cl = []
     for cid, c in sorted(camps.items()):
@@ -906,11 +1025,32 @@ def _app_file(a, D, lo, res, camps, ctys, eps_by, extra, t):
         if f is None:
             continue
         f = max(f, lo)
-        ct.append({"cc": cc, "from": _iso(D.d0, f),
-                   "d": {"sp_inr": _cut(c["sp_inr"], f, False), "sp_usd": _cut(c["sp_usd"], f, False),
-                         "dl": _cut(c["dl"], f, False), "rev": _cut(c["rev"], f, False),
-                         "imp": _cut(c["imp"], f, True)},
-                   "ep": [_ep_row(ep) for ep in eps_by.get(("country", aid + "|" + cc), [])]})
+        row = {"cc": cc, "from": _iso(D.d0, f),
+               "d": {"sp_inr": _cut(c["sp_inr"], f, False), "sp_usd": _cut(c["sp_usd"], f, False),
+                     "dl": _cut(c["dl"], f, False), "rev": _cut(c["rev"], f, False),
+                     "imp": _cut(c["imp"], f, True)},
+               "ep": [_ep_row(ep) for ep in eps_by.get(("country", aid + "|" + cc), [])]}
+        # the Chart tab's country view: its normal per day (CPI ₹ / eCPM $: the engine's — its own open episode's B
+        # (base_of's: a B that was a peak gives way to H, as the app's), else its healthy level; D0 ROAS (AdMob-matched):
+        # the same healthy rule on its r0 ÷ $ cost) + its r0
+        ek = ("country", aid + "|" + cc)
+        en, e0 = (res.get("normal") or {}).get(ek) or {}, extra.get("cday0", {}).get(aid + "|" + cc)
+        cn = {}
+        if e0:
+            off = (D.d0 + timedelta(days=f) - _d(e0)).days
+            for fam, nd in (("CPI", 2), ("ECPM", 4)):
+                arr = _shown(en.get(fam), fam, eps_by.get(ek, []), (res.get("healthy") or {}).get(ek) or {}, _d(e0))
+                if arr and any(v is not None for v in arr):
+                    vals = arr[off:] if off >= 0 else [None] * (-off) + arr
+                    cn[fam] = [None if v is None else round(v, nd) for v in vals]
+        if c.get("r0") is not None:
+            row["d"]["r0"] = _cut(c["r0"], f, False)
+            h = roas_h(c["r0"], c["sp_usd"])
+            if any(v is not None for v in h[f:]):
+                cn["ROAS"] = [None if v is None else round(v, 4) for v in h[f:]]
+        if cn:
+            row["nrm"] = cn
+        ct.append(row)
     ct.sort(key=lambda x: (-sum(v for v in x["d"]["sp_inr"] if v), x["cc"]))
     n = a["notes"]
     notes = {"clock": extra["clock"].get(a["store"]), "ga4_till": n.get("ga4_till"), "ga4_tz": n.get("ga4_tz"),
@@ -918,7 +1058,8 @@ def _app_file(a, D, lo, res, camps, ctys, eps_by, extra, t):
              "troas_from": extra.get("troas_from"), "spend_ok_till": extra.get("ok_till"),
              "geo_till": extra.get("geo_till"), "camp_till": extra.get("camp_till"),
              "src": SRC_NOTE, "ga4_sampled_note": "not in this build's GA4 site files",
-             "cty_rule": "share>=%g all history or last 120 days, top %d" % (CTY_SHARE, CTY_MAX)}
+             "cty_rule": "share>=%g all history or last 120 days, top %d" % (CTY_SHARE, CTY_MAX),
+             "cty_r0": n.get("cty_r0")}
     return {"v": V, "app_id": aid, "name": a["name"], "key": a["key"], "t": t.isoformat(),
             "day0": _iso(D.d0, lo), "d": d, "nrm": nrm, "camps": cl, "ctys": ct, "src": [],
             "ep": [_ep_full(ep) for ep in eps_by.get(key, [])], "notes": notes}
@@ -1323,6 +1464,7 @@ def compute(dashboard, data_dir, out_dir, s, now, counts=None):
     D, apps, camps, ctys, extra = got
     ents = entities(apps, camps, ctys, D)
     extra["day0"] = {e.id: e.day0 for e in ents if e.kind == "app"}
+    extra["cday0"] = {e.id: e.day0 for e in ents if e.kind == "country"}
     res = CA.run(ents, CA.P_PROD, t.isoformat())
     ptr, allb, files, big = build_files(dashboard, D, apps, camps, ctys, extra, res, now)
     if counts is not None:

@@ -334,8 +334,10 @@ def test_the_shapes_the_page_reads(built):
             assert sorted(c["d"]) == ["d0_inr", "inst", "sp_inr", "sp_usd"]
             assert all(len(v) == nd(c["from"], T) for v in c["d"].values())
         for c in f["ctys"]:
-            assert sorted(c) == ["cc", "d", "ep", "from"] and sorted(c["d"]) == ["dl", "imp", "rev", "sp_inr", "sp_usd"]
+            assert sorted(c) == ["cc", "d", "ep", "from", "nrm"] and sorted(c["d"]) == ["dl", "imp", "rev", "sp_inr", "sp_usd"]
             assert all(len(v) == nd(c["from"], T) for v in c["d"].values())
+            assert sorted(c["nrm"]) == (["CPI", "ECPM"] if k == "a" else ["CPI"])   # (Beta: no AdMob country rows; no cube: no ROAS)
+            assert all(len(v) == nd(c["from"], T) for v in c["nrm"].values())
         assert f["src"] == [] and "src" in f["notes"]
     fa = load(site, p["apps"][IDS["a"]]["file"])
     assert fa["day0"] == DAY0                                         # (first spend − 28 days, never before the data)
@@ -931,3 +933,89 @@ def test_an_app_whose_file_is_too_big_is_not_counted(tmp_path, monkeypatch):
     assert IDS["b"] not in p["apps"] and sorted(p["apps"]) == sorted(IDS[k] for k in "ade")
     assert p["counts"] == {"alarm": 1, "watch": 0, "fixed": 0, "ok": 0, "new": 1, "paused": 1}      # Beta (ok) not counted
     assert sum(p["counts"].values()) == len(p["apps"]) and cb.pop_line().endswith(", too big 1")
+
+
+# ── 🌍 the Chart tab's country view: each country's AdMob-matched D0 (the cohort cube's share × the app's c_r0) ────────
+CUBE_SHARE = {"XA": 0.5, "XB": 0.3, "--": 0.2}       # of GA4's age-0 revenue; GA4 = 0.8 × AdMob (the scale k = 1.25)
+
+
+def _cube(data, aid, skip=(), loss=()):
+    """A synthetic cohort cube for one app: month files 2025-10 … 2026-03 (every day folded, but `skip`), age-0 revenue
+    of install day X = 0.8 × the ROI fixture's r0 split by CUBE_SHARE (+ an age-1 value that must be ignored), and a
+    hot day 2026-03-30 (not folded)."""
+    from admob_iq.fetch import ga4_cube as gcu
+    folder = gcu.app_dir(data, aid)
+    os.makedirs(folder, exist_ok=True)
+    roi = load(os.path.join(os.path.dirname(data), "site"), "roi_%s.json.gz" % gu.file_key(aid))
+    r0 = {row[0]: row[4][0] for row in roi["rows"]}
+    mon = {}
+    for x in days(DAY0, "2026-03-29"):
+        if x in skip:
+            continue
+        m = mon.setdefault(x[:7], {"v": gcu.V, "stream_id": "s1", "days": {}, "b": {}, "c": {}, "e": {}, "t": {},
+                                   "loss": {}})
+        m["days"][x] = {"st": "loss" if x in loss else "ok", "loss": 5 if x in loss else 0, "t": 1}
+        for cc, q in CUBE_SHARE.items():
+            m["e"].setdefault(cc, {})[x] = [10, int(round(r0[x] * 0.8 * q * 1e6)), 999]
+    for k, m in mon.items():
+        write_json_gz_stable(os.path.join(folder, k + ".json.gz"), m)
+    write_json_gz_stable(os.path.join(folder, "hot.json.gz"),
+                         {"v": gcu.V, "stream_id": "s1", "d": {"2026-03-30": {"st": "ok", "e": {"XA": {"2026-03-30": [1, 5]}}}}})
+
+
+def test_country_d0_adds_up_to_the_app_and_ships_its_normals(tmp_path):
+    data, site, dash = make(tmp_path)
+    _cube(data, IDS["a"], skip=("2026-01-15",), loss=("2026-02-10",))
+    assert cb.run(dash, data, site, {"ga4_cube": True}, NOW) == ["/cpi*"]
+    cb.pop_line()
+    f = load(site, dash["cpi"]["apps"][IDS["a"]]["file"])
+    C = {c["cc"]: c for c in f["ctys"]}
+    assert sorted(C) == ["XA", "XB"] and all(sorted(c["d"]) == ["dl", "imp", "r0", "rev", "sp_inr", "sp_usd"]
+                                             for c in C.values())
+    n_day = 0
+    for i, a in enumerate(f["d"]["c_r0"]):
+        x = addd(f["day0"], i)
+        xa, xb = at(C["XA"]["d"]["r0"], C["XA"]["from"], x), at(C["XB"]["d"]["r0"], C["XB"]["from"], x)
+        if a is None or x == "2026-01-15":                 # not matured / the cube does not hold that install day
+            assert xa is None and xb is None
+            continue
+        n_day += 1                                         # k_X = c_r0 ÷ Σ every cube country: the "(not set)" too
+        assert xa == pytest.approx(a * 0.5, abs=0.006) and xb == pytest.approx(a * 0.3, abs=0.006)
+        assert xa + xb + a * 0.2 == pytest.approx(a, abs=0.011)
+    assert n_day > 100
+    assert f["notes"]["cty_r0"] == {"from": f["day0"], "loss_days": 1}
+    # the normals: CPI ₹ / eCPM $ = the engine's (its own episode's B while open, else H) · D0 ROAS = the healthy rule
+    res = cb.compute(copy.deepcopy(dash), data, site, {"ga4_cube": True}, NOW)[5]
+    hl = res["healthy"][("country", IDS["a"] + "|XA")]
+    for c in C.values():
+        assert sorted(c["nrm"]) == ["CPI", "ECPM", "ROAS"] and all(len(v) == nd(c["from"], T) for v in c["nrm"].values())
+    xa = C["XA"]
+    i = nd(xa["from"], "2026-02-20") - 1
+    assert xa["nrm"]["CPI"][i] == pytest.approx(20.0, rel=0.03) and xa["nrm"]["ECPM"][i] == pytest.approx(6.0, rel=0.03)
+    assert xa["nrm"]["ECPM"][i] == pytest.approx(round(hl["ECPM"][(date(2026, 2, 20) - date(2025, 10, 1)).days], 4))
+    r = [at(xa["d"]["r0"], xa["from"], x) for x in days("2026-01-16", "2026-01-29")]
+    sp = [at(xa["d"]["sp_usd"], xa["from"], x) for x in days("2026-01-16", "2026-01-29")]
+    q = 0.40 * 0.9 * 0.5 / 0.6                          # XA: 50 % of the D0 revenue on 60 % of the cost (before C)
+    assert xa["nrm"]["ROAS"][i] == pytest.approx(q, rel=0.02)                   # AdMob-matched D0 ÷ $ cost
+    assert q * 0.98 < sum(r) / sum(sp) < q * 1.02                    # (a window after the day the cube lacks)
+    # the roas_h rule itself: windows ending d−14, d−21 … with every day known and ≥ $10 a day, ≥ 4 of them
+    H = cb.roas_h([1.0] * 60, [20.0] * 60)
+    assert H[40] is None and H[48] == pytest.approx(0.05) and H[59] == pytest.approx(0.05)
+    H2 = cb.roas_h([1.0] * 60, [5.0] * 60)                                      # $5 a day: no window counts
+    assert all(v is None for v in H2)
+
+
+def test_country_d0_needs_the_cube_switch_and_a_bad_cube_costs_only_it(tmp_path, monkeypatch, capsys):
+    data, site, dash = make(tmp_path)
+    _cube(data, IDS["a"])
+    d0 = copy.deepcopy(dash)
+    cb.run(d0, data, site, {}, NOW)                         # GA4_CUBE off: the store unread
+    cb.pop_line()
+    f = load(site, d0["cpi"]["apps"][IDS["a"]]["file"])
+    assert all("r0" not in c["d"] and "ROAS" not in c["nrm"] for c in f["ctys"]) and f["notes"]["cty_r0"] is None
+    monkeypatch.setattr(cb, "cty_d0", lambda *a, **k: 1 / 0)
+    d1 = copy.deepcopy(dash)
+    assert cb.run(d1, data, site, {"ga4_cube": True}, NOW) == ["/cpi*"]
+    assert "cpi country d0 skipped: ZeroDivisionError" in capsys.readouterr().err
+    assert health.SKIP.search("cpi country d0 skipped: ZeroDivisionError")
+    assert d1["cpi"]["apps"] == d0["cpi"]["apps"]          # everything else as without it

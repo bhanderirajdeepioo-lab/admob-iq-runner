@@ -2960,6 +2960,8 @@ h2.cpx-h{font-size:20px;margin:0 0 3px;font-weight:800}.cpx-d{margin:0;color:var
 .cpx-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 10px}
 .cpx-tab{font:inherit;font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:var(--ink2);cursor:pointer}
 .cpx-tab[aria-selected="true"]{background:var(--cyan);color:#06202a;border-color:var(--cyan)}
+.cpx-ctyp{display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;margin:0 0 8px}.cpx-ctyp .cpx-pk select{max-width:min(280px,64vw)}
+.cpx-ctyp .cpx-s{white-space:normal}
 .cpx-chs{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}   /* 3 across where each gets ≥ 300 px, else 2, else 1 */
 .cpx-chw{position:relative;min-width:0}
 .cpx-svg{display:block;width:100%;height:auto;background:var(--panel2);border:1px solid var(--line);border-radius:10px;touch-action:pan-y}
@@ -8252,6 +8254,10 @@ let EL=null, WIRED=false, KEEPING=false;
 let PER='14', PF='', PTO='', PREAD=false;
 // OPEN: the app (id) whose details are open under its row (null = none); TAB: its details tab; DN: Day-wise rows shown
 let OPEN=null, TAB='ch', DN=30;
+// CTY: the Chart tab's country per app (app id → cc; '' / none = All countries), remembered per viewer — read lazily (the first
+// Chart tab), CTY_LS in try/catch
+let CTY=null;
+const CTY_LS='cpx_cty_v1';
 const ALLF={raw:null,v:null,busy:false,err:false}, FILES={};   // cpi.json.gz · cpi_<key>.json.gz → {raw, v, busy, err}
 const CHD={};   // chart id → its points (the tooltip reads them)
 const PERS=[['today','Today'],['yday','Yesterday'],['7','Last 7 days'],['14','Last 14 days'],['tm','This month'],['lm','Last month'],['30','Last 30 days'],['60','Last 60 days'],['90','Last 90 days'],['all','All time'],['cus','Custom']];
@@ -8559,13 +8565,55 @@ function fsum(o,day0,keys,lo,hi){ const r={n:0}; keys.forEach(k=>{ r[k]=0; });
     r.n++; for(const k of keys) r[k]+=+o[k][i]; }
   return r; }
 // ---- 📈 Chart: CPI · eCPM · D0 ROAS as 14-day sums over the period (at least 120 days), the normal dashed, the problem spans
-// shaded, first / peak / now / normal printed, a tooltip per day ----
+// shaded, first / peak / now / normal printed, a tooltip per day. A country picker above them (owner, 6 Nov: "pehle all country
+// ke liye tino chart rahenge fir jo country choose krenge vo country ka data tino chart me aa jayega"): All countries = the app's
+// three charts; a country = the SAME three charts from that country's own lines (no fourth chart) ----
 function chartsHtml(r,F){ const t=ptr().t, end=r.hi<t?r.hi:t, e2=end<fEnd(F)?end:fEnd(F), a0=addD(e2,-119), lo=r.lo<a0?r.lo:a0;
   const s0=addD(F.day0,13), from=lo<s0?s0:lo; if(from>e2) return '<p class="cpx-note">Is period me chart ke liye din kam hain.</p>';
+  const C=ctyList(r,F), cc=ctyOf(r.id,C), c=cc?C.find(z=>z.c.cc===cc).c:null, pick=ctyCtl(C,cc);
+  if(c) return pick+ctyCharts(c,F,from,e2);
   const L=eps(F.ep);
   const cpi=series(F,from,e2,'CPI'), ec=series(F,from,e2,'ECPM'), ro=series(F,from,e2,'ROAS_G');
-  return `<div class="cpx-chs">${chart('cpx-c1',VIN()?'CPI ₹ (cost ÷ installs)':'CPI $ (cost ÷ installs)',cpi,'CPI',L,'cpx-l1')}${chart('cpx-c2','eCPM $ (AdMob)',ec,'ECPM',L,'cpx-l2')}${chart('cpx-c3','D0 ROAS (Google D0 ÷ cost)',ro,'ROAS_G',L,'cpx-l3')}</div>`
+  return pick+`<div class="cpx-chs">${chart('cpx-c1',VIN()?'CPI ₹ (cost ÷ installs)':'CPI $ (cost ÷ installs)',cpi,'CPI',L,'cpx-l1')}${chart('cpx-c2','eCPM $ (AdMob)',ec,'ECPM',L,'cpx-l2')}${chart('cpx-c3','D0 ROAS (Google D0 ÷ cost)',ro,'ROAS_G',L,'cpx-l3')}</div>`
     +'<p class="cpx-fn">Har point = us din tak ke pichhle 14 din ka jod (jaise 18 Aug = 5–18 Aug): ek din ka number bahut upar-neeche hota hai, 14 din jodne se asli trend dikhta hai · aakhri point = upar wali line · dashed = normal · laal patti = alarm ke din, peeli = watch.</p>'; }
+// the details file's countries with their spend share of the picked period (to t; a period with no final day: the last 14 days
+// ending t), biggest first
+function ctyList(r,F){ let [lo,hi]=span(r); if(lo>hi){ hi=ptr().t; lo=addD(hi,-13); }
+  const tot=fsum(F.d,F.day0,['sp_inr'],lo,hi).sp_inr;
+  return (Array.isArray(F.ctys)?F.ctys:[]).filter(c=>c&&typeof c.cc==='string'&&c.cc&&c.d&&okD(c.from))
+    .map(c=>{ const w=fsum(c.d,c.from,['sp_inr'],lo,hi).sp_inr; return {c,sh:tot>0?w/tot:null,w}; })
+    .sort((a,b)=>b.w-a.w||(a.c.cc<b.c.cc?-1:1)); }
+function ctyRead(){ if(CTY) return CTY; CTY={}; let o=null; try{ o=JSON.parse(localStorage.getItem(CTY_LS)||'null'); }catch(e){}
+  if(o&&typeof o==='object'&&!Array.isArray(o)) for(const k in o) if(typeof o[k]==='string') CTY[k]=o[k];
+  return CTY; }
+// the remembered country of an app, when the file still has it (else All countries)
+function ctyOf(id,C){ const v=ctyRead()[id]; return v&&C.some(z=>z.c.cc===v)?v:''; }
+function ctySet(id,cc){ const m=ctyRead(); if(cc) m[id]=cc; else delete m[id]; try{ localStorage.setItem(CTY_LS,JSON.stringify(m)); }catch(e){} }
+const ctyName=cc=>{ let f='', n=cc; try{ f=valFlag(cc)||''; }catch(e){} try{ n=valCtyName(cc)||cc; }catch(e){} return (f?f+' ':'')+n; };
+function ctyCtl(C,cc){ if(!C.length) return '';
+  const o=`<option value=""${cc?'':' selected'}>All countries</option>`+C.map(z=>`<option value="${E(z.c.cc)}"${z.c.cc===cc?' selected':''}>${E(ctyName(z.c.cc))} · ${z.sh!=null?Math.round(z.sh*100)+'%':'—'}</option>`).join('');
+  return `<div class="cpx-ctyp"><label class="cpx-pk"><span aria-hidden="true">🌍</span><select data-cpx-cty="1" aria-label="Country">${o}</select></label>`
+    +`<span class="cpx-s">${cc?'Teeno chart sirf is country ke':'% = period me spend ka hissa'}</span></div>`; }
+// one country's three charts: CPI = its cost ÷ Google Ads downloads, eCPM = the AdMob country report (gross), D0 ROAS = its
+// AdMob-matched install-day revenue ÷ its cost ($ dated); normal = its own (nrm), shading = its own episodes
+function ctyCharts(c,F,from,to){ const L=eps(c.ep), nt=F.notes||{}, hasR=Array.isArray(c.d.r0);
+  const cpi=cSeries(c,from,to,'CPI'), ec=cSeries(c,from,to,'ECPM'), ro=hasR?cSeries(c,from,to,'ROAS_G'):null;
+  const r0f=nt.cty_r0&&okD(nt.cty_r0.from)?nt.cty_r0.from:null, af=okD(nt.admob_cty_from)?nt.admob_cty_from:null;
+  return `<div class="cpx-chs">${chart('cpx-c1',VIN()?'CPI ₹ (cost ÷ downloads)':'CPI $ (cost ÷ downloads)',cpi,'CPI',L,'cpx-l1',1)}${chart('cpx-c2','eCPM $ (AdMob country)',ec,'ECPM',L,'cpx-l2',1)}`
+    +(ro?chart('cpx-c3','D0 ROAS (AdMob-matched)',ro,'ROAS_G',L,'cpx-l3',1):`<div class="cpx-chw"><div class="cpx-note cpx-chn"><b>D0 ROAS (AdMob-matched)</b><br>Is build me country-wise install-day revenue nahi (GA4 cohort cube nahi mila).</div></div>`)+'</div>'
+    +`<p class="cpx-fn">${E(ctyName(c.cc))}: har point = pichhle 14 din ka jod · CPI = is country ka Google Ads cost ÷ downloads · eCPM = AdMob country report (gross, har ad source)${af?` — ${E(fdy(af))} se`:''}${af&&from<af?' (usse pehle ka eCPM nahi)':''}`
+    +` · D0 ROAS ≈ AdMob-matched: GA4 cohort me is country ka install-day revenue × (app ka AdMob D0 ÷ sab countries ka GA4 D0), ÷ is country ka cost ($ din ke rate pe), sirf matured din${r0f?` — ${E(fdy(r0f))} se`:''}`
+    +' · dashed = normal (country ka khula alarm ho to uska baseline, warna healthy level) · peeli patti = is country ka apna alarm.</p>'; }
+// one country's 14-day points (as series(): v in the view's currency, n the normal; the CPI normal ₹ × the window's own rate)
+function cSeries(c,from,to,f){ const d0=c.from, nr0=(c.nrm||{})[f==='ROAS_G'?'ROAS':f], out=[];
+  const keys=f==='ECPM'?['rev','imp']:f==='CPI'?['sp_inr','sp_usd','dl']:['r0','sp_usd'];
+  for(let x=from;x<=to;x=addD(x,1)){ const i=nD(d0,x)-1, w=fsum(c.d,d0,keys,addD(x,-13),x);
+    const nr=Array.isArray(nr0)&&i>=0&&i<nr0.length&&nr0[i]!=null&&ok(+nr0[i])?+nr0[i]:null; let v=null, n=null;
+    if(w.n===14){ if(f==='CPI'&&w.dl>0&&w.sp_inr>0){ const k=VIN()?1:w.sp_usd/w.sp_inr; v=(VIN()?w.sp_inr:w.sp_usd)/w.dl; n=nr!=null?nr*k:null; }
+      if(f==='ECPM'&&w.imp>0){ v=w.rev/w.imp*1000; n=nr; } if(f==='ROAS_G'&&w.sp_usd>0){ v=w.r0/w.sp_usd; n=nr; } }
+    else if(nr!=null&&f!=='CPI') n=nr;
+    out.push({x,v,n}); }
+  return out; }
 // one family's 14-day points: v (CPI in the view's currency; the $ normal at the window's own rate), n (normal), raw sums
 function series(F,from,to,f){ const i0=fIx(F,from), i1=fIx(F,to), d=F.d, out=[];
   for(let i=i0;i<=i1;i++){ const x=addD(F.day0,i); let v=null, n=null;
@@ -8576,14 +8624,14 @@ function series(F,from,to,f){ const i0=fIx(F,from), i1=fIx(F,to), d=F.d, out=[];
     else if(ok(nr)&&f!=='CPI') n=+nr;
     out.push({x,v,n}); }
   return out; }
-function chart(id,title,P,f,L,cls){ const pts=P.map((p,i)=>[i,p.v]).filter(q=>q[1]!=null), N=P.length;
+function chart(id,title,P,f,L,cls,line){ const pts=P.map((p,i)=>[i,p.v]).filter(q=>q[1]!=null), N=P.length;
   if(pts.length<2) return `<div class="cpx-chw"><div class="cpx-note cpx-chn"><b>${E(title)}</b><br>Is period me kaafi din nahi (14 din ka jod nahi bana).</div></div>`;
   const W=360, H=176, Lm=10, Rm=12, Tp=32, Bm=22, ns=P.map(p=>p.n).filter(ok), vals=pts.map(q=>q[1]).concat(ns);
   let lo=Math.min(...vals), hi=Math.max(...vals); const pad=(hi-lo)*0.12||hi*0.1||1; lo=Math.max(0,lo-pad); hi=hi+pad;
   const X=i=>Lm+(W-Lm-Rm)*(N>1?i/(N-1):0.5), Y=v=>Tp+(H-Tp-Bm)*(1-(v-lo)/(hi-lo));
   const o=[`<svg class="cpx-svg" data-cpx-ch="${id}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${E(title)}">`];
-  // the problem spans of this family (Alarm red, Watch amber)
-  L.filter(e=>e.fam===f&&(e.tier==='ALERT'||e.tier==='WATCH')).forEach(e=>{ const a=e.c<P[0].x?0:P.findIndex(p=>p.x>=e.c), end=e.closed||P[N-1].x;
+  // the problem spans of this family (Alarm red, Watch amber; line: a country's own episodes, all LINE, amber)
+  L.filter(e=>e.fam===f&&(e.tier==='ALERT'||e.tier==='WATCH'||(line&&e.tier==='LINE'))).forEach(e=>{ const a=e.c<P[0].x?0:P.findIndex(p=>p.x>=e.c), end=e.closed||P[N-1].x;
     if(a<0||e.c>P[N-1].x||end<P[0].x) return; let b=P.findIndex(p=>p.x>end); b=b<0?N-1:Math.max(a,b-1);
     o.push(`<rect x="${X(a).toFixed(1)}" y="${Tp-6}" width="${Math.max(2,X(b)-X(a)).toFixed(1)}" height="${H-Tp-Bm+6}" class="${e.tier==='ALERT'?'cpx-sb':'cpx-sw2'}"/>`); });
   P.forEach((p,i)=>{ if(p.x.endsWith('-01')) o.push(`<line x1="${X(i).toFixed(1)}" x2="${X(i).toFixed(1)}" y1="${Tp-6}" y2="${H-Bm}" class="cpx-gl"/><text x="${(X(i)+3).toFixed(1)}" y="${H-6}" class="cpx-ax">${E(fd(p.x).split(' ')[1]||'')}</text>`); });
@@ -8783,6 +8831,8 @@ function onClick(e){ const t=e.target; if(!t||!t.closest) return; let b;
     keep(`[data-cpx-app="${sq(id)}"]`,()=>{ setOpen(OPEN===id?null:id); paint(); }); } }
 function onChange(e){ const t=e.target; if(!t||!t.closest) return;
   if(t.closest('[data-cpx-sel]')){ const k=String(t.value||''); if(!PERK.has(k)&&!MON_RE.test(k)) return; keep('[data-cpx-sel]',()=>{ PER=k; perSave(); paint(); }); return; }
+  if(t.closest('[data-cpx-cty]')){ const v=String(t.value||''), F=OPEN!=null?fOf(OPEN):null;   // (a code the open file has, or '' = All)
+    if(!F||(v&&!(Array.isArray(F.ctys)&&F.ctys.some(c=>c&&c.cc===v)))) return; const id=OPEN; keep('[data-cpx-cty]',()=>{ ctySet(id,v); paint(); }); return; }
   const f=t.closest('[data-cpx-pf]'), to=t.closest('[data-cpx-pto]'); if(!f&&!to) return; const v=String(t.value||''); if(!okD(v)) return;
   keep(f?'[data-cpx-pf]':'[data-cpx-pto]',()=>{ const [lo,hi]=rng(); PF=f?v:lo; PTO=to?v:hi; PER='cus'; perSave(); paint(); }); }
 function onMove(e){ const t=e.target, s=EL; if(!s||!s.querySelectorAll) return; const svg=t&&t.closest?t.closest('svg[data-cpx-ch]'):null;
@@ -8832,8 +8882,8 @@ function card(name){ const p=ptr(); if(!p) return null; const id=Object.keys(p.a
 // an app without one (no Google Ads spend: that card keeps today's Review card)
 function hubVerdict(name){ const p=ptr(); if(!p||!Object.keys(p.apps).some(k=>p.apps[k]&&p.apps[k].name===name)) return null; return card(name); }
 return {ptr, render, paint, show:showMe, left, alarmN, alertNote, card, hubVerdict,
-  _:{rng, isDef, sums, rows, rowOf, judge, normal, hLvl, lossG, epOf, eps, now3, perRestore, perLoad, keep, cal, fI, fU, fP, series, dayRows, verdict, moneyLine, tabBody, ALLF, FILES, CHD,
-    get:()=>({PER,PF,PTO,OPEN,TAB,DN}), set:o=>{ if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o) OPEN=o.OPEN; if('TAB' in o) TAB=o.TAB; if('DN' in o) DN=o.DN; if('PREAD' in o) PREAD=o.PREAD; }}};
+  _:{rng, isDef, sums, rows, rowOf, judge, normal, hLvl, lossG, epOf, eps, now3, perRestore, perLoad, keep, cal, fI, fU, fP, series, cSeries, ctyList, ctyOf, dayRows, verdict, moneyLine, tabBody, ALLF, FILES, CHD,
+    get:()=>({PER,PF,PTO,OPEN,TAB,DN,CTY}), set:o=>{ if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o) OPEN=o.OPEN; if('TAB' in o) TAB=o.TAB; if('DN' in o) DN=o.DN; if('PREAD' in o) PREAD=o.PREAD; if('CTY' in o) CTY=o.CTY; }}};
 })();
 function renderCpx(){ return CPX.render(); }
 // ---- 📈 ROI — a section of the 💸 Install value tab (owner, 13 Oct: "every date wise uska incremental day wise revenue from

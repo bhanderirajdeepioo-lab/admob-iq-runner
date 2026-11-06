@@ -253,6 +253,35 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     out.lm_head = SCREEN.innerHTML.includes('<th>Month</th><th>Ratio</th><th>Days</th>');
     // the history's money: D0 ROAS episodes only
     out.hist = await lm({ PER: '14', TAB: 'hi' });
+    // ── 🌍 the Chart tab's country picker: All countries first (the app's three charts), then the file's countries by the
+    // period's spend share; a country = the SAME three charts from its own lines; remembered per app (lazy, try/catch) ──
+    reset(); LS = {}; _.set({ OPEN: ID.a, TAB: 'ch', CTY: null }); CPX.paint(); await tick(); await tick(); CPX.paint();
+    const chOf = () => { const h = det2(SCREEN.innerHTML); return { opts: [...h.matchAll(/<option value="([^"]*)"( selected)?>([^<]*)</g)].map(m => [m[1], !!m[2], m[3]]),
+      titles: [...h.matchAll(/class="cpx-tt">([^<]+)</g)].map(m => m[1]), labels: [...h.matchAll(/class="cpx-(?:pt|nt)"[^>]*>([^<]+)</g)].map(m => m[1]),
+      svgs: (h.match(/<svg class="cpx-svg"/g) || []).length, shade: (h.match(/class="cpx-sw2"/g) || []).length + (h.match(/class="cpx-sb"/g) || []).length, text: strip(h) }; };
+    const Fa = _.FILES['cpi_' + KEY.a + '.json.gz'].raw, rA2 = _.rows(...R['14']).find(r => r.id === ID.a), US = Fa.ctys.find(c => c.cc === 'US');
+    out.cty = { all: chOf(), list: _.ctyList(rA2, Fa).map(z => [z.c.cc, z.sh]), ls_read: LS.cpx_cty_v1 === undefined };
+    const pickC = v => SCREEN._on.change[0]({ target: { value: v, closest: s => s === '[data-cpx-cty]' ? {} : null } });
+    pickC('US'); out.cty.us = chOf(); out.cty.ls = LS.cpx_cty_v1;
+    // hand math: the 14-day sums of the country's own arrays
+    const hand = (keys, x, fn) => { const i1 = Math.round((Date.parse(x) - Date.parse(US.from)) / 864e5); const s = {}; keys.forEach(k => { s[k] = 0; }); for (let i = i1 - 13; i <= i1; i++) for (const k of keys) { const v = US.d[k][i]; if (v == null) return null; s[k] += v; } return fn(s); };
+    out.cty.us_roas = _.cSeries(US, '2026-03-20', '2026-03-28', 'ROAS_G').map(p => [p.x, p.v, p.n, hand(['r0', 'sp_usd'], p.x, s => s.r0 / s.sp_usd)]);
+    out.cty.us_cpi = _.cSeries(US, '2026-03-27', '2026-03-28', 'CPI').map(p => [p.x, p.v, p.n, hand(['sp_inr', 'dl'], p.x, s => s.sp_inr / s.dl)]);
+    out.cty.us_ecpm = _.cSeries(US, '2026-03-28', '2026-03-28', 'ECPM').map(p => [p.x, p.v, p.n, hand(['rev', 'imp'], p.x, s => s.rev / s.imp * 1000)]);
+    CURV = 'USD'; out.cty.us_cpi_usd = _.cSeries(US, '2026-03-28', '2026-03-28', 'CPI').map(p => [p.x, p.v, p.n, hand(['sp_usd', 'sp_inr', 'dl'], p.x, s => [s.sp_usd / s.dl, 20 * s.sp_usd / s.sp_inr])]); CURV = 'INR';
+    pickC('BR'); out.cty.br = chOf();                                          // no country D0 in this build: a note, never a 0 chart
+    pickC('ZZ'); out.cty.bad = _.get().CTY[ID.a];                             // a code the file does not have: refused
+    pickC(''); out.cty.back = chOf(); out.cty.ls2 = LS.cpx_cty_v1;
+    // remembered per app: read once (a fresh viewer), a code the file lost → All countries; a throwing storage is harmless
+    LS = { cpx_cty_v1: JSON.stringify({ [ID.a]: 'IN', [ID.b]: 'XX' }) }; _.set({ CTY: null });
+    const Fb = Fa; out.cty.read = [_.ctyOf(ID.a, _.ctyList(rA2, Fa)), _.ctyOf(ID.b, _.ctyList(rA2, Fb))];
+    LS_THROW = true; _.set({ CTY: null }); CPX.paint(); out.cty.throw = { titles: chOf().titles, err: chOf().text.includes('padha nahi') }; pickC('US'); out.cty.throw.after = chOf().titles; LS_THROW = false; LS = null;
+    // keep(): the picker back in its place after the repaint (the charts above it never move it)
+    reset(); _.set({ OPEN: ID.a, TAB: 'ch', CTY: {} }); CPX.paint(); await tick(); await tick(); CPX.paint(); SCROLL = [];
+    let n0 = 0; SCREEN.querySelector = s => s === '[data-cpx-cty]' ? { getBoundingClientRect: () => ({ top: n0++ ? 452 : 400 }) } : null;
+    pickC('US'); out.cty.keep = { dy: SCROLL.slice(), cty: _.get().CTY[ID.a] }; SCREEN.querySelector = () => null;
+    // an app whose file has no country: no picker, the three charts as before
+    reset(); _.set({ OPEN: ID.a, TAB: 'ch' }); CPX.paint(); await tick(); await tick(); const Fn = _.FILES['cpi_' + KEY.a + '.json.gz'].raw; Fn.ctys = []; CPX.paint(); out.cty.none = chOf();
   } catch (e) { errors.push(String(e && e.stack || e)); }
   console.log(JSON.stringify({ errors, out }));
 })();
