@@ -64,6 +64,9 @@ run(`function __upLine(h){ const nz=x=>x.replace(/(id="|url\\(#|href="#)([A-Za-z
   const a=((UNI&&UNI.apps)||[]).find(z=>z.app_id===UNIAPP), c=a?nz(uniImpactCard(a)):''; if(!c||h.indexOf(c)<0) return '__no card__';
   return h.replace(c,nz(uniImpUpLine())); }`);
 
+// ── years: the same file read in the next year (meta.today moved to 5 Jan 2027): its days are the previous year's and print their year ──
+get('years', `(()=>{ ${RESET} const S1=Object.assign({},__STUDIO,{meta:Object.assign({},__STUDIO.meta,{today:'2027-01-05'})}), r={}, pick=()=>{ KWIN='7'; uniScreen(); return {tl:__text(US._.tl()), kpis:__text(US._.kpis())}; };
+  US._.load(S1); r.next=pick(); US._.load(__STUDIO); r.now=pick(); ${RESET} return JSON.stringify(r); })()`);
 // ── the screen, its order and the consistency rules ─────────────────────────────────────────────────────────────────
 get('screen7', `(()=>{ ${RESET} return uniScreen(); })()`);
 get('order7', `(()=>{ const R=US._.R(), A=US._.A();

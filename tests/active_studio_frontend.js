@@ -64,6 +64,11 @@ ctx.dAddT = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 864e5).toISOSt
 const STUDIO_ONLY = h => { const a = h.indexOf('id="as-root"'), b = h.indexOf('id="act-old"'); return h.slice(a < 0 ? 0 : a, b < 0 ? h.length : b); };
 ctx.__studio = STUDIO_ONLY;
 
+// ── years: the same file read in the next year (meta.today moved to 5 Jan 2027): its days are the previous year's and print their year ──
+get('years', `(()=>{ ${RESET} const S1=Object.assign({},__STUDIO,{meta:Object.assign({},__STUDIO.meta,{today:'2027-01-05'})}), r={};
+  const pick=()=>{ ${RESET} KWIN='7'; actScreen(); __flush(); const raw=AS._.tl(), tl=__text(raw), ticks=[...raw.matchAll(/font-size="10" fill="var\\(--faint\\)">([^<]+)</g)].map(m=>m[1]).filter(t=>/^\\d/.test(t)), A=AS._.A(), a=A.find(x=>x.ready&&x.rel.length)||A[0], row=actRows().find(x=>x.app_id===a.id);
+    APP=row.app; ACTAPP=a.id; const pg=__text(__studio(actScreen())); __flush(); ${RESET} return {tl,pg,ticks}; };
+  AS._.load(S1); r.next=pick(); AS._.load(__STUDIO); r.now=pick(); ${RESET} return JSON.stringify(r); })()`);
 // ── the screen, its order and the consistency rules ─────────────────────────────────────────────────────────────────
 const ROWS = `o=>({i:o.a.i,nm:o.a.nm,id:o.a.id,pill:o.pill,rank:o.rank,ready:o.a.ready,steep:o.steep,alP:o.alP?o.alP.sev:null,
   L:(!o.L||o.L.far==null)?{why:o.L&&o.L.why}:{far:o.L.far,fi:o.L.fi,asli:o.L.asli,base:o.L.base,relT:o.L.relT,relA:o.L.relA,zT:o.L.zT,zA:o.L.zA,sigT:o.L.sigT,sigA:o.L.sigA,n:o.L.n,f:o.L.f,t:o.L.t,usd:o.L.usd,usdA:o.L.usdA,alR:!!o.L.alR},

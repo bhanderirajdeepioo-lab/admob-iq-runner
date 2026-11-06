@@ -266,3 +266,12 @@ def test_a_newer_open_day_makes_the_live_view_read_only_and_live_writes_say_so(r
 def test_an_unreachable_index_is_a_load_failure_not_review_not_started(rep):
     assert S(rep, "idx_net") == "fail" and S(rep, "idx_503") == "fail"      # offline / login redirect / server error
     assert S(rep, "idx_404") == "missing" and S(rep, "idx_empty") == "empty"  # → "Review abhi shuru nahi hua"
+
+
+def test_dates_outside_the_reference_year_carry_their_year(rep):
+    y = S(rep, "years")                                                         # read on 3 Jan 2027
+    assert y["past"] == "30 Dec 2026" and y["cur"] == "2 Jan"                           # a past-year day says its year; the open day's year stays short
+    assert y["wk"].endswith(", 30 Dec 2026")                                            # the History day heading (weekday, date)
+    assert y["over"] == "28 Sep 2026–3 Jan 2027" and y["same"] == "1 Jan–3 Jan"         # the History span: over New Year both ends carry their year
+    assert y["old_same"] == "28 Sep 2026–5 Oct 2026"                                    # (a whole past-year range: the year on each end)
+    assert "2026" in y["when_past"] and "2027" not in y["when_cur"] and "2026" not in y["when_cur"]   # a flag / log time from another year says its year

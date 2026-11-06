@@ -134,6 +134,10 @@ async function step(name, code) {
     r.sum=RVS._.sumHtml(); r.hist=RVS._.histHtml(); r.drawers={}; RVS._.A.forEach(a=>{ r.drawers[a.key]=RVS._.drawerHtml(a.key); });
     r.tips={}; const T=RVS._.TIPS; RVS._.A.forEach(a=>{ r.tips[a.key]=['kamai','uninstall','active','value','update','ads','deduct','mediation','health','setup'].map(f=>T.cell(a.key,f,false)).join('|')+T.app(a.key); });
     r.frtips=['frozen','rev','ga4','final','next'].map(k=>T.fr(k)).join('|'); return r; })()`);
+  // years: the same card read on 3 Jan 2027 (the open day moved): every date of the card's year (2026) says its year, over-the-year ranges carry both
+  await step('years', `(()=>{ const keep=RV.idx, k=RVS._.A[0].key, tx=h=>String(h).replace(/<style[\\s\\S]*?<\\/style>/g,'').replace(/<[^>]*>/g,' ').replace(/\\s+/g,' ');
+    const r={ now: tx(RVS._.drawerHtml(k)) + tx(RVS._.histHtml()) }; RV.idx=Object.assign({},keep,{open_day:'2027-01-03'});
+    try { r.next=tx(RVS._.drawerHtml(k)) + tx(RVS._.histHtml()); } finally { RV.idx=keep; } return r; })()`);
   await step('inr', `(()=>{ CURVIEW='INR'; const h=RVS._.heroHtml()+RVS._.drawerHtml(RVS._.A[0].key); CURVIEW='USD'; return h; })()`);
   // ── every action → the right endpoint, the right body (the older tab's own request shape) ──
   const K = FX.keys;

@@ -440,6 +440,23 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     ctx.APP = 'Alpha App'; _.set({ OPEN: 0, SEC: 'ov', PER: '30' }); SCR.paint();
     out.chart_svg = { normal: /class="sc-nt">Normal [\d.]+<\/text>/.test(box._h), last: /class="sc-rl"[^>]*>[\d.]+<\/text>/.test(box._h), avg: /class="sc-al">Avg [\d.]+<\/text>/.test(box._h), bars: (box._h.match(/<rect /g) || []).length };
     ctx.document.getElementById = () => null;
+    // ── years: a date outside the reference year (the file's last final day) is never printed without its year ──
+    { _.set({ PER: 'all' });
+      const pl = (lo, hi, ft) => _.perLine({ ft: ft || '2026-03-28' }, lo, hi);
+      const mk = (a, b) => { const days = []; for (let t = Date.parse(a + 'T00:00:00Z'); t <= Date.parse(b + 'T00:00:00Z'); t += 864e5) days.push([new Date(t).toISOString().slice(0, 10), 100, 10, '']); return days; };
+      const mAll = _.chartModel(mk('2024-06-20', '2026-03-28'), 5, '2026-03-28'); _.set({ CH: mAll });
+      const box2 = { clientWidth: 600, _h: '', set innerHTML(v) { box2._h = v; }, get innerHTML() { return box2._h; }, querySelector: () => null };
+      ctx.document.getElementById = id => id === 'sc-chart' ? box2 : null; _.drawChart(); ctx.document.getElementById = () => null;
+      const mJan = _.chartModel(mk('2025-12-09', '2026-01-07'), 5, '2026-01-07'); _.set({ CH: mJan }); box2._h = ''; ctx.document.getElementById = id => id === 'sc-chart' ? box2 : null; _.drawChart(); ctx.document.getElementById = () => null;
+      out.years = { all: pl('2024-06-20', '2026-03-30'), jan: pl('2025-12-09', '2026-01-07', '2026-01-07'), old: pl('2025-03-01', '2025-03-31'), cur: pl('2026-02-27', '2026-03-28'),
+        one_old: pl('2025-03-04', '2025-03-04'), one_cur: pl('2026-03-04', '2026-03-04'),
+        tip_week: _.tipText({ d0: '2025-12-28', d1: '2026-01-03', v: 5, vr: 0, a: 0, n: 0, nd: 7, nf: false, why: '' }), tip_one: _.tipText({ d0: '2025-12-28', d1: '2025-12-28', v: 5, vr: 0, a: 0, n: 0, nd: 1, nf: false, why: '' }),
+        ticks_all: null, ticks_jan: null };
+      _.set({ CH: mAll }); box2._h = ''; ctx.document.getElementById = id => id === 'sc-chart' ? box2 : null; _.drawChart(); ctx.document.getElementById = () => null;
+      out.years.ticks_all = [...box2._h.matchAll(/y="214" text-anchor="(?:start|middle|end)">([^<]+)<\/text>/g)].map(m => m[1]);
+      _.set({ CH: mJan }); box2._h = ''; ctx.document.getElementById = id => id === 'sc-chart' ? box2 : null; _.drawChart(); ctx.document.getElementById = () => null;
+      out.years.ticks_jan = [...box2._h.matchAll(/y="214" text-anchor="(?:start|middle|end)">([^<]+)<\/text>/g)].map(m => m[1]);
+      _.set({ CH: null, PER: '30' }); }
     // ── keep(): the tapped control back to its place, its sideways row's scroll kept ──
     let top = 300; const ROW = { scrollLeft: 140 }; const BTN = { getBoundingClientRect: () => ({ top }), closest: s => s === '.sc-x' ? ROW : null };
     SCREEN.querySelector = s => s === '[data-sc-per="90"]' ? BTN : null; SCROLL = [];

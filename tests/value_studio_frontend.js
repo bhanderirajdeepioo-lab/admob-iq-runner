@@ -60,6 +60,11 @@ const STUDIO_ONLY = h => { const a = h.indexOf('id="vs-root"'), b = h.indexOf('i
 ctx.__studio = STUDIO_ONLY;
 
 // ── the screen and the numbers ────────────────────────────────────────────────────────────────────────────────────
+// ── years: the same file read in the next year (meta.today moved to 5 Jan 2027): its days are the previous year's and print their year ──
+get('years', `(()=>{ ${RESET} const S1=Object.assign({},__STUDIO,{meta:Object.assign({},__STUDIO.meta,{today:'2027-01-05'})}), r={};
+  const pick=()=>{ ${RESET} KWIN='90'; valScreen(); return {tl:__text(VS._.tl())}; };
+  VS._.load(S1); r.next=pick(); VS._.load(__STUDIO); r.now=pick();
+  ${RESET} KWIN='all'; valScreen(); r.all={tl:__text(VS._.tl()), foot:__text(VS._.foot())}; ${RESET} return JSON.stringify(r); })()`);
 get('screen7', `(()=>{ ${RESET} return valScreen(); })()`);
 const ROWS = `JSON.stringify({W:VS._.W(), M:{SW:VS._.M().SW,nw:VS._.M().nw,H:VS._.M().H},
   rows:VS._.R().map(o=>({id:o.a.id,nm:o.a.nm,pill:o.pill,todo:o.todo.v,profD:o.s.profD,marg:o.s.marg,jw:o.s.jw,ads:o.s.ads,thin:o.s.thin,never:!!(o.s.pb&&o.s.pb.never),cprofD:o.c.profD})),

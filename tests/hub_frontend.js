@@ -266,6 +266,23 @@ const fresh = async (opt) => { opt = opt || {};   // a new page load: history, U
     run(`RANGE='today'; window.__ax=null;`);
     return { L, rel: [run(`relDay(DATA.today_date)`), run(`relDay(DATA.latest_complete)`), run(`relDay('2025-01-01')`)], T: run(`fmtD(DATA.today_date)`), Y: run(`fmtD(DATA.latest_complete)`) }; });
 
+  // years: the period's dates / the Date-wise rows / the review history say their year when it is not the build's year
+  await step('years', () => { const T = run(`DATA.today_date`), Y = T.slice(0, 4), R = {};
+    run(`RANGE='all'; window.__ax=['2024-03-14','2024-03-15','${run('DATA.latest_complete')}'];`); R.all = { lbl: run(`curWinLabel()`), dates: run(`curWinDates()`) };
+    run(`window.__ax=['${Y - 1}-12-09','${Y - 1}-12-10','${Y}-01-07'];`); R.over = run(`curWinLabel()`);
+    run(`window.__ax=['${Y - 1}-03-01','${Y - 1}-03-02'];`); R.past = run(`curWinLabel()`);
+    run(`window.__ax=['${Y}-02-01','${Y}-02-02'];`); R.cur = run(`curWinLabel()`);
+    run(`RANGE='today'; window.__ax=null;`);
+    R.day = run(`(()=>{ const row=d=>({d,rev:1,spend:0,inst:0,newrev:0,oldrev:0,pl:0,n:1}); return dateWiseTable([row('${Y - 1}-12-31'),row('${Y}-01-02')],'day'); })()`).match(/<td class="nm">([^<]*)<\/td>/g);
+    R.rv = [run(`hubRvDay('${Y - 1}-12-28')`), run(`hubRvDay('${Y}-01-02')`)].map(h => h.replace(/<[^>]*>/g, ''));
+    R.fn = run(`[fmtDY('${Y - 1}-03-04'), fmtDY('${Y}-03-04'), fmtRange('${Y - 1}-12-23','${Y}-01-05'), fmtRange('${Y - 1}-03-01','${Y - 1}-03-31'), fmtRange('${Y}-03-01','${Y}-03-31'), fmtRange('${Y}-03-04','${Y}-03-04')]`);
+    R.bsy = run(`[bSpansYears('${Y - 1}-12-22','${Y}-01-10'), bSpansYears('${Y}-03-01','${Y}-03-10'), bSpansYears('${Y - 1}-03-01','${Y - 1}-03-30')]`);
+    R.d0 = run(`(()=>{ const st=(since,miss)=>({D:{day_since:since},e:{},days:[],pend:[],miss,has:false,k:0,n:0}); return [d0DayTip(st('${Y - 1}-10-28',['${Y - 1}-03-05'])), d0DayTip(st('${Y}-01-05',['${Y}-01-02']))]; })()`);
+    R.win = run(`(()=>{ const k=[KWIN]; KWIN='7'; try { return uniWindow({ data_till: '${Y - 1}-03-10', history_start: '${Y}-01-01' }).label; } finally { KWIN=k[0]; } })()`);
+    R.cards = run(`(()=>{ const x=dt=>({app:'Demo Gallery',app_id:'a',severity:'warning',family:'rate_spike',dir:'up',text:'t',data_till:dt}), g=h=>{ const m=/data till ([^<]*)</.exec(h); return m&&m[1]; };
+      const r={}; for (const [k,f] of [['uni',uniAlertCards],['act',actAlertCards],['val',valAlertCards]]) { try { r[k]=[g(f([x('${Y - 1}-12-28')])),g(f([x('${Y}-01-05')]))]; } catch (e) { r[k]=String(e); } } return r; })()`);
+    R.T = T; return R; });
+
   // ── App Overview cards ──────────────────────────────────────────────────────────────────────────────────────────────
   const K = run(`hubKeyOf('Demo Gallery')`), money = (usd, s) => ({ usd, s: s || '', sign: 0, p: 0 });
   ctx.__RVF = { v: 1, day: LAST, feats: [['kamai', 'Revenue · eCPM', 'Revenue', '💰'], ['uninstall', 'Uninstall', 'Uninstall', '🗑️'], ['active', 'Active users', 'Active', '👥'],

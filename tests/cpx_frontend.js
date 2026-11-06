@@ -228,6 +228,16 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
       pre: { st: Object.fromEntries(Object.entries(r3c).map(([k, v]) => [k, v.st])), cell: rowT(t3c, 'Gamma App'), verdict: strip(_.verdict(r3c[ID.c])) },
       h: _.hLvl([null, null, 5, 6], '2025-10-01', '2025-10-01', '2025-10-04', 1), h0: _.hLvl([5, 6, 7, 8], '2025-10-01', '2025-10-03', '2025-10-04', 1),
       h_none: _.hLvl([null, null], '2025-10-01', '2025-10-01', '2025-10-02', 1), h_after: _.hLvl([5, 6, 7], '2025-10-01', '2025-10-09', '2025-10-10', 1) };
+    // years: the period line / spans never print a date from another year without its year (reference year = the alarm's data day)
+    const pdOf = h => ((h.match(/class="cpx-pd">([^<]*)/) || [])[1] || '').replace(/ · $/, '');
+    reset(); _.set({ PER: 'all' }); CPX.paint(); const yAll = pdOf(SCREEN.innerHTML);
+    reset(); _.set({ PER: 'cus', PF: '2025-12-20', PTO: '2026-01-06' }); CPX.paint(); const yCus = pdOf(SCREEN.innerHTML);
+    reset(); _.set({ PER: 'mon:2025-12' }); CPX.paint(); const yMon = pdOf(SCREEN.innerHTML);
+    reset(); _.set({ PER: 'cus', PF: '2026-02-03', PTO: '2026-02-03' }); CPX.paint(); const yOne = pdOf(SCREEN.innerHTML);
+    reset(); _.set({ PER: '14' }); CPX.paint(); const y14 = pdOf(SCREEN.innerHTML);
+    out.yr = { all: yAll, cus: yCus, mon: yMon, one: yOne, d14: y14,
+      rg: [_.rg('2025-03-01', '2025-03-31'), _.rg('2026-03-01', '2026-03-10'), _.rg('2025-12-23', '2026-01-05'), _.rg('2026-03-04', '2026-03-04'), _.rg('2025-03-04', '2025-03-04'), _.rg('2026-03-01', '2026-03-10', true)],
+      fd: [_.fd('2026-03-04'), _.fd('2025-03-04')] };
     // D4: a period that runs past t counts D0 ROAS on the days ≤ t only and says "till <t>"; one with no final day says so
     const sTm = _.sums(..._.rng('tm'))['Alpha App'], sTd = _.sums(..._.rng('today'))['Alpha App'], s14 = _.sums(..._.rng('14'))['Alpha App'];
     const t4 = await paintP({ PER: 'tm' }), t4n = await paintP({ PER: 'today' }), t4d = await paintP({ PER: '14' });
@@ -429,6 +439,13 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     // the chart: a marker + printed label per level change inside the days; the proposal hollow; the tooltip names the level
     await lvTab({ TAB: 'ch', PER: 'all' }); const chH = SCREEN.innerHTML;
     out.lv.chart = { marks: (chH.match(/class="cpx-lvm"/g) || []).length, labels: [...chH.matchAll(/class="cpx-lvn"[^>]*>([^<]+)</g)].map(m => m[1]), hollow: (chH.match(/class="cpx-lvo"/g) || []).length };
+    out.lv.ticks = [...chH.matchAll(/class="cpx-ax">([^<]+)</g)].map(m => m[1]);
+    // a chart wholly inside the reference year: the month ticks stay as short as before (no year on the first one)
+    const cy = []; for (let d = new Date(Date.UTC(2026, 4, 1)); d <= Date.UTC(2026, 8, 1); d = new Date(+d + 864e5)) cy.push({ x: d.toISOString().slice(0, 10), v: 10, n: 10 });
+    out.lv.ticks_cur = [..._.chart('cx-y', 'T', cy, 'CPI', [], 'cpx-ok', null, false).matchAll(/class="cpx-ax">([^<]+)</g)].map(m => m[1]);
+    // … and one that starts on 1 Jan of the reference year: no year on the January tick either
+    const cj = []; for (let d = new Date(Date.UTC(2026, 0, 1)); d <= Date.UTC(2026, 3, 1); d = new Date(+d + 864e5)) cj.push({ x: d.toISOString().slice(0, 10), v: 10, n: 10 });
+    out.lv.ticks_jan = [..._.chart('cx-j', 'T', cj, 'CPI', [], 'cpx-ok', null, false).matchAll(/class="cpx-ax">([^<]+)</g)].map(m => m[1]);
     const c1 = _.CHD['cpx-c1']; out.lv.tip = c1 ? strip(_.tipHtml(c1, c1.P.length - 1)) : null;
     // a country picked: its own three charts carry no app level marker / proposal and the tooltip names no app level;
     // back to All countries: the app's markers again

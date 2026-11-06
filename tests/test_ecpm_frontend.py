@@ -929,10 +929,10 @@ def test_cmp_taps_navigate_within_the_history_and_stay_put(report):
     # what the card says: the exact days compared, partial months by their days
     assert "last 14 days avg (kal samet 14 poore din: <b>25 Feb–10 Mar</b>)" in n["b14"]["card"]
     assert "kal (<b>10 Mar</b>) ka eCPM − <b>Feb 2026</b> ka avg eCPM (<b>1 Feb–28 Feb</b> ki kamai" in n["feb"]["card"]
-    assert "adhura mahina: sirf poore din, kal samet" in n["mar"]["card"] and "data 20 Dec se hai, isliye sirf 12 din" in n["dec"]["card"]
+    assert "adhura mahina: sirf poore din, kal samet" in n["mar"]["card"] and "data 20 Dec 2025 se hai, isliye sirf 12 din" in n["dec"]["card"]
     j = n["cJan"]["card"]
-    assert "<h3>All apps · Jan 2026 vs Dec 2025 (20–31)</h3>" in j and "<b>1 Jan–31 Jan</b> vs <b>20 Dec–31 Dec</b>" in j
-    assert "(impressions ÷ 31 din)" in j and "adhura mahina hai" not in j and "<b>Dec 2025 (20–31)</b> = data 20 Dec se hai, isliye sirf 12 din." in j
+    assert "<h3>All apps · Jan 2026 vs Dec 2025 (20–31)</h3>" in j and "<b>1 Jan–31 Jan</b> vs <b>20 Dec–31 Dec 2025</b>" in j
+    assert "(impressions ÷ 31 din)" in j and "adhura mahina hai" not in j and "<b>Dec 2025 (20–31)</b> = data 20 Dec 2025 se hai, isliye sirf 12 din." in j
     assert "<b>Mar 2026 (1–10)</b> adhura mahina hai — sirf poore din (aaj ka adhura din nahi)." in n["m"]["card"]
     v = n["vJan"]["card"]                                  # two months apart: the title, the days, impact per day of March
     assert "<h3>All apps · Mar 2026 (1–10) vs Jan 2026</h3>" in v and "<b>1 Mar–10 Mar</b> vs <b>1 Jan–31 Jan</b>" in v
@@ -1388,7 +1388,9 @@ def _norm_periods(h):
     if not isinstance(h, str):
         return h
     h = re.sub(r'<div class="ec-ctl">.*?</div></div>', '<div class="ec-ctl">PERIODS</div>', h, flags=re.S)
-    return h.replace("<b>Full</b> pe sab", "<b>All time</b> pe sab")
+    h = h.replace("<b>Full</b> pe sab", "<b>All time</b> pe sab")
+    # a date outside the build's year now carries its year ("data 20 Dec 2025 se hai", "20 Dec–31 Dec 2025"): an intended change
+    return re.sub(r"(\d+ [A-Z][a-z]{2}) 2025", r"\1", h)
 
 
 def test_cmp_default_view_is_byte_identical_to_before(tmp_path, dash):
@@ -1446,3 +1448,11 @@ def test_cmp_control_css_phone_and_tap_targets():
     assert re.search(r"\.ec-ml\{[^}]*min-width:11\.2em", css)                                            # a fixed label: ‹ › never move
     assert re.search(r"\.ec-mnav\{[^}]*flex:none", css)
     assert re.search(r"\.ec-mvs\{display:inline-flex;[^}]*flex:none", css)                               # "vs ‹ month ›" wraps as one piece
+
+
+def test_dates_carry_their_year_when_not_in_the_build_year(report):
+    y = report["years"]                                                                 # synthetic build: its year is 2026
+    assert y["T"] == "2026"
+    assert y["span"] == ["20 Dec–22 Dec 2025", "29 Dec 2025–1 Jan 2026", "1 Mar–2 Mar", "4 Mar 2025", "4 Mar"]   # past year · over New Year · this year (short)
+    assert y["runs"] == ["1 Sep–2 Sep 2025, 25 Sep 2025", "1 Feb–2 Feb, 10 Feb"]        # the Countries card's missing-day runs
+    assert y["one"] == ["4 Mar 2025", "4 Mar"]

@@ -283,3 +283,8 @@ def test_installs_never_opened_and_the_period(out):
               "cc_day", "cc_old", "cc_month_cols", "fail_line", "retry_ok"):
         assert a[k] is True, k
     assert a["loads_ads"] == 1 and a["b7_order"] == ["XA", "XB"]
+
+
+def test_dates_carry_their_year_when_not_in_the_reference_year(out):
+    assert out["yr_changed"]                                                            # "screens badle 20 Jun 2025, 31 Aug": an earlier year keeps its year
+    assert out["yr_gap"] == ["7 Dec 2025 – 10 Jan 2026", "22 Feb – 28 Mar"]            # the 35-day status window over New Year: both years; inside the year: short

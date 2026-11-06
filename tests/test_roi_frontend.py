@@ -1380,3 +1380,9 @@ def test_wiring():
     assert "const K=cardOf(t), sc=K?'#'+K.id+' ':'';" in p and "const paint=(K,n)=>K?benchPaint(n):repaint();" in p
     # a pack that lands repaints the card(s) waiting for it; the packs both cards wait for are kept
     assert "ensurePack(pk[0],pk[1],cd.b,ccLand); return wait; }" in p and "if(o===k||w.includes(o)){ i++; continue; }" in p
+
+
+def test_week_label_over_new_year_carries_both_years(out):
+    w = out["yr_weeks"]
+    assert "29 Dec 25–4 Jan 26" in w                                                    # the Monday-start week over New Year: each end with its year
+    assert "22 Dec–28 Dec 25" in w and "5 Jan–11 Jan 26" in w                           # a week inside one year keeps the short form

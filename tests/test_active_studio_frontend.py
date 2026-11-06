@@ -472,3 +472,12 @@ def test_the_owners_standard_picker_renders_every_choice(report):
     assert r["90"]["W"]["L"] == 90 and r["90"]["W"]["t"] == "2026-09-19" and not r["90"]["nc"]
     assert r["all"]["nc"] and r["all"]["W"]["cL"] == 0 and r["all"]["W"]["t"] == "2026-09-19"
     assert (m["W"]["f"], m["W"]["t"], m["W"]["L"]) == ("2026-08-01", "2026-08-31", 31)              # a picked month: all of it
+
+
+def test_dates_outside_the_reference_year_carry_their_year(report):
+    y = J(report, "years")
+    yr = lambda s: re.findall(r"\b\d{1,2} [A-Z][a-z]{2} 2026\b", s)
+    assert len(yr(y["next"]["tl"])) >= 3 and len(yr(y["next"]["pg"])) >= 3             # read in 2027: the axis ticks say 2026
+    assert y["next"]["ticks"] and all(t.endswith(" 2026") for t in y["next"]["ticks"])  # every tick label itself carries the year
+    assert y["now"]["ticks"] and not any(re.search(r"\b20\d\d\b", t) for t in y["now"]["ticks"])  # read in 2026: no year on a tick
+    assert yr(y["now"]["tl"]) == [] and yr(y["now"]["pg"]) == []                       # read in 2026: as short as before

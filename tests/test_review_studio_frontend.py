@@ -358,3 +358,13 @@ def test_chart_labels_never_overlap_at_any_width_and_keep_the_key_values(report)
     assert any(re.search(r"\b(?:Mo|Tu|We|Th|Fr|Sa|Su) \d", x) for x in L["xl"]["1280"])     # … a wide screen: the full ones
     html = _css()
     assert "function LB(){" in html and "function xAxis(" in html and "function tw(" in html
+
+
+def test_dates_outside_the_reference_year_carry_their_year(report):
+    y = report["years"]
+    yr = lambda s: re.findall(r"\b\d{1,2} [A-Z][a-z]{2} 2026\b", s)
+    assert set(yr(y["now"])) <= {"1 Oct 2026"}                                          # read in the card's own year: as short as before (only the day heading always says its year)
+    assert "Revenue by network · 24 Sep–30 Sep" in y["now"] and "Daily review · 1 Oct – 1 Oct" in y["now"]
+    assert len(yr(y["next"])) >= 10                                                     # read on 3 Jan 2027: the card's dates say 2026
+    assert "Revenue by network · 24 Sep 2026–30 Sep 2026" in y["next"]                 # a whole range in the past year: each end with its year
+    assert "Daily review · 1 Oct 2026 – 3 Jan 2027" in y["next"]                       # the History span over New Year: both ends

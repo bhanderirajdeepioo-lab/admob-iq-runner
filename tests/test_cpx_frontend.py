@@ -210,10 +210,10 @@ def test_d3_normal_never_turns_every_app_new(out):
     assert [st[k] for k in (A, B, C_, E_, Z, D)] == ["alarm", "watch", "ok", "ok", "ok", "new"]    # only the truly new app is New
     assert d["all"]["nrm"]["CPI"] == {"v": 20, "b": 0, "src": "Hin", "on": "2025-10-29"}
     assert d["all"]["a"]["ROAS_G"]["b"] == 1 and d["all"]["a"]["ROAS_G"]["src"] == "B"   # an episode open at the end: its baseline
-    assert "normal = 29 Oct level" in d["all"]["cell"]                                  # the cell says which normal it is
+    assert "normal = 29 Oct 2025 level" in d["all"]["cell"]                                  # the cell says which normal it is
     assert d["all"]["verdict"].startswith("Sab normal ke andar: CPI ₹20.0 → ₹20.0")
     e = d["early"]                                                                      # an early Custom (starts at day0)
-    assert set(e["st"].values()) == {"ok"} and e["nrm"]["ROAS_G"]["src"] == "Hin" and "normal = 29 Oct level" in e["cell"]
+    assert set(e["st"].values()) == {"ok"} and e["nrm"]["ROAS_G"]["src"] == "Hin" and "normal = 29 Oct 2025 level" in e["cell"]
     p = d["pre"]                                                                        # a period that ends before any healthy level exists
     assert set(p["st"].values()) == {"new"} and "no normal yet" in p["cell"]
     assert "history kam hai" not in p["verdict"] and p["verdict"].startswith("Normal nahi bana — period ke end tak")
@@ -235,11 +235,11 @@ def test_since_n_din_only_while_open_at_the_period_end(out):
     s = out["since"]
     c = s["closed"]                                                                     # December: the alarm closed on 20 Dec
     assert c["since"] == "2025-12-01" and not c["open"] and c["to"] == "2025-12-20" and not c["din"]
-    assert "spend ₹15.5 L · 1 Dec – 20 Dec" in c["text"] and "1 Dec – 20 Dec Fixed" in c["text"]
-    assert c["verdict"].startswith("D0 ROAS 1 Dec – 20 Dec normal se neeche rahi (ab band). Is period me 36.6% (normal 40.0%)")
+    assert "spend ₹15.5 L · 1 Dec – 20 Dec 2025" in c["text"] and "1 Dec – 20 Dec 2025 Fixed" in c["text"]   # (a past year keeps its year)
+    assert c["verdict"].startswith("D0 ROAS 1 Dec – 20 Dec 2025 normal se neeche rahi (ab band). Is period me 36.6% (normal 40.0%)")
     o = s["open_at_b"]                                                                  # 1–10 Dec: still open on the last day → "N din se"
-    assert o["open"] and "since 1 Dec (10 din)" in o["text"] and "1 Dec 10 din se" in o["text"]
-    assert o["verdict"].startswith("D0 ROAS 1 Dec se normal se neeche: 33.0% (normal 40.0%)")
+    assert o["open"] and "since 1 Dec 2025 (10 din)" in o["text"] and "1 Dec 2025 10 din se" in o["text"]
+    assert o["verdict"].startswith("D0 ROAS 1 Dec 2025 se normal se neeche: 33.0% (normal 40.0%)")
     assert "20 Mar – closed" in s["def_closed"]["text"] and "din se" not in s["def_closed"]["text"].split("Alarm")[0]   # the pointer lists open ones only
     assert s["def_closed"]["n"] == 1 and out["sc"]                                      # (a closed alarm is not an open Alarm) · the pointer's lost.sc is the default "since c"
 
@@ -253,7 +253,7 @@ def test_nav_badge_and_alerts_note_count_open_alert_episodes(out):
 def test_loss_math_baseline_and_ratio_column(out):
     lm = out["lm"]
     assert "÷ 36.0% = ≈$0.00 (normal period se ek din pehle ka healthy level" in lm["feb"]            # no open C0 episode: H the day before
-    assert "÷ 36.0% = ≈$1,573 (normal period ka pehla healthy level, 29 Oct" in lm["early"]          # before H exists: the first known inside
+    assert "÷ 36.0% = ≈$1,573 (normal period ka pehla healthy level, 29 Oct 2025" in lm["early"]          # before H exists: the first known inside
     assert "÷ 50.0% = ≈$3,031 (normal alarm se pehle ka" in lm["def"]                                 # an episode open at the end: its baseline
     assert out["lm_head"]                                                                             # Ratio right after Month
 
@@ -567,3 +567,18 @@ def test_levels_owner_actions_and_undo_stay_without_a_history_block(out):
     p = out["lvfix"]["nolv_pending"]                                               # no actions either: the saved ones are pending
     assert p["pending"] == 1 and p["undo"] == ["a-0000000000d1"] and p["pend"] == 1
     assert p["undo_post"] == [{"act": "undo", "ref": "a-0000000000d1"}]
+
+
+def test_dates_carry_their_year_when_not_in_the_reference_year(out):
+    y = out["yr"]                                                                       # synthetic build: reference year 2026, history from 1 Oct 2025
+    assert y["all"] == "1 Oct 2025 – 30 Mar 2026"                                       # All time crosses the year: both ends carry it
+    assert y["cus"] == "20 Dec 2025 – 6 Jan 2026"                                       # a Custom range over New Year
+    assert y["mon"] == "1 Dec – 31 Dec 2025"                                            # a past-year month: one year at the end
+    assert y["one"] == "3 Feb 2026"                                                     # a single day: with its year (as before)
+    assert y["d14"] == "15 Mar – 28 Mar 2026"                                           # the default stays as short as it was
+    assert y["rg"] == ["1 Mar – 31 Mar 2025", "1 Mar – 10 Mar", "23 Dec 2025 – 5 Jan 2026",
+                       "4 Mar", "4 Mar 2025", "1 Mar – 10 Mar 2026"]
+    assert y["fd"] == ["4 Mar", "4 Mar 2025"]                                          # a past-year single date gets its year
+    assert out["lv"]["ticks"][0].endswith("’25") and "Jan ’26" in out["lv"]["ticks"]    # chart month ticks: the first one and every January carry the year
+    assert out["lv"]["ticks_cur"] == ["May", "Jun", "Jul", "Aug", "Sep"]                # a chart inside the reference year: no year on any tick
+    assert out["lv"]["ticks_jan"] == ["Jan", "Feb", "Mar", "Apr"]                      # from 1 Jan of the reference year: January stays short

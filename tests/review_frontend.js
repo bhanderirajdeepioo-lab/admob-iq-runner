@@ -71,6 +71,10 @@ ctx.__MONEY = MONEY;
 scen('money_usd', `CURVIEW='USD'; __MONEY.map(a => rvMoney(a[0], a[1], a[2], a[3]))`);
 scen('money_inr', `(() => { CURVIEW='INR'; try { return __MONEY.map(a => rvMoney(a[0], a[1], a[2], a[3])); } finally { CURVIEW='USD'; } })()`);
 // ── layout rules (§C.5) ──
+// years: read on 3 Jan 2027 the review tab's dates from 2026 say their year; the open day's year stays short
+scen('years', `(() => { const keep = RV.idx; RV.idx = { open_day: '2027-01-03', go_live: '2026-09-28' };
+  try { return { past: rvFd('2026-12-30'), cur: rvFd('2027-01-02'), wk: rvWd('2026-12-30') + ', ' + rvFd('2026-12-30'), over: rvRange('2026-09-28', '2027-01-03'), same: rvRange('2027-01-01', '2027-01-03'),
+    old_same: rvRange('2026-09-28', '2026-10-05'), when_past: rvWhen('2026-12-29T04:44:00Z'), when_cur: rvWhen('2027-01-02T04:44:00Z') }; } finally { RV.idx = keep; } })()`);
 scen('layout', `rvLayout(__DOC, __S)`);
 scen('layout_empty', `rvLayout(__DOC, __S0)`);
 scen('eff', `(() => { const o = {}; for (const a of __DOC.apps) { o[a.key] = {}; for (const [f] of __DOC.feats) o[a.key][f] = rvEffSt(__DOC, __S, a.key, f); } return o; })()`);

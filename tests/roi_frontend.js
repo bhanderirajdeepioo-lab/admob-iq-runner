@@ -36,6 +36,9 @@ if (a < 0 || b < 0 || c0 < 0) { console.log(JSON.stringify({ errors: ['ROI modul
 // the page's shared month-mover helpers (the owner's standard picker, 4 Nov 2026) — every period picker calls them
 const MON0 = html.indexOf('// ---- the month mover'), MON1 = html.indexOf("// ---- a daily chart's period");
 const MONSRC = MON0 >= 0 && MON1 > MON0 ? html.slice(MON0, MON1) : '';
+// the page's shared date-with-year helpers (refYear / fmtDY / fmtRange)
+const YR0 = html.indexOf('// ---- dates with their year ----'), YR1 = html.indexOf('// ---- end: dates with their year ----');
+const YRSRC = YR0 >= 0 && YR1 > YR0 ? html.slice(YR0, YR1) : '';
 const src = MONSRC + html.slice(a, b + 1) + html.slice(c0, c1) + '\nthis.ROI=ROI;this.roiWrap=roiWrap;this.roiCardLine=roiCardLine;';
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const ctx = {
@@ -55,8 +58,8 @@ const T = [0, 1, 3, 7, 14, 30, 60, 90, 180, 365];
 const iso = d => d.toISOString().slice(0, 10);
 const day = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
 // an app file: 70 install days to 13 Oct; the newest 40 with day-by-day revenue ($1 a day, spend $10)
-function appFile() {
-  const rows = [], newest = '2026-10-13';
+function appFile(newest0) {
+  const rows = [], newest = newest0 || '2026-10-13';
   for (let i = 69; i >= 0; i--) {
     const X = day(newest, -i), age = i, exact = i < 40;
     const obs = Math.min(30, age), df = Math.max(0, Math.min(obs, age - 3) + 1);
@@ -2617,6 +2620,10 @@ async function benchReload(VW, file, packs) {
     out.bn_packs = { w375: await benchPacks(375, dc, PACKS), w1280: await benchPacks(1280, dc, PACKS) };
     out.bn_reload = { w375: await benchReload(375, dc, PACKS), w1280: await benchReload(1280, dc, PACKS) };
     }
+    // years: a week over New Year prints both ends with their year; a week inside a year keeps the short form
+    { const c9 = Object.assign({}, CTX0, { DATA: null, window: {} }); vm.createContext(c9); vm.runInContext(src, c9); const U9 = c9.ROI._;
+      U9.set('GRAIN', 'week'); U9.set('MET', 'roas'); const wkH = U9.cohortTable(appFile('2026-01-20'));
+      out.yr_weeks = [...wkH.matchAll(/(\d+ [A-Z][a-z]{2}(?: \d\d)?–\d+ [A-Z][a-z]{2} \d\d)/g)].map(m => m[1]).filter((v, i, a) => a.indexOf(v) === i); }
     // the hub card line
     const x = { st: 'normal', line: 'Money back in ~108 days' };
     ctx.roiCardLine(x, 'Alpha Pick');

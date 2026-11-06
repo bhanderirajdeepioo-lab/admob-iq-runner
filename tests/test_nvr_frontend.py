@@ -119,3 +119,10 @@ def test_a_picked_countrys_ad_unit_and_format_tables(out):
     i = out["uc_imps"]                                     # revenue whole, impressions a quarter: the eCPMs are wrong
     assert "ⓘ" in i and "kamai 100%" in i and "impressions 25%" in i and "first session +300%" in i and "✓" not in i
 
+
+
+def test_chart_axis_dates_carry_their_year_when_not_in_the_reference_year(out):
+    t = out["yr_ticks"]                                                                 # reference year pinned to 2026 by the harness
+    assert t["all"] == ["20 Jun 2024", "16 Apr 2025", "10 Feb"]                         # All time over three years
+    assert t["jan"] == ["20 Dec 2025", "30 Dec 2025", "10 Jan"]                         # a window over New Year
+    assert t["cur"] == ["1 Mar", "10 Mar", "20 Mar"]                                    # this year stays short

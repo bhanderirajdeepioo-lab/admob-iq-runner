@@ -407,3 +407,12 @@ def test_the_owners_standard_picker_renders_every_choice(report):
     assert r["tm"]["W"]["i1"] == r["7"]["W"]["i1"] and r["lm"]["W"]["i1"] <= r["tm"]["W"]["i0"] + 1
     assert r["all"]["nc"] and r["all"]["W"]["i0"] == 0 and r["all"]["W"]["cL"] == 0
     assert m["W"] == dict(r["lm"]["W"], empty=False, nc=False) or m["W"]["i0"] == r["lm"]["W"]["i0"]   # August = Last month's weeks
+
+
+def test_dates_outside_the_reference_year_carry_their_year(report):
+    y = J(report, "years")
+    yr = lambda s: re.findall(r"\b\d{1,2} [A-Z][a-z]{2} 2026\b", s)
+    assert len(yr(y["next"]["tl"])) >= 3                                               # read in 2027: the Timeline's axis ticks say 2026
+    assert yr(y["now"]["tl"]) == []                                                    # read in 2026: as short as before
+    a = y["all"]                                                                       # All time over New Year: both ends of a range carry their year
+    assert "21 Jul 2025–13 Sep 2026" in a["tl"] and "install hafte 21 Jul 2025 – 13 Sep 2026" in a["foot"]

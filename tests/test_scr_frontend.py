@@ -555,3 +555,15 @@ def test_banner_refresh_line(out):
     assert b["notime"] == [] and b["calm"] == [] and b["agg"] == [] and b["n"] == 1    # no engagement / 0.9 per view / aggregate row
     assert b["fn"] == [45, None, None, None]                                           # exactly 100 is not above 1 · aggregate · no file 2
     assert b["full"] is False and out["bn_alpha"] is False                             # not in Full-screen; Alpha is ~10 / 100
+
+
+def test_dates_carry_their_year_when_not_in_the_reference_year(out):
+    y = out["years"]                                                                     # reference year = the last final day's year (2026 here)
+    assert y["all"] == "All time (GA4 · 20 Jun 2024 – 30 Mar 2026) · not final"          # All time crosses years: both ends carry it
+    assert y["jan"] == "All time (GA4 · 9 Dec 2025 – 7 Jan 2026)"                        # a 30-day window over New Year
+    assert y["old"] == "All time (GA4 · 1 Mar – 31 Mar 2025)"                            # a whole past-year range: the year at the end
+    assert y["cur"] == "All time (GA4 · 27 Feb – 28 Mar)"                                # the reference year stays short
+    assert y["one_old"] == "All time (GA4 · 4 Mar 2025)" and y["one_cur"] == "All time (GA4 · 4 Mar)"
+    assert y["tip_week"].startswith("<b>28 Dec 2025 – 3 Jan 2026</b>") and y["tip_one"].startswith("<b>28 Dec 2025</b>")   # the New Year week: both years
+    assert y["ticks_all"] == ["20 Jun 2024", "1 Apr 2025", "1 Mar"]                      # the axis ticks of a multi-year chart (monthly buckets)
+    assert y["ticks_jan"] == ["9 Dec 2025", "23 Dec 2025", "7 Jan"]                      # over New Year: the December ticks carry 2025

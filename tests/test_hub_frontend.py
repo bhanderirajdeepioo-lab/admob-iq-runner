@@ -355,3 +355,21 @@ def test_first_open_tab_in_the_hub(report):
     # controls with Try again) in the hub, the classic layout the same bytes; each file fetched once (no retry loop)
     assert r["wait"] == {"cc": "XA", "loads": ["firstopen.json.gz", "firstopen_cc_fffffffffff0.json.gz"], "st": True, "tries": [True, True, True],
                          "line": True, "tables": True, "same": True}
+
+
+def test_dates_carry_their_year_when_not_in_the_builds_year(report):
+    r = O(report, "years")
+    assert r["T"][:4] == "2026"                                                         # the synthetic build's year
+    assert r["all"]["lbl"].startswith("14 Mar 2024–") and r["all"]["lbl"].endswith(" 2026 · 3d")   # All time over years: both ends carry theirs
+    assert r["all"]["dates"] == r["all"]["lbl"]
+    assert r["over"] == "9 Dec 2025–7 Jan 2026 · 3d"                                    # a 30-day window over New Year
+    assert r["past"] == "1 Mar–2 Mar 2025 · 2d" and r["cur"] == "1 Feb–2 Feb · 2d"      # a past-year range: the year at the end; this year: short
+    assert r["day"][:2] == ['<td class="nm">2 Jan</td>', '<td class="nm">31 Dec 2025</td>']   # Date-wise rows (newest first): only the other year says it
+    assert r["rv"][0].startswith("28 Dec 2025") and r["rv"][1].startswith("2 Jan")      # the review history list
+    assert r["fn"] == ["4 Mar 2025", "4 Mar", "23 Dec 2025–5 Jan 2026", "1 Mar–31 Mar 2025", "1 Mar–31 Mar", "4 Mar"]
+    assert r["bsy"] == [True, False, True]                                              # the daily charts' year switch: over New Year / a past year on; this year off
+    assert "By date number 28 Oct 2025 se hai" in r["d0"][0] and "5 Mar 2025 ka nahi hai" in r["d0"][0]   # the "By date" tip: a past-year baseline and day
+    assert "By date number 5 Jan se hai" in r["d0"][1] and "2 Jan ka nahi hai" in r["d0"][1]             # (this year: as short as before)
+    assert r["win"] == "No GA4 data for this period yet (GA4 data till 10 Mar 2025)"                       # an old data_till says its year
+    for k in ("uni", "act", "val"):                                                    # the three Alerts cards' "data till": a past-year day says its year
+        assert r["cards"][k] == ["28 Dec 2025", "5 Jan"], k

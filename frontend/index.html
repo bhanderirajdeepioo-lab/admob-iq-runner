@@ -4738,6 +4738,14 @@ function screenDiv(id){const d=document.createElement('section');d.className='sc
 function kpi(l,v,d,cls,spark){const n=String(v==null?'':v).replace(/<[^>]*>/g,'').replace(/&[a-z#0-9]+;/gi,'_').length, vl=n>15?' vl vxl':(n>12?' vl':'');
   return `<div class="card kpi"><div class="l">${l}</div><div class="v${vl}">${v}</div><div class="d ${cls||'muted'}">${d||''}</div>${spark||''}</div>`;}
 function fmtD(s){const p=String(s||'').split('-');if(p.length<3)return s||'';const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return (+p[2])+' '+(mo[(+p[1])-1]||'');}
+// ---- dates with their year ----
+// a label's date says its year when it is not in the reference year (the build's latest day, DATA.today_date; the browser's year without it)
+function refYear(){ const T=(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||''; return /^\d{4}-/.test(T)?T.slice(0,4):String(new Date().getFullYear()); }
+function fmtDY(s){ const y=String(s||'').slice(0,4); return fmtD(s)+(/^\d{4}$/.test(y)&&y!==refYear()?' '+y:''); }
+// a range "a–b": a day → its date; the ends in different years → both carry theirs; the same year → the year at the end, unless it is the reference year
+function fmtRange(a,b,sep){ sep=sep||'–'; if(!a) return b?fmtDY(b):''; if(!b||a===b) return fmtDY(a); const ya=String(a).slice(0,4), yb=String(b).slice(0,4);
+  return ya!==yb?fmtD(a)+' '+ya+sep+fmtD(b)+' '+yb:fmtD(a)+sep+fmtDY(b); }
+// ---- end: dates with their year ----
 function rangeSpan(k){if(!k||!k.from||!k.to)return '';const f=fmtD(k.from),t=fmtD(k.to);return (k.from===k.to?f:f+'–'+t)+(k.days?` · ${k.days}d`:'');}
 function fmtN(n){n=+n||0;if(n>=1e6)return (n/1e6).toFixed(1)+'M';if(n>=1e3)return (n/1e3).toFixed(1)+'k';return String(Math.round(n));}
 // ---- App filter (real, client-side over the daily data each placement already carries) ----
@@ -4955,11 +4963,11 @@ function curWinArr(){ const ax=gAxis(); let cf=RCUSTOM.from,ct=RCUSTOM.to;
   return windowDates(ax, RANGE, cf, ct); }
 function curWin(){ return new Set(curWinArr()); }
 function curWinLabel(){ const w=curWinArr(); if(!w.length) return 'is range me data nahi'; const a=w[0],b=w[w.length-1], r=a===b?relDay(a):'';
-  if(r) return r+' · '+fmtD(a)+(r==='Today'?' · live':'');   // owner: "5 Oct me Yesterday likho, 6 me Today" — one day says which
-  return (a===b?fmtD(a):fmtD(a)+'–'+fmtD(b))+' · '+w.length+'d'+(RANGE==='today'?' · live':''); }
+  if(r) return r+' · '+fmtDY(a)+(r==='Today'?' · live':'');   // owner: "5 Oct me Yesterday likho, 6 me Today" — one day says which
+  return fmtRange(a,b)+' · '+w.length+'d'+(RANGE==='today'?' · live':''); }
 // the window's dates alone (no "Today" / "Yesterday" word): for a caption that already names the period
 function curWinDates(){ const w=curWinArr(); if(!w.length) return 'is range me data nahi'; const a=w[0],b=w[w.length-1];
-  return (a===b?fmtD(a):fmtD(a)+'–'+fmtD(b)+' · '+w.length+'d')+(a===b&&relDay(a)==='Today'?' · live':''); }
+  return (a===b?fmtDY(a):fmtRange(a,b)+' · '+w.length+'d')+(a===b&&relDay(a)==='Today'?' · live':''); }
 // "Today" / "Yesterday" for the AdMob day of this build (DATA.today_date, the report's own time zone) and the one before; else ''
 function relDay(d){ const T=(typeof DATA!=='undefined'&&DATA&&DATA.today_date)||''; if(!d||!T) return ''; if(d===T) return 'Today';
   const t=Date.parse(T+'T00:00:00Z'); return isFinite(t)&&d===new Date(t-864e5).toISOString().slice(0,10)?'Yesterday':''; }
@@ -5474,7 +5482,7 @@ function hubOvHtml(name){ const acc=apkAcc(name).acc, R=hubRev(name), ac=hubAct(
   const sp=hubSpend(name), roas=sp&&sp.y>0?R.rev/sp.y:null, sc=sp&&sp.usual?(sp.y-sp.usual)/sp.usual:null;
   const kS=sp?kpi(`📣 Ad spend · ${DL}`,sp.y>0?mv(sp.y):'—',(sp.y>0?`ROAS ${roas.toFixed(2)}×`:'No spend')
       +(sp.usual?` · usual ${mv(sp.usual)}/day${sc!=null&&sp.y>0?` (${sc>=0?'+':'−'}${Math.abs(Math.round(sc*100))}%)`:''}`:(sp.y>0?'':' · Google Ads')),roas==null?'muted':(roas>=1?'up':'down')):'';
-  const D2=(typeof DATA!=='undefined'&&DATA)||{}, gaT=ac&&ac.data_till?` · GA4 till ${fmtD(ac.data_till)}`:'';
+  const D2=(typeof DATA!=='undefined'&&DATA)||{}, gaT=ac&&ac.data_till?` · GA4 till ${fmtDY(ac.data_till)}`:'';
   const su=_appStoreUrl(name);   // the app's logo + name: once, in the top bar's title (owner: "logo ek page me 3-3 jagah")
   return `<div class="hub-hd"><div class="hub-ac">${acc?'🅐 '+hAttr(acc)+' · ':''}AdMob till ${fmtD(D2.latest_complete)}${gaT}`
     +`${su?` · <a class="hub-ps" href="${hAttr(su)}" target="_blank" rel="noopener">Play Store ↗</a>`:''}</div></div>`
@@ -5602,7 +5610,7 @@ function hubRvHtml(){ const R=HUB.rv, name=APP;
     return `<div class="card hub-rd"><div class="hub-rdd">${hubRvDay(d)}<button type="button" class="lnk hub-rdo" onclick="hubRvGo('${d}')">Open card →</button></div>${hd}<div class="hub-rcs">${chips}</div><div class="hub-rst">${rs}</div></div>`; }).join('');
   const more=days.length>show.length?`<button type="button" class="hub-more" onclick="hubRvMore(14)">Show older days (${days.length-show.length} more)</button>`:'';
   return h+`<div class="hub-rl">${rows}</div>${more}`; }
-function hubRvDay(d){ const W=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], t=new Date(d+'T00:00:00Z'); return `<b>${fmtD(d)}</b> <span class="faint">${W[t.getUTCDay()]||''}</span>`; }
+function hubRvDay(d){ const W=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], t=new Date(d+'T00:00:00Z'); return `<b>${fmtDY(d)}</b> <span class="faint">${W[t.getUTCDay()]||''}</span>`; }
 // Review (left nav) at that day's History, the app's card open in its drawer once the day is in
 function hubRvGo(d){ const key=hubKeyOf(APP), od=(HUB.rv.idx&&HUB.rv.idx.open_day)||'', v=d===od?'today':'hist';
   try{ if(v==='hist') RV.histDay=d; RV.view=v; RVS.want(v); }catch(e){}
@@ -5642,7 +5650,7 @@ function dateWiseTable(rows,mode){
   const plF=(n)=>(n<0?'-':'')+csym()+Number(Math.abs(n)*cfx()).toLocaleString(undefined,{maximumFractionDigits:0});
   if(!rows.length) return '<div class="muted" style="font-size:13px;padding:16px 17px">Is range me kisi din ka data nahi.</div>';
   const head=`<thead><tr><th>${mon?'Month':'Date'}</th>${on?'<th>Spend</th><th>Google Ads installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">ads only · not all installs</div></th>':''}<th>Revenue</th>${on?'<th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − D0</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}</tr></thead>`;
-  const body=rows.slice().reverse().map(r=>`<tr><td class="nm">${mon?`${fmtMon(r.d)} <span class="faint" style="font-weight:500">· ${r.n}d</span>`:fmtD(r.d)}</td>${on?`<td>${r.spend>0?money(r.spend):'—'}</td><td>${r.inst?Math.round(r.inst).toLocaleString():'—'}</td>`:''}<td style="font-weight:700">${money(r.rev)}</td>${on?`<td>${r.newrev>0?money(r.newrev):'—'}</td><td class="${r.oldrev<0?'down':''}">${plF(r.oldrev)}</td><td class="${r.pl>=0?'up':'down'}">${plF(r.pl)}</td>`:''}</tr>`).join('');
+  const body=rows.slice().reverse().map(r=>`<tr><td class="nm">${mon?`${fmtMon(r.d)} <span class="faint" style="font-weight:500">· ${r.n}d</span>`:fmtDY(r.d)}</td>${on?`<td>${r.spend>0?money(r.spend):'—'}</td><td>${r.inst?Math.round(r.inst).toLocaleString():'—'}</td>`:''}<td style="font-weight:700">${money(r.rev)}</td>${on?`<td>${r.newrev>0?money(r.newrev):'—'}</td><td class="${r.oldrev<0?'down':''}">${plF(r.oldrev)}</td><td class="${r.pl>=0?'up':'down'}">${plF(r.pl)}</td>`:''}</tr>`).join('');
   const T=rows.reduce((t,r)=>({rev:t.rev+r.rev,spend:t.spend+r.spend,inst:t.inst+r.inst,newrev:t.newrev+r.newrev,oldrev:t.oldrev+r.oldrev,pl:t.pl+r.pl}),{rev:0,spend:0,inst:0,newrev:0,oldrev:0,pl:0});
   const foot=`<tr class="dw-tot"><td class="nm">Total · ${mon?rows.length+' months · ':''}${days}d</td>${on?`<td>${money(T.spend)}</td><td>${Math.round(T.inst).toLocaleString()}</td>`:''}<td>${money(T.rev)}</td>${on?`<td>${money(T.newrev)}</td><td class="${T.oldrev<0?'down':''}">${plF(T.oldrev)}</td><td class="${T.pl>=0?'up':'down'}">${plF(T.pl)}</td>`:''}</tr>`;
   return `<table style="margin-top:10px">${head}<tbody>${body}${foot}</tbody></table>`;
@@ -5791,7 +5799,7 @@ function renderOverview(){
       <div class="ov-apps card pad0"><div class="ct" style="padding:16px 17px 0"><h3>${APP?'This app':'Revenue by app'}</h3><span class="faint" style="font-size:11.5px">app pe tap = poori report · ↗ = Play Store</span></div>
         <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Google Ads installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">ads only · not all installs</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>Total Revenue</th>${SHOWSP?'<th>D0 rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads · '+(DATA.roas.d0?'by date / by 24h':'first 24h')+'</div></th><th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users · live</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − D0</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
       <div class="ov-datewise card pad0"><div class="ct" style="padding:16px 17px 0"><h3>Date-wise report <span class="faint" style="font-weight:400;font-size:11px">· latest ${dwRows.length} days</span></h3><span class="lnk" onclick="openDateWise('')">View more →</span></div>${dateWiseTable(dwRows)}</div>
-      <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v*cfx()),xlab:fmtD,color:'#3dd0f0',spend:SHOWSP?spendSeries:null,spendColor:'#e6b84e'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue</span>${SHOWSP?'<span><i class="dot" style="background:#e6b84e"></i> Ad spend</span>':''}<span class="faint" style="font-size:11px">· tap / hover a day for its numbers</span></div></div>
+      <div class="ov-chart card"><div class="ct"><h3>${trendTitle}</h3><span class="tag">${trendSeries.length} days</span></div>${bTrendChart(trendDates,trendSeries,{fmt:v=>csym()+fmtN(v*cfx()),xlab:d=>bDay(d,d.slice(0,4)!==refYear()),color:'#3dd0f0',spend:SHOWSP?spendSeries:null,spendColor:'#e6b84e'})}<div class="lgd"><span><i class="dot" style="background:#3dd0f0"></i> Daily revenue</span>${SHOWSP?'<span><i class="dot" style="background:#e6b84e"></i> Ad spend</span>':''}<span class="faint" style="font-size:11px">· tap / hover a day for its numbers</span></div></div>
       <div class="ov-movers card ov-coll${OVOPEN.movers?' open':''}"><div class="ct" onclick="ovToggle(this)"><h3>📈 Top movers</h3><span class="ov-chev"></span></div><div class="feed">${moversBody}</div></div>
       <div class="ov-attn card ov-coll${OVOPEN.attn?' open':''}"><div class="ct" onclick="ovToggle(this)"><h3>🔔 Needs attention</h3><span class="pill p-r">${(a.counts.critical||0)+(a.counts.warning||0)} alerts</span><span class="ov-chev"></span></div><div class="feed">${alertItems}</div></div>
     </div>`;
@@ -5947,7 +5955,7 @@ function ecCmpFrom(C){ return [C.cur[0],C.base[0]].filter(Boolean).sort()[0]||''
 function ecCDays(app,T){ const o=new Set(); Object.values((DATA.countries_daily||{})[app]||{}).forEach(rows=>(rows||[]).forEach(r=>{ if(r&&r[0]&&r[0]!==T) o.add(r[0]); })); return o; }
 function ecCMiss(K,dm,cd){ return [...new Set([...K.base,...K.cur])].filter(d=>{ const x=dm[d]; return x&&x[1]>=EC_MIN_IMPR&&!cd.has(d); }).sort(); }
 function ecRanges(days){ const o=[]; let a='',b='';   // "1 Sep–20 Sep, 25 Sep" (the first 4 runs, then how many more)
-  const put=()=>{ if(a) o.push(a===b?fmtD(a):fmtD(a)+'–'+fmtD(b)); };
+  const put=()=>{ if(a) o.push(fmtRange(a,b)); };
   (days||[]).forEach(d=>{ if(b&&ecNextDay(b)===d){ b=d; return; } put(); a=b=d; }); put();
   return o.length>4?o.slice(0,4).join(', ')+` +${o.length-4} more`:o.join(', '); }
 // this viewer's last pick. A value stored before the two Month vs month pickers (no v: its cm moved BOTH months, "Sep 2026 vs
@@ -5990,18 +5998,18 @@ function ecCmpCtl(W,C){ const M=ecMon(W), S=C.S, n=W.comp.length;
 // the All apps note: what is compared with what, on which days (the default keeps its words)
 function ecCmpNote(C,W){ const s=csym(), lead=`Sabse zyada <b>${s} nuksan</b> wali app sabse upar. `, tail=` ÷ 1,000 — sirf eCPM badalne se ${C.m==='m'?'roz':'kal'} kitna kam / zyada kamaya.`;
   if(C.def) return `${lead}<b>Change</b> = kal ka eCPM − last 7 days avg (kal samet 7 poore din). <b>${s} impact/day</b> = kal ke impressions × (kal ka eCPM − 7-day avg)${tail}`;
-  const kal=`kal (<b>${fmtD(W.L)}</b>) ka eCPM`, M=ecMon(W);
+  const kal=`kal (<b>${fmtDY(W.L)}</b>) ka eCPM`, M=ecMon(W);
   if(C.m==='y'&&C.n) return `${lead}<b>Change</b> = ${kal} − last ${C.n} days avg (kal samet ${C.n} poore din: <b>${ecSpan(C.base)}</b>). <b>${s} impact/day</b> = kal ke impressions × (kal ka eCPM − ${C.n}-day avg)${tail}`;
   if(C.m==='y') return `${lead}<b>Change</b> = ${kal} − <b>${C.baseL}</b> ka avg eCPM (<b>${ecSpan(C.base)}</b> ki kamai ÷ impressions × 1000`
-    +(C.bm===M.Lm&&!ecMFull(C.bm,C.base)?' — adhura mahina: sirf poore din, kal samet':(ecMFull(C.bm,C.base)?(C.bm===M.Lm?' — poora mahina, kal samet':''):` — data ${fmtD(C.base[0])} se hai, isliye sirf ${C.base.length} din`))
+    +(C.bm===M.Lm&&!ecMFull(C.bm,C.base)?' — adhura mahina: sirf poore din, kal samet':(ecMFull(C.bm,C.base)?(C.bm===M.Lm?' — poora mahina, kal samet':''):` — data ${fmtDY(C.base[0])} se hai, isliye sirf ${C.base.length} din`))
     +`). <b>${s} impact/day</b> = kal ke impressions × (kal ka eCPM − ${C.baseL} avg)${tail}`;
   return `${lead}<b>Change</b> = <b>${C.curL}</b> ka eCPM − <b>${C.baseL}</b> ka eCPM (har mahina = us mahine ki kamai ÷ impressions × 1000 · <b>${ecSpan(C.cur)}</b> vs <b>${ecSpan(C.base)}</b>).`
     +(ecMFull(C.cm,C.cur)?'':` <b>${C.curL}</b> adhura mahina hai — sirf poore din (aaj ka adhura din nahi).`)
-    +(ecMFull(C.pm,C.base)||!C.base.length?'':` <b>${C.baseL}</b> = data ${fmtD(C.base[0])} se hai, isliye sirf ${C.base.length} din.`)
+    +(ecMFull(C.pm,C.base)||!C.base.length?'':` <b>${C.baseL}</b> = data ${fmtDY(C.base[0])} se hai, isliye sirf ${C.base.length} din.`)
     +` <b>${s} impact/day</b> = ${C.curL} ke roz ke avg impressions (impressions ÷ ${C.cur.length} din) × (eCPM ka farq)${tail}`; }
 // the Ad units / Countries cards: one line with the exact days (nothing for the default)
 function ecCmpWhat(C,W){ if(C.def) return '';
-  return C.m==='y'?` Yahan: kal (<b>${fmtD(W.L)}</b>) vs <b>${C.baseL}</b> (${ecSpan(C.base)}).`
+  return C.m==='y'?` Yahan: kal (<b>${fmtDY(W.L)}</b>) vs <b>${C.baseL}</b> (${ecSpan(C.base)}).`
     :` Yahan: <b>${C.curL}</b> (${ecSpan(C.cur)}) vs <b>${C.baseL}</b> (${ecSpan(C.base)}) — ${csym()} impact/day = ${C.curL} ke roz ke avg impressions par.`; }
 function ecSortRows(rows,S){ const k=S.k, dir=S.d==='desc'?-1:1, lowLast=k!=='name'&&k!=='yi';
   const val=r=>k==='name'?String(r.label||'').toLowerCase():(k==='st'?EC_STO[r.st]:r[k]);
@@ -6050,7 +6058,7 @@ const EC_MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','
 function ecDL(d){ if(!d) return ''; const t=new Date(Date.UTC(+d.slice(0,4),+d.slice(5,7)-1,+d.slice(8,10)));
   return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][t.getUTCDay()]+', '+(+d.slice(8,10))+' '+EC_MO[+d.slice(5,7)-1]+' '+d.slice(0,4); }
 function ecML(m){ return m?(EC_MO[+m.slice(5,7)-1]||m)+' '+m.slice(0,4):''; }
-function ecSpan(days){ if(!days||!days.length) return ''; const a=days[0], b=days[days.length-1]; return a===b?fmtD(a):fmtD(a)+'–'+fmtD(b); }
+function ecSpan(days){ if(!days||!days.length) return ''; const a=days[0], b=days[days.length-1]; return fmtRange(a,b); }
 function ecYear(d){ return d?fmtD(d)+' '+d.slice(0,4):''; }
 // ---- the chart (an SVG drawn at its real width: 1 unit = 1 px, so its text is the same size on a phone) ----
 function ecChartSvg(pts,W,month){ const n=pts.length; if(!n) return null; const S=ecPtStats(pts); if(S.last<0) return null;
@@ -6088,7 +6096,7 @@ function ecChartSvg(pts,W,month){ const n=pts.length; if(!n) return null; const 
   pr+=`<circle cx="${f1(lx)}" cy="${f1(ly)}" r="4.6" fill="#3dd0f0" stroke="#0b1220" stroke-width="1.4"/>`+lbl(lAnchorX,lyT,ltxt,{a:'end',s:F.big,w:750});
   // x labels: days (≤120) · month starts (longer) · months; thinned from the end so two never touch
   const xs=[]; if(month) pts.forEach((p,i)=>xs.push([i,bMon(p.k)+(p.partial?'*':'')]));
-  else if(n<=120){ const step=Math.max(1,Math.ceil(n/Math.max(2,Math.floor(pw/(nar?58:70))))); for(let i=n-1;i>=0;i-=step) xs.push([i,fmtD(pts[i].k)]); }
+  else if(n<=120){ const step=Math.max(1,Math.ceil(n/Math.max(2,Math.floor(pw/(nar?58:70))))); for(let i=n-1;i>=0;i-=step) xs.push([i,fmtDY(pts[i].k)]); }
   else pts.forEach((p,i)=>{ if(i===0||p.k.slice(8,10)==='01') xs.push([i,bMon(p.k.slice(0,7))]); });
   const xw=t=>String(t).length*F.ax*.6; let xl='', left=1e9;
   xs.sort((a,b)=>b[0]-a[0]).forEach(([i,t])=>{ let x=X(i), an='middle'; if(x+xw(t)/2>W-1){ x=W-1; an='end'; } else if(x-xw(t)/2<1){ x=1; an='start'; }
@@ -6100,7 +6108,7 @@ function ecChartSvg(pts,W,month){ const n=pts.length; if(!n) return null; const 
   return {svg,W,H,mT,ph,xs:pts.map((p,i)=>X(i)),ys:pts.map(p=>p.ec!=null?Y(p.ec):null),S}; }
 // the tooltip of one point: date (or month), eCPM, earnings, impressions, the change vs the previous day / month
 function ecTipHtml(p,month,pin){ const d=p.pv!=null&&p.ec!=null?p.ec-p.pv:null, q=d!=null&&p.pv?d/p.pv:null;
-  const head=month?ecML(p.k)+(p.partial?` · so far (${p.n} ${p.n===1?'day':'days'})`:'')+(p.from?` · from ${fmtD(p.from)}`:''):ecDL(p.k);
+  const head=month?ecML(p.k)+(p.partial?` · so far (${p.n} ${p.n===1?'day':'days'})`:'')+(p.from?` · from ${fmtDY(p.from)}`:''):ecDL(p.k);
   return `<div class="d">${head}</div><div class="v">${ecCm(p.ec)}<small>eCPM</small></div>`
     +`<div class="r"><span>Earnings</span><b>${ecMoney((p.e||0)/1e6)}</b></div><div class="r"><span>Impressions</span><b>${Math.round(p.i||0).toLocaleString()}</b></div>`
     +`<div class="r"><span>vs previous ${month?'month':'day'}</span><b class="${ecCls(q)}">${d==null?'—':ecCmS(d)+' ('+ecPct(q)+')'}</b></div>`
@@ -6199,7 +6207,7 @@ function ecTodaySpark(app){ const X=DATA&&DATA.ecpm_intraday; if(!X||X.today!==D
     +(nw?`<circle cx="${X_(nw[0])}" cy="${Y_(nw[1])}" r="2.6" class="ec-spd"/>`:'')
     +`<line class="ec-spg" x1="0" y1="0" x2="0" y2="${H}" visibility="hidden"/></svg>`
     +`<div class="ec-spx"><span>12 AM</span><span>12 PM</span><span>12 AM</span></div>`
-    +`<div class="ec-spl"><span class="ec-spl-t">today</span><span class="ec-spl-y">yesterday${y.length>1?'':' · from '+fmtD(ecNextDay(DATA.today_date))}</span></div>`
+    +`<div class="ec-spl"><span class="ec-spl-t">today</span><span class="ec-spl-y">yesterday${y.length>1?'':' · from '+fmtDY(ecNextDay(DATA.today_date))}</span></div>`
     +`<div class="ec-sptip" hidden></div></div>`; }
 // eCPM so far at minute m of a day's points [minute, earnings micros, impressions] (between two points ≤ 3 h apart)
 function ecSpkVal(pts,m){ let a=null,b=null; for(const p of pts){ if(p[0]<=m) a=p; else { b=p; break; } } let v=null;
@@ -6227,14 +6235,14 @@ function ecPairSpark(dm,cur,prev,lc,lp,avg){ const ec=d=>{ const x=dm[d]; return
     +(p.filter(q=>q[1]!=null).length>1?`<path d="${path(p)}" class="ec-spy"/>`:'')+`<path d="${path(c)}" class="ec-spt0"/>`
     +(lastK>=0?`<circle cx="${X_(lastK)}" cy="${Y_(c[lastK][1])}" r="2.6" class="ec-spd"/>`:'')
     +`<line class="ec-spg" x1="0" y1="0" x2="0" y2="${H}" visibility="hidden"/></svg>`
-    +`<div class="ec-spx"><span>${fmtD(c[0][0])}</span><span>${fmtD(c[c.length-1][0])}</span></div>`
+    +`<div class="ec-spx"><span>${fmtDY(c[0][0])}</span><span>${fmtDY(c[c.length-1][0])}</span></div>`
     +`<div class="ec-spl"><span class="ec-spl-t">${hAttr(lc)}</span>${lp?`<span class="ec-spl-y">${hAttr(lp)}</span>`:''}${avg!=null?'<span class="ec-spl-a">7-day avg</span>':''}</div>`
     +`<div class="ec-sptip" hidden></div></div>`; }
 function ecPsAt(ev,el){ let d; try{ d=JSON.parse(el.getAttribute('data-s')); }catch(e){ return; } const r=el.getBoundingClientRect(); if(!r.width) return;
   const n=Math.max(d.c.length,d.p.length,2), fx=Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width)), k=Math.round(fx*(n-1)), x=k/(n-1);
   const g=el.querySelector('.ec-spg'), tip=el.querySelector('.ec-sptip'); if(!g||!tip) return; ecSpkOthers(el);
   g.setAttribute('x1',(x*240).toFixed(1)); g.setAttribute('x2',(x*240).toFixed(1)); g.setAttribute('visibility','visible');
-  const one=q=>q?`${fmtD(q[0])} <b>${q[1]!=null?cm(q[1]):'—'}</b>`:'';
+  const one=q=>q?`${fmtDY(q[0])} <b>${q[1]!=null?cm(q[1]):'—'}</b>`:'';
   tip.innerHTML=[one(d.c[k]),d.p.length?one(d.p[k]):'',d.avg!=null?`7-day avg <b>${cm(d.avg)}</b>`:''].filter(Boolean).join(' · '); tip.hidden=false;
   tip.style.left=Math.max(0,Math.min(r.width-tip.offsetWidth,x*r.width-tip.offsetWidth/2))+'px'; }
 // one tooltip at a time (a phone tap never "leaves" the chart it opened)
@@ -6251,8 +6259,8 @@ function ecKpis(dm,W,td){ const s=d=>ecSum(dm,d), y=s(W.y), w7=s(W.d7), p7=s(W.p
   const tsub=!(td&&td.T)?'':(sm?`(<b class="${ecCls((td.ec-ix.yEc)/ix.yEc)}">${ecPct((td.ec-ix.yEc)/ix.yEc)}</b> vs kal isi samay <b>${cm(ix.yEc)}</b>)`
       :(td.ec!=null&&y.ec?`(<b>${ecPct((td.ec-y.ec)/y.ec)}</b> vs yesterday <b>${cm(y.ec)}</b> · poora din)`:`<span class="faint">${td.i?'yesterday: —':'aaj ka data abhi nahi aaya'}</span>`))
     +(ix&&ix.hEc!=null?`<span class="ec-w ec-hr">pichhle ${ix.hrM} min: <b>${cm(ix.hEc)}</b>${ix.yhEc!=null?` · kal isi waqt <b>${cm(ix.yhEc)}</b>`:''}</span>`:'')
-    +w(fmtD(td.T)+(ix&&ix.m!=null&&!ix.none?' · '+ecHm(ix.m)+' tak':' · ab tak')+(td.i?' · '+fmtN(td.i)+' impr':'')+(td.i&&td.i<EC_MIN_IMPR?' · low data':'')+' · not final'
-      +(ix&&!sm&&ix.since?(ix.since>=td.T?` · kal-isi-samay tulna ${fmtD(ecNextDay(td.T))} se`:' · kal isi samay ka point nahi'):''));
+    +w(fmtDY(td.T)+(ix&&ix.m!=null&&!ix.none?' · '+ecHm(ix.m)+' tak':' · ab tak')+(td.i?' · '+fmtN(td.i)+' impr':'')+(td.i&&td.i<EC_MIN_IMPR?' · low data':'')+' · not final'
+      +(ix&&!sm&&ix.since?(ix.since>=td.T?` · kal-isi-samay tulna ${fmtDY(ecNextDay(td.T))} se`:' · kal isi samay ka point nahi'):''));
   const tt=td&&td.T?kpi('Today eCPM · live',ecCm(td.ec),tsub,'muted',ecTodaySpark(td.app||'')):'';
   const y8=W.comp.slice(-8);   // Yesterday's chart: the 8 days up to it, and the 7-day avg it is compared with
   return `<div class="row ${tt?'c5':'c4'} ec-kpis">${tt}${kpi('Yesterday eCPM',ecCm(y.ec),cmp(y,w7,'7-day avg')+w(ecSpan(W.y)+(y.i?' · '+fmtN(y.i)+' impr':'')),'muted',ecPairSpark(dm,y8,null,'daily','',w7.ec))}`
@@ -6267,14 +6275,14 @@ function ecChartCard(){ const W=EC.W||ecWin(), dm=ecChartDm(), first=EC.app?ecFi
   const seg=(cur,fn,opts)=>`<div class="ec-seg" role="group">${opts.map(([v,l])=>`<button type="button" class="${cur===v?'on':''}" aria-pressed="${cur===v}" onclick="${fn}('${v}')">${l}</button>`).join('')}</div>`;
   const S=ecPtStats(pts), nm=EC.app?ecAppLbl(EC.app).label:'all apps';
   const dl=pts.length?(mo?ecML(pts[0].k)+' – '+ecML(pts[pts.length-1].k)+' · '+pts.length+' months':ecYear(pts[0].k)+' – '+ecYear(pts[pts.length-1].k)+' · '+pts.length+' days'):'';
-  const facts=S.last>=0?`<b>${dl}</b> · latest <b>${cm(pts[S.last].ec)}</b> · avg <b>${S.avg!=null?cm(S.avg):'—'}</b> · min <b>${cm(pts[S.min].ec)}</b> (${mo?bMon(pts[S.min].k):fmtD(pts[S.min].k)}) · max <b>${cm(pts[S.max].ec)}</b> (${mo?bMon(pts[S.max].k):fmtD(pts[S.max].k)})`:(EC.r==='today'?'Aaj ka din abhi chal raha hai — chart sirf poore din dikhata hai; aaj ka live eCPM upar Today tile me hai.':'Is range me data nahi.');
+  const facts=S.last>=0?`<b>${dl}</b> · latest <b>${cm(pts[S.last].ec)}</b> · avg <b>${S.avg!=null?cm(S.avg):'—'}</b> · min <b>${cm(pts[S.min].ec)}</b> (${mo?bMon(pts[S.min].k):fmtDY(pts[S.min].k)}) · max <b>${cm(pts[S.max].ec)}</b> (${mo?bMon(pts[S.max].k):fmtDY(pts[S.max].k)})`:(EC.r==='today'?'Aaj ka din abhi chal raha hai — chart sirf poore din dikhata hai; aaj ka live eCPM upar Today tile me hai.':'Is range me data nahi.');
   const hist=first&&W.L?`Poori history: <b>${ecYear(first)}</b> se <b>${ecYear(W.L)}</b> tak (${W.comp.filter(d=>d>=first).length.toLocaleString()} din) — <b>All time</b> pe sab.`:'';
   return `<div class="ct"><h3>📈 ${mo?'Monthly':'Daily'} eCPM · ${hAttr(nm)}</h3><span class="faint" style="font-size:11.5px">hover / tap = us ${mo?'mahine':'din'} ke numbers</span></div>
     <div class="ec-ctl">${seg(EC.r,'ecSetR',EC_RS)}<div class="ec-seg" role="group" aria-label="Month">${monMover(EC.r,W.T||W.L||'',first||W.comp[0]||'',(k,l,on,dis,ar)=>`<button type="button" class="${on?'on':''}" aria-pressed="${on}" aria-label="${ar}"${dis?' disabled':` onclick="ecSetR('${k}')"`}>${l}</button>`)}</div>${seg(EC.g,'ecSetG',[['day','Day'],['month','Month']])}</div>${EC.r==='custom'?stdCusBox('ec-cus',first||W.comp[0]||'',W.L||'',EC.cf,EC.ct,'ecSetCus'):''}
     <div class="ec-chw" id="ec-chw"><div class="ec-svgw"></div><div class="ec-tip" role="status" aria-live="polite"></div></div>
     <div class="ec-lg"><span><i style="background:#3dd0f0"></i>eCPM</span><span><i class="ec-la"></i>range avg</span><span><i class="ec-lb"></i>impressions (faint)</span><span><i style="background:#34d99a"></i>max</span><span><i style="background:#ff6b6b"></i>min</span></div>
     <div class="ec-note">${facts}</div>
-    <div class="ec-note">${mo?'Month = mahine ki kamai ÷ mahine ke impressions × 1000. '+(pts.length&&pts[pts.length-1].partial?`<b>${bMon(pts[pts.length-1].k)}*</b> = abhi tak (adhura mahina). `:''):''}Aaj${W.T?' ('+fmtD(W.T)+')':''} ka adhura din kahin shamil nahi — sirf poore din. ${hist}</div>`; }
+    <div class="ec-note">${mo?'Month = mahine ki kamai ÷ mahine ke impressions × 1000. '+(pts.length&&pts[pts.length-1].partial?`<b>${bMon(pts[pts.length-1].k)}*</b> = abhi tak (adhura mahina). `:''):''}Aaj${W.T?' ('+fmtDY(W.T)+')':''} ka adhura din kahin shamil nahi — sirf poore din. ${hist}</div>`; }
 function ecDraw(){ const w=document.getElementById('ec-chw'), C=EC.ch; if(!w||!C) return; const box=w.querySelector('.ec-svgw'); if(!box) return;
   const W=Math.max(260,Math.round(w.clientWidth||btcGuessW())); const g=ecChartSvg(C.pts,W,C.month); C.g=g; C.cw=W;
   box.innerHTML=g?g.svg:'<div class="faint" style="font-size:12.5px;padding:24px 4px">Is range me data nahi.</div>';
@@ -6316,7 +6324,7 @@ function ecPaint(){ const s=(EC.el&&EC.el.isConnected!==false)?EC.el:document.qu
   if(!EC.cmp) EC.cmp=ecCmpLoad();                       // the tables' comparison: this viewer's last pick, made safe for this data
   { const fx=ecCmpFix(W,EC.cmp); if(JSON.stringify(fx)!==JSON.stringify(EC.cmp)){ EC.cmp=fx; ecCmpSave(); } }
   const C=ecCmpC(W,EC.cmp), ctl=ecCmpCtl(W,C); EC.C=C;
-  const A=ecAgg(), first=W.comp[0]||'', T=W.T?` · aaj (${fmtD(W.T)}) ka adhura din sirf <b>Today</b> tile me (chart / table me nahi)`:'';
+  const A=ecAgg(), first=W.comp[0]||'', T=W.T?` · aaj (${fmtDY(W.T)}) ka adhura din sirf <b>Today</b> tile me (chart / table me nahi)`:'';
   const hint=`<b>eCPM = har 1,000 ads (impressions) pe kamai</b> = kamai ÷ impressions × 1000 · data till <b>${ecYear(W.L)}</b>${T}`;
   let h;
   if(!EC.app){
@@ -7180,7 +7188,7 @@ function allHtml(){ const ok=new Set((RAW.apps||[]).filter(a=>vis(a.app_id)).map
   return `<div class="fo-chips" role="group" aria-label="Filter by status">${['Worse','Watch','Better','Normal','Too early','N/A'].map(k=>`<button type="button" class="fo-chip st-${ST_KEY[k]}" data-fo-filt="${k}" aria-pressed="${FILT===k}"><span>${WD.sti[ST_KEY[k]]}</span> <b>${c(k)}</b></button>`).join('')}</div>`
     +`<div class="card fo-card"><div class="ct"><h3>All apps · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">app pe tap = us app ka poora funnel · column pe tap = sort · status chip pe tap = sirf wo apps</span></div>`
     +`<div id="fo-tb">${tableHtml()}</div></div>`
-    +`<p class="fo-note">Final till ${fmtD(till)} (aakhri 2 din GA4 me abhi badalte hain). Status = Splash → Home pichhle 7 final din vs usse pehle ke 28 din: 5 pts gira Worse, 2 pts Watch, 5 pts badha Better. 200 se kam Splash users (7 din) = N/A, 35 din se kam history = Too early.</p>`; }
+    +`<p class="fo-note">Final till ${fmtDY(till)} (aakhri 2 din GA4 me abhi badalte hain). Status = Splash → Home pichhle 7 final din vs usse pehle ke 28 din: 5 pts gira Worse, 2 pts Watch, 5 pts badha Better. 200 se kam Splash users (7 din) = N/A, 35 din se kam history = Too early.</p>`; }
 // ---- one app ----
 function months(rows){ const m=new Map(); for(const r of rows){ const k=r[0].slice(0,7); if(!m.has(k)) m.set(k,[]); m.get(k).push(r); } return [...m.entries()].reverse(); }
 function stepBars(a,x){ const out=[]; for(const k of ['intro','language','permission','home']){ if(k!=='home'&&!(a.steps||{})[k]) continue;
@@ -7196,7 +7204,7 @@ function appHtml(a,x,top,board,inM,inD){ const rows=a.days||[], fin=rows.filter(
     +`<tr><td>Splash → Home</td><td>${cell(t,sh)}</td><td>${cell(y,sh)}</td><td><b>${P(x.s2h)}</b></td><td>${P(x.usual)}</td></tr>`
     +`<tr><td>Incl. late open</td><td>${cell(t,sa)}</td><td>${cell(y,sa)}</td><td>${P(x.s2h_any)}</td><td>—</td></tr></tbody></table></div>`
     +`<p class="fo-note">Today aur Yesterday abhi final nahi. Screens counted: ${scr}.${x.sample!=null?` <span class="fo-smp">≈</span> = GA4 ne is app ke funnel me sirf ~${Math.max(1,Math.round(x.sample*100))}% data padha (sampling): users ki ginti lagbhag hai, % ka direction sahi.`:''}</p>`;
-  return `<div class="fo-crumb"><button type="button" class="fo-back" data-fo-all="1">← All apps</button><span>${chip(x.status)}${x.why?` <small>${E(x.why)}</small>`:''} · history ${fmtD(a.first_day)} ${a.first_day.slice(0,4)} se${(a.steps_changed||[]).length?' · screens badle '+(a.steps_changed||[]).map(c=>fmtD(c.at)).join(', '):''}</span></div>`
+  return `<div class="fo-crumb"><button type="button" class="fo-back" data-fo-all="1">← All apps</button><span>${chip(x.status)}${x.why?` <small>${E(x.why)}</small>`:''} · history ${fmtD(a.first_day)} ${a.first_day.slice(0,4)} se${(a.steps_changed||[]).length?' · screens badle '+(a.steps_changed||[]).map(c=>fmtDY(c.at)).join(', '):''}</span></div>`
     +(top||'')+`<div class="card fo-card"><div class="ct"><h3>Today · Yesterday · last 7 days · usual</h3></div>${mini}</div>`
     +`<div class="fo-grid"><div class="card fo-card"><div class="ct"><h3>Steps · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">Splash dekhne walon me se kitne kram me aage aaye · patli bar = usual</span></div>${stepBars(a,x)}</div>`
     +`<div class="card fo-card"><div class="ct"><h3>Every day · full history</h3><span class="faint" style="font-size:11.5px">hover / tap = us din ke numbers</span></div><div class="fo-chart" id="fo-chart"></div>`
@@ -7283,7 +7291,7 @@ const yd=s=>`${fmtD(s)} ${String(s).slice(0,4)}`;
 function ccWhen(d){ return `${yd(d.first_day)} – ${yd(ccLast(d))}`; }
 function ccGapNote(d){ const m=+d.missing||0, ft=d.final_till; if(!(m>0)||!ft) return '';
   const lo=d.first_day>addD(ft,-34)?d.first_day:addD(ft,-34);
-  return `<p class="fo-note fo-ccgap">⚠️ Status ke liye ${fmtD(lo)} – ${fmtD(ft)} ke saare din ka country data chahiye — inme se <b>${m} din</b> abhi nahi padhe (country data ${ccWhen(d)}; backfill chal raha hai ya country fetch peeche hai). Isliye abhi status <b>Too early</b>, aur "last 7 days" / usual sirf ${fmtD(ft)} tak ke lagatar dino ka (beech ka gap kabhi joda nahi).</p>`; }
+  return `<p class="fo-note fo-ccgap">⚠️ Status ke liye ${fmtRange(lo,ft,' – ')} ke saare din ka country data chahiye — inme se <b>${m} din</b> abhi nahi padhe (country data ${ccWhen(d)}; backfill chal raha hai ya country fetch peeche hai). Isliye abhi status <b>Too early</b>, aur "last 7 days" / usual sirf ${fmtDY(ft)} tak ke lagatar dino ka (beech ka gap kabhi joda nahi).</p>`; }
 // (a picked country's view says the dates once — the note under its Country control — and the missing steps once — the
 // Every day card: the board's note leaves both out there)
 function perCtl(a,ad){ const L=[['today','Today'],['yday','Yesterday'],['7','7 days'],['tm','This month'],['lm','Last month'],['30','30 days'],['60','60 days'],['90','90 days'],['all','All time'],['cus','Custom']];   // the owner's standard picker (3 Nov 2026)
@@ -7369,7 +7377,7 @@ function ccAppHtml(a,x,d,c){ const rows=c.days, ft=c.final_till, at=k=>{ const t
       if(!rs.length) return `<tr class="fo-old"><td class="fo-nm">${fmtMon(m)}${o.gone?` <small class="fo-mx">· ${o.gone}d First opens only</small>`:''}${x?` <small class="fo-mx">· ${x}</small>`:''}</td><td>${o.gone&&!o.nofo?N(o.fo):'—'}</td>${adsTds(a,av)}<td>—</td><td>—</td><td>—</td><td>—</td></tr>`;
       return `<tr><td class="fo-nm">${SMP(low(rs))}${fmtMon(m)} <small>· ${rs.length}d</small>${x?` <small class="fo-mx">· ${x}</small>`:''}</td><td>${N(sum(rs,'first_open'))}</td>${adsTds(a,av)}<td>${N(sum(rs,'splash'))}</td><td>${N(sum(rs,'home'))}</td><td><b>${P(rate(sum(rs,'home'),sum(rs,'splash')))}</b></td><td>${P(rate(sum(rs,'splash'),sum(rs,'first_open')))}</td></tr>`; }).join('')
     +`</tbody></table></div>`;
-  const gapRow=(lo,hi)=>`<tr class="fo-gap"><td colspan="${adsPtr(a)?10:6}">↕ ${dd(lo,hi)+1} din (${fmtD(lo)} – ${fmtD(hi)}): abhi padhe ja rahe hain (backfill chal raha hai)</td></tr>`;
+  const gapRow=(lo,hi)=>`<tr class="fo-gap"><td colspan="${adsPtr(a)?10:6}">↕ ${dd(lo,hi)+1} din (${fmtRange(lo,hi,' – ')}): abhi padhe ja rahe hain (backfill chal raha hai)</td></tr>`;
   const dayCell=(k,t)=>`<td class="fo-nm">${fmtD(k)} ${k.slice(0,4)} <small>· ${t}</small></td>`;
   let body='', run=null, nGone=0;   // run = [oldest, newest] of the days not read yet being walked (newest first)
   const last=cal.length?cal[cal.length-1]:'', av1=k=>ADY[k]?[[k,ADY[k]]]:[];
@@ -7424,7 +7432,7 @@ function drawChart(a){ const box=document.getElementById('fo-chart'); if(!box) r
   let nf=rows.findIndex(r=>r[0]>a.final_till); if(nf<0) nf=n;   // the first not-final day (the last 2: GA4 still adds to them)
   const fin=pts=>pts.slice(0,nf), tail=pts=>nf<n?pts.slice(Math.max(0,nf-1)):[];
   const grid=[0,0.25,0.5,0.75,1].map(v=>`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}" class="g"/><text x="${m.l-6}" y="${Y(v)+4}" text-anchor="end">${Math.round(v*100)}%</text>`).join('');
-  const ticks=[0,Math.floor((n-1)/2),n-1].map(i=>`<text x="${X(i)}" y="${H-6}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${fmtD(rows[i][0])}</text>`).join('');
+  const ticks=[0,Math.floor((n-1)/2),n-1].map(i=>`<text x="${X(i)}" y="${H-6}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${fmtDY(rows[i][0])}</text>`).join('');
   const lastOf=pts=>{ for(let k=pts.length-1;k>=0;k--) if(pts[k][1]!=null) return pts[k]; return null; };
   const sh=ser('h'), so=ser('o'), lh=lastOf(fin(sh)), lo=lastOf(fin(so));
   box.innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Splash to Home and Opened app, every day">${grid}${ticks}`
@@ -7492,7 +7500,7 @@ function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector
   if(a&&CHART) drawChart(CHART); }
 function show(){ paint(); }
 function left(){ }
-return {ptr, ensure, render, paint, show, left, card, ready:()=>!!RAW&&!!ptr(), _:{appOf, nameOf, tableHtml, sum, rate, appHtml, ccTop, ccSlot, ccIn, ccWait, ccFrom, CC_COLS, pick, ccRows, ccData, ccFill, ccNone, noneTip, hold, cc:()=>CC, ccTable, ccBoard, monthTable, dayTable, perRange, perAds, perFunnel, adsData, per,
+return {ptr, ensure, render, paint, show, left, card, ready:()=>!!RAW&&!!ptr(), _:{ccGapNote, appOf, nameOf, tableHtml, sum, rate, appHtml, ccTop, ccSlot, ccIn, ccWait, ccFrom, CC_COLS, pick, ccRows, ccData, ccFill, ccNone, noneTip, hold, cc:()=>CC, ccTable, ccBoard, monthTable, dayTable, perRange, perAds, perFunnel, adsData, per,
   setPer:(k,f,t)=>{ PER=k; PF=f||''; PTO=t||''; }, ADS}};
 })();
 function renderFirstOpen(){ return FO.render(); }
@@ -7552,7 +7560,14 @@ const PU=v=>ok(v)?(v>=100?Math.round(v).toLocaleString('en-US'):v>=10?(Math.roun
 const secs=v=>!ok(v)?'—':v>=10?Math.round(v)+' s':v>=1?(Math.round(v*10)/10).toFixed(1)+' s':(Math.round(v*100)/100).toFixed(2)+' s';
 const DAY=864e5, t0=s=>Date.parse(s+'T00:00:00Z'), iso=t=>new Date(t).toISOString().slice(0,10), addD=(s,k)=>iso(t0(s)+k*DAY);
 const nD=(a,b)=>Math.round((t0(b)-t0(a))/DAY)+1, okD=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&isFinite(t0(s));
-const fd=s=>{ try{ return fmtD(s); }catch(e){ return String(s||''); } }, fdy=s=>s?fd(s)+' '+String(s).slice(0,4):'—';
+// dates: the year is printed whenever a date is not in the reference year (the year of the file's last final day; the browser's before a screen is drawn)
+let RYR='';
+const fd0=s=>{ try{ return fmtD(s); }catch(e){ return String(s||''); } }, fdy=s=>s?fd0(s)+' '+String(s).slice(0,4):'—';
+const refY=()=>RYR||String(new Date().getFullYear());
+const fd=s=>{ const y=String(s||'').slice(0,4); return fd0(s)+(/^\d{4}$/.test(y)&&y!==refY()?' '+y:''); };
+// a range: a day → its date; both ends keep their year when they differ; same year → the year at the end only (end=true: always), none in the reference year
+const rg=(lo,hi,end)=>{ if(!hi||lo===hi) return end?fdy(lo):fd(lo); if(String(lo).slice(0,4)!==String(hi).slice(0,4)) return fdy(lo)+' – '+fdy(hi);
+  return fd0(lo)+' – '+(end||String(hi).slice(0,4)!==refY()?fdy(hi):fd0(hi)); };
 const vis=id=>{ try{ return uniVis(id); }catch(e){ return true; } };   // the apps hidden in Settings stay hidden here too
 const quiet=f=>{ try{ if(typeof SP!=='undefined'&&SP&&SP.quietly) SP.quietly(f); else f(); }catch(e){} };
 const phone=()=>{ try{ return (+window.innerWidth||1280)<=720; }catch(e){ return false; } };
@@ -7603,7 +7618,7 @@ function normWin(x,lo,hi){ const L=Math.max(28,nD(lo,hi)), e0=addD(lo,-1), e=e0<
 function finals(x,lo,hi){ const a=x.d0&&lo<x.d0?x.d0:lo, b=hi<x.ft?hi:x.ft; return a>b?0:nD(a,b); }
 function perName(k){ if(monOf(k)) return monName(monOf(k)); const p=PERS.find(z=>z[0]===k); return p?p[1]:k; }
 // the period's line: "Today (GA4 · 4 Nov) · not final", "30 days (GA4 · 5 Oct – 3 Nov)"
-function perLine(x,lo,hi){ return `${E(perName(PER))} (GA4 · ${lo===hi?fd(lo):fd(lo)+' – '+fd(hi)}${lo.slice(0,4)!==hi.slice(0,4)?' '+hi.slice(0,4):''})${hi>x.ft?' · not final':''}`; }
+function perLine(x,lo,hi){ if(okD(x.ft)) RYR=x.ft.slice(0,4); return `${E(perName(PER))} (GA4 · ${rg(lo,hi)})${hi>x.ft?' · not final':''}`; }
 // ---- the period's numbers (JS; the status, its why and the cause are the file's) ----
 const dIx=(x,d)=>Math.round((t0(d)-t0(x.d0))/DAY);
 // the app's day indexes of [lo, hi] on its own calendar (from d0): spanK hands the index only (the period sums and the
@@ -7835,12 +7850,12 @@ function tilesIn(x,id,lo,hi){ const all=PER==='all', s=appScore(x,lo,hi,all), a=
     +`${tile('Full-screen / 100',R(p.fr),scoreTxt(s.fs,s.muted,all)+basis)}${puTile(x,id,lo,hi)}`
     +tile('Status',`${+a[2]||0} Worse · ${+a[3]||0} Watch`,'pichhle 10 final din vs 28 pehle','sc-kst'); }
 function tilesHtml(x,id,lo,hi){ return `<div class="sc-tiles sc-five sc-x" id="sc-tiles">${tilesIn(x,id,lo,hi)}</div>`; }
-function attnHtml(x){ const items=x.items||[], w=statWin(x), rows=[];
+function attnHtml(x){ const items=x.items||[], w=statWin(x), rows=[]; if(okD(x.ft)) RYR=x.ft.slice(0,4);
   items.forEach((it,i)=>{ const s=stOf(x,i); if(s&&judged(it)) rows.push({i,it,s}); });
   const bad=rows.filter(r=>r.s[0]==='Worse'||r.s[0]==='Watch').sort((a,b)=>rankOf(a.s[0])-rankOf(b.s[0])||(+a.s[2]||0)-(+b.s[2]||0)).slice(0,5);
   const one=r=>{ const qn=sumItem(x,r.i,w.N[0],w.N[1]), qw=sumItem(x,r.i,w.W[0],w.W[1]);
     return `<div class="sc-at">${chip(r.s[0])}<span class="sc-atn" title="${E(itemTitle(r.it))}">${itemName(r.it)}</span><span class="sc-atr">ads/100 ${R(qn.rate)} → ${R(qw.rate)} (${PC(qn.rate,qw.rate)})</span>${r.s[3]?`<span class="sc-atc">${E(r.s[3])}</span>`:''}<button type="button" class="sc-lnk" data-sc-open="${r.i}">Details ▸</button></div>`; };
-  if(bad.length) return `<div class="card sc-card" id="sc-attn"><div class="ct"><h3>Needs attention</h3><span class="sc-faint">pichhle 10 final din (${fd(w.W[0])} – ${fd(w.W[1])}) vs usse pehle ke 28</span></div>${bad.map(one).join('')}</div>`;
+  if(bad.length) return `<div class="card sc-card" id="sc-attn"><div class="ct"><h3>Needs attention</h3><span class="sc-faint">pichhle 10 final din (${rg(w.W[0],w.W[1])}) vs usse pehle ke 28</span></div>${bad.map(one).join('')}</div>`;
   const good=rows.filter(r=>r.s[0]==='Better').slice(0,5), fine=rows.some(r=>r.s[0]==='Normal'||r.s[0]==='Better'), a=Array.isArray(x.app)?x.app:[];
   if(!fine) return `<div class="card sc-card" id="sc-attn"><div class="ct"><h3>Needs attention</h3></div><p class="sc-note">Abhi koi screen judge nahi ho saki${a[1]?': '+E(a[1]):' (data kam ya din whole nahi)'} — numbers neeche hain, status nahi.</p></div>`;
   return `<div class="card sc-card" id="sc-attn"><div class="ct"><h3>Needs attention</h3></div><p class="sc-ok">✅ Sab screens normal</p>${good.map(one).join('')}</div>`; }
@@ -8132,7 +8147,7 @@ function appHtml(id){ const x=ALL.apps[id], a=Array.isArray(x.app)?x.app:[];
   return crumb+`<div class="card sc-card sc-stk" id="sc-stk">${perCtl(x)}</div>`+tilesHtml(x,id,lo,hi)+attnHtml(x)+miniHtml(x)+segHtml(x,id,lo,hi)+ddHtml(x,id,lo,hi)
     +`<div class="sc-folds" id="sc-folds">${foldsHtml(x,id,lo,hi)}</div>`; }
 // ---- the chart: ads / 100 views (line) + views (bars, second axis) + the normal (dashed), printed: latest + average ----
-function chartModel(days,nrate,ft){ const n=days.length, by=n>540?'m':n>120?'w':'d', B=[];
+function chartModel(days,nrate,ft){ if(okD(ft)) RYR=ft.slice(0,4); const n=days.length, by=n>540?'m':n>120?'w':'d', B=[];
   days.forEach((r,k)=>{ const [d,v,a,why]=r, key=by==='m'?d.slice(0,7):by==='w'?Math.floor(k/7):d; let b=B[B.length-1];
     if(!b||b.key!==key){ b={key,d0:d,d1:d,v:0,vr:0,a:0,n:0,nd:0,nf:false,why:''}; B.push(b); }
     b.d1=d; b.nd++; if(v!=null) b.v+=v; if(v!=null&&a!=null){ b.vr+=v; b.a+=a; b.n++; } else if(why&&!b.why) b.why=why; if(d>ft) b.nf=true; });
@@ -8140,7 +8155,7 @@ function chartModel(days,nrate,ft){ const n=days.length, by=n>540?'m':n>120?'w':
   let last=null; for(let k=B.length-1;k>=0;k--) if(B[k].r!=null){ last=k; break; }
   const sv=B.reduce((s,b)=>s+b.vr,0), sa=B.reduce((s,b)=>s+b.a,0), avg=sv>0?sa/sv*100:null;
   return {by,B,last,avg,norm:ok(nrate)?nrate:null,labels:{last:last!=null?R(B[last].r):null,avg:avg!=null?'Avg '+R(avg):null,norm:ok(nrate)?'Normal '+R(nrate):null}}; }
-function tipText(b,by){ const dd=b.d0===b.d1?fdy(b.d0):fd(b.d0)+' – '+fdy(b.d1);
+function tipText(b,by){ const dd=rg(b.d0,b.d1,true);
   return `<b>${dd}</b>${b.nf?' · not final':''}<br>Screen views ${N(b.v)}`+(b.n?`<br>Ads ${N(b.a)} · <b>${R(b.vr>0?b.a/b.vr*100:null)}</b> / 100 views${b.n<b.nd?` <small>(${b.n}/${b.nd} days)</small>`:''}${b.vr<100?'<br><small>100 se kam views: point nahi</small>':''}`:`<br>${E(b.why||'ads ka data nahi')}`); }
 function drawChart(){ const box=document.getElementById('sc-chart'); if(!box||!CH) return; const B=CH.B, n=B.length;
   if(!n){ box.innerHTML='<div class="sc-note">Is period me koi din nahi</div>'; return; }
@@ -8253,9 +8268,9 @@ function left(){ let has=false; try{ has=typeof HB!=='undefined'&&HB.st.some(z=>
   Promise.resolve().then(()=>{ if(onScreen()) return; OPEN=null; try{ hbDrop('scr-dd'); }catch(e){} }); }
 return {ptr, ensure, render, paint, show, left, ready:()=>!!ALL&&!!ptr(), fold:(k,o)=>{ FOLD[k]=!!o; },
   _:{rng, normWin, finals, sumItem, itemShare, perScore, perUser, bannerSec, appUser, addUp, appSum, appScore, cover, coverAll, covWhy, dayState, apps, topSplit, tableRows, sortItems, sortApps, appRow, dispName, itemName, fmtOf,
-    chartModel, copy, perRestore, perLoad, keep, arrive, allHtml, appHtml, secHtml, ddHtml, foldsHtml, layerPeriod, WDK, RANK, PIECES, SECS, FILES, chip,
+    chartModel, perLine, tipText, drawChart, rg, fd, copy, perRestore, perLoad, keep, arrive, allHtml, appHtml, secHtml, ddHtml, foldsHtml, layerPeriod, WDK, RANK, PIECES, SECS, FILES, chip,
     get:()=>({PER,PF,PTO,OPEN,SEC,SEG,MORE,COVP,SORT,TS,CH,OPENAPP}), set:o=>{ if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o){ OPEN=o.OPEN; OPENAPP=OPEN==null?null:appIdNow(); } if('SEC' in o) SEC=o.SEC;
-      if('SEG' in o) SEG=o.SEG; if('MORE' in o) MORE=o.MORE; if('COVP' in o) COVP=o.COVP; if('PREAD' in o) PREAD=o.PREAD; if('TS' in o) TS=o.TS; if('SORT' in o) SORT=o.SORT; }}};
+      if('SEG' in o) SEG=o.SEG; if('MORE' in o) MORE=o.MORE; if('COVP' in o) COVP=o.COVP; if('PREAD' in o) PREAD=o.PREAD; if('TS' in o) TS=o.TS; if('SORT' in o) SORT=o.SORT; if('CH' in o) CH=o.CH; }}};
 })();
 function renderScreens(){ return SCR.render(); }
 // ---- 📉 CPI vs eCPM (owner, 6 Nov 2026: "short and direct view … sirf one view me direct pata chal jana chaiye, lekin details
@@ -8296,7 +8311,13 @@ const E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','
 const ok=v=>v!=null&&isFinite(v);
 const DAY=864e5, t0=s=>Date.parse(s+'T00:00:00Z'), iso=t=>new Date(t).toISOString().slice(0,10), addD=(s,k)=>iso(t0(s)+k*DAY);
 const nD=(a,b)=>Math.round((t0(b)-t0(a))/DAY)+1, okD=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&isFinite(t0(s));
-const fd=s=>{ try{ return fmtD(s); }catch(e){ return String(s||''); } }, fdy=s=>s?fd(s)+' '+String(s).slice(0,4):'—';
+// dates: the year is printed whenever a date is not in the reference year (the alarm's data-day year; the browser's year without a file)
+const fd0=s=>{ try{ return fmtD(s); }catch(e){ return String(s||''); } }, fdy=s=>s?fd0(s)+' '+String(s).slice(0,4):'—';
+const refY=()=>{ const c=cal(); return c?c.t.slice(0,4):String(new Date().getFullYear()); };
+const fd=s=>{ const y=String(s||'').slice(0,4); return fd0(s)+(/^\d{4}$/.test(y)&&y!==refY()?' '+y:''); };
+// a range: a day → its date; both ends keep their year when they differ; same year → the year at the end only (end=true: always, the period line), none in the reference year
+const rg=(lo,hi,end)=>{ if(!hi||lo===hi) return end?fdy(lo):fd(lo); if(String(lo).slice(0,4)!==String(hi).slice(0,4)) return fdy(lo)+' – '+fdy(hi);
+  return fd0(lo)+' – '+(end||String(hi).slice(0,4)!==refY()?fdy(hi):fd0(hi)); };
 const quiet=f=>{ try{ if(typeof SP!=='undefined'&&SP&&SP.quietly) SP.quietly(f); else f(); }catch(e){} };
 const phone=()=>{ try{ return (+window.innerWidth||1280)<=760; }catch(e){ return false; } };
 const dev=()=>{ try{ return typeof window!=='undefined'&&!!window.__DEV_VIEW__; }catch(e){ return false; } };   // the developer copy: no money anywhere
@@ -8352,7 +8373,7 @@ function rng(per,pf,pto){ per=per==null?PER:per; pf=pf==null?PF:pf; pto=pto==nul
 // the default view (Last 14 days ending t): the pointer's own status / normal / money — the screen paints without any file
 const isDef=(lo,hi)=>{ const p=ptr(); return !!p&&hi===p.t&&lo===addD(p.t,-13); };
 function perName(k){ if(monOf(k)) return monName(monOf(k)); const p=PERS.find(z=>z[0]===k); return p?p[1]:k; }
-const perDates=(lo,hi)=>lo===hi?fdy(lo):fd(lo)+' – '+fd(hi)+' '+hi.slice(0,4);
+const perDates=(lo,hi)=>rg(lo,hi,true);
 // ---- the period's "now" numbers per app NAME, from DATA: spend in the view's currency (₹ as billed, $ at each day's own rate:
 // roasDaily), spend in ₹, Google Ads installs (ads only), Google D0 value ÷ the same-rate spend (= ₹ ÷ ₹), AdMob earnings ÷
 // impressions (every ad source, net) — kept per (DATA, period, currency): a tap / the 5-minute refresh on the same build never
@@ -8486,7 +8507,7 @@ const stw=r=>r.wait?[r.wait==='err'?'—':'⏳','cpx-fnt']:(ST[r.st]||ST.ok);
 function sinceOf(r){ if(!r.since) return {a:'—',b:''};
   if(r.sinceOpen){ const e=r.hi<ptr().t?r.hi:ptr().t, age=nD(r.since,e>r.since?e:r.since);
     return {a:`${fd(r.since)}<br><span class="cpx-nv">${age} din se</span>`,b:` · since ${fd(r.since)} (${age} din)`}; }
-  const sp=fd(r.since)+' – '+(r.sinceTo?fd(r.sinceTo):'closed'); return {a:E(sp),b:' · '+E(sp)}; }
+  const sp=r.sinceTo?rg(r.since,r.sinceTo):fd(r.since)+' – closed'; return {a:E(sp),b:' · '+E(sp)}; }
 function rowHtml(r,on,one){ const c=stw(r), m=now3(r), lv=lostV(r), ls=lostS(r), sw=sinceOf(r);
   const sn=sw.b?`<span class="cpx-mob">${sw.b}</span>`:'';
   const nm=one?'':`<span class="cpx-nm">${E(r.name)}</span>`;   // one app: its name is in the top bar already (once per page)
@@ -8550,11 +8571,11 @@ function verdict(r){ const m=now3(r), nw=f=>m[f].n==null?`<b>${fmtF(f,m[f].v)}</
   const all3=`CPI ${nw('CPI')}, eCPM ${nw('ECPM')}, D0 ROAS ${nw('ROAS_G')}.`;
   if(r.st==='alarm'||r.st==='watch'||r.st==='fixed'){ const f=r.fam, w=FAMW[f]||f||'—', dir=UP[f]?'upar':'neeche';
     const o=m[f]?['CPI','ECPM','ROAS_G'].filter(z=>z!==f).map(z=>`${z==='ROAS_G'?'D0 ROAS':z==='ECPM'?'eCPM':'CPI'} ${nw(z)}`).join(', '):'';
-    if(!r.sinceOpen){ const sp=fd(r.since)+' – '+(r.sinceTo?fd(r.sinceTo):'closed');   // the problem is over by the period's end: its span, not "N se"
+    if(!r.sinceOpen){ const sp=r.sinceTo?rg(r.since,r.sinceTo):fd(r.since)+' – closed';   // the problem is over by the period's end: its span, not "N se"
       return `${E(w)} <b>${E(sp)}</b> normal se ${dir} rahi (ab band).`+(m[f]?` Is period me <b>${fmtF(f,m[f].v)}</b> (normal ${m[f].n==null?'—':fmtF(f,m[f].n)}). ${o}.`:` ${all3}`); }
     if(m[f]){ return `${w} <b>${fd(r.since)} se</b> normal se ${dir}: <b>${fmtF(f,m[f].v)}</b> (normal ${m[f].n==null?'—':fmtF(f,m[f].n)}). ${o}.`; }
     return `${E(w)} <b>${fd(r.since)} se</b> normal se ${dir}. ${all3}`; }
-  if(r.st==='paused') return `Pichhle 3 din (${fd(addD(ptr().t,-2))} – ${fd(ptr().t)}) Google Ads spend nahi. ${all3}`;
+  if(r.st==='paused') return `Pichhle 3 din (${rg(addD(ptr().t,-2),ptr().t)}) Google Ads spend nahi. ${all3}`;
   if(r.st==='new') return `Normal nahi bana — period ke end tak is app ka koi healthy level nahi tha (naya app ya spend abhi shuru hua). CPI <b>${fmtF('CPI',m.CPI.v)}</b>, eCPM <b>${fmtF('ECPM',m.ECPM.v)}</b>, D0 ROAS <b>${fmtF('ROAS_G',m.ROAS_G.v)}</b>.`;
   return `Sab normal ke andar: ${all3}`; }
 function moneyLine(r){ const g=r.lost; if(!g) return '';
@@ -8660,7 +8681,9 @@ function chart(id,title,P,f,L,cls,F,line){ const pts=P.map((p,i)=>[i,p.v]).filte
   L.filter(e=>e.fam===f&&(e.tier==='ALERT'||e.tier==='WATCH'||(line&&e.tier==='LINE'))).forEach(e=>{ const a=e.c<P[0].x?0:P.findIndex(p=>p.x>=e.c), end=e.closed||P[N-1].x;
     if(a<0||e.c>P[N-1].x||end<P[0].x) return; let b=P.findIndex(p=>p.x>end); b=b<0?N-1:Math.max(a,b-1);
     o.push(`<rect x="${X(a).toFixed(1)}" y="${Tp-6}" width="${Math.max(2,X(b)-X(a)).toFixed(1)}" height="${H-Tp-Bm+6}" class="${e.tier==='ALERT'?'cpx-sb':'cpx-sw2'}"/>`); });
-  P.forEach((p,i)=>{ if(p.x.endsWith('-01')) o.push(`<line x1="${X(i).toFixed(1)}" x2="${X(i).toFixed(1)}" y1="${Tp-6}" y2="${H-Bm}" class="cpx-gl"/><text x="${(X(i)+3).toFixed(1)}" y="${H-6}" class="cpx-ax">${E(fd(p.x).split(' ')[1]||'')}</text>`); });
+  let tk0=true;   // month ticks: a chart that starts before the reference year puts the year on its first tick and on each January
+  P.forEach((p,i)=>{ if(p.x.endsWith('-01')){ const yy=P[0].x.slice(0,4)!==refY()&&(tk0||p.x.endsWith('01-01')); tk0=false;
+    o.push(`<line x1="${X(i).toFixed(1)}" x2="${X(i).toFixed(1)}" y1="${Tp-6}" y2="${H-Bm}" class="cpx-gl"/><text x="${(X(i)+3).toFixed(1)}" y="${H-6}" class="cpx-ax">${E((fd0(p.x).split(' ')[1]||'')+(yy?" ’"+p.x.slice(2,4):''))}</text>`); } });
   // the normal (dashed, a gap where unknown)
   let nd='', up=false; P.forEach((p,i)=>{ if(p.n==null){ up=false; return; } nd+=(up?'L':'M')+X(i).toFixed(1)+' '+Y(p.n).toFixed(1)+' '; up=true; });
   if(nd) o.push(`<path d="${nd}" class="cpx-nl"/>`);
@@ -8690,8 +8713,8 @@ function chart(id,title,P,f,L,cls,F,line){ const pts=P.map((p,i)=>[i,p.v]).filte
   CHD[id]={P,f,W,Lm,Rm,N,F};
   return `<div class="cpx-chw">${o.join('')}<div class="cpx-tip" hidden></div></div>`; }
 function tipHtml(c,i){ const p=c.P[i]; if(!p) return ''; const x=c.F?lvAt(c.F,c.f,p.x):null;
-  return `<b>${E(fd(addD(p.x,-13)))} – ${E(fdy(p.x))}</b> <span class="cpx-nv">(14 din ka jod)</span><br><b>${E(fmtF(c.f,p.v))}</b>${p.n!=null?` · normal ${E(fmtF(c.f,p.n))}`:''}${p.v!=null&&p.n?` (${fP(p.v/p.n-1)})`:''}`
-    +(x?`<br><span class="cpx-nv">Level: ${E(HOWW[x.src]||x.src)} · ${E(fd(x.from))} se${x.days?' · measured '+E(fd(x.days[0]))+' – '+E(fd(x.days[1])):''}</span>`:''); }
+  return `<b>${E(perDates(addD(p.x,-13),p.x))}</b> <span class="cpx-nv">(14 din ka jod)</span><br><b>${E(fmtF(c.f,p.v))}</b>${p.n!=null?` · normal ${E(fmtF(c.f,p.n))}`:''}${p.v!=null&&p.n?` (${fP(p.v/p.n-1)})`:''}`
+    +(x?`<br><span class="cpx-nv">Level: ${E(HOWW[x.src]||x.src)} · ${E(fd(x.from))} se${x.days?' · measured '+E(rg(x.days[0],x.days[1])):''}</span>`:''); }
 // ---- 📅 Day-wise: newest first (Today / Yesterday on top from DATA, marked ⏳), 30 rows + Show 30 more ----
 function dayRows(r,F){ const d=DD(), t=ptr().t, c=cal(), L=eps(F.ep), e=d&&d.roas&&d.roas.by_app&&d.roas.by_app[r.name], out=[];
   // the days after t (not final): from DATA, as the list's own sums
@@ -8838,7 +8861,7 @@ function lvV(F,f,r){ const v=+r.v; if(!ok(v)) return null; if(f!=='CPI'||VIN()) 
   if(r.sums&&+r.sums.inst>0&&ok(+r.sums.sp_usd)) return +r.sums.sp_usd/+r.sums.inst; const k=lvK(F,r.from); return k?v*k:null; }
 const lvFmt=(f,v)=>f==='CPI'?fCpi(v):f==='ECPM'?fE(v):/^ROAS/.test(f)?fR(v):f==='SPEND'?fU(v)+'/day':fX(v);
 function lvMeas(f,r){ const s=r.sums; if(!r.days) return 'Typed by owner (no named days)';
-  const dd=`${fd(r.days[0])} – ${fdy(r.days[1])}`; if(!s) return dd; const n=nD(r.days[0],r.days[1]);
+  const dd=perDates(r.days[0],r.days[1]); if(!s) return dd; const n=nD(r.days[0],r.days[1]);
   const q=f==='CPI'?`${fM(+s.sp_inr,+s.sp_usd)} ÷ ${fN(+s.inst)} installs`:f==='ECPM'?`${fU(+s.rev)} ÷ ${fN(+s.imp)} impressions × 1000`
     :f==='GAP'?`(${fU(+s.sp_usd)} ÷ ${fN(+s.inst)} installs) × (${fN(+s.imp)} ÷ ${fU(+s.rev)})`:f==='IPU'?`${fN(+s.imp)} impressions ÷ ${fN(+s.dau)} users`
     :f==='ROAS_G'?`${fI(+s.d0_inr)} D0 value ÷ ${fI(+s.sp_inr)} cost`:/^ROAS_C/.test(f)?`${fU(+s[LVK[f][0]])} revenue ÷ ${fU(+s.c_sp)} cost`:`${fU(+s.sp_usd)} ÷ ${n} days`;
@@ -8873,7 +8896,7 @@ const lvUsd=f=>f==='CPI'&&!VIN(), lvUnit=f=>lvUsd(f)?'$ per install':UNITW[f], l
 function lvSetHtml(F,f){ const t=ptr().t, s=LVSET, n=nD(s.a,s.b), okN=n>=7&&n<=120&&s.a<=s.b, usd=lvUsd(f), kk=usd?lvK(F,t):null;
   let pv='', can=false;
   if(s.mode==='val'){ can=!usd||kk>0; pv=`Typed value · ${E(lvUnit(f))} · named din nahi, isliye ✓ check nahi hoga`
-      +(!usd?'':kk>0?`<br>$ view: aapki $ value save par ₹ me badal di jaati hai (1 $ = ₹${E((1/kk).toFixed(2))}, ${E(fd(addD(t,-13)))} – ${E(fdy(t))} ka rate) — level ₹ per install (as billed) me hi rakha jaata hai.`
+      +(!usd?'':kk>0?`<br>$ view: aapki $ value save par ₹ me badal di jaati hai (1 $ = ₹${E((1/kk).toFixed(2))}, ${E(perDates(addD(t,-13),t))} ka rate) — level ₹ per install (as billed) me hi rakha jaata hai.`
         :'<br><span class="cpx-wat">$ view: $ se ₹ ka rate nahi mila (in dino spend nahi) — ₹ view me value daalo.</span>'); }
   else if(!okN) pv='<span class="cpx-wat">7 se 120 din chuno</span>';
   else{ const w=fsum(F.d,F.day0,LVK[f],s.a,s.b), v=w.n===n?lvOf(f,w,n):null, row={v,sums:w,from:s.b,days:[s.a,s.b]};
@@ -8950,7 +8973,7 @@ function histHtml(r,F){ const L=eps(F.ep).sort((a,b)=>(a.opened<b.opened?1:a.ope
   const mon=e=>e.money&&e.fam==='ROAS_G'&&ok(+e.money.since_c_inr)?'≈'+fM(+e.money.since_c_inr,+e.money.since_c_usd):'—';
   const body=L.map(e=>`<tr><td>${E(FAMW[e.fam]||e.fam)} ${UP[e.fam]?'up':'down'}</td><td>${E(OPW[e.opener]||e.opener||'—')}</td>`
     +`<td>${e.closed?`Closed · ${E(WHYW[e.why]||e.why||'—')}`:`<b class="${e.tier==='ALERT'?'cpx-bad':e.tier==='WATCH'?'cpx-wat':''}">Open</b>`} <small class="cpx-nv">${E(TIERW[e.tier]||e.tier||'')}</small></td>`
-    +`<td>${E(fdy(e.c))}</td><td>${E(fdy(okD(e.seen)?e.seen:e.opened))}</td><td>${e.closed?E(fdy(e.closed)):'—'}</td><td>${base(e)}${Array.isArray(e.bspan)&&okD(e.bspan[0])&&okD(e.bspan[1])?`<small>measured ${E(fd(e.bspan[0]))} – ${E(fd(e.bspan[1]))}</small>`:''}</td><td>${ok(+e.max_worse)?fP(UP[e.fam]?+e.max_worse:-e.max_worse):'—'}</td><td>${mon(e)}</td></tr>`).join('');
+    +`<td>${E(fdy(e.c))}</td><td>${E(fdy(okD(e.seen)?e.seen:e.opened))}</td><td>${e.closed?E(fdy(e.closed)):'—'}</td><td>${base(e)}${Array.isArray(e.bspan)&&okD(e.bspan[0])&&okD(e.bspan[1])?`<small>measured ${E(rg(e.bspan[0],e.bspan[1]))}</small>`:''}</td><td>${ok(+e.max_worse)?fP(UP[e.fam]?+e.max_worse:-e.max_worse):'—'}</td><td>${mon(e)}</td></tr>`).join('');
   return lv+`<h4 class="cpx-h4">Alarms</h4><div class="cpx-x"><table class="cpx-t"><thead><tr><th>Family</th><th>Opener</th><th>Status</th><th>Change start</th><th title="data day + 2 (IST)">Opened (seen)</th><th>Closed</th><th>Baseline</th><th>Worst</th><th>Money</th></tr></thead><tbody>${body}</tbody></table></div>`
     +'<p class="cpx-fn">Money sirf D0 ROAS alarms pe (≈ cost − value ÷ baseline, change se band hone tak); AdMob install-day ka hisaab Loss math tab me. Campaign / country alarms unke apne tabs me.</p>'; }
 // ---- the reader's place (the SCR pattern): a tap that repaints puts the tapped control back where it was, the page holds its
@@ -9062,14 +9085,14 @@ function alertNote(){ const n=alarmIds(true).length; if(!n) return '';
 function card(name){ const p=ptr(); if(!p) return null; const id=Object.keys(p.apps).find(k=>p.apps[k]&&p.apps[k].name===name); if(!id) return {st:'lagu',line:'Is app ka Google Ads spend nahi'};
   const a=p.apps[id], [lo,hi]=[addD(p.t,-13),p.t], s=sums(lo,hi)[name]||{}, r=rowOf(id,a,s,lo,hi), m=now3(r);
   const pc=f=>m[f].d!=null?` (${fP(m[f].d)})`:'';
-  const head=r.st==='alarm'||r.st==='watch'?`<b>${ST[r.st][0]}</b>${r.since?' since '+fd(r.since):''} · `:r.st==='fixed'?`<b>Fixed</b>${r.since?' '+fd(r.since)+(r.sinceTo?' – '+fd(r.sinceTo):''):''} · `:'';
+  const head=r.st==='alarm'||r.st==='watch'?`<b>${ST[r.st][0]}</b>${r.since?' since '+fd(r.since):''} · `:r.st==='fixed'?`<b>Fixed</b>${r.since?' '+(r.sinceTo?rg(r.since,r.sinceTo):fd(r.since)):''} · `:'';
   return {st:STK[r.st]||'lagu',line:`${head}CPI ${fmtF('CPI',m.CPI.v)}${pc('CPI')} · eCPM ${fE(m.ECPM.v)}${pc('ECPM')} · D0 ROAS ${fR(m.ROAS_G.v)}${pc('ROAS_G')}${r.lost&&!r.lost.na?` · ≈${fM(r.lost.inr,r.lost.usd)} lost`:''}`}; }
 // the hub's 💰 Marketing ROAS card follows this verdict (one verdict everywhere): the 📉 card of an app in the pointer, null for
 // an app without one (no Google Ads spend: that card keeps today's Review card)
 function hubVerdict(name){ const p=ptr(); if(!p||!Object.keys(p.apps).some(k=>p.apps[k]&&p.apps[k].name===name)) return null; return card(name); }
 return {ptr, render, paint, show:showMe, left, alarmN, alertNote, card, hubVerdict,
-  _:{rng, isDef, sums, rows, rowOf, judge, normal, hLvl, lossG, epOf, eps, now3, perRestore, perLoad, keep, cal, fI, fU, fP, series, cSeries, ctyList, ctyOf, dayRows, verdict, moneyLine, tabBody, ALLF, FILES, CHD,
-    lvCheck, lvOf, lvV, lvActs, levelsHtml, tipHtml, LVQ:()=>LVQ, PEND:()=>PEND,
+  _:{rg, fd, rng, isDef, sums, rows, rowOf, judge, normal, hLvl, lossG, epOf, eps, now3, perRestore, perLoad, keep, cal, fI, fU, fP, series, cSeries, ctyList, ctyOf, dayRows, verdict, moneyLine, tabBody, ALLF, FILES, CHD,
+    lvCheck, lvOf, lvV, lvActs, levelsHtml, tipHtml, chart, LVQ:()=>LVQ, PEND:()=>PEND,
     get:()=>({PER,PF,PTO,OPEN,TAB,DN,CTY,LVF,LVSET,LVBUSY}), set:o=>{ if('LVBUSY' in o) LVBUSY=!!o.LVBUSY; if('LVF' in o) LVF=o.LVF; if('LVSET' in o) LVSET=o.LVSET; if('LVQ' in o) LVQ=o.LVQ; if('PEND' in o) PEND=o.PEND; if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o) OPEN=o.OPEN; if('TAB' in o) TAB=o.TAB; if('DN' in o) DN=o.DN; if('PREAD' in o) PREAD=o.PREAD; if('CTY' in o) CTY=o.CTY; }}};
 })();
 function renderCpx(){ return CPX.render(); }
@@ -9259,7 +9282,7 @@ function groupRows(d){ const rows=d.rows||[]; if(GRAIN==='day') return rows.slic
   return [...g.entries()].sort((a,b)=>a[0]<b[0]?1:-1).map(([k,rs])=>({k,lab:k,rows:rs})); }
 function agg(gr,c,T){ let v=0, fin=true; for(const r of gr.rows){ const [x,f]=cum(r,c,T); if(!ok(x)) return [null,false]; v+=x; fin=fin&&f; } return [v,fin]; }
 function sumK(gr,i){ let s=0; for(const r of gr.rows){ if(r[i]==null) return null; s+=+r[i]; } return s; }
-function rowLabel(gr,d){ if(GRAIN==='month') return fmtMon(gr.k); if(GRAIN==='week'){ const e=new Date(gr.k+'T00:00:00Z'); e.setUTCDate(e.getUTCDate()+6); return fmtD(gr.k)+'–'+fmtD(e.toISOString().slice(0,10))+' '+gr.k.slice(2,4); }
+function rowLabel(gr,d){ if(GRAIN==='month') return fmtMon(gr.k); if(GRAIN==='week'){ const e=new Date(gr.k+'T00:00:00Z'); e.setUTCDate(e.getUTCDate()+6); const en=e.toISOString().slice(0,10); return gr.k.slice(0,4)!==en.slice(0,4)?fd(gr.k)+'–'+fd(en):fmtD(gr.k)+'–'+fmtD(en)+' '+gr.k.slice(2,4); }   // (a week over New Year: both ends with their year)
   return relLab(d,gr.k)+fd(gr.k); }
 function relLab(d,x){ const nw=d.newest; if(!nw) return ''; if(x===nw) return 'Today · '; const y=new Date(nw+'T00:00:00Z'); y.setUTCDate(y.getUTCDate()-1); return x===y.toISOString().slice(0,10)?'Yesterday · ':''; }
 function cell(v,base,met,prev,n){ if(!ok(v)) return null;
@@ -10152,7 +10175,7 @@ function lifeView(life,till,d,co){ life=life||[]; if(d) CCY=d.ccy||null; if(!lif
   const kp=`<div class="roi-ks6">`+tile('Lifetime revenue',MV(cr),`AdMob · ${E(fdy(done[0][0]))} se ${E(fd(tl))} tak`)+tile('Lifetime ads spend',MV(cs),billed()?'Google Ads · jitna bill hua':'Google Ads')
     +tile('Profit / loss · cash',`<span class="${inProfit?'roi-up':'roi-dn'}">${MV(pr,true)}</span>`,cs?`ROAS <b>${P(cr/cs)}</b> · saara revenue − saara spend`:'ads nahi',inProfit?'roi-kg':'roi-kb')
     +tile(inProfit?'Profit me since':'Loss me since',since?E(fdy(since)):'—',first?`pehli baar profit: ${E(fdy(first))}`:'abhi tak kabhi profit nahi')
-    +tile('Last full day · '+E(fmtD(lastD[0]||'')),MV(lastD[1]),`spend ${MV(lastD[2])} · <b>${MV((lastD[1]||0)-(lastD[2]||0),true)}</b>`)
+    +tile('Last full day · '+E(lastD[0]?fdy(lastD[0]):''),MV(lastD[1]),`spend ${MV(lastD[2])} · <b>${MV((lastD[1]||0)-(lastD[2]||0),true)}</b>`)
     +(liveD&&liveD[1]>0?tile('Today · live',MV(liveD[1]),`spend ${MV(liveD[2])} · <i>abhi pura din nahi</i>`):'')
     +(()=>{ if(!co) return ''; const g=new Map(); (co.rows||[]).forEach(r=>{ const k=String(r[0]).slice(0,7); const e=g.get(k)||{sp:0,spi:0,bi:true,s:0,ok:true}; if(r[2]==null) e.ok=false; else e.sp+=+r[2]; if(r[3]==null) e.bi=false; else e.spi+=+r[3]; e.s+=+r[4]||0; g.set(k,e); });
       const ms=[...g.values()].filter(e=>e.ok&&e.sp>0); if(!ms.length) return ''; const paid=ms.filter(e=>RV(e.s)>=(billed()&&e.bi?e.spi:RV(e.sp))).length;
@@ -11274,7 +11297,7 @@ function chart(d,lo,hi){ const pts=[]; for(let k=lo;k<=hi;k=addD(k,1)){ const i=
   const path=key=>{ let s='', up=false; pts.forEach((p,i)=>{ const v=p[key]; if(v==null){ up=false; return; } s+=(up?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '; up=true; }); return s; };
   const last=key=>{ for(let i=n-1;i>=0;i--) if(pts[i][key]!=null) return [i,pts[i][key]]; return null; };
   const grid=[0,0.5,1].map(f=>`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(mx*f).toFixed(1)}" y2="${Y(mx*f).toFixed(1)}" class="g"/><text x="${m.l-6}" y="${(Y(mx*f)+4).toFixed(1)}" text-anchor="end">${E(EM(mx*f))}</text>`).join('');
-  const ticks=[0,Math.floor((n-1)/2),n-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=>`<text x="${X(i).toFixed(1)}" y="${H-6}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${E(fmtD(pts[i].k))}</text>`).join('');
+  const ticks=[0,Math.floor((n-1)/2),n-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=>`<text x="${X(i).toFixed(1)}" y="${H-6}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${E(fmtDY(pts[i].k))}</text>`).join('');
   const lab=(key,cls)=>{ const l=last(key); return l?`<circle cx="${X(l[0]).toFixed(1)}" cy="${Y(l[1]).toFixed(1)}" r="3" class="${cls}"/><text x="${(X(l[0])+6).toFixed(1)}" y="${(Y(l[1])+4).toFixed(1)}" class="${cls}">${E(EM(l[1]))}</text>`:''; };
   return `<div class="nvr-ch" data-nvr-ch="1"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Daily eCPM, first session and returning">${grid}${ticks}<path d="${path('n')}" class="n"/><path d="${path('r')}" class="r"/>${lab('n','n')}${lab('r','r')}<line class="rule" y1="${m.t}" y2="${H-m.b}" x1="0" x2="0" visibility="hidden"/></svg><div class="nvr-tip" hidden></div></div>`
     +`<div class="roi-lg nvr-lg"><span class="n">First session</span><span class="r">Returning</span><span class="faint nvr-nb">din jinme 100 se kam impressions: point nahi</span></div>`; }
@@ -11403,7 +11426,7 @@ function wire(){ if(WIRED||typeof document==='undefined'||!document.addEventList
     const f=t.closest('[data-nvr-pf]'), to=t.closest('[data-nvr-pto]'); if(!f&&!to) return;
     keep(r,f?'[data-nvr-pf]':'[data-nvr-pto]',()=>{ if(f) PF=String(t.value||''); else PTO=String(t.value||''); PER='cus'; repaint(); }); });
   document.addEventListener('pointermove',ev=>{ const t=ev.target; if(t&&t.closest&&t.closest('#nvr-root [data-nvr-ch]')) tip(ev); },{passive:true}); }
-return {ptr, block, repaint, _:{rng, sums, view, shardOf, ucView, UF, set:(k,v)=>{ if(k==='PER') PER=v; if(k==='PF') PF=v; if(k==='PTO') PTO=v; if(k==='CC') CC=v; if(k==='AF') Object.assign(AF,v); }, AF}};
+return {ptr, block, repaint, _:{chart, rng, sums, view, shardOf, ucView, UF, set:(k,v)=>{ if(k==='PER') PER=v; if(k==='PF') PF=v; if(k==='PTO') PTO=v; if(k==='CC') CC=v; if(k==='AF') Object.assign(AF,v); }, AF}};
 })();
 // the Install value page: 📈 ROI first, the Value Studio + the older views folded under "📊 More details" (a jump into one
 // of their sections from another tab opens it)
@@ -11923,7 +11946,7 @@ function goPlacement(id){
   const lastRow=(p.daily&&p.daily.length)?p.daily[p.daily.length-1]:null;
   const lastActive=lastRow?lastRow[0]:'';
   const noWin=!m.earn&&!m.impr&&!m.req;
-  const dormNote=(noWin&&lastActive)?`<div class="note" style="margin:2px 0 12px;background:linear-gradient(90deg,#3a2f14,transparent);border-color:#6b5320">🕒 Is placement ne <b>${pRangeLabel(RANGE)}</b> window me koi data nahi diya — ye <b>${fmtD(lastActive)}</b> tak active tha, uske baad band ho gaya. Neeche <b>Lifetime</b> aur chart me poori history hai; live numbers ke liye Period ⤴ <b>All time</b> karo ya koi active placement chuno.</div>`:'';
+  const dormNote=(noWin&&lastActive)?`<div class="note" style="margin:2px 0 12px;background:linear-gradient(90deg,#3a2f14,transparent);border-color:#6b5320">🕒 Is placement ne <b>${pRangeLabel(RANGE)}</b> window me koi data nahi diya — ye <b>${fmtDY(lastActive)}</b> tak active tha, uske baad band ho gaya. Neeche <b>Lifetime</b> aur chart me poori history hai; live numbers ke liye Period ⤴ <b>All time</b> karo ya koi active placement chuno.</div>`:'';
   s.innerHTML=`<div class="backlnk" onclick="openAppDetail('${(p.app||'').replace(/'/g,'')}')">← ${p.app?appIcon(p.app,16)+p.app:'Back'}</div>
     <div class="verdict" style="background:linear-gradient(90deg,${vbg},transparent);border:1px solid var(--line2)"><div style="font-size:28px">${p.verdict==='declining'?'🔴':p.verdict==='strong'?'🟢':'🟡'}</div><div><div class="big" style="text-transform:capitalize">${p.verdict}</div><div class="muted" style="font-size:13px">${p.name} · ${appIcon(p.app,14,'ail')}${p.app} · ${p.format} · health ${p.health}</div></div></div>
     <div class="note" style="margin:2px 0 12px">⏱ <b>${pRangeLabel(RANGE)}</b> <span class="faint">(${winLbl})</span> — neeche ke core metrics isi window ke hain. Upar "Period" se badlo.</div>
@@ -12165,9 +12188,9 @@ function renderDeductions(){
     const geoTop=geo.have?geo.rows.slice(0,15):[]; const geoMore=geo.have?geo.rows.length-geoTop.length:0;
     const geoRows=geo.have?(geoTop.map(cc=>`<tr><td class="nm">${cName(cc.country)} <span class="faint" style="font-size:10px">${cc.country}</span></td><td class="down" style="font-weight:700">−${_dm(cc.dedMicros)}</td><td><div class="meter r" style="display:inline-block;width:60px;vertical-align:middle"><i style="width:${Math.round((cc.share||0)*100)}%"></i></div> ${Math.round((cc.share||0)*100)}%</td><td class="faint">${_dcur(cc.rev)} rev</td></tr>`).join('')+(geoMore>0?`<tr><td colspan="4" class="faint" style="padding:9px 17px;font-size:11.5px">+${geoMore} more countries · small amounts</td></tr>`:''))
       :`<tr><td colspan="4" class="muted" style="padding:14px">${(ACD===null||ACDLOADING)?'⏳ country data load ho raha hai…':'Is din is ad-unit ka country revenue data nahi (ya current mahine ke bahar).'}</td></tr>`;
-    s.innerHTML=head+_dedBackBtn(`${fmtD(DEDDATE)} · ${appIcon(effApp,14,'ail')}${effApp}`)+
-      `<div class="card" style="margin-bottom:14px"><div class="ct"><h3>${appIcon(effApp,20)}${u.unit_name||DEDUNIT} <span class="faint" style="font-weight:400;font-size:12px">· ${fmtD(DEDDATE)}</span></h3>${dedIvtPill(p,c.ded)}</div>
-        <div class="row c3" style="margin-top:4px">${kpi('Before (estimate)',_dm(c.first),fmtD(DEDDATE),'muted')}${kpi('Now (revised)',_dm(c.latest),'','muted')}${kpi('Deduction',(c.ded>0?'−':'')+_dm(c.ded),pct(p)+' reduced','down')}</div></div>
+    s.innerHTML=head+_dedBackBtn(`${fmtDY(DEDDATE)} · ${appIcon(effApp,14,'ail')}${effApp}`)+
+      `<div class="card" style="margin-bottom:14px"><div class="ct"><h3>${appIcon(effApp,20)}${u.unit_name||DEDUNIT} <span class="faint" style="font-weight:400;font-size:12px">· ${fmtDY(DEDDATE)}</span></h3>${dedIvtPill(p,c.ded)}</div>
+        <div class="row c3" style="margin-top:4px">${kpi('Before (estimate)',_dm(c.first),fmtDY(DEDDATE),'muted')}${kpi('Now (revised)',_dm(c.latest),'','muted')}${kpi('Deduction',(c.ded>0?'−':'')+_dm(c.ded),pct(p)+' reduced','down')}</div></div>
       <div class="card pad0"><div class="ct" style="padding:16px 17px 0"><h3>🌍 Country-wise (≈ by revenue share)</h3><span class="muted" style="font-size:11.5px">is din is ad-unit me kis country me kitna ghata — geo revenue share se estimate</span></div>
         <table style="margin-top:10px"><thead><tr><th>Country</th><th>Deduction</th><th>Share</th><th>Revenue</th></tr></thead><tbody>${geoRows}</tbody></table></div>`;
     return s;
@@ -12178,9 +12201,9 @@ function renderDeductions(){
     const units=dedUnitsForDate(di,effApp); let af=0,al=0; units.forEach(x=>{af+=x.first;al+=x.latest;}); const ap=_dpct(af,al);
     const rows=units.map(x=>{const xp=_dpct(x.first,x.latest);
       return `<tr class="clk" onclick="dedOpenUnit('${(x.uid||'').replace(/'/g,"\\'")}')"><td class="nm">${x.name}</td><td>${_dm(x.first)}</td><td>${_dm(x.latest)}</td><td class="down" style="font-weight:700">−${_dm(x.ded)}</td><td class="${xp>=0.15?'down':''}" style="font-weight:600">${pct(xp)}</td><td>${dedIvtPill(xp,x.ded)}</td></tr>`;}).join('')||`<tr><td colspan="6" class="muted" style="padding:16px">Is din is app ka koi ad-unit decay nahi.</td></tr>`;
-    s.innerHTML=head+_dedBackBtn(APP?fmtD(DEDDATE):`${fmtD(DEDDATE)} ki apps`)+
-      `<div class="card" style="margin-bottom:14px"><div class="ct"><h3>${appIcon(effApp,22)}${appNm(effApp)} <span class="faint" style="font-weight:400;font-size:12px">· ${fmtD(DEDDATE)}</span></h3><span class="muted" style="font-size:12px">ad-unit pe click → country</span></div>
-        <div class="row c3" style="margin-top:4px">${kpi('Before',_dm(af),fmtD(DEDDATE),'muted')}${kpi('Now',_dm(al),'','muted')}${kpi('Deduction',(af-al>0?'−':'')+_dm(af-al),pct(ap)+' reduced','down')}</div></div>
+    s.innerHTML=head+_dedBackBtn(APP?fmtDY(DEDDATE):`${fmtDY(DEDDATE)} ki apps`)+
+      `<div class="card" style="margin-bottom:14px"><div class="ct"><h3>${appIcon(effApp,22)}${appNm(effApp)} <span class="faint" style="font-weight:400;font-size:12px">· ${fmtDY(DEDDATE)}</span></h3><span class="muted" style="font-size:12px">ad-unit pe click → country</span></div>
+        <div class="row c3" style="margin-top:4px">${kpi('Before',_dm(af),fmtDY(DEDDATE),'muted')}${kpi('Now',_dm(al),'','muted')}${kpi('Deduction',(af-al>0?'−':'')+_dm(af-al),pct(ap)+' reduced','down')}</div></div>
       <div class="card pad0"><table><thead><tr><th>Ad-unit</th><th>Pehle</th><th>Ab</th><th>Deduction</th><th>%</th><th>Flag</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     return s;
   }
@@ -12192,7 +12215,7 @@ function renderDeductions(){
     const rows=apps.map(x=>{const xp=_dpct(x.first,x.latest);
       return `<tr class="clk" onclick="dedOpenApp('${(x.app||'').replace(/'/g,"\\'")}')"><td class="nm">${appIcon(x.app,20)}${appNm(x.app)}</td><td class="faint">${x.units}</td><td>${_dm(x.first)}</td><td>${_dm(x.latest)}</td><td class="down" style="font-weight:700">−${_dm(x.ded)}</td><td class="${xp>=0.15?'down':''}" style="font-weight:600">${pct(xp)}</td><td>${dedIvtPill(xp,x.ded)}</td></tr>`;}).join('')||`<tr><td colspan="7" class="muted" style="padding:16px">Is din koi app decay nahi.</td></tr>`;
     s.innerHTML=head+covNote+_dedBackBtn('All dates')+
-      `<div class="card" style="margin-bottom:14px"><div class="ct"><h3>📅 ${fmtD(DEDDATE)} — deduction that day</h3><span class="muted" style="font-size:12px">click an app → ad unit → country</span></div>
+      `<div class="card" style="margin-bottom:14px"><div class="ct"><h3>📅 ${fmtDY(DEDDATE)} — deduction that day</h3><span class="muted" style="font-size:12px">click an app → ad unit → country</span></div>
         <div class="row c3" style="margin-top:4px">${kpi('Before that day',_dm(pehle),'total revenue','muted')}${kpi('Now',_dm(dayRev),'','muted')}${kpi('Deduction',(dateDed>0?'−':'')+_dm(dateDed),pct(_dpct(pehle,dayRev))+' reduced','down')}</div></div>
       <div class="card pad0"><div class="ct" style="padding:16px 17px 0"><h3>App-wise — biggest first</h3></div>
         <table style="margin-top:10px"><thead><tr><th>App</th><th>Units</th><th>Pehle</th><th>Ab</th><th>Deduction</th><th>%</th><th>Flag</th></tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -12202,7 +12225,7 @@ function renderDeductions(){
   // ---- LEVEL 0: DATE list (newest first) ----
   const drows=dedDateRows(keep); const periodDed=drows.reduce((a,x)=>a+x.ded,0);
   const rows=drows.map(x=>{const xp=_dpct(x.pehle,x.ab);
-    return `<tr class="clk" onclick="dedOpenDate('${x.date}')"><td class="nm">${fmtD(x.date)}</td><td class="faint">${x.apps}</td><td>${_dm(x.pehle)}</td><td>${_dm(x.ab)}</td><td class="down" style="font-weight:700">−${_dm(x.ded)}</td><td class="${xp>=0.15?'down':''}" style="font-weight:600">${pct(xp)}</td></tr>`;}).join('')||`<tr><td colspan="6" class="muted" style="padding:16px">Is period me koi deduction observe nahi hua.</td></tr>`;
+    return `<tr class="clk" onclick="dedOpenDate('${x.date}')"><td class="nm">${fmtDY(x.date)}</td><td class="faint">${x.apps}</td><td>${_dm(x.pehle)}</td><td>${_dm(x.ab)}</td><td class="down" style="font-weight:700">−${_dm(x.ded)}</td><td class="${xp>=0.15?'down':''}" style="font-weight:600">${pct(xp)}</td></tr>`;}).join('')||`<tr><td colspan="6" class="muted" style="padding:16px">Is period me koi deduction observe nahi hua.</td></tr>`;
   s.innerHTML=head+dedPeriodBar()+covNote+`<div class="row c3" style="margin-bottom:14px">${kpi('Is period deduction',(periodDed>0?'−':'')+_dcur(periodDed),curWinLabel(),'down')}${kpi('Last 5 days',(last5>0?'−':'')+_dcur(last5),'freshest decay','down')}${kpi('Days affected',drows.length,'this period','muted')}</div>
     <div class="card pad0"><div class="ct" style="padding:16px 17px 0"><h3>📅 Date-wise deduction — newest first</h3><span class="muted" style="font-size:12px">kisi date pe click → us din ki apps → ad-unit → country</span></div>
       <table style="margin-top:10px"><thead><tr><th>Date</th><th>Apps</th><th>Before (that day)</th><th>Ab</th><th>Deduction</th><th>%</th></tr></thead><tbody>${rows}</tbody></table></div>`;
@@ -12233,7 +12256,7 @@ function renderCountries(){
   }else{                                           // fallback (demo/stale payload): fixed-window view, partial cols
     cs=(APP?((DATA.countries_by_app||{})[APP]||[]):(DATA.countries||[]));
     ctyTotal=cs.reduce((a,b)=>a+(b.revenue||0),0);
-    const cw=DATA.country_window||{};winLbl=(cw.from&&cw.to)?`${fmtD(cw.from)}–${fmtD(cw.to)} · ${cw.days}d`:'';
+    const cw=DATA.country_window||{};winLbl=(cw.from&&cw.to)?`${fmtRange(cw.from,cw.to)} · ${cw.days}d`:'';
   }
   if(!cs.length){
     s.innerHTML=`<h2 class="sc">Country Strategy${APP?' · '+appIcon(APP,20,'ail')+APP:''}</h2><p class="scd">Per-country revenue, eCPM, match, show, CTR aur share — is window ka.</p>
@@ -12486,9 +12509,9 @@ const BDCFG=[{k:'ecpm',lab:'eCPM',col:'#3dd0f0'},{k:'rev',lab:'Revenue',col:'#4a
 const BDLAB={ecpm:'eCPM',rev:'Revenue',ctr:'CTR',match:'Match rate',show:'Show rate',req:'Requests'};
 function bDay(d,yr){ if(!d)return''; const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; const p=(''+d).split('-'); if(p.length<3)return d;
   const s=(+p[2])+' '+(MO[(+p[1])-1]||p[1]); return yr?s+" '"+p[0].slice(2):s; }   // yr: append "'YY" (same short form as bMon)
-// true when a (ascending ISO) date range spans ≥11 months — ambiguous across years without one ("20 Jun" could be
-// any of 3+ years on an "All time" chart), so the axis / tooltip / window label then carries the year too.
-function bSpansYears(d0,dN){ if(!d0||!dN) return false; const y0=+d0.slice(0,4),m0=+d0.slice(5,7),y1=+dN.slice(0,4),m1=+dN.slice(5,7); return (y1-y0)*12+(m1-m0)>=11; }
+// true when a (ascending ISO) date range spans ≥11 months, crosses a New Year or is not in the reference year — ambiguous
+// without one ("20 Jun" could be any of 3+ years on an "All time" chart), so the axis / tooltip / window label then carries the year too.
+function bSpansYears(d0,dN){ if(!d0||!dN) return false; const y0=+d0.slice(0,4),m0=+d0.slice(5,7),y1=+dN.slice(0,4),m1=+dN.slice(5,7); return (y1-y0)*12+(m1-m0)>=11||y0!==y1||String(y1)!==refYear(); }
 function bDFmt(k,v){ if(v==null||isNaN(v))return'—';
   if(k==='rev')return csym()+(+v*cfx()).toLocaleString(undefined,{maximumFractionDigits:(+v*cfx()<100?2:0)});
   if(k==='req')return (+v).toLocaleString();
@@ -12741,9 +12764,9 @@ function d0DayLate(D){ const h=(D.day_next||{}).late_h; return (typeof h==='numb
 function d0DayTip(st){ if(!st) return '';
   const D=st.D, e=st.e||{}, since=D.day_since||'',
     span=a=>{ const run=a.every((d,i)=>!i||Date.parse(d)-Date.parse(a[i-1])===864e5);
-      return a.length===1?fmtD(a[0]):!run&&a.length<=3?a.map(fmtD).join(', ')
+      return a.length===1?fmtDY(a[0]):!run&&a.length<=3?a.map(fmtDY).join(', ')
         :a.length+' din ('+fmtDy(a[0],a)+'–'+fmtDy(a[a.length-1],a)+(run?')':' me se)'); },
-    fmtDy=(d,a)=>fmtD(d)+(a[0].slice(0,4)!==a[a.length-1].slice(0,4)?' '+d.slice(0,4):''),
+    fmtDy=(d,a)=>fmtD(d)+(a[0].slice(0,4)!==a[a.length-1].slice(0,4)||d.slice(0,4)!==refYear()?' '+d.slice(0,4):''),
     ref=[st.days,st.pend,st.miss].map(a=>a[a.length-1]).find(Boolean)||(e.d0day_next||D.day_next||{}).date||'',
     tt=ref?d0DayAt(D,ref,e):NaN, x=isFinite(tt)?new Date(tt+330*60000).toISOString():'', h=x?+x.slice(11,13):-1,
     part=!x||(h>=4&&h<12)?' subah':h<4||h>=21?' raat':'';
@@ -12759,7 +12782,7 @@ function d0DayTip(st){ if(!st) return '';
   // day_gap: dates whose morning was lost to a known cause (backend d1_day_gap; "tz": the build machine's time zone)
   const gap=D.day_gap||{}, old=st.miss.filter(d=>!since||d<since), gone=st.miss.filter(d=>since&&d>=since),
     lost=gone.filter(d=>gap[d]==='tz'), rest=gone.filter(d=>gap[d]!=='tz');
-  if(old.length) t+=' '+(since?'By date number '+fmtD(since)+' se hai':'By date number abhi shuru nahi hua')
+  if(old.length) t+=' '+(since?'By date number '+fmtDY(since)+' se hai':'By date number abhi shuru nahi hua')
     +' (Google Ads subah wala purana number nahi rakhta) — '+span(old)+' ka nahi hai.';
   if(lost.length) t+=' '+span(lost)+' — us raat hamari build machine pe time zone nahi mila, isliye By date number'
     +' nahi liya gaya (Google Ads subah wala purana number nahi rakhta).';
@@ -12770,7 +12793,7 @@ function d0DayTip(st){ if(!st) return '';
 // fixes) / the drift after fixing
 function d0Tip(st){ if(!st) return '';
   const D=st.D, pre='By 24h = har install ke click se 24 ghante ki kamai (Google Ads). ';
-  if(st.pend.length){ const a=st.pend[0], b=st.pend[st.pend.length-1], n=st.pend.length, span=n===1?fmtD(a):n+' din ('+fmtD(a)+'–'+fmtD(b)+')';
+  if(st.pend.length){ const a=st.pend[0], b=st.pend[st.pend.length-1], n=st.pend.length, span=n===1?fmtD(a):n+' din ('+fmtRange(a,b)+')';
     if(!D.fixed_till) return pre+'Abhi tak koi din fix nahi hua (Google Ads ka poora read abhi nahi mila) — '+span+' ka number abhi badal sakta hai.';
     // at: the last pending date's own moment while still ahead (a waiting app's date after fixed_till needs it too);
     // past and the latest read could fix nothing (D.incomplete): no "agle refresh" promise
@@ -13943,7 +13966,7 @@ function uniWindow(a,tillOverride){
   const till=tillOverride||(a&&a.data_till), hs=uniFirst(a)||till;
   const none={from:'',to:'',days:0,label:'No GA4 data',empty:true}; if(!till) return none;
   const w=kwWin(hs,till);
-  if(w.empty) return Object.assign({},none,{label:'No GA4 data for this period yet (GA4 data till '+fmtD(till)+')'});
+  if(w.empty) return Object.assign({},none,{label:'No GA4 data for this period yet (GA4 data till '+fmtDY(till)+')'});
   return {from:w.from,to:w.to,days:w.days,label:uniSpan(w.from,w.to)+' · '+w.days+'d',empty:false};
 }
 // the common end date for the All-apps pooled window: the MIN data_till among the apps that have one (so every
@@ -14510,7 +14533,7 @@ const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec
 const fd=s=>{ if(!s) return ''; return (+s.slice(8,10))+' '+MO[+s.slice(5,7)-1]+(s.slice(0,4)!==YR?' '+s.slice(0,4):''); };
 const fdNoY=s=>(+s.slice(8,10))+' '+MO[+s.slice(5,7)-1];
 const span=(a,b)=>{ if(!a) return ''; if(!b||a===b) return fd(a);
-  if(a.slice(0,4)!==b.slice(0,4)) return fd(a)+'–'+fd(b);
+  if(a.slice(0,4)!==b.slice(0,4)) return fdNoY(a)+' '+a.slice(0,4)+'–'+fdNoY(b)+' '+b.slice(0,4);   // over New Year: each end with its year
   return (a.slice(0,7)===b.slice(0,7)?String(+a.slice(8)):fdNoY(a))+'–'+fd(b); };
 const addMonths=(s,k)=>{ const y=+s.slice(0,4), m0=+s.slice(5,7)-1+k, d=+s.slice(8,10), Y=y+Math.floor(m0/12), Mm=((m0%12)+12)%12;
   const last=new Date(Date.UTC(Y,Mm+1,0)).getUTCDate(); return new Date(Date.UTC(Y,Mm,Math.min(d,last))).toISOString().slice(0,10); };
@@ -14884,7 +14907,7 @@ function kpisHtml(){ const L=W.L, cL=W.cL, provI=W.t>M.settled?Math.max(0,ix(dAd
     dR={cls:Math.abs(r)<.005?'us-flat':(up?'us-up-bad':'us-dn-good'),h:`${up?'▲':'▼'} ${fS(ppl)} users/day (${rp(PT.rate)}, before ${rp(PC.rate)})`}; }
   const fmtR=v=>rp(v);
   const subR=`<span data-tk="ptl:0">Loss <b>${fX(PT.Ltot)} users/day</b>${PT.Lusd?' ≈ <b>'+moneyL(PT.Lusd,true)+'</b>':''}</span> · normal rate ${rp(PT.lo)}–${rp(PT.hi)}`;
-  const lst=(arr,f)=>i=>fdNoY(dAdd(W.f,i))+': '+f(arr[i]), lstR=i=>{ const k=ix(W.f)+i; return fdNoY(dAdd(W.f,i))+': '+fN(PD.un[k])+' ('+rp(sR[i])+')'; };
+  const lst=(arr,f)=>i=>fd(dAdd(W.f,i))+': '+f(arr[i]), lstR=i=>{ const k=ix(W.f)+i; return fd(dAdd(W.f,i))+': '+fN(PD.un[k])+' ('+rp(sR[i])+')'; };
   return mk('ins','Installs','daily avg',insD,'n','/day',dI,spark({vals:sI,ghost:cI,prov:provI,color:'var(--us-s-in)',area:1,tip:tipD('Installs',sI,cI,fN),lab:{last:lst(sI,fN),avg:insD,avgT:'avg '+fN(insD)}}),`Total ${fN(PT.ins)} · ${W.L} days${PT.prov?' · <span class="us-watch">━ ⏳ not final</span>':''}`)
     +mk('outs','Uninstalls','daily avg',outD,'n','/day',dO,spark({vals:sO,ghost:cO,prov:provI,color:'var(--us-s-out)',area:1,tip:tipD('Uninstalls',sO,cO,fN),lab:{last:lst(sO,fN),avg:outD,avgT:'avg '+fN(outD)}}),`Total ${fN(PT.outs)} · ${W.L} days${PT.prov?' · <span class="us-watch">━ ⏳ not final</span>':''}`)
     +mk('net','Net','installs − uninstalls',netD,'s','/day',dN,spark({vals:sN,ghost:cN,prov:provI,color:'var(--ink2)',zero:1,tip:tipD('Net',sN,cN,fS),lab:{last:lst(sN,fS),avg:netD,avgT:'avg '+fS(netD)}}),`${netD>0?'Users growing':'Users falling'} · total ${fS(PT.net)}`)
@@ -15044,7 +15067,7 @@ function tlHtml(){ const i1=ix(W.t), i0=Math.max(0,Math.min(ix(W.f),i1-41)), n=i
   s+=`<path d="${pathOf(un.map((v,i)=>i<=ws?v:null),X,Y)}" fill="none" stroke="var(--us-s-out)" stroke-width="1.6" opacity=".45"/><path d="${pathOf(un.map((v,i)=>i>=ws?v:null),X,Y)}" fill="none" stroke="var(--us-s-out)" stroke-width="2.2"/>`;
   [[100,'📦 Updates'],[138,'🔔 Change started']].forEach(([y,l])=>{ s+=`<line x1="${padL}" x2="${X(n-1)+hw}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-dasharray="2 4"/><text x="0" y="${y+4}" font-size="11" fill="var(--muted)">${l}</text>`; });
   const pv=W.t>M.settled?ix(dAdd(M.settled,1))-i0:null; if(pv!=null&&pv<n) s+=`<line x1="${(X(Math.max(0,pv))-hw).toFixed(1)}" x2="${(X(n-1)+hw).toFixed(1)}" y1="${h-21}" y2="${h-21}" stroke="var(--watch)" stroke-width="2.5"/><text x="${(X(n-1)+hw+6).toFixed(1)}" y="${h-17}" font-size="10" fill="var(--watch)">⏳ not final</text>`;
-  const step=Math.max(n<=14?1:(n<=31?3:7),xStep(n,w-padL-padR)); for(let i=n-1;i>=0;i-=step){ s+=`<text x="${X(i)}" y="${h-4}" text-anchor="middle" font-size="10" fill="var(--faint)">${fdNoY(dOf(i0+i))}</text>`; }
+  const step=Math.max(n<=14?1:(n<=31?3:7),xStep(n,w-padL-padR)); for(let i=n-1;i>=0;i-=step){ s+=`<text x="${X(i)}" y="${h-4}" text-anchor="middle" font-size="10" fill="var(--faint)">${fd(dOf(i0+i))}</text>`; }
   s+=`<line class="us-xh" x1="0" x2="0" y1="8" y2="${h-22}" stroke="var(--ink2)" stroke-width="1" opacity="0"/><rect x="${padL}" y="8" width="${X(n-1)-padL+hw}" height="70" fill="transparent"/>`;
   Object.keys(ups).forEach(d=>{ const Ls=ups[d], x=xAt(cu.days[d]), i=dDiff(f0,d), lv=Ls.some(z=>z[1][2]==='halt')?'var(--bad)':(Ls.some(z=>z[1][2]==='win')?'var(--good)':'var(--us-blue-s)');
     s+=`<g class="us-mk" data-tk="tlu:${d}" data-tl="u:${d}"><circle class="us-mkh" cx="${x.toFixed(1)}" cy="100" r="${TLHIT}" fill="transparent"/><line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${(un[i]!=null?Y(un[i]):70).toFixed(1)}" y2="92" stroke="${lv}" stroke-opacity=".3"/><rect x="${(x-7).toFixed(1)}" y="93" width="14" height="14" rx="3" transform="rotate(45 ${x.toFixed(1)} 100)" fill="${lv}"/>${Ls.length>1?`<text x="${x.toFixed(1)}" y="103.5" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0a1120">${Ls.length}</text>`:''}</g>`; });
@@ -15054,7 +15077,7 @@ function tlHtml(){ const i1=ix(W.t), i0=Math.max(0,Math.min(ix(W.f),i1-41)), n=i
   obs.push(...ptsObs(un,X,Y,2.5));
   let li=-1; for(let i=n-1;i>=0;i--) if(un[i]!=null){ li=i; break; }
   const gx=X(n-1)+12;
-  if(li>=0) L.push({x:gx,y:Y(un[li])+4,t:fdNoY(dOf(i0+li))+': '+fN(un[li])+(rt[li]!=null?' ('+rp(rt[li])+')':''),a:'start',p:1,b:1,c:'var(--ink)',dys:[0,-12,12,-24,24]});
+  if(li>=0) L.push({x:gx,y:Y(un[li])+4,t:fd(dOf(i0+li))+': '+fN(un[li])+(rt[li]!=null?' ('+rp(rt[li])+')':''),a:'start',p:1,b:1,c:'var(--ink)',dys:[0,-12,12,-24,24]});
   if(avgU!=null) L.push({x:gx,y:Y(avgU)+4,t:'Avg '+fN(avgU)+'/day'+(PT.rate!=null?' ('+rp(PT.rate)+')':''),a:'start',p:2,c:'var(--us-s-out)',dys:[0,-12,12,-24,24,36]});
   if(nrmU!=null) L.push({x:gx,y:Y(nrmU)+4,t:'Normal '+fN(nrmU)+'/day'+(PT.med!=null?' ('+rp(PT.med)+')':''),a:'start',p:3,c:'var(--good)',dys:[0,12,-12,24,-24,36]});
   s+=labels(L,[padL,4,w-2,90],obs,'var(--panel)')+'</svg>';
@@ -15257,9 +15280,9 @@ function renderTbl(keepFocus){ gdRender(true); const el=$('us-tbl'); if(!el) ret
 function expandH(o){ const a=o.a, i0=Math.max(0,Math.min(ix(W.f),N-28)), i1=ix(W.t), wi=ix(W.f)-i0;
   const rate=spark({vals:a.rate.slice(i0,i1+1),lo:a.lo.slice(i0,i1+1),hi:a.hi.slice(i0,i1+1),w:320,h:80,color:'var(--us-s-rate)',prov:W.t>a.settled?ix(dAdd(a.settled,1))-i0:null,
     tip:i=>{ const k=i0+i; return `<div class="us-tt">${fd(dOf(k))}</div>${trow('Uninstalls',fN(a.un[k])+(a.rate[k]!=null?' ('+rp(a.rate[k])+')':''))}${a.lo[k]!=null?trow('Normal',rp(a.lo[k])+'–'+rp(a.hi[k])):''}`; },
-    lab:{last:i=>fdNoY(dOf(i0+i))+': '+fN(a.un[i0+i])+' ('+rp(a.rate[i0+i])+')',avg:o.s.rate,avgT:'avg '+fN(o.outD)+' ('+rp(o.s.rate)+')'}});
+    lab:{last:i=>fd(dOf(i0+i))+': '+fN(a.un[i0+i])+' ('+rp(a.rate[i0+i])+')',avg:o.s.rate,avgT:'avg '+fN(o.outD)+' ('+rp(o.s.rate)+')'}});
   const io=spark({vals:a.nw.slice(i0,i1+1),ghost:null,w:320,h:80,color:'var(--us-s-in)',area:1,tip:i=>{ const k=i0+i; return `<div class="us-tt">${fd(dOf(k))}</div>${trow('Installs',fN(a.nw[k]))}${trow('Uninstalls',fN(a.un[k]))}${trow('Net',fS((a.nw[k]||0)-(a.un[k]||0)))}`; },
-    lab:{last:i=>fdNoY(dOf(i0+i))+': '+fN(a.nw[i0+i])+' installs'}});
+    lab:{last:i=>fd(dOf(i0+i))+': '+fN(a.nw[i0+i])+' installs'}});
   const io2=spark({vals:a.un.slice(i0,i1+1),w:320,h:80,color:'var(--us-s-out)',area:1,dot:false});
   return `<div class="us-xin"><div><h4>Uninstall rate % · normal band${wi>0?' · last 4 weeks':''}</h4>${rate}</div><div><h4><span style="color:var(--us-s-in)">Installs</span> vs <span style="color:var(--us-s-out)">uninstalls</span> /day</h4><div style="position:relative">${io}<div style="position:absolute;inset:0;pointer-events:none">${io2}</div></div></div><div><h4>Install weeks · % still in app</h4>${cohMini(a)}</div><button class="us-btn us-go" data-go="${a.i}">Full app view →</button></div>`; }
 const cohLab=c=>c===0?'Install day':'Day '+c;
@@ -15422,7 +15445,7 @@ function bigChart(a,o,mode){ const i1=ix(W.t), i0=Math.max(a.fi,Math.min(ix(W.f)
   const pv=W.t>a.settled?ix(dAdd(a.settled,1))-i0:null; if(pv!=null&&pv<n){ s+=`<rect x="${X(pv)-hw}" y="${pt-6}" width="${X(n-1)-X(pv)+2*hw}" height="${h-pb-pt+6}" fill="url(#us-hatch)"/>`;
     L.push({x:X(n-1),y:h-pb-5,t:'⏳ not final',a:'end',p:8,c:'var(--watch)',fs:10,dys:[0]}); }
   for(let k=0;k<=4;k++){ const v=mn+(mx-mn)*k/4; s+=`<line x1="${pl}" x2="${X(n-1)}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-opacity=".6"/><text x="${pl-6}" y="${Y(v)+3.5}" text-anchor="end" font-size="10.5" fill="var(--faint)">${rp(v)}</text>`; }
-  const step=xStep(n,w-pl-pr); for(let i=n-1;i>=0;i-=step) s+=`<text x="${X(i)}" y="${h-8}" text-anchor="middle" font-size="10.5" fill="var(--faint)">${fdNoY(dOf(i0+i))}</text>`;
+  const step=xStep(n,w-pl-pr); for(let i=n-1;i>=0;i-=step) s+=`<text x="${X(i)}" y="${h-8}" text-anchor="middle" font-size="10.5" fill="var(--faint)">${fd(dOf(i0+i))}</text>`;
   s+=`<path d="${areaOf(lo,hi2,X,Y)}" fill="var(--us-band)"/><path d="${pathOf(md,X,Y)}" fill="none" stroke="var(--us-blue-s)" stroke-opacity=".45" stroke-dasharray="2 4"/>`;
   s+=`<path d="${pathOf(gh,X,Y)}" fill="none" stroke="var(--us-ghost)" stroke-width="1.4" stroke-dasharray="4 4"/>`;
   // the chosen range's average and the normal: reference marks across the range, labelled at the right edge
@@ -15437,7 +15460,7 @@ function bigChart(a,o,mode){ const i1=ix(W.t), i0=Math.max(a.fi,Math.min(ix(W.f)
   let li=-1; for(let i=n-1;i>=0;i--) if(rate[i]!=null){ li=i; break; }
   const gx=wide?X(n-1)+10:X(n-1);
   if(li>=0){ const un=a.un[i0+li]; obs.push([X(li)-5,Y(rate[li])-5,X(li)+5,Y(rate[li])+5]);
-    L.push({x:wide?gx:X(li)-6,y:Y(rate[li])+4,t:(wide?fdNoY(dOf(i0+li))+': ':'')+fN(un)+' ('+rp(rate[li])+')',a:wide?'start':'end',p:1,b:1,fs:12,c:'var(--ink)',dys:[0,-14,14,-28,28]}); }
+    L.push({x:wide?gx:X(li)-6,y:Y(rate[li])+4,t:(wide?fd(dOf(i0+li))+': ':'')+fN(un)+' ('+rp(rate[li])+')',a:wide?'start':'end',p:1,b:1,fs:12,c:'var(--ink)',dys:[0,-14,14,-28,28]}); }
   if(avgR!=null) L.push({x:wide?gx:X(n-1),y:Y(avgR)+4,t:'Avg '+fN(avgU)+(wide?'/day':'')+' ('+rp(avgR)+')',a:wide?'start':'end',p:2,fs:11.5,c:'var(--us-s-rate)',dys:[0,-13,13,-26,26,-39,39]});
   if(nrmR!=null) L.push({x:wide?gx:X(n-1),y:Y(nrmR)+4,t:'Normal '+fN(nrmU)+(wide?'/day':'')+' ('+rp(nrmR)+')',a:wide?'start':'end',p:3,fs:11.5,c:'var(--good)',dys:[0,13,-13,26,-26,39,-39]});
   // 📦 each update: its version and the 7 days before → after (actual uninstalls a day, then the rate)
@@ -15450,7 +15473,7 @@ function bigChart(a,o,mode){ const i1=ix(W.t), i0=Math.max(a.fi,Math.min(ix(W.f)
   // 🔔 each alert's start: its date and that day's value
   a.al.forEach(x=>{ if(x.closed) return; const d=startedOf(x); if(!d) return; const i=ix(d)-i0; if(i<0||i>=n) return; const col=x.sev==='bigda'?'var(--bad)':(x.sev==='dhyan'?'var(--watch)':'var(--good)');
     s+=`<circle cx="${X(i)}" cy="${h-pb}" r="5" fill="${col}" stroke="var(--bg2)" stroke-width="2" data-tk="al:${x.k}"/>`; obs.push([X(i)-6,h-pb-6,X(i)+6,h-pb+6]);
-    const v=rate[i]; L.push({x:X(i),y:h-pb-10,t:`🔔 ${fdNoY(d)}: ${fN(a.un[i0+i])}${v!=null?' ('+rp(v)+')':''}`,a:'middle',xs:[[X(i)+8,'start'],[X(i)-8,'end']],p:5,c:col,fs:10.5,dys:[0,-12,-24,-36]}); });
+    const v=rate[i]; L.push({x:X(i),y:h-pb-10,t:`🔔 ${fd(d)}: ${fN(a.un[i0+i])}${v!=null?' ('+rp(v)+')':''}`,a:'middle',xs:[[X(i)+8,'start'],[X(i)-8,'end']],p:5,c:col,fs:10.5,dys:[0,-12,-24,-36]}); });
   s+=labels(L,[pl+2,pt-30,w-2,h-pb+2],obs)+'</svg>';
   SPK[id]={n,X,w,tip:i=>{ const k=i0+i, dd=dOf(k); return `<div class="us-tt">${ic(a,14,'ail')}${esc(a.nm)} · ${fd(dd)}${dd>a.settled?' ⏳':''}</div>${trow('Uninstalls',fN(a.un[k])+(a.rate[k]!=null?' ('+rp(a.rate[k])+')':''))}${trow('Installs',fN(a.nw[k]))}${a.lo[k]!=null?trow('Normal',rp(a.lo[k])+'–'+rp(a.hi[k])):''}${gh[i]!=null?trow('Before ('+fd(dAdd(dd,-cOff))+')',rp(gh[i])):''}${a.rel.filter(r=>r[0]===dd).map(r=>'<div class="us-tsm">📦 '+esc(r[1])+'</div>').join('')}`; }};
   return `<div class="us-chart">${s}</div><div class="us-clg"><span class="us-k"><i style="background:var(--us-s-rate)"></i>Uninstall rate %</span><span class="us-k"><i style="background:var(--us-band);height:9px"></i>Normal range</span><span class="us-k"><i style="background:repeating-linear-gradient(90deg,var(--us-s-rate) 0 6px,transparent 6px 9px)"></i>Avg (chosen range)</span><span class="us-k"><i style="background:repeating-linear-gradient(90deg,var(--good) 0 2px,transparent 2px 5px)"></i>Normal (chosen range)</span><span class="us-k"><i style="background:var(--us-ghost)"></i>Before (${span(W.cf,W.ct)}, same spot)</span><span class="us-k">📦 Update</span><span class="us-k"><i style="background:var(--bad);width:8px;height:8px;border-radius:50%"></i>Alert started</span><span class="us-k">● out of range</span><span class="us-k"><i style="background:repeating-linear-gradient(135deg,rgba(230,184,78,.45) 0 2px,transparent 2px 4px);height:9px"></i>⏳ not final</span>${cut?'<span class="us-k us-faint">normal band clipped from top (chart padhne layak rahe)</span>':''}</div>`; }
@@ -15463,14 +15486,14 @@ function ioChart(a,mode){ const i1=ix(W.t), i0=Math.max(a.fi,Math.min(ix(W.f),i1
   const obs=[];
   I.forEach((v,i)=>{ const d=dOf(i0+i), op=d>a.settled?.55:1; if(v!=null){ s+=`<rect x="${X(i)-bw/2}" y="${mid-Y(v)}" width="${bw}" height="${Y(v)}" rx="1.5" fill="var(--us-s-in)" opacity="${op}" data-tk="io:${a.i}:${i0+i}"/>`; obs.push([X(i)-bw/2,mid-Y(v),X(i)+bw/2,mid]); }
     if(O[i]!=null){ s+=`<rect x="${X(i)-bw/2}" y="${mid+1}" width="${bw}" height="${Y(O[i])}" rx="1.5" fill="var(--us-s-out)" opacity="${op}" data-tk="io:${a.i}:${i0+i}"/>`; obs.push([X(i)-bw/2,mid,X(i)+bw/2,mid+1+Y(O[i])]); } });
-  const step=xStep(n,w-pl-pr); for(let i=n-1;i>=0;i-=step) s+=`<text x="${X(i)}" y="${h-6}" text-anchor="middle" font-size="10.5" fill="var(--faint)">${fdNoY(dOf(i0+i))}</text>`;
+  const step=xStep(n,w-pl-pr); for(let i=n-1;i>=0;i-=step) s+=`<text x="${X(i)}" y="${h-6}" text-anchor="middle" font-size="10.5" fill="var(--faint)">${fd(dOf(i0+i))}</text>`;
   // the latest bar and the biggest bar, of each: their values on the chart
   const last=arr=>{ for(let i=arr.length-1;i>=0;i--) if(arr[i]!=null) return i; return -1; }, big=arr=>{ let b=-1; arr.forEach((v,i)=>{ if(v!=null&&(b<0||v>arr[b])) b=i; }); return b; };
   const L=[], li=last(I), bi=big(I), lo_=last(O), bo=big(O);
-  if(li>=0) L.push({x:X(li)+bw/2,y:mid-Y(I[li])-4,t:fdNoY(dOf(i0+li))+': '+fN(I[li]),a:'end',p:1,b:1,c:'var(--us-s-in)',dys:[0,-11,-22]});
-  if(bi>=0&&bi!==li) L.push({x:X(bi),y:mid-Y(I[bi])-4,t:'Max '+fN(I[bi])+' ('+fdNoY(dOf(i0+bi))+')',a:'middle',xs:[[X(bi)-bw/2,'end'],[X(bi)+bw/2,'start']],p:2,c:'var(--us-s-in)',dys:[0,-12,-24,-36]});
-  if(lo_>=0) L.push({x:X(lo_)+bw/2,y:mid+1+Y(O[lo_])+12,t:fdNoY(dOf(i0+lo_))+': '+fN(O[lo_]),a:'end',p:3,b:1,c:'var(--us-s-out)',dys:[0,11,22]});
-  if(bo>=0&&bo!==lo_) L.push({x:X(bo),y:mid+1+Y(O[bo])+12,t:'Max '+fN(O[bo])+' ('+fdNoY(dOf(i0+bo))+')',a:'middle',xs:[[X(bo)-bw/2,'end'],[X(bo)+bw/2,'start']],p:4,c:'var(--us-s-out)',dys:[0,12,24,36]});
+  if(li>=0) L.push({x:X(li)+bw/2,y:mid-Y(I[li])-4,t:fd(dOf(i0+li))+': '+fN(I[li]),a:'end',p:1,b:1,c:'var(--us-s-in)',dys:[0,-11,-22]});
+  if(bi>=0&&bi!==li) L.push({x:X(bi),y:mid-Y(I[bi])-4,t:'Max '+fN(I[bi])+' ('+fd(dOf(i0+bi))+')',a:'middle',xs:[[X(bi)-bw/2,'end'],[X(bi)+bw/2,'start']],p:2,c:'var(--us-s-in)',dys:[0,-12,-24,-36]});
+  if(lo_>=0) L.push({x:X(lo_)+bw/2,y:mid+1+Y(O[lo_])+12,t:fd(dOf(i0+lo_))+': '+fN(O[lo_]),a:'end',p:3,b:1,c:'var(--us-s-out)',dys:[0,11,22]});
+  if(bo>=0&&bo!==lo_) L.push({x:X(bo),y:mid+1+Y(O[bo])+12,t:'Max '+fN(O[bo])+' ('+fd(dOf(i0+bo))+')',a:'middle',xs:[[X(bo)-bw/2,'end'],[X(bo)+bw/2,'start']],p:4,c:'var(--us-s-out)',dys:[0,12,24,36]});
   s+=labels(L,[pl+2,1,w-2,h-18],obs);
   SPK[id]={n,X,w,tip:i=>TIPS.io(a.i,i0+i)};
   return `<div class="us-chart">${s}</svg></div><div class="us-clg"><span class="us-k"><i style="background:var(--us-s-in)"></i>Installs (top)</span><span class="us-k"><i style="background:var(--us-s-out)"></i>Uninstalls (bottom)</span><span class="us-k us-faint">faded = ⏳ not final</span></div>`; }
@@ -17858,7 +17881,7 @@ function uniAlertCards(list){
       :`<span class="abtn pri" onclick="uniGo('${uniQ(x.app_id)}')">Uninstall detail →</span>`;
     return `<div class="alert ${sev}" data-sev="${x.severity}" data-metrics="uninstall"><div style="font-size:17px">${ICON[x.severity]||'•'}</div><div class="abody">
       <div class="atitle">${title}</div>
-      <div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appChip(x.app,18,x.app_id)}<span class="faint">· GA4${imp?' + AdMob':''} · data till ${fmtD(x.data_till)}</span></div>
+      <div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appChip(x.app,18,x.app_id)}<span class="faint">· GA4${imp?' + AdMob':''} · data till ${uniD(x.data_till)}</span></div>
       <div style="margin:9px 0 2px;font-size:12.5px;color:${uniAlertCol(x)}">${hAttr(smpInfoTxt(x.text||x.message||''))}</div>${imp?'':uniAlSplit(x,true)}
       ${cause?`<div class="acause" style="margin-top:8px">💡 ${cause}</div>`:''}
       <div class="aact">${btn}</div></div></div>`; }).join(''); }
@@ -17954,7 +17977,7 @@ const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec
 const fd=s=>{ if(!s) return ''; return (+s.slice(8,10))+' '+MO[+s.slice(5,7)-1]+(s.slice(0,4)!==YR?' '+s.slice(0,4):''); };
 const fdNoY=s=>(+s.slice(8,10))+' '+MO[+s.slice(5,7)-1];
 const span=(a,b)=>{ if(!a) return ''; if(!b||a===b) return fd(a);
-  if(a.slice(0,4)!==b.slice(0,4)) return fd(a)+'–'+fd(b);
+  if(a.slice(0,4)!==b.slice(0,4)) return fdNoY(a)+' '+a.slice(0,4)+'–'+fdNoY(b)+' '+b.slice(0,4);   // over New Year: each end with its year
   return (a.slice(0,7)===b.slice(0,7)?String(+a.slice(8)):fdNoY(a))+'–'+fd(b); };
 const addMonths=(s,k)=>{ const y=+s.slice(0,4), m0=+s.slice(5,7)-1+k, d=+s.slice(8,10), Y=y+Math.floor(m0/12), Mm=((m0%12)+12)%12;
   const last=new Date(Date.UTC(Y,Mm+1,0)).getUTCDate(); return new Date(Date.UTC(Y,Mm,Math.min(d,last))).toISOString().slice(0,10); };
@@ -18468,7 +18491,7 @@ function honHtml(){ if(!HS) return '';
   ev.sort((x,y)=>y.i-x.i);
   const ch=ev.slice(0,5).map(e=>`<span class="as-hch ${e.s>0?'as-hch-up':'as-hch-dn'}" data-tk="hon:${e.i}">${e.s>0?'+1 app joined':MI+'1 app stopped'} · ${fd(dOf(e.i))} · ${appIconId(e.p.a&&e.p.a.app_id,e.p.name,14,'ail')}${esc(e.p.name)}</span>`).join('')
     +(ev.length>5?`<span class="as-hch" data-tk="honl:0">+${ev.length-5} more</span>`:'')
-    +(miss.length?`<span class="as-hch as-hch-miss" data-tk="honm:0">⏸️ Big app data missing · ${miss.length} ${miss.length===1?'day':'days'} (${miss.slice(0,4).map(i=>fdNoY(dOf(i))).join(', ')}${miss.length>4?' …':''})</span>`:'');
+    +(miss.length?`<span class="as-hch as-hch-miss" data-tk="honm:0">⏸️ Big app data missing · ${miss.length} ${miss.length===1?'day':'days'} (${miss.slice(0,4).map(i=>fd(dOf(i))).join(', ')}${miss.length>4?' …':''})</span>`:'');
   return `<div class="as-hon"><span class="as-hl">⚠️ Totals pe asar</span>${ch}<span class="as-hx">${ev.length?'Apps ki ginti badli — ▲▼ me nayi / ruki app ka hissa bhi hai, ye growth / drop nahi. ':''}${miss.length?'⏸️ din ka total kam dikhta hai, girawat nahi. ':''}Din-wise: 📋 Day by day.</span></div>`; }
 TIPS.hon=i=>{ const h=hon(+i); if(!h) return '';
   return `<div class="as-tt">${fd(h.d)} · apps with data</div>${trow('Apps with data',h.k+' of '+h.n)}${h.gap.length?trow('No data',pnm(h.gap,6)):''}${h.late.length?trow('Not in yet',pnm(h.late,6)):''}${h.err.length?trow('Not built this time',pnm(h.err,6)):''}${h.brk.length?trow('Tracking check',pnm(h.brk,6)):''}${honTip(+i)}${!h.gap.length&&!h.late.length&&!h.err.length&&!h.up.length&&!h.dn.length?'<div class="as-tsm">Data for all apps</div>':''}${h.pv?'<div class="as-tsm">⏳ not final</div>':''}`; };
@@ -18567,7 +18590,7 @@ function tlHtml(){ const i1=ix(W.t), i0=Math.max(0,Math.min(ix(W.f),i1-41)), n=i
   if(avgT&&isFinite(Y(PT.ret))) LB.push({x:X(n-1)+8,y:Y(PT.ret),t:avgT,p:3,c:'var(--muted)',dys:[0,-6,6,-11,11]});
   [[96,'📦 Updates'],[138,'🔔 Change started']].forEach(([y,l])=>{ s+=`<line x1="${padL}" x2="${w-padR}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-dasharray="2 4"/><text x="0" y="${y+4}" font-size="11" fill="var(--muted)">${l}</text>`; });
   const pv=W.t>M.settled?ix(dAdd(M.settled,1))-i0:null; if(pv!=null&&pv<n){ s+=`<line x1="${(X(Math.max(0,pv))-hw).toFixed(1)}" x2="${(X(n-1)+hw).toFixed(1)}" y1="${h-22}" y2="${h-22}" stroke="var(--watch)" stroke-width="2.5"/>`; LB.push({x:X(n-1)+hw,y:h-30,t:'⏳ not final',p:4,a:'end',c:'var(--watch)',fs:10}); }
-  const step=Math.max(n<=14?1:(n<=31?3:7),xStep(n,w-padL-padR)); for(let i=n-1;i>=0;i-=step){ s+=`<text x="${X(i)}" y="${h-4}" text-anchor="middle" font-size="10" fill="var(--faint)">${fdNoY(dOf(i0+i))}</text>`; avoid.push({x:X(i)-16,y:h-15,w:32,h:13}); }
+  const step=Math.max(n<=14?1:(n<=31?3:7),xStep(n,w-padL-padR)); for(let i=n-1;i>=0;i-=step){ s+=`<text x="${X(i)}" y="${h-4}" text-anchor="middle" font-size="10" fill="var(--faint)">${fd(dOf(i0+i))}</text>`; avoid.push({x:X(i)-16,y:h-15,w:32,h:13}); }
   const clus=Mp=>{ const out=[]; Object.keys(Mp).sort().forEach(d=>{ const x=X(dDiff(f0,d)), c=out[out.length-1]; if(c&&x-c.x0<20){ c.ds.push(d); c.L=c.L.concat(Mp[d]); c.x1=x; } else out.push({ds:[d],L:Mp[d].slice(),x0:x,x1:x}); });
     out.forEach(c=>{ c.x=(c.x0+c.x1)/2; c.key=c.ds.join(','); c.i=dDiff(f0,c.ds[c.ds.length-1]); c.sp=c.ds.length>1?span(c.ds[0],c.ds[c.ds.length-1]):fd(c.ds[0]); }); return out.reverse(); };
   clus(ups).forEach((c,k)=>{ const L=c.L, i=c.i, x=c.x, d=c.ds[0], lv=L.some(z=>z[1][2]==='halt')?'var(--bad)':(L.some(z=>z[1][2]==='win')?'var(--good)':'var(--as-blue-s)');
@@ -18775,7 +18798,7 @@ function bigChart(o,W0){ const a=o.a, L=o.L, i1=ix(W.t), i0=Math.max(a.fi,Math.m
     if(x+fw>w){ x=w-pr; a='end'; } if(a==='end'&&x-fw<pl){ x=pl+4; a='start'; } LB.push({x,y:pt+5,t,p:1,a,c:'var(--cyan)',b:1,dys:[0,10,20]}); }
   const pv=W.t>a.settled?ix(dAdd(a.settled,1))-i0:null; if(pv!=null&&pv<n){ s+=`<rect x="${X(pv)-((X(1)-X(0))/2)}" y="${pt-6}" width="${w-pr-X(pv)+(X(1)-X(0))/2}" height="${h-pb-pt+6}" fill="url(#as-hatch)"/>`; LB.push({x:w-pr-2,y:h-pb-8,t:'⏳ not final',p:5,a:'end',c:'var(--watch)'}); }
   for(let k=0;k<=4;k++){ const v=mn+(mx-mn)*k/4; s+=`<line x1="${pl}" x2="${w-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-opacity=".6"/><text x="${pl-6}" y="${Y(v)+3.5}" text-anchor="end" font-size="10.5" fill="var(--faint)">${fN(v)}</text>`; }
-  const step=xStep(n,w-pl-pr); for(let i=n-1;i>=0;i-=step){ s+=`<text x="${X(i)}" y="${h-8}" text-anchor="middle" font-size="10.5" fill="var(--faint)">${fdNoY(dOf(i0+i))}</text>`; avoid.push({x:X(i)-17,y:h-19,w:34,h:14}); }
+  const step=xStep(n,w-pl-pr); for(let i=n-1;i>=0;i-=step){ s+=`<text x="${X(i)}" y="${h-8}" text-anchor="middle" font-size="10.5" fill="var(--faint)">${fd(dOf(i0+i))}</text>`; avoid.push({x:X(i)-17,y:h-19,w:34,h:14}); }
   s+=`<path d="${areaOf(loC,hiC,X,Y)}" fill="var(--as-band)"/>`;
   // the farak: actual vs the weekday normal, shaded
   if(L&&L.far!=null){ let d=''; ex.forEach((e,j)=>{ if(e==null||rt[j]==null) return; const x=X(j), bw=Math.max(2,(X(1)-X(0))*.5); d+=`<rect x="${(x-bw/2).toFixed(1)}" y="${Math.min(Y(e),Y(rt[j])).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1,Math.abs(Y(e)-Y(rt[j]))).toFixed(1)}" fill="${rt[j]<e?'var(--bad)':'var(--good)'}" opacity=".35"/>`; }); s+=d;
@@ -18806,7 +18829,7 @@ function ioChart(o,W0){ const a=o.a, i1=ix(W.t), i0=Math.max(a.fi,Math.min(ix(W.
   I.forEach((v,j)=>{ s+=`<rect x="${(X(j-.5)).toFixed(1)}" y="${pt}" width="${(X(j+.5)-X(j-.5)).toFixed(1)}" height="${h-pt-pb}" fill="transparent" data-tk="io:${a.i}:${i0+j}"/>`; });
   I.forEach((v,j)=>{ const op=i0+j>a.si?.5:1; if(v!=null){ s+=`<rect x="${X(j)-bw/2}" y="${mid-Y(v)}" width="${bw}" height="${Y(v)}" rx="1.5" fill="var(--as-s-in)" opacity="${op}" data-tk="io:${a.i}:${i0+j}"/>`; avoid.push({x:X(j)-bw/2,y:mid-Y(v),w:bw,h:Y(v)}); }
     if(Yv[j]!=null){ s+=`<rect x="${X(j)-bw/2}" y="${mid+1}" width="${bw}" height="${Y(Yv[j])}" rx="1.5" fill="var(--as-s-back)" opacity="${op}" data-tk="io:${a.i}:${i0+j}"/>`; avoid.push({x:X(j)-bw/2,y:mid+1,w:bw,h:Y(Yv[j])}); } });
-  const step=xStep(n,w-pl-pr); for(let j=n-1;j>=0;j-=step){ s+=`<text x="${X(j)}" y="${h-8}" text-anchor="middle" font-size="10.5" fill="var(--faint)">${fdNoY(dOf(i0+j))}</text>`; avoid.push({x:X(j)-17,y:h-19,w:34,h:14}); }
+  const step=xStep(n,w-pl-pr); for(let j=n-1;j>=0;j-=step){ s+=`<text x="${X(j)}" y="${h-8}" text-anchor="middle" font-size="10.5" fill="var(--faint)">${fd(dOf(i0+j))}</text>`; avoid.push({x:X(j)-17,y:h-19,w:34,h:14}); }
   // the latest and the biggest bar of each, printed on the chart
   const ends=(arr,up,c,lab)=>{ let la=-1, bi=-1; arr.forEach((v,j)=>{ if(v==null) return; la=j; if(bi<0||v>arr[bi]) bi=j; });
     if(la>=0) LB.push({x:X(la),y:up?mid-Y(arr[la])-8:mid+1+Y(arr[la])+8,t:lab+fN(arr[la]),p:up?1:2,a:'middle',c,b:1,dys:[0,up?-9:9]});
@@ -20097,7 +20120,7 @@ function actAlertCards(list){
     const btn=`<span class="abtn pri" onclick="actGo('${uniQ(x.app_id)}')">Open app →</span>`+(R&&R.key?`<span class="abtn" onclick="uniImpGo('${uniQ(x.app_id)}','${uniQ(R.key)}','act')">Update detail →</span>`:'');
     return `<div class="alert ${x.severity==='critical'?'crit':(x.severity||'watch')}" data-sev="${x.severity||'watch'}" data-metrics="active"><div style="font-size:17px">${IC[x.severity]||'•'}</div><div class="abody">
       <div class="atitle">👥 ${ACT_AML[x.metric]||'Active users'} — ${ACT_FAM[x.family]||'Change'} <span class="pill ${sv[1]}" style="margin-left:4px">${sv[0]}</span></div>
-      <div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appChip(x.app,18,x.app_id)}<span class="faint">· ${actWhen(x)} · GA4${ad?' + AdMob':''} · data till ${fmtD(x.data_till)}</span></div>
+      <div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appChip(x.app,18,x.app_id)}<span class="faint">· ${actWhen(x)} · GA4${ad?' + AdMob':''} · data till ${uniD(x.data_till)}</span></div>
       <div style="margin:9px 0 2px;font-size:12.5px;color:${COL[x.severity]||'var(--ink2)'}">${hAttr(smpInfoTxt(x.text||x.message||''))}</div>${actAlSplit(x,true)}
       ${x.linked?`<div class="faint act-linked" style="font-size:11.5px;margin-top:6px">📦 Yahi badlaav ${R&&R.label?hAttr(R.label)+' ke ':''}Update impact card me bhi hai — ek hi baat, alert count me ek baar.</div>`:''}
       ${cause?`<div class="acause" style="margin-top:8px">💡 ${cause}</div>`:''}
@@ -20343,8 +20366,9 @@ const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec
 const fd=s=>{ if(!s) return ''; return (+s.slice(8,10))+' '+MO[+s.slice(5,7)-1]+(s.slice(0,4)!==YR?' '+s.slice(0,4):''); };
 const fdNoY=s=>(+s.slice(8,10))+' '+MO[+s.slice(5,7)-1];
 const span=(a,b)=>{ if(!a) return ''; if(!b||a===b) return fd(a);
-  if(a.slice(0,4)!==b.slice(0,4)) return fd(a)+'–'+fd(b);
+  if(a.slice(0,4)!==b.slice(0,4)) return fdNoY(a)+' '+a.slice(0,4)+'–'+fdNoY(b)+' '+b.slice(0,4);   // over New Year: each end with its year
   return (a.slice(0,7)===b.slice(0,7)?String(+a.slice(8)):fdNoY(a))+'–'+fd(b); };
+const rngY=(a,b)=>!a||!b?fd(a||b):a.slice(0,4)!==b.slice(0,4)?fdNoY(a)+' '+a.slice(0,4)+' – '+fdNoY(b)+' '+b.slice(0,4):fd(a)+' – '+fd(b);   // two years: both ends carry theirs
 const wkSpan=(i0,i1)=>span(wS(i0),wE(i1==null?i0:i1));
 const ist=iso=>{ const t=Date.parse(iso); if(isNaN(t)) return null; const z=new Date(t+330*6e4).toISOString(); return {day:z.slice(0,10),hm:z.slice(11,16)}; };
 const fist=iso=>{ const z=ist(iso); return z?fd(z.day)+', '+z.hm+' IST':''; };
@@ -20731,7 +20755,7 @@ function topHtml(){ const r0=rangeOf(), c0=cmpOf(), cur=curView();
     +`<label class="vs-sel" for="vs-cmp"><span>vs</span><select id="vs-cmp"><option value="prev"${c0==='prev'?' selected':''}>Previous same weeks</option><option value="month"${c0==='month'?' selected':''}>4 weeks before (last month)</option><option value="c"${c0==='c'?' selected':''}>Custom weeks…</option></select></label>`
     +`<div class="vs-seg" id="vs-cur" role="group" aria-label="Currency"><button data-c="INR" aria-pressed="${cur==='INR'}">₹</button><button data-c="USD" aria-pressed="${cur!=='INR'}">$</button></div></div></div>`
     +`<div class="vs-custom" id="vs-customRow"${(r0==='c'||c0==='c')?'':' hidden'}><span class="vs-grp" id="vs-cgA"${r0==='c'?'':' hidden'}>Install weeks ${iv('vs-cf1',wS(W.i0),'Range from')} – ${iv('vs-ct1',wE(W.i1),'Range to')}</span>`
-    +`<span class="vs-grp" id="vs-cgB"${c0==='c'?'':' hidden'}>Compare ${iv('vs-cf2',wS(W.c0),'Compare from')} – ${iv('vs-ct2',wE(W.c1),'Compare to')}</span><span class="vs-faint" id="vs-cnote">Full install weeks (Mon–Sun) · data ${fd(pickMin())} – ${fd(wE(NW-1))}</span></div>`
+    +`<span class="vs-grp" id="vs-cgB"${c0==='c'?'':' hidden'}>Compare ${iv('vs-cf2',wS(W.c0),'Compare from')} – ${iv('vs-ct2',wE(W.c1),'Compare to')}</span><span class="vs-faint" id="vs-cnote">Full install weeks (Mon–Sun) · data ${rngY(pickMin(),wE(NW-1))}</span></div>`
     +`<div class="vs-winline" id="vs-winline">${winHtml()}</div>`; }
 function renderTop(){ const el=$('vs-top'); if(!el) return;   // in place: the focused control keeps its focus
   const r0=rangeOf(), c0=cmpOf(), cur=curView();
@@ -20909,7 +20933,7 @@ function tlHtml(){ const i1=W.i1, i0=Math.max(0,Math.min(W.c0,W.i0)), n=i1-i0+1,
   const als={}; ALS.forEach(z=>{ let d=z.st; if(!d) return; const before=d<f0; if(before) d=f0; if(d>t0) return; (als[d]=als[d]||[]).push([z,before]); });
   Object.keys(als).forEach(d=>{ const L=als[d], x=X(dDiff(f0,d)+.5), sv=L.some(z=>z[0].r.sev==='bigda')?'var(--bad)':(L.some(z=>z[0].r.sev==='dhyan')?'var(--watch)':'var(--good)');
     s+=`<g class="vs-mk" data-tk="tla:${d}" data-tl="a:${d}">${L.some(z=>z[1])?`<text x="${x-12}" y="142" text-anchor="end" font-size="11" fill="var(--faint)">←</text>`:''}<circle cx="${x}" cy="138" r="${L.length>1?8.5:6.5}" fill="${sv}"/>${L.length>1?`<text x="${x}" y="141.5" text-anchor="middle" font-size="10" font-weight="700" fill="#0a1120">${L.length}</text>`:''}</g>`; });
-  const step=Math.max(1,Math.ceil(n/Math.max(2,Math.floor((w-padL-padR)/64)))); for(let i=i1;i>=i0;i-=step) s+=`<text x="${Xw(i).toFixed(1)}" y="${h-4}" text-anchor="middle" font-size="10" fill="var(--faint)">${fdNoY(wS(i))}</text>`;
+  const step=Math.max(1,Math.ceil(n/Math.max(2,Math.floor((w-padL-padR)/64)))); for(let i=i1;i>=i0;i-=step) s+=`<text x="${Xw(i).toFixed(1)}" y="${h-4}" text-anchor="middle" font-size="10" fill="var(--faint)">${fd(wS(i))}</text>`;
   const pv=X(dDiff(f0,dAdd(M.settled,1))); if(pv<w-padR) s+=`<line x1="${pv.toFixed(1)}" x2="${(w-padR).toFixed(1)}" y1="${h-21}" y2="${h-21}" stroke="var(--watch)" stroke-width="2.5"/>`;
   Object.keys(ups).forEach(d=>{ const L=ups[d], x=X(dDiff(f0,d)+.5);
     s+=`<g class="vs-mk" data-tk="tlu:${d}" data-tl="u:${d}"><line x1="${x}" x2="${x}" y1="60" y2="96" stroke="var(--purple)" stroke-opacity=".3"/><rect x="${x-7}" y="97" width="14" height="14" rx="3" transform="rotate(45 ${x} 104)" fill="var(--purple)"/>${L.length>1?`<text x="${x}" y="107.5" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0a1120">${L.length}</text>`:''}</g>`; });
@@ -21170,7 +21194,7 @@ function weekChart(o){ const a=o.a, ph=innerWidth<=640, w=chartW(), h=ph?190:210
   RC.forEach(c=>{ c.x=(c.x0+c.x1)/2; c.key=c.L.map(r=>r[0]).join(','); const x=c.x;
     s+=`<g data-tk="drel:${a.i}:${c.key}"><rect x="${(x-14).toFixed(1)}" y="${pt-16}" width="28" height="20" fill="transparent"/><line x1="${x}" x2="${x}" y1="${pt}" y2="${h-pb}" stroke="var(--purple)" stroke-opacity=".55" stroke-dasharray="1 3"/><text x="${x}" y="${pt-2}" text-anchor="middle" font-size="11">📦</text>${c.L.length>1?`<text x="${x+8}" y="${pt-7}" font-size="9.5" font-weight="700" fill="var(--purple)">${c.L.length}</text>`:''}</g>`; });
   // weeks across years (every week since the start): the axis says month + year ("May 2024"), else the day ("14 Sep")
-  const yrs=wS(i0).slice(0,4)!==wS(i1).slice(0,4), xl=d=>yrs?MO[+d.slice(5,7)-1]+' '+d.slice(0,4):fdNoY(d);
+  const yrs=wS(i0).slice(0,4)!==wS(i1).slice(0,4), xl=d=>yrs?MO[+d.slice(5,7)-1]+' '+d.slice(0,4):fd(d);
   const step=yrs?Math.max(1,Math.ceil(n/Math.max(2,Math.floor((w-pl-pr)/76)))):xStep(n,w-pl-pr);
   for(let k=n-1;k>=0;k-=step) s+=`<text x="${(yrs?Math.min(X(k),w-26):X(k)).toFixed(1)}" y="${h-8}" text-anchor="middle" font-size="10.5" fill="var(--faint)">${xl(wS(i0+k))}</text>`;
   { const ob=[rbox(0,0,pl,h),rbox(0,h-pb,w,pb)], LB=[]; let li=-1, bi=-1;
@@ -21308,7 +21332,7 @@ function footHtml(){ return `<summary>How these numbers are made (chhoti si list
 <li><b>${SYM()==='₹'?'₹':'₹'}</b>: har hafta apne rate pe (Google Ads ne jo ₹ liya ÷ $) — isliye ₹ kharcha bilkul billed; $ view me engine ke $.</li>
 <li><b>Range</b> = upar ka chunav (Uninstall aur Active users ke saath ek hi): 7 din = 1 install hafta · 14 = 2 · 30 = 4 · 60 = 8 · Custom = jin hafton me chuni dates aati hain. "vs" = pichhle utne hi hafte / 4 hafte pehle / custom.</li>
 <li><b>Alerts</b>: abhi ${ALS.filter(z=>!z.closed).length} value alerts khule. "What's new" me Studio ka hisaab aur engine info — dono alert nahi, isliye 🕒 "—".</li>
-<li>Data: install hafte ${fd(wS(0))} – ${fd(wE(NW-1))} · install-day data ${fd(M.settled)} tak (⏳ ~${LAG} din late) · ${A.length} apps + ${NOGA.length} bina GA4 · naam hamesha account ke saath.</li></ul>`; }
+<li>Data: install hafte ${rngY(wS(0),wE(NW-1))} · install-day data ${fd(M.settled)} tak (⏳ ~${LAG} din late) · ${A.length} apps + ${NOGA.length} bina GA4 · naam hamesha account ke saath.</li></ul>`; }
 
 /* ================= render ================= */
 // the whole Studio as HTML (the dashboard's valScreen puts it in the Install value screen); the parts that need the page
@@ -22261,7 +22285,7 @@ function valAlertCards(list){
     const btn=`<span class="abtn pri" onclick="${go}">Open app →</span>`+(R&&R.key?`<span class="abtn" onclick="uniImpGo('${uniQ(x.app_id)}','${uniQ(R.key)}','act')">Update detail →</span>`:'');
     return `<div class="alert ${x.severity==='critical'?'crit':(x.severity||'watch')}" data-sev="${x.severity||'watch'}" data-metrics="value"><div style="font-size:17px">${IC[x.severity]||'•'}</div><div class="abody">
       <div class="atitle">${title} <span class="pill ${sv[1]}" style="margin-left:4px">${sv[0]}</span></div>
-      <div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appChip(x.app,18,x.app_id)}<span class="faint">· ${valWhen(x)} · GA4 + AdMob + Google Ads${x.data_till?' · data till '+fmtD(x.data_till):''}</span></div>
+      <div class="ameta" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${appChip(x.app,18,x.app_id)}<span class="faint">· ${valWhen(x)} · GA4 + AdMob + Google Ads${x.data_till?' · data till '+uniD(x.data_till):''}</span></div>
       <div style="margin:9px 0 2px;font-size:12.5px;color:${COL[x.severity]||'var(--ink2)'}">${valTxt(smpInfoTxt(x.text||x.message||''))}</div>${valSplit(x,true)}
       ${cause?`<div class="acause" style="margin-top:8px">💡 ${cause}</div>`:''}
       <div class="aact">${btn}</div></div></div>`; }).join(''); }
@@ -22479,12 +22503,17 @@ function rvIso(d){ return d.toISOString().slice(0,10); }
 function rvAddDays(s,n){ const d=rvPd(s); d.setUTCDate(d.getUTCDate()+n); return rvIso(d); }
 function rvOpenN(n){ return n+(n===1?" day":" days")+" open"; }   // "1 day open" / "4 days open"
 function rvDayDiff(a,b){ return Math.round((rvPd(b)-rvPd(a))/864e5); }
-function rvFd(s){ if(!s) return ""; const d=rvPd(s); return isNaN(d)?String(s):d.getUTCDate()+" "+RV_MON[d.getUTCMonth()]; }
+// the reference year: the open review day's (the date the tab is "at"); the build's year before the index arrives
+function rvRefY(){ const o=(RV.idx&&RV.idx.open_day)||(RV.doc&&RV.doc.day)||""; return /^\d{4}-/.test(o)?o.slice(0,4):refYear(); }
+function rvFd(s){ if(!s) return ""; const d=rvPd(s); return isNaN(d)?String(s):d.getUTCDate()+" "+RV_MON[d.getUTCMonth()]+(String(d.getUTCFullYear())!==rvRefY()?" "+d.getUTCFullYear():""); }
+function rvFdY(s){ if(!s) return ""; const d=rvPd(s); return isNaN(d)?String(s||""):d.getUTCDate()+" "+RV_MON[d.getUTCMonth()]+" "+d.getUTCFullYear(); }
+function rvRange(a,b){ if(!a||!b) return rvFd(a||b); return String(a).slice(0,4)!==String(b).slice(0,4)?rvFdY(a)+"–"+rvFdY(b):rvFd(a)+"–"+rvFd(b); }   // over New Year both ends carry their year
 function rvWd(s){ const d=rvPd(s); return isNaN(d)?"":RV_WDAY[d.getUTCDay()]; }
 function rvIstDay(ts){ const t=Date.parse(ts); return isNaN(t)?"":new Date(t+330*60000).toISOString().slice(0,10); }
 function rvWhen(ts){ const t=Date.parse(ts); if(isNaN(t)) return "";
-  try{ return new Intl.DateTimeFormat("en-IN",{timeZone:"Asia/Kolkata",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(new Date(t)); }
-  catch(e){ const d=new Date(t+330*60000); return d.getUTCDate()+" "+RV_MON[d.getUTCMonth()]+", "+String(d.getUTCHours()).padStart(2,"0")+":"+String(d.getUTCMinutes()).padStart(2,"0"); } }
+  const y=new Date(t+330*60000).getUTCFullYear(), oy=String(y)!==rvRefY();   // (a time from another year says its year)
+  try{ return new Intl.DateTimeFormat("en-IN",Object.assign({timeZone:"Asia/Kolkata",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",hourCycle:"h23"},oy?{year:"numeric"}:{})).format(new Date(t)); }
+  catch(e){ const d=new Date(t+330*60000); return d.getUTCDate()+" "+RV_MON[d.getUTCMonth()]+(oy?" "+y:"")+", "+String(d.getUTCHours()).padStart(2,"0")+":"+String(d.getUTCMinutes()).padStart(2,"0"); } }
 function rvWho(email){ const e=String(email||""); const n=e.indexOf("@")>0?e.slice(0,e.indexOf("@")):e;
   return '<span class="rv-who" title="'+rvEsc(e)+'">'+rvEsc(n||"?")+"</span>"; }
 function rvPct(x){ return ((x>=0?"+":"−")+Math.abs(Math.round(x*100))+"%"); }
@@ -23138,7 +23167,7 @@ function rvRenderHist(){ const hv=rvQ("#rv-v-hist"); if(!hv||!RV.idx) return; co
   if(RV.S&&I.open_day){ cal={days:{...((cal&&cal.days)||{})}}; const od=I.open_day, n=Object.keys(RV.S.states).length;   // the open day: live
     cal.days[od]={...(cal.days[od]||{}),rev:n}; }
   const keep=rvQ("#rv-dayp");
-  hv.innerHTML='<section class="rv-blk"><div class="rv-bh"><h2>Daily review · '+rvEsc(rvFd(I.go_live))+"–"+rvEsc(rvFd(I.open_day))+'</h2><span class="rv-sub">Tap a day</span></div>'+
+  hv.innerHTML='<section class="rv-blk"><div class="rv-bh"><h2>Daily review · '+rvEsc(rvRange(I.go_live,I.open_day))+'</h2><span class="rv-sub">Tap a day</span></div>'+
     '<p class="rv-hint">History '+rvEsc(rvFd(I.go_live))+" se shuru hui (jab review chalu hua).</p>"+
     '<div class="rv-hleg"><span><span class="rv-sq green"></span>all reviewed</span><span><span class="rv-sq amber"></span>half</span><span><span class="rv-sq red"></span>pending (not reviewed)</span><span><span class="rv-sq none"></span>cards not made</span></div>'+
     (RV.calErr||(!RV.me&&!RV.cal)?'<p class="rv-hint">Pichhle dino ki ginti abhi nahi mili (review server) — din pe tap karke cards dekh sakte ho.</p>':"")+
@@ -23491,7 +23520,12 @@ const WDN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday
 const DAYMS=864e5, P=s=>Date.parse(s+'T00:00:00Z');
 const dAdd=(s,n)=>new Date(P(s)+n*DAYMS).toISOString().slice(0,10);
 const dDiff=(a,b)=>Math.round((P(b)-P(a))/DAYMS);
-const fd=s=>s?(+String(s).slice(8,10))+' '+MO[+String(s).slice(5,7)-1]:'';
+const fd0=s=>s?(+String(s).slice(8,10))+' '+MO[+String(s).slice(5,7)-1]:'';
+// a date says its year when it is not in the reference year (the open review day's; the build's before the index arrives)
+const RY=()=>{ const o=(RV.idx&&RV.idx.open_day)||(FILE&&FILE.meta&&FILE.meta.day)||''; return /^\d{4}-/.test(o)?o.slice(0,4):refYear(); };
+const fd=s=>{ const y=String(s||'').slice(0,4); return fd0(s)+(/^\d{4}$/.test(y)&&y!==RY()?' '+y:''); };
+const fdY=s=>s?fd0(s)+' '+String(s).slice(0,4):'';
+const fr=(a,b,sep)=>(sep=sep||'–',String(a).slice(0,4)!==String(b).slice(0,4)?fdY(a)+sep+fdY(b):fd(a)+sep+fd(b));   // over New Year both ends carry their year
 const wd=s=>WDN[new Date(P(s)).getUTCDay()]||'';
 const esc=s=>rvEsc(s);
 const nf=new Intl.NumberFormat('en-US');
@@ -23506,7 +23540,7 @@ const rt=x=>rvRt(x,FXR()), rtp=x=>rvRtText(x,FXR());
 function pct(r,dp){ if(r==null||!isFinite(r)) return '—'; const x=r*100, d=dp==null?(Math.abs(x)<10?1:0):dp; const s=trim(Math.abs(x).toFixed(d)); return (x>0.05?'+':(x<-0.05?MI:'±'))+s+'%'; }
 const rel=(a,b)=>(a==null||!b)?null:(a-b)/Math.abs(b);
 const when=iso=>{ const t=rvWhen(iso); return t?t+' IST':''; };
-const rng=(a,b)=>(!a||!b)?fd(a||b):(String(a).slice(0,7)===String(b).slice(0,7)?(+String(a).slice(8,10))+'–'+fd(b):fd(a)+'–'+fd(b));
+const rng=(a,b)=>(!a||!b)?fd(a||b):(String(a).slice(0,7)===String(b).slice(0,7)?(+String(a).slice(8,10))+'–'+fd(b):fr(a,b));
 
 /* ================= the file (and the apps of the card on screen) ================= */
 function ptr(){ const I=RV.idx, d=(RV.doc&&RV.doc.day)||(I&&I.open_day); return d?ptrOf(d):null; }
@@ -23649,7 +23683,7 @@ function revSpark(a){ const ser=a.ser; if(!ser||!ser.length) return '<div class=
   const X=lin(0,n-1,pl+2,w-pr-2), Y=lin(mn,mx,h-pb,pt), id='rs-ch'+(++chN);
   const pth=pathOf(vals,X,Y), li=n-1, yy=Y(vals[li]==null?0:vals[li]), uy=Y(us), up=(vals[li]||0)>=us;
   const col=Math.abs(rel(a.y,a.us)||0)<0.1?'var(--rs-blue-s)':(up?'var(--good)':'var(--bad)');
-  let s=`<svg class="rs-spk" data-ch="${id}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Revenue ${fd(d14[0])}–${fd(d14[n-1])}: yesterday ${esc(mT(a.y))}, usual ${esc(mT(a.us))} a day">`;
+  let s=`<svg class="rs-spk" data-ch="${id}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Revenue ${fr(d14[0],d14[n-1])}: yesterday ${esc(mT(a.y))}, usual ${esc(mT(a.us))} a day">`;
   s+=`<rect x="${(X(n-8)-(X(1)-X(0))/2).toFixed(1)}" y="${pt-4}" width="${(X(n-2)-X(n-8)+(X(1)-X(0))).toFixed(1)}" height="${h-pb-pt+4}" fill="var(--rs-band)" rx="4"/>`;
   s+=`<path d="${pth}L${X(li).toFixed(1)} ${h-pb}L${X(0).toFixed(1)} ${h-pb}Z" fill="var(--rs-blue-s)" opacity=".10"/>`;
   s+=`<line x1="${pl}" x2="${w-pr}" y1="${uy.toFixed(1)}" y2="${uy.toFixed(1)}" stroke="var(--watch)" stroke-width="1.2" stroke-dasharray="4 3" opacity=".9"/>`;
@@ -23693,7 +23727,7 @@ function barChart(ch,W,o){ o=o||{}; const BL=o.bl||'before avg', bv=ch.before!=n
   return s; }
 function revChart(a,W){ const d14=FILE.meta.d14, U=FILE.meta.usual||{};
   return barChart({cap:'App AdMob revenue · /day',labels:d14.map(d=>wd(d).slice(0,2)+' '+fd(d)),vals:a.ser,fmt:'usd',before:a.us,after_idx:null,marks:[],
-    tips:d14.map((d,i)=>i===13?'Yesterday — card ka number (frozen)':(U.from&&d>=U.from&&d<=U.to?'usual window ('+fd(U.from)+'–'+fd(U.to)+')':''))},W,{h:170,col:'var(--cyan)',bl:'usual/day'}); }
+    tips:d14.map((d,i)=>i===13?'Yesterday — card ka number (frozen)':(U.from&&d>=U.from&&d<=U.to?'usual window ('+fr(U.from,U.to)+')':''))},W,{h:170,col:'var(--cyan)',bl:'usual/day'}); }
 // same day uninstall by install week (the cohort file) — every bar printed, the actual count in the tooltip
 function unChart(a,W){ const U=a.x&&a.x.un; if(!U) return ''; const wk=U.wk.filter(w=>w.n>0); if(!wk.length) return ''; const H=150,pl=8,pr=8,pt=22,pb=34,n=wk.length,id='rs-ch'+(++chN);
   const v=wk.map(w=>100*w.s/w.n), mx=Math.max(...v,1)*1.2, bw=(W-pl-pr)/n, X=i=>pl+bw*(i+.5), Y=lin(0,mx,H-pb,pt);
@@ -23705,7 +23739,7 @@ function unChart(a,W){ const U=a.x&&a.x.un; if(!U) return ''; const wk=U.wk.filt
   const xa=xAxis(L,wk.map(w=>fd(w.f)),X,n,H-pb+13,1,W-1); s+=xa.s;
   xa.idx.forEach(i=>{ s+=L.at(X(i),H-pb+25,nf.format(wk[i].n),{a:'middle',c:'var(--faint)',fs:10,fw:500},1,W-1); });
   s+=`<line class="rs-xh" x1="0" x2="0" y1="${pt-6}" y2="${H-pb}" stroke="var(--ink2)" opacity="0"/></svg>`;
-  CH[id]={X,n,w:W,tip:i=>{ const w=wk[i]; return `<div class="rs-tt">Installs ${fd(w.f)}–${fd(w.t)}</div><div class="rs-row"><span>Same day uninstall</span><b>${nf.format(w.s)} of ${nf.format(w.n)}</b></div><div class="rs-row"><span>Share</span><b>${trim((100*w.s/w.n).toFixed(1))}%</b></div>${w.prov?`<div class="rs-tsm rs-prov">⏳ Not final — is app ka uninstall data ${esc(U.late)} din tak late aata hai</div>`:''}`; }};
+  CH[id]={X,n,w:W,tip:i=>{ const w=wk[i]; return `<div class="rs-tt">Installs ${fr(w.f,w.t)}</div><div class="rs-row"><span>Same day uninstall</span><b>${nf.format(w.s)} of ${nf.format(w.n)}</b></div><div class="rs-row"><span>Share</span><b>${trim((100*w.s/w.n).toFixed(1))}%</b></div>${w.prov?`<div class="rs-tsm rs-prov">⏳ Not final — is app ka uninstall data ${esc(U.late)} din tak late aata hai</div>`:''}`; }};
   return `<div class="rs-chartp"><div class="rs-cap">Same day uninstall · by install week · bars = %, below = installs${wk.some(w=>w.prov)?' · <span class="rs-prov">hatched = ⏳ not final</span>':''}</div>${s}</div>`; }
 // returning users per day (the Active users file), final till the day GA4 stops changing it
 function retChart(a,W){ const R=a.x&&a.x.ret; if(!R) return ''; const v=R.v, d=R.d, n=v.length, H=140,pl=8,pr=8,pt=18,pb=20,id='rs-ch'+(++chN);
@@ -23724,14 +23758,14 @@ function retChart(a,W){ const R=a.x&&a.x.ret; if(!R) return ''; const v=R.v, d=R
   [...new Set([li,fi,mi,mo])].forEach(i=>{ if(i>=0&&v[i]!=null) s+=lab(i,i===li?'var(--good)':'var(--ink2)'); });
   s+=`<line class="rs-xh" x1="0" x2="0" y1="${pt-6}" y2="${H-pb}" stroke="var(--ink2)" opacity="0"/></svg>`;
   CH[id]={X,n,w:W,tip:i=>`<div class="rs-tt">${esc(wd(d[i]).slice(0,3))}, ${fd(d[i])}</div><div class="rs-row"><span>Old users</span><b>${v[i]==null?'—':nf.format(v[i])}</b></div>${R.final&&d[i]>R.final?'<div class="rs-tsm rs-prov">⏳ Not final — GA4 abhi badal sakta hai</div>':''}`};
-  return `<div class="rs-chartp"><div class="rs-cap">Old users per day · GA4 · ${fd(d[0])}–${fd(d[n-1])}${R.final?' (final till '+fd(R.final)+')':''}</div>${s}</div>`; }
+  return `<div class="rs-chartp"><div class="rs-cap">Old users per day · GA4 · ${fr(d[0],d[n-1])}${R.final?' (final till '+fd(R.final)+')':''}</div>${s}</div>`; }
 // mediation: every network's share of the revenue (the card's 7 days), the actual revenue first, % beside it
 function medChart(a){ const sh=(a.x&&a.x.med)||[]; if(!sh.length) return ''; const C=['var(--cyan)','var(--purple)','var(--rs-blue-s)','var(--watch)','var(--good)','#f472b6'];
   const w7=FILE.meta.w7||{}, p7=FILE.meta.p7||{};
   let bar='', lg='';
   sh.forEach((x,i)=>{ if(!(x.s>0)) return; const c=C[i%C.length]; bar+=`<i style="width:${x.s}%;background:${c}" data-tk="med:${esc(a.key)}:${i}">${x.s>=18?esc(String(x.n).replace(/\s*\(.*\)$/,''))+' '+trim(x.s.toFixed(0))+'%':''}</i>`;
     lg+=`<span class="rs-k" data-tk="med:${esc(a.key)}:${i}"><span class="rs-sw" style="background:${c}"></span>${esc(x.n)} <b>${x.usd!=null?mH(x.usd)+' · ':''}${trim(x.s.toFixed(1))}%</b>${x.p!=null?` <span class="rs-faint">(was ${trim(x.p.toFixed(1))}%)</span>`:''}${x.f!=null?` <span class="rs-faint">· fill ${trim(x.f.toFixed(1))}%</span>`:''}</span>`; });
-  return `<div class="rs-chartp"><div class="rs-cap">Revenue by network · ${fd(w7.from)}–${fd(w7.to)} (was = ${fd(p7.from)}–${fd(p7.to)})</div><div class="rs-mbar rs-mbig">${bar}</div><div class="rs-legend rs-legin">${lg}</div></div>`; }
+  return `<div class="rs-chartp"><div class="rs-cap">Revenue by network · ${fr(w7.from,w7.to)} (was = ${fr(p7.from,p7.to)})</div><div class="rs-mbar rs-mbig">${bar}</div><div class="rs-legend rs-legin">${lg}</div></div>`; }
 function ringSvg(done,n){ const r=50, c=2*Math.PI*r, p=n?done/n:0;
   return `<svg class="rs-ring" viewBox="0 0 120 120" role="img" aria-label="${done} of ${n} reviewed"><circle cx="60" cy="60" r="${r}" fill="none" stroke="var(--rs-raise2)" stroke-width="11"/><circle cx="60" cy="60" r="${r}" fill="none" stroke="${p>=1?'var(--good)':'var(--cyan)'}" stroke-width="11" stroke-linecap="round" stroke-dasharray="${(c*p).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 60 60)"/><text class="rs-rl1" x="60" y="62" text-anchor="middle">${done}/${n}</text><text class="rs-rl2" x="60" y="80" text-anchor="middle">${Math.round(100*p)}% DONE</text></svg>`; }
 
@@ -23740,7 +23774,7 @@ function topHtml(){ const M=FILE.meta, I=RV.idx||{}, me=RV.me, v=SV();
   const tab=(id,l,c)=>`<button type="button" role="tab" id="rs-tb-${id}" data-rsv="${id}" aria-selected="${v===id}" aria-controls="rs-v-${id}"${v===id?'':' tabindex="-1"'}>${l}${c?`<span class="rs-cnt">${c}</span>`:''}</button>`;
   const pend=A.length-doneN(), of=(S0().flags||[]).filter(x=>x.status==='open').length;
   const nx=I.next_snapshot?String(I.next_snapshot).slice(0,10):null;
-  return `<div class="rs-top-in"><div class="rs-brand"><span class="rs-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" rx="3.2" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M5.4 9.3l2.3 2.3 4.9-5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><div class="rs-bn">Review Studio</div><div class="rs-sub">${esc(M.wday)}, ${fd(M.day)} ${esc(String(M.day).slice(0,4))} · daily app review</div></div></div>`
+  return `<div class="rs-top-in"><div class="rs-brand"><span class="rs-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="2" width="14" height="14" rx="3.2" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M5.4 9.3l2.3 2.3 4.9-5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><div class="rs-bn">Review Studio</div><div class="rs-sub">${esc(M.wday)}, ${fd0(M.day)} ${esc(String(M.day).slice(0,4))} · daily app review</div></div></div>`
    +`<div class="rs-ctrls"><div class="rs-seg" role="tablist" aria-label="Review views">${tab('today',"Today's review",pend?pend+'<span class="rs-cw"> pending</span>':'✓')}${tab('sum','Summary',of?of+' 🚩':'')}${tab('hist','History','')}</div>`
    +`<div class="rs-seg" role="group" aria-label="Currency"><button type="button" data-rscur="INR" aria-pressed="${INR()}">₹</button><button type="button" data-rscur="USD" aria-pressed="${!INR()}">$</button></div>`
    +`<span class="rs-me" title="${esc(me&&me.email||'')}">${me?'👤 '+rvWho(me.email)+(me.admin?' · <b>Admin</b>':''):'👤 —'}</span>`
@@ -23902,10 +23936,10 @@ function drawerHtml(a){ const k=a.key, B=bads(a), O=FID().filter(f=>B.indexOf(f)
   let h=`<div class="rs-dh">${avH(a,'rs-lg')}<div class="rs-t"><div class="rs-eyebrow ${past?'rs-dpast':'rs-opt'}">${past?`📅 ${esc(wd(dd))}, ${fd(dd)} · frozen card · read-only`:`Full card · #${a.rank} of ${A.length} · ${esc(GRP[a.grp])}`}</div><h3>${esc(String(a.name).trim())}${a.tag?` <span class="rs-tagw">${esc(a.tag)}</span>`:''} <span class="rs-acn">· ${esc(a.acct)}</span></h3><div class="rs-l2"><span class="rs-sz ${a.size==='badi'?'rs-badi':''}">${SIZE[a.size]||'—'}</span>${nbOf(a).length?'<span class="rs-nbchip">🆕 New & worse</span>':''}<span id="rs-dw-pill">${pillH(k)}</span><span class="rs-opt">Revenue till ${fd(M.admob_till)}${M.ga4_till?' · users till '+fd(M.ga4_till):''}</span></div></div><div class="rs-nav"><button class="rs-icb" type="button" data-rsdnav="-1" aria-label="Previous app (k)">‹</button><button class="rs-icb" type="button" data-rsdnav="1" aria-label="Next app (j)">›</button><button class="rs-icb" type="button" data-rsdclose="1" id="rs-dclose" aria-label="Close">✕</button></div></div>`;
   h+=past?`<div class="rs-db">${roBar(a)}`:`<div class="rs-db"><div id="rs-dw-acts">${actsHtml(a,true)}</div><div id="rs-dw-pslot" class="rs-pslot"></div>`;
   h+=`<div class="rs-dk"><div class="rs-kpi"><div class="rs-kl">Yesterday<span class="rs-kh">${fd(M.admob_till)}</span></div><div class="rs-kv">${mH(a.y)}</div><div class="rs-kd ${r>=0.1?'rs-up':(r<=-0.1?'rs-dn':'rs-fl')}">${mH((+a.y||0)-(+a.us||0),{sign:1})} (${pct(r)}) <span class="rs-vs">vs usual</span></div></div>`
-   +`<div class="rs-kpi"><div class="rs-kl">Usual<span class="rs-kh">${M.usual?fd(M.usual.from)+'–'+fd(M.usual.to):''}</span></div><div class="rs-kv">${mH(a.us)}<small>/day</small></div><div class="rs-kd rs-fl"><span class="rs-vs">7-day daily avg</span></div></div>`
-   +`<div class="rs-kpi"><div class="rs-kl">Last 7 days<span class="rs-kh">${M.w7?fd(M.w7.from)+'–'+fd(M.w7.to):''}</span></div><div class="rs-kv">${mH(a.k7)}<small>/day</small></div><div class="rs-kd ${kp>=0.1?'rs-up':(kp<=-0.1?'rs-dn':'rs-fl')}">${pct(kp)} <span class="rs-vs">vs ${mH(a.kp7,{s:'/day'})} before</span></div></div>`
+   +`<div class="rs-kpi"><div class="rs-kl">Usual<span class="rs-kh">${M.usual?fr(M.usual.from,M.usual.to):''}</span></div><div class="rs-kv">${mH(a.us)}<small>/day</small></div><div class="rs-kd rs-fl"><span class="rs-vs">7-day daily avg</span></div></div>`
+   +`<div class="rs-kpi"><div class="rs-kl">Last 7 days<span class="rs-kh">${M.w7?fr(M.w7.from,M.w7.to):''}</span></div><div class="rs-kv">${mH(a.k7)}<small>/day</small></div><div class="rs-kd ${kp>=0.1?'rs-up':(kp<=-0.1?'rs-dn':'rs-fl')}">${pct(kp)} <span class="rs-vs">vs ${mH(a.kp7,{s:'/day'})} before</span></div></div>`
    +`<div class="rs-kpi"><div class="rs-kl">Ads spend<span class="rs-kh">Google Ads · 4-wk avg</span></div><div class="rs-kv">${a.spend>0.05?mH(a.spend)+'<small>/day</small>':'—'}</div><div class="rs-kd rs-fl"><span class="rs-vs">${a.spend>0.05?(a.k7?mH(a.spend)+' = '+trim((100*a.spend/a.k7).toFixed(0))+'% of revenue':''):'No ads spend'}</span></div></div></div>`;
-  if(a.ser) h+=`<div class="rs-chartp"><div class="rs-cap">AdMob revenue per day · ${fd(M.d14[0])}–${fd(M.d14[13])} · dotted = usual${M.usual?' ('+fd(M.usual.from)+'–'+fd(M.usual.to)+' avg)':''}</div>${revChart(a,dwW())}</div>`;
+  if(a.ser) h+=`<div class="rs-chartp"><div class="rs-cap">AdMob revenue per day · ${fr(M.d14[0],M.d14[13])} · dotted = usual${M.usual?' ('+fr(M.usual.from,M.usual.to)+' avg)':''}</div>${revChart(a,dwW())}</div>`;
   h+=`<div class="rs-sect"><h4>Issues · ${B.length}</h4>${B.length?`<div class="rs-fgrid">${B.map(f=>featBlock(a,f,true)).join('')}</div>`:'<div class="rs-muted rs-small">Koi Worse / Watch nahi ✅</div>'}</div>`;
   h+=`<div class="rs-sect"><h4>Other features · ${O.length}</h4><div class="rs-fgrid">${O.map(f=>featBlock(a,f,(f==='uninstall'&&a.x&&a.x.un)||(f==='active'&&a.x&&a.x.ret)||(f==='mediation'&&a.x&&a.x.med))).join('')}</div></div>`;
   if(!past) h+=`<div class="rs-sect"><h4>Note</h4><div class="rs-pnl"><label for="rs-dw-note">Team ke liye note (is app ke liye)</label><textarea id="rs-dw-note" maxlength="600" placeholder="Jaise: developer ko bata diya, kal update aayega"${canW()?'':' disabled'}>${esc(ST.dnote||'')}</textarea><div class="rs-row2"><button type="button" class="rs-btn" id="rs-dw-notesave" data-rsdwnote="${esc(k)}"${canW()?'':' disabled'}>Save note</button><span class="rs-cc" id="rs-dw-cc">${(ST.dnote||'').length} / 600</span></div></div></div>`;
@@ -23980,7 +24014,7 @@ function sumHtml(){ const S=S0(), d=RV.doc.day, n=A.length, dn=doneN(), me=RV.me
 function calOf(){ const I=RV.idx; let cal=(RV.cal&&RV.cal.days)?{...RV.cal.days}:{}; if(RV.S&&I&&I.open_day) cal[I.open_day]={...(cal[I.open_day]||{}),rev:Object.keys(RV.S.states||{}).length}; return cal; }
 function histHtml(){ const I=RV.idx||{}, first=I.go_live, last=I.open_day; if(!first||!last) return '<div class="rs-empty rs-panel">History abhi nahi</div>';
   const snap={}; (I.days||[]).forEach(x=>{ if(x&&x.d) snap[x.d]=Number(x.apps)||0; }); const cal=calOf(), sel=RV.histDay||last;
-  let h=`<section class="rs-panel" id="rs-hcal"><div class="rs-ph"><div><div class="rs-eyebrow">History</div><h2>Daily review · ${fd(first)} – ${fd(last)}</h2><div class="rs-hint">History ${fd(first)} se shuru hui (jab review chalu hua) — sirf asli din dikhte hain. Har din ke cards ${esc(I.ready_ist||'09:00')} IST ke baad freeze hote hain, isliye yahan wahi dikhta hai jo review ke waqt tha.</div></div></div>`;
+  let h=`<section class="rs-panel" id="rs-hcal"><div class="rs-ph"><div><div class="rs-eyebrow">History</div><h2>Daily review · ${fr(first,last,' – ')}</h2><div class="rs-hint">History ${fd(first)} se shuru hui (jab review chalu hua) — sirf asli din dikhte hain. Har din ke cards ${esc(I.ready_ist||'09:00')} IST ke baad freeze hote hain, isliye yahan wahi dikhta hai jo review ke waqt tha.</div></div></div>`;
   if(RV.calErr||(!RV.me&&!RV.cal)) h+='<div class="rs-empty">Pichhle dino ki ginti abhi nahi mili (review server) — din pe tap karke cards dekh sakte ho.</div>';
   let cur=first; const nx=I.next_snapshot?String(I.next_snapshot).slice(0,10):null;
   while(cur<=last){ const y=+cur.slice(0,4), m=+cur.slice(5,7), m0=cur.slice(0,8)+'01', dow=(new Date(P(m0)).getUTCDay()+6)%7, dim=new Date(Date.UTC(y,m,0)).getUTCDate();
@@ -24034,7 +24068,7 @@ function dayBody(x){ const d=x.d, doc=x.doc, S=x.raw, I=RV.idx||{}, past=!x.live
   const fixN=new Set((S.log||[]).filter(y=>y&&y.app&&y.extra&&typeof y.extra==='object'&&y.extra.admin_fix).map(y=>y.app)).size;
   const built=doc.built_at?when(doc.built_at):'', lab=k=>{ const a=rvAppOf(doc,k); return a?(a.name||a.dname||k)+' · '+(a.acct||''):k; };
   const yr=String(d).slice(0,4);
-  let h=`<section class="rs-panel" id="rs-hday" aria-labelledby="rs-dayh"><div class="rs-ph"><div><div class="rs-eyebrow">${past?'Selected day · read-only':'Selected day · today (open)'}</div><h2 id="rs-dayh" tabindex="-1">${esc(wd(d))}, ${fd(d)} ${esc(yr)}</h2>`
+  let h=`<section class="rs-panel" id="rs-hday" aria-labelledby="rs-dayh"><div class="rs-ph"><div><div class="rs-eyebrow">${past?'Selected day · read-only':'Selected day · today (open)'}</div><h2 id="rs-dayh" tabindex="-1">${esc(wd(d))}, ${fd0(d)} ${esc(yr)}</h2>`
     +`<div class="rs-hint">${[known?(cnt.pend?(past?'⏳ Is din ka review poora nahi hua':'⏳ Aaj ka review chal raha hai'):'✅ Sab apps reviewed'):'',built?`🧊 cards frozen ${esc(built)}`:''].filter(Boolean).join(' · ')}</div></div>`
     +`<div class="rs-right">${x.live?'<button class="rs-btn rs-sm" type="button" data-rsv="today">Open today\'s review ›</button>':''}</div></div>`;
   h+=`<div class="rs-hsum"><div class="rs-hst rs-hst-ok"><span class="rs-t">✅ Reviewed</span><b>${known?done:'—'}</b><small>of ${n} apps</small></div>`

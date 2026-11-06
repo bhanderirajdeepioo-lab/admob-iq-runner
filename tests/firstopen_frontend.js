@@ -37,7 +37,11 @@ if (a < 0 || b < 0) { console.log(JSON.stringify({ errors: ['FO module not found
 // the page's shared month-mover helpers (the owner's standard picker, 4 Nov 2026) — every period picker calls them
 const MON0 = html.indexOf('// ---- the month mover'), MON1 = html.indexOf("// ---- a daily chart's period");
 const MONSRC = MON0 >= 0 && MON1 > MON0 ? html.slice(MON0, MON1) : '';
-const src = MONSRC + html.slice(a, b) + '\nthis.FO=FO;';
+// the page's shared date-with-year helpers (refYear / fmtDY / fmtRange)
+const YR0 = html.indexOf('// ---- dates with their year ----'), YR1 = html.indexOf('// ---- end: dates with their year ----');
+// (a test build has no today_date: the reference year is pinned so no test depends on the date it runs)
+const YRSRC = (YR0 >= 0 && YR1 > YR0 ? html.slice(YR0, YR1) : '') + "\nrefYear=function(){ return '2026'; };\n";
+const src = MONSRC + YRSRC + html.slice(a, b) + '\nthis.FO=FO;';
 const out = {}, errors = [];
 // ── a tiny element: innerHTML + the attributes the module reads ──
 function el(screen) {
@@ -140,6 +144,11 @@ const tick = () => new Promise(r => setTimeout(r, 0));
     out.app_first_day_row = /<td class="fo-nm fo-nf"><span class="fo-smp"[^>]*>≈<\/span>29 Sep 2026 · not final<\/td>/.test(p);
     out.app_changed = p.includes('screens badle 31 Aug');
     out.app_smp_note = p.includes('sirf ~2% data padha');
+    // years: a screens change in an earlier year keeps its year; the status window over New Year carries both
+    const kbF = FILE.apps.find(z => z.key === 'kb'), chg0 = kbF.steps_changed; kbF.steps_changed = [{ at: '2025-06-20', from: {} }, { at: day(30), from: {} }]; FO.paint();
+    out.yr_changed = SCREEN.innerHTML.includes('screens badle 20 Jun 2025, 31 Aug'); kbF.steps_changed = chg0; FO.paint();
+    out.yr_gap = [FO._.ccGapNote({ missing: 3, final_till: '2026-01-10', first_day: '2025-01-01' }), FO._.ccGapNote({ missing: 3, final_till: '2026-03-28', first_day: '2025-01-01' })]
+      .map(h => (h.match(/Status ke liye (.*?) ke saare din/) || [])[1]);
     out.app_lang_col = p.includes('<th>Language</th>');
     ctx.APP = 'Alpha Pick'; FO.paint();
     out.alpha_steps = /<span class="fo-bl">Language<\/span>.*?<b>50%<\/b> <small>usual 55%<\/small>/.test(SCREEN.innerHTML);
@@ -439,7 +448,7 @@ async function byCountry() {
   c2.APP = 'Eta'; FO.paint(); await tick(); await tick();
   click('[data-fo-cc]', { foCc: 'XA' });
   const eh = html2;
-  R.e_tail = /<tr><td class="fo-nm">1 Aug 2026<\/td>(?:(?!<tr).)*<\/tr><tr class="fo-gap"><td colspan="6">↕ 1 din \(31 Jul – 31 Jul\): abhi padhe ja rahe hain \(backfill chal raha hai\)<\/td><\/tr><tr class="fo-old"><td class="fo-nm">30 Jul 2026 <small>· GA4 named no country<\/small><\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>—<\/td><\/tr><tr class="fo-gap"><td colspan="6">↕ 1 din \(29 Jul – 29 Jul\)[^<]*<\/td><\/tr><tr class="fo-old"><td class="fo-nm">28 Jul 2026 <small>· First opens only<\/small><\/td><td>7<\/td>(?:(?!<tr).)*<\/tr><tr class="fo-gap"><td colspan="6">↕ 2 din \(26 Jul – 27 Jul\): abhi padhe ja rahe hain \(backfill chal raha hai\)<\/td><\/tr><\/tbody>/.test(eh);
+  R.e_tail = /<tr><td class="fo-nm">1 Aug 2026<\/td>(?:(?!<tr).)*<\/tr><tr class="fo-gap"><td colspan="6">↕ 1 din \(31 Jul\): abhi padhe ja rahe hain \(backfill chal raha hai\)<\/td><\/tr><tr class="fo-old"><td class="fo-nm">30 Jul 2026 <small>· GA4 named no country<\/small><\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>—<\/td><td>—<\/td><\/tr><tr class="fo-gap"><td colspan="6">↕ 1 din \(29 Jul\)[^<]*<\/td><\/tr><tr class="fo-old"><td class="fo-nm">28 Jul 2026 <small>· First opens only<\/small><\/td><td>7<\/td>(?:(?!<tr).)*<\/tr><tr class="fo-gap"><td colspan="6">↕ 2 din \(26 Jul – 27 Jul\): abhi padhe ja rahe hain \(backfill chal raha hai\)<\/td><\/tr><\/tbody>/.test(eh);
   R.e_months = monthsOf(eh);
   R.e_note = (eh.match(/<b>First opens only<\/b> wale 1 din/g) || []).length;
   R.e_tip_nobody = FO._.noneTip({ none: FO._.ccNone(CCF['firstopen_cc_cccccccccccc.json.gz']), cc: 'XA' }, day(-2));

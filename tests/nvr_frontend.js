@@ -13,7 +13,11 @@ if (a < 0 || b < 0 || b < a) { console.log(JSON.stringify({ errors: ['NVR module
 // the page's shared month-mover helpers (the owner's standard picker, 4 Nov 2026) — every period picker calls them
 const MON0 = html.indexOf('// ---- the month mover'), MON1 = html.indexOf("// ---- a daily chart's period");
 const MONSRC = MON0 >= 0 && MON1 > MON0 ? html.slice(MON0, MON1) : '';
-const src = MONSRC + html.slice(a, b) + '\nthis.NVR=NVR;';
+// the page's shared date-with-year helpers (refYear / fmtDY / fmtRange)
+const YR0 = html.indexOf('// ---- dates with their year ----'), YR1 = html.indexOf('// ---- end: dates with their year ----');
+// (a test build has no today_date: the reference year is pinned so no test depends on the date it runs)
+const YRSRC = (YR0 >= 0 && YR1 > YR0 ? html.slice(YR0, YR1) : '') + "\nrefYear=function(){ return '2026'; };\n";
+const src = MONSRC + YRSRC + html.slice(a, b) + '\nthis.NVR=NVR;';
 const out = {}, errors = [];
 // ROW: the period chips' row (it scrolls sideways on a phone); a repaint draws it at its left end again (scrollLeft 0)
 const ROW = { scrollLeft: 0 };
@@ -100,6 +104,10 @@ const tbl = (title) => { const i = h().indexOf(`<h3>${title}</h3>`); return i < 
     const oct = per('mon:2026-10'), sep = per('mon:2026-09');
     out.month = [oct, sep, h().includes('data-nvr-per="mon:2026-09" aria-pressed="true"')];
     out.scroll = SCROLL;
+    // years: the chart's axis dates carry their year outside the reference year (2026 here)
+    { const mkd = (a, n) => ({ first_day: a, final_till: day(0), days: Array.from({ length: n }, (_, i) => [0, [2, 1000, 3, 3000, 0.01, 2], [100, 90, 500, 300], {}, {}]) });
+      const ticks = h => [...h.matchAll(/y="214" text-anchor="(?:start|middle|end)">([^<]+)<\/text>/g)].map(m => m[1]);
+      out.yr_ticks = { all: ticks(NVR._.chart(mkd('2024-06-20', 600), '2024-06-20', '2026-02-10')), jan: ticks(NVR._.chart(mkd('2025-12-20', 30), '2025-12-20', '2026-01-10')), cur: ticks(NVR._.chart(mkd('2026-03-01', 20), '2026-03-01', '2026-03-20')) }; }
     // Custom: from / to (reversed → swapped)
     change('[data-nvr-pf]', '2026-10-20'); change('[data-nvr-pto]', '2026-10-11');
     out.custom = [per2(), h().includes('<input type="date" data-nvr-pf="1" value="2026-10-11" min="2026-09-01" max="2026-11-02">'),

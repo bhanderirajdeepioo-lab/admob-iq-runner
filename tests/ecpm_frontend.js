@@ -162,6 +162,11 @@ const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { e
 
   // ── the maths ────────────────────────────────────────────────────────────────────────────────────────────────────────
   await step('win', () => J(`(()=>{ const W=ecWin(); return {L:W.L,T:W.T,y:W.y,d7:W.d7,d30:W.d30,mtd:W.mtd,lm:W.lm,p7:W.p7,p30:W.p30,sw:W.sw,s30:W.s30,ncomp:W.comp.length,first:W.comp[0],last:W.comp[W.comp.length-1]}; })()`));
+  // years: a date outside the build's year (DATA.today_date) carries its year in the spans / runs the cards print
+  await step('years', () => J(`({ T: DATA.today_date.slice(0, 4),
+    span: [ecSpan(['2025-12-20', '2025-12-21', '2025-12-22']), ecSpan(['2025-12-29', '2025-12-30', '2025-12-31', '2026-01-01']), ecSpan(['2026-03-01', '2026-03-02']), ecSpan(['2025-03-04']), ecSpan(['2026-03-04'])],
+    runs: [ecRanges(['2025-09-01', '2025-09-02', '2025-09-25']), ecRanges(['2026-02-01', '2026-02-02', '2026-02-10'])],
+    one: [fmtDY('2025-03-04'), fmtDY('2026-03-04')] })`));
   await step('agg', () => J(`(()=>{ const A=ecAgg(); return {pfDays:Object.keys(A.pf).length, hasToday:(DATA.today_date in A.pf)||Object.values(A.apps).some(a=>DATA.today_date in a), apps:Object.keys(A.apps).sort()}; })()`));
   await step('pf_sums', () => J(`(()=>{ const W=ecWin(), pf=ecAgg().pf, s=d=>ecSum(pf,d); return {y:s(W.y),d7:s(W.d7),d30:s(W.d30),mtd:s(W.mtd),lm:s(W.lm),p7:s(W.p7),p30:s(W.p30)}; })()`));
   await step('rows', () => J(`(()=>{ const W=ecWin(), A=ecAgg().apps, o={}; Object.keys(A).forEach(n=>{ const r=ecRow(A[n],W); delete r.spark; o[n]=r; }); return o; })()`));
