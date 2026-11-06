@@ -173,6 +173,10 @@ def settings() -> dict:
         # then has no "dev" block); GA4_DEVICE_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
         "ga4_device": _env("GA4_DEVICE", "false").lower() == "true",
         "ga4_device_budget_sec": _int_env(("GA4_DEVICE_BUDGET_SEC",), 0),
+        # … its history (All time, devices-backfill.yml): GA4_DEVICE_HISTORY on = the job's staged folder
+        # (DEVICE_STAGED_DIR) is merged into the store first; off: nothing of it is read (the store as without it)
+        "ga4_device_history": _env("GA4_DEVICE_HISTORY", "false").lower() == "true",
+        "device_staged_dir": _env("DEVICE_STAGED_DIR", ""),
         # 📈 Day-wise ROI: every day 0 … 30 of each install day's GA4 ad revenue (fetch.ga4_cohort: a one-time backfill
         # from the GA4 history start, the last 35 days every 6 hours). Off: nothing of it is read, written or printed
         "ga4_cohort": _env("GA4_COHORT", "false").lower() == "true",

@@ -187,6 +187,7 @@ PREFIX = "roi_"
 FILE_RE = re.compile(r"^roi_[0-9a-f]{12}\.json\.gz$")
 PACK_RE = re.compile(r"^roi_[0-9a-f]{12}_c\d{2,3}\.json\.gz$")     # 🌍 the country packs (the page checks the same)
 CP_RE = re.compile(r"^roi_[0-9a-f]{12}_cpd?\.json\.gz$")            # 🌍 the countries board: period sums / install days
+DV_RE = re.compile(r"^roi_[0-9a-f]{12}_dv(?:[md]_\d{4}-\d{2})?\.json\.gz$")   # 📱 Devices: buttons / a month / its days
 CP_V = 1
 CP_A = (7, 14, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360)   # … its ages (days): money back looks through
                                                                     # every one; the page shows 7 / 30 / 90 / 180 / 360
@@ -277,7 +278,8 @@ class Acc:
         self.adtz = None                            # … Google Ads store → its accounts' time zones (read once)
         self.packs = set()                          # … the country packs written this build (kept by _clean)
         self.cdn = {"apps": 0, "countries": 0, "packs": 0, "failed": 0, "geo_failed": 0}
-        self.dvn = {"apps": 0, "rows": 0, "failed": 0}  # 📱 Devices: apps with a block, model rows, failures
+        self.dvn = {"apps": 0, "rows": 0, "failed": 0, "months": 0, "cached": 0, "kb": 0, "toobig": 0, "changed": 0}
+        self.dvf = set()                            # 📱 … the Devices files written / kept this build (kept by _clean)
 
 
 def start(cal=None, adsrc=None, cube=False, cmon=None):
@@ -2189,16 +2191,35 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
     return cd
 
 
-def _dev(dst, P, pre, spend, sids, rows, data_dir):
-    """📱 Devices (device_build): the app's device store + its Google Ads cost by country × install day (the 🌍 Countries
-    cost: _geo_app over its own stores, in USD at each day's rate) + its AdMob ÷ GA4 per install month + its own revenue
-    curve past 30 / 90 days → the ROI file's "dev" block, or None."""
+def _appk_q(P, months):
+    """The install months whose AdMob ÷ GA4 scale has no AdMob behind it (every week of the month borrowed from another
+    week — "nomob" — or none at all) → {month: True}: the Devices page marks their revenue ≈ (never silently GA4's)."""
+    kf = P["sc"]["kf"]
+    out = {}
+    for M in months:
+        a, b = _month_days(M)
+        flags = set()
+        for d in [a + timedelta(days=i) for i in range(0, (b - a).days + 1, 7)] + [b]:   # every week of the month
+            try:
+                flags.add(kf(d)[1])
+            except Exception:
+                flags.add(None)
+        out[M] = flags <= {"nomob", "none"}
+    return out
+
+
+def _dev(dst, P, pre, spend, sids, rows, data_dir, aid, key, out_dir, info=None):
+    """📱 Devices (device_build.build_app): the app's device store (every install day since its first one) + its
+    Google Ads cost by country × install day (the 🌍 Countries cost: _geo_app over its own stores, in USD at each day's
+    rate) + its AdMob ÷ GA4 per install month (and which months have no AdMob match) + its own revenue curve past 30 /
+    90 days → (the ROI file's "dev" stub, the Devices files written), or None."""
     from . import device_build as dvb
     from .fetch import ga4_device as gdv
     f = _d(dst["F"])
     win = gdv.windows(f)
     today = _d(dst["today"]) if dst.get("today") else f
-    lo = min(min(w[0] for w in win.values()), today - timedelta(days=gdv.RANGE_DAYS))   # the windows and every period
+    first = P.get("hs") if P.get("hs") else None
+    lo = min([min(w[0] for w in win.values()), today - timedelta(days=gdv.RANGE_DAYS)] + ([first] if first else []))
     hi = max(max(w[1] for w in win.values()), today)
     days = [lo + timedelta(days=i) for i in range((hi - lo).days + 1)]
     cost_usd, unk = {}, set()
@@ -2208,6 +2229,7 @@ def _dev(dst, P, pre, spend, sids, rows, data_dir):
         fxg = val._fx_fn((pre or {}).get("fx"), geo.get("ccy") or spend.get("ccy") or "USD")[0]
         sdaily = ((pre or {}).get("spend") or {}).get("daily") or {}
         cost, unk, _ = _geo_app(geo, sids, sdaily, spend, days)
+        geo = None
         for cc, byx in cost.items():
             if cc == NOT_SPLIT:
                 continue
@@ -2215,8 +2237,27 @@ def _dev(dst, P, pre, spend, sids, rows, data_dir):
                 cost_usd.setdefault(cc, {})[X] = c / 1e6 * (fxg(X) or 0)
     elif not sids:
         unk = set()                                     # no Google Ads store: no cost at all (the "No ads" rows)
-    kmap = _appk(P, sorted({_mkey(d) for d in days}))
-    return dvb.dev_block(dst, cost_usd, unk, lambda X: kmap.get(_mkey(X)), dvb.curve_of(rows, list(T)))
+    unk = set(unk)
+    months = sorted({_mkey(d) for d in days})
+    kmap = _appk(P, months)
+    qmap = _appk_q(P, months)
+    curve = dvb.curve_of(rows, list(T))
+    return dvb.build_app(data_dir, gu.file_key(aid), cost_usd, unk, lambda X: kmap.get(_mkey(X)),
+                         lambda X: qmap.get(_mkey(X)), curve, first, out_dir, info, fkey=key)
+
+
+def _dev_last(out_dir, key):
+    """The app's Devices stub of the LAST build (its ROI file, still on disk) and every Devices file it points at, or
+    None: kept as they are when this build's would be over the size limit."""
+    try:
+        with gzip.open(os.path.join(out_dir, PREFIX + key + ".json.gz"), "rt", encoding="utf-8") as f:
+            dev = (json.load(f) or {}).get("dev")
+    except (OSError, ValueError):
+        return None
+    if not isinstance(dev, dict) or dev.get("v") != 3 or not dev.get("file"):
+        return None
+    files = {n for n in os.listdir(out_dir) if n.startswith(PREFIX + key + "_dv") and DV_RE.match(n)}
+    return dev, files
 
 
 def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids=None):
@@ -2288,13 +2329,27 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
             cty["months"] = {}
         dev = None
         try:                                            # 📱 Devices (GA4_DEVICE's store): its own try — a failure costs
-            from .fetch import ga4_device as gdv        # only this block
+            from . import device_build as dvb           # only this block
+            from .fetch import ga4_device as gdv
             dst = gdv.load_store(gdv.store_path(data_dir, aid))
             if dst and str(dst.get("stream_id") or "") == str(store.get("stream_id") or ""):
-                dev = _dev(dst, P, pre, spend, sids, rows, data_dir)
-        except Exception:
-            acc.dvn["failed"] += 1
+                try:
+                    with _sc.stage("roi_device"):       # (⏱ measure only, stage_clock: summed over the apps)
+                        got = _dev(dst, P, pre, spend, sids, rows, data_dir, aid, key, out_dir, acc.dvn)
+                except dvb.TooBigError:                 # a file over the limit: the page keeps the last good copy
+                    acc.dvn["toobig"] += 1
+                    got = _dev_last(out_dir, key)
+                if got:
+                    dev, dfiles = got
+                    acc.dvf.update(dfiles)
+        except Exception as e:                          # seen (the health banner) and the last good copy kept: its
+            acc.dvn["failed"] += 1                      # files are not cleaned away (nor built again next time)
+            print("devices skipped: %s" % type(e).__name__, file=sys.stderr)
+            got = _dev_last(out_dir, key)
             dev = None
+            if got:
+                dev, dfiles = got
+                acc.dvf.update(dfiles)
         body = {"v": V, "app_id": aid, "app": a["app_name"], "key": key, "tz": P["tz"], "cur": "USD",
                 "ccy": spend["ccy"] if spend else None, "S": _iso(P["S"]), "hs": _iso(P["hs"]),
                 "newest": co.get("read_today") if co else None, "spend_till": spend.get("till") if spend else None,
@@ -2307,7 +2362,6 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
         if dev:
             body["dev"] = dev
             acc.dvn["apps"] += 1
-            acc.dvn["rows"] += len(((dev.get("P") or {}).get("30") or {}).get("rows") or [])
         if late is not None:
             body["late"] = late["info"]
         if cv is not None and late is not None and "B" in late:   # 🌍 one country's install-day table (own try:
@@ -2435,7 +2489,7 @@ def _clean(out_dir, keep):
     except OSError:
         return
     for f in names:
-        if ((FILE_RE.match(f) or PACK_RE.match(f) or CP_RE.match(f)) and f not in keep) or \
+        if ((FILE_RE.match(f) or PACK_RE.match(f) or CP_RE.match(f) or DV_RE.match(f)) and f not in keep) or \
                 (f == ALL_FILE and ALL_FILE not in keep):
             try:
                 os.remove(os.path.join(out_dir, f))
@@ -2480,7 +2534,9 @@ def finish(acc, dashboard, out_dir):
                             "apps": {x["app_id"]: {k: x.get(k) for k in ("file", "st", "r7", "u7", "pb", "nb", "life", "cut", "fc")}
                                      for x in acc.apps}}
         keys = {PREFIX + x["key"] + "_c" for x in acc.apps}     # 🌍 an app's packs live while its file does
-        _clean(out_dir, {x["file"] for x in acc.apps} | {ALL_FILE} | {p for p in acc.packs if p[:len(PREFIX) + 14] in keys})
+        dkeys = {PREFIX + x["key"] + "_d" for x in acc.apps}    # 📱 … and its Devices files
+        _clean(out_dir, {x["file"] for x in acc.apps} | {ALL_FILE} | {p for p in acc.packs if p[:len(PREFIX) + 14] in keys}
+               | {p for p in acc.dvf if p[:len(PREFIX) + 14] in dkeys})
         sts = {}
         for x in acc.apps:
             sts[x["st"]] = sts.get(x["st"], 0) + 1
@@ -2493,7 +2549,11 @@ def finish(acc, dashboard, out_dir):
             LINE += "; countries: apps %d, countries %d, packs %d, failed %d, ads split unread %d" % (
                 c["apps"], c["countries"], c["packs"], c["failed"], c["geo_failed"])
         if acc.dvn["apps"] or acc.dvn["failed"]:        # 📱 Devices (counts only)
-            LINE += "; devices: apps %d, rows %d, failed %d" % (acc.dvn["apps"], acc.dvn["rows"], acc.dvn["failed"])
+            d = acc.dvn
+            LINE += "; devices: apps %d, rows %d, months %d, cached %d, built %d, kb %d, failed %d" % (
+                d["apps"], d["rows"], d["months"], d["cached"], d["changed"], d["kb"], d["failed"])
+        if acc.dvn["toobig"]:                           # (also when no app's Devices block was built)
+            print("devices skipped: TooBigError", file=sys.stderr)
         if acc.fc is not None:
             from . import forecast_build as fob
             fob.finish(acc.fc)

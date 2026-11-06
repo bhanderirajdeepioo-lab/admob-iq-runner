@@ -333,8 +333,10 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         try:                                            # install day — own store, a failure costs that step only
             from .fetch import ga4_device as gdv
             with _sc.stage("ga4_device"):
-                print(gdv.log_line(gdv.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
-                                                   budget=s.get("ga4_device_budget_sec") or gdv.BUDGET_SEC)),
+                print(gdv.log_line(gdv.refresh_all(
+                    cfg, data_dir, apps, now, clock or time.monotonic,
+                    budget=s.get("ga4_device_budget_sec") or gdv.BUDGET_SEC,
+                    staged_dir=(s.get("device_staged_dir") or None) if s.get("ga4_device_history") else None)),
                       file=sys.stderr)
         except Exception as e:
             print("ga4 device skipped: %s" % type(e).__name__, file=sys.stderr)

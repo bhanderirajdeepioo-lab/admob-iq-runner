@@ -1,0 +1,82 @@
+# The 📱 Devices tab's HISTORY (owner, 6 Nov 2026: "muje all time ka chahiye jab se app start hui he"): every install day
+# of every app since its first one, older than the hourly build's own (it reads the last 92 days): GA4 by phone model ×
+# country — installs + revenue so far (S, a month of install days in one call), paid installs (P) and back next day (D1),
+# each with its truth; newest first (the last year of every app before anything older), then old revenue so far again
+# every 28 / 91 days. 12 properties side by side for up to 5.5 h. See admob_iq/fetch/ga4_device.py (backfill_all, main).
+# It writes ONLY the private repo's ga4_device_bf/ (same layout as data/ga4_device/): the hourly build's push replaces
+# all of data/ and site/ every run, so anything another job wrote there would be lost. The hourly build merges it into
+# data/ga4_device (DEVICE_STAGED_DIR in refresh.yml); this job removes what the build has merged before it starts.
+# Every 10 min, and at the end, that folder alone is committed on top of the private repo's newest main and pushed
+# (retried on a race; never a force).
+# Quota: a property at the job's floors (65 % of an hourly token bucket — above the 50 % where the hourly build's other
+# GA4 steps stop —, 40 % of the day's, 60 potentially thresholded requests) or answering 429 waits for the next clock
+# hour while the job goes on with the others (the Screens history job's floors: together they never push a property
+# under 65 %).
+# Switch: the repo variable GA4_DEVICE_HISTORY ('false' stops this job and the hourly merge without a code push).
+# This repo's Actions log is PUBLIC: a counts-only heartbeat and ONE counts-only result line; stderr is hidden, and the
+# inputs are read by the job from the event file only — never put into a step's env or script.
+name: devices-backfill
+
+on:
+  # every 6 hours as well (offset from screens-backfill's :47): a run goes on from where the last one stopped (its 5.5 h
+  # clock, the quota floors) — the biggest apps' history takes several runs — and ends within minutes once every app's
+  # history is complete and nothing is due again. Runs never overlap (concurrency).
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      apps:
+        description: "only these apps: comma list of 12-hex file keys (empty = all)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read                 # this repo is never written to
+
+concurrency:
+  group: devices-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    if: vars.GA4_DEVICE_HISTORY != 'false'
+    # PINNED as refresh.yml: a new runner image is a deliberate change (1 Nov 2026: the zone names Google sends went
+    # missing on ubuntu-latest); tzdata in requirements.txt is the second guard
+    runs-on: ubuntu-24.04
+    # the job starts no GA4 call 19,800 s (5.5 h) after it starts, then saves and pushes what it has; before it: setup
+    # (~3 min) + the clone (capped at 10 min below)
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -q -r requirements.txt
+      - name: Clone the PRIVATE data (routes, the build's store, the staged history)
+        env:
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+        run: |
+          test -n "$DATA_REPO"       || { echo "::error::DATA_REPO secret missing"; exit 1; }
+          test -n "$DATA_REPO_TOKEN" || { echo "::error::DATA_REPO_TOKEN secret missing"; exit 1; }
+          # the token goes in a header for this one command only: never into a URL, a file or .git/config (the job's
+          # own pushes send it the same way, command by command)
+          auth=$(printf 'x-access-token:%s' "$DATA_REPO_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          timeout 600 git -c http.extraheader="AUTHORIZATION: basic $auth" clone -q --depth=1 \
+            "https://github.com/$DATA_REPO.git" _private > /dev/null 2>&1 \
+            || { echo "::error::could not clone the private data repo"; exit 1; }
+          echo "private data: cloned"
+      - name: Run
+        env:
+          GA4_REFRESH_TOKENS: ${{ secrets.GA4_REFRESH_TOKENS }}
+          GA4_REFRESH_TOKEN: ${{ secrets.GA4_REFRESH_TOKEN }}
+          GA4_CLIENT_ID: ${{ secrets.GA4_CLIENT_ID }}
+          GA4_CLIENT_SECRET: ${{ secrets.GA4_CLIENT_SECRET }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+          DEVICES_DATA_DIR: _private
+          PYTHONUNBUFFERED: "1"
+        run: python -m admob_iq.fetch.ga4_device --backfill 2>/tmp/devices.err || { echo "::error::devices backfill failed (details kept off the public log)"; exit 1; }

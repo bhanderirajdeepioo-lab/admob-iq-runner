@@ -171,6 +171,11 @@ jobs:
           # install day for the ROI tab's Devices view. GA4_DEVICE=false stops the reads without a code push
           GA4_DEVICE:           ${{ vars.GA4_DEVICE || 'true' }}
           GA4_DEVICE_BUDGET_SEC: ${{ vars.GA4_DEVICE_BUDGET_SEC }}
+          # … its HISTORY (All time: every install day since the app's first one): devices-backfill.yml writes ONLY
+          # ga4_device_bf/ in the private repo (the push below replaces data/); merged into data/ga4_device first.
+          # GA4_DEVICE_HISTORY=false stops the history job and this merge without a code push
+          GA4_DEVICE_HISTORY:   ${{ vars.GA4_DEVICE_HISTORY || 'true' }}
+          DEVICE_STAGED_DIR:    _private/ga4_device_bf
           # 📈 Day-wise ROI: every day 0 … 30 of each install day's GA4 ad revenue (admob_iq/fetch/ga4_cohort.py;
           # data/ga4_cohort/ in the private repo, kept for good): GA4_COHORT=false stops the reads without a code push;
           # ROI_TAB=false takes the ROI section off the Install value tab

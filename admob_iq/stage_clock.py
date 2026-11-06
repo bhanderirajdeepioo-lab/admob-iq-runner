@@ -74,7 +74,7 @@ STAGES = (
     "ga4_audience", "ga4_firstopen", "ga4_firstopen_cc", "ga4_source", "ga4_source_cty", "ga4_source_dev", "ga4_newusers",
     "ga4_nvr", "ga4_nvr_uc", "ga4_device", "ga4_cohort", "ga4_cube", "ga4_screens",
     "active_prepass", "value_prepass", "uninstall_store_load", "uninstall_eval", "active_apps", "value_apps",
-    "roi_apps", "roi_cube", "roi_country", "adcfg", "forecast", "impact_any", "cohort_files",
+    "roi_apps", "roi_cube", "roi_country", "roi_device", "adcfg", "forecast", "impact_any", "cohort_files",
     "impact_any_finish", "uninstall_asset", "active_finish", "value_finish", "roi_finish",
     "tabs", "uninstall_studio", "active_studio", "value_studio", "audience_tab", "firstopen_tab", "source_tab", "nvr_tab",
     "scr_tab", "cpi_tab",

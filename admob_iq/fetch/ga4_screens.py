@@ -1854,10 +1854,11 @@ def bf_apps(data_dir, want=None):
     return out
 
 
-def git_push(repo, sub, token, tries=PUSH_TRIES, run=subprocess.run, pause=ga4._sleep):
+def git_push(repo, sub, token, tries=PUSH_TRIES, run=subprocess.run, pause=ga4._sleep, label="screens backfill"):
     """Commit the private clone's `sub` folder ONLY, on top of the remote's newest main (fetch; the index reset to it;
     the folder added; commit; push — again on a race, `tries` times) → True when the remote has it. The token rides an
-    http.extraheader for each command only (never a URL, a file or .git/config); git's output is discarded."""
+    http.extraheader for each command only (never a URL, a file or .git/config); git's output is discarded. label: the
+    commit message's fixed words (the Devices history job's own; never data)."""
     auth = base64.b64encode(("x-access-token:%s" % token).encode("utf-8")).decode("ascii")
     hdr = ["-c", "http.extraheader=AUTHORIZATION: basic " + auth]
     who = ["-c", "user.name=admob-iq-bot", "-c", "user.email=admob-iq-bot@users.noreply.github.com"]
@@ -1876,7 +1877,7 @@ def git_push(repo, sub, token, tries=PUSH_TRIES, run=subprocess.run, pause=ga4._
         git("add", "-A", "--", sub)
         if git("diff", "--cached", "--quiet") == 0:
             return True                                 # nothing new since the last push
-        if git("commit", "-q", "-m", "screens backfill %s UTC" % time.strftime("%Y-%m-%d %H:%M", time.gmtime())):
+        if git("commit", "-q", "-m", "%s %s UTC" % (label, time.strftime("%Y-%m-%d %H:%M", time.gmtime()))):
             continue
         if git("push", "-q", "origin", "HEAD:main", net=True) == 0:
             return True
