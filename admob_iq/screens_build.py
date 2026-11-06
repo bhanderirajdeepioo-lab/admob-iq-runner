@@ -12,13 +12,20 @@ streamed: one app's core (t v w a) + ONE month of one layer group in memory at a
 derived month (per class, per dim) is cached in data/ga4_screens_cache/<key>/<grp>_<YYYY-MM>.json.gz under the store
 file's sha1: an unchanged month is never parsed again ("cached N" in the line). AdMob comes from the dashboard this build
 already holds (placements[].daily per ad unit per IST day, apps_catalog, latest_complete, report_tz) and
-data/app_store_ids.json (sibling AdMob app ids of the same Play package).
+data/app_store_ids.json (sibling AdMob app ids of the same Play package). The app's daily users (Ads / user, owner 6 Nov
+2026: "1 user ko kitna impression mila") come from the Uninstall store data/ga4_uninstall/<key>.json.gz: its "daily" a1
+is GA4's activeUsers by date on the same Android stream filter — used only when its property, stream and time zone are
+this store's (app_users).
 
 Files (sorted compact JSON, deterministic gzip — no mtime / file name, level GZ_LEVEL — written only when their bytes
 changed, known from the out-file index in the cache dir; day arrays from the app's first day d0, shards from the 1st of
 their month; a month's shard is not even built while its inputs are unchanged):
   site/scr_all.json.gz          every app's day arrays over its display items + status words (the tab's first load)
-  site/scr_<key>.json.gz        the app page: screens, units, per-day core rows, AdMob per unit (blended), row details
+  site/scr_<key>.json.gz        the app page: screens, units, per-day core rows, AdMob per unit (blended), row details;
+                                Ads / user (only the app page reads them, never All apps): "U" the top screens' users
+                                per FINAL day ("Us" their screen indexes; only where the users read AND the ads by
+                                screen are whole: users_by_day), "au" the app's daily active users per final day
+                                (app_users; else "auw" why)
   site/scr_l_<key>.json.gz      the app's layers: per-day small-group records, versions, month sums, shard list, the
                                 developer report text (English, no money)
   site/scr_r_<key>_<YYYYMM>.json.gz / scr_c_<key>_<YYYYMM>.json.gz   one month of versions / countries over the display
@@ -73,6 +80,9 @@ CACHE_DIR = "ga4_screens_cache"
 CACHE_V = 4                            # 4: scr_l's small-group records carry _ch's state (a "skip" record "-"); 3: a
                                        # "skip" record (GA4 never asked) is cached as "-"; 2: a "p" day with GA4 grouped
                                        # ≤ FOLD_OK as "w" (older caches re-derived)
+SMALL_V = 1                            # the small month cache's parts beside its day records ("u": the users by screen of
+                                       # its whole users days): a cache without them / of another SMALL_V is encoded again
+                                       # (a CACHE_V bump would derive every layer month again too)
 GZ_LEVEL = 6                           # the scr_ files' gzip level (9 took ~4× the time for files under a tenth smaller)
 IDX_V, IDX_APP, IDX_ALL = 1, "shards.json", "all.json"      # the out-file index (_idx_path)
 SHARD_V = 1                            # bump when shard_body's output changes for the same inputs (a shard key part)
@@ -2162,15 +2172,22 @@ def _clicks(rec):
     return n
 
 
+def _users(e):
+    """An encoded uV record (_enc: rows [screen index, sessions, users]) → [[screen index, users]] (its rows' order)."""
+    return [[r[0], r[2]] for r in e.get("r") or ()]
+
+
 def small_days(app, data_dir, recent, broken=None, counts=None):
     """The small group per day as scr_l's day records — each day's sorted compact JSON (bytes: classes → file 2 screen
-    indexes, layer ads without a format on a confirmed copy day → null; spliced into scr_l unparsed) — its state chars
-    and the click tally (a month file that cannot be read → `broken`). A store month is encoded once: its day records,
-    states and clicks are cached under the store file's sha1 (data/ga4_screens_cache/<key>/small_<YYYY-MM>.json.gz) with
-    its classes in the order the encoding met them and the screen indexes they got; a cached month registers those
-    classes in that order — the indexes an uncached build gives — and is used only when they match (else encoded again)."""
+    indexes, layer ads without a format on a confirmed copy day → null; spliced into scr_l unparsed) — its state chars,
+    the click tally (a month file that cannot be read → `broken`) and the users by screen ({day: {screen index: users}},
+    only the days whose uV record is whole: GA4's activeUsers, unique within one day and one screen — users_by_day). A
+    store month is encoded once: its day records, states, clicks and users are cached under the store file's sha1
+    (data/ga4_screens_cache/<key>/small_<YYYY-MM>.json.gz) with its classes in the order the encoding met them and the
+    screen indexes they got; a cached month registers those classes in that order — the indexes an uncached build
+    gives — and is used only when they match (else encoded again)."""
     ids = GROUPS["small"]
-    frag, st = {}, {i: {} for i in ids}
+    frag, st, users = {}, {i: {} for i in ids}, {}
     clicks = {"seen": 0, "n": 0}
     td = _iso(app.td)
     for m in _months(data_dir, app.key, "small", app.meta) if app.d0 else ():
@@ -2185,7 +2202,7 @@ def small_days(app, data_dir, recent, broken=None, counts=None):
         lo, hi = max(app.d0, m + "-01"), min(_month_end(m), td)
         dk = "".join(str(app.dup.get(d, 0)) for d in _span(m + "-01", _month_end(m)))
         c = _cache_get(data_dir, app.key, "small", m, src)
-        if c is not None and [c.get("dk"), c.get("lo"), c.get("hi")] == [dk, lo, hi]:
+        if c is not None and [c.get("dk"), c.get("lo"), c.get("hi"), c.get("sv")] == [dk, lo, hi, SMALL_V]:
             cls = c.get("cls") or []
             for x in cls:
                 _si(app, x)
@@ -2193,6 +2210,7 @@ def small_days(app, data_dir, recent, broken=None, counts=None):
                 frag.update((d, t.encode("utf-8")) for d, t in c["days"].items())
                 for i, by in (c.get("st") or {}).items():
                     st.setdefault(i, {}).update(by)
+                users.update((d, {si: n for si, n in rows}) for d, rows in (c.get("u") or {}).items())
                 clicks["seen"] += c["ck"][0]
                 clicks["n"] += c["ck"][1]
                 if counts is not None:
@@ -2204,7 +2222,7 @@ def small_days(app, data_dir, recent, broken=None, counts=None):
             if broken is not None:
                 broken.append(("small", m, type(e).__name__))
             continue
-        seen, mf, mst, ck = {}, {}, {i: {} for i in ids}, [0, 0]
+        seen, mf, mst, ck, mu = {}, {}, {i: {} for i in ids}, [0, 0], {}
         for d, recs in days.items():
             if not isinstance(recs, dict) or not lo <= d <= hi:
                 continue
@@ -2218,14 +2236,18 @@ def small_days(app, data_dir, recent, broken=None, counts=None):
                 if i == "k" and _ok(rec):
                     ck[0] += 1
                     ck[1] += _clicks(rec)
+                elif i == "uV" and _whole(rec):
+                    mu[d] = _users(e[i])
             if e:
                 mf[d] = _raw(e)
-        _cache_put(data_dir, app.key, "small", m, {"v": CACHE_V, "src": src, "dk": dk, "lo": lo, "hi": hi,
-                                                   "cls": list(seen), "map": [app.six[x] for x in seen], "st": mst,
-                                                   "ck": ck, "days": {d: t.decode("utf-8") for d, t in mf.items()}})
+        _cache_put(data_dir, app.key, "small", m, {"v": CACHE_V, "sv": SMALL_V, "src": src, "dk": dk, "lo": lo,
+                                                   "hi": hi, "cls": list(seen), "map": [app.six[x] for x in seen],
+                                                   "st": mst, "ck": ck, "u": mu,
+                                                   "days": {d: t.decode("utf-8") for d, t in mf.items()}})
         frag.update(mf)
         for i, by in mst.items():
             st[i].update(by)
+        users.update((d, {si: n for si, n in rows}) for d, rows in mu.items())
         clicks["seen"] += ck[0]
         clicks["n"] += ck[1]
     # the recent days (re-read on refresh: never cached) over the month's records of the same day, read by read
@@ -2244,9 +2266,14 @@ def small_days(app, data_dir, recent, broken=None, counts=None):
             if i == "k" and _ok(rec):
                 clicks["seen"] += 1
                 clicks["n"] += _clicks(rec)
+            elif i == "uV":                              # (a recent record replaces the month's: whole or not)
+                if _whole(rec):
+                    users[d] = {si: n for si, n in _users(e[i])}
+                else:
+                    users.pop(d, None)
         if e:
             frag[d] = _raw(e)
-    return frag, st, clicks
+    return frag, st, clicks, users
 
 
 _SPLICE = "\u0000scr-days\u0000"     # scr_l's "days" while serialized: replaced by the day records' own JSON
@@ -2361,6 +2388,64 @@ def statuses(app, ft=None):
     return out, ast
 
 
+# ── Ads / user (owner, 6 Nov 2026: "1 user ko kitna impression mila"): the users beside the ads ─────────────────
+
+def users_by_day(app, users):
+    """File 2's "Us" + "U": the top screens (app.top's order) as file 2 screen indexes, and per app day their users —
+    only on FINAL days (≤ ft, the tab's "GA4 data till") whose users read (uV) AND ads by screen are whole, else None; a
+    top screen with no uV row that day has 0. Never Today / Yesterday: their users (a layer read, re-read every 12 h)
+    and their ads (core, every 3 h) are snapshots hours apart while GA4 still adds to both — ads ÷ users of two
+    moments. GA4's users are unique within ONE day and ONE screen: the page divides the period's Σ of a row's ads by
+    the Σ of these (ads per user per day), and no row ever gets users added across screens — an aggregate row (Other
+    screens, Not recorded, Ad screens, GA4 grouped) has none. users: small_days' {day: {screen index: users}}. →
+    (Us, U), or None when no day has any (that app ships neither)."""
+    six = [app.six[c] for c in app.top]
+    ft = _iso(app.ft)
+    out = [None if d > ft or d not in users or d not in app.whole["a"] else [users[d].get(si, 0) for si in six]
+           for d in app.days]
+    return (six, out) if six and any(x is not None for x in out) else None
+
+
+def daily_users(app, au):
+    """File 2's "au": the app's daily active users (app_users' {day: users}) per app day — FINAL days only (≤ ft: as
+    users_by_day, never Today / Yesterday), else None (never 0) — or None when no day has any."""
+    ft = _iso(app.ft)
+    out = [au.get(d) if d <= ft else None for d in app.days]
+    return out if any(v is not None for v in out) else None
+
+
+def app_users(meta, data_dir):
+    """The app's GA4 daily active users → ({day: users}, None) from the Uninstall store (data/ga4_uninstall/<key>.json.gz,
+    its "daily" a1: GA4's activeUsers by date, read with the same Android stream filter as this store's reads), or
+    ({}, why): "none" (no store, not readable, or no day with users), "stream" (its app, property, stream or time zone
+    is not this store's: another stream's users, or days on another calendar), "cut" (GA4 cut its daily report). A day
+    without users (0 / missing) is left out, never 0 — so a store flagged "thresholded" is still used: GA4's
+    thresholding only withholds rows (on a date-only report a whole day, which reads 0), never changes a number."""
+    aid = str(meta.get("app_id") or "")
+    raw = _read_gz_bytes(gu.store_path(data_dir, aid))
+    u = _json(raw) if raw is not None else None
+    if not u:
+        return {}, "none"
+    pid, sid = str(meta.get("property_id") or ""), str(meta.get("stream_id") or "")
+    if not (pid and sid and str(u.get("app_id") or "") == aid and str(u.get("property_id") or "") == pid
+            and str(u.get("stream_id") or "") == sid
+            and str(u.get("time_zone") or "UTC") == str(meta.get("time_zone") or "UTC")):
+        return {}, "stream"
+    fl = u.get("flags") if isinstance(u.get("flags"), dict) else {}
+    if "daily" in (fl.get("truncated") if isinstance(fl.get("truncated"), list) else ()):
+        return {}, "cut"
+    out = {}
+    daily = u.get("daily") if isinstance(u.get("daily"), dict) else {}
+    for d, e in daily.items():
+        try:
+            n = _i(e.get("a1"))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if n > 0 and re.match(r"^\d{4}-\d{2}-\d{2}$", str(d)):
+            out[str(d)] = n
+    return (out, None) if out else ({}, "none")
+
+
 def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=None, idx=None):
     """One app → (file-2 name, its raw bytes, scr_l name, its raw bytes, the scr_all entry, kept shard names, counts) —
     the shards and scr_l written here; file 2 written by the caller after this returns (write order). broken (a list):
@@ -2389,7 +2474,7 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
     for grp in ("ver", "cc"):
         broken += [(grp, m, t) for m, t in sorted(lay[grp].broken.items())]
     prev = {v: ver[v]["prev"] for v in ver}
-    sdays, sst, clicks = small_days(app, data_dir, recent, broken, counts)
+    sdays, sst, clicks, users = small_days(app, data_dir, recent, broken, counts)
     # a store month file that cannot be read: its days ship "x" (file 2's day states and scr_all's state strings)
     mark_lost(app, broken, lambda i: app.st[i] if i in GROUPS["core"] else sst[i] if i in GROUPS["small"] else
               lay["ver"].st[i] if i in GROUPS["ver"] else lay["cc"].st[i])
@@ -2464,6 +2549,18 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
     body2 = {"v": V, "key": key, "app_id": app.aid, "ft": _iso(app.ft), "td": _iso(app.td), "d0": app.d0,
              "screens": [[c, kind(c)] for c in app.screens], "units": app.units, "trig": app.trig, "days": days2,
              "adm": adm, "rows": rows2, "notes": notes}
+    # Ads / user — here, never in scr_all (only the app page reads them): the top screens' users per final day ("U",
+    # their screen indexes "Us": the screen rows) and the app's daily active users per final day ("au", the app tile:
+    # GA4's own, the same stream) — or why the app has none ("auw": none · stream · cut)
+    uu = users_by_day(app, users)
+    if uu is not None:
+        body2["Us"], body2["U"] = uu
+    au, auw = app_users(meta, data_dir)
+    aul = daily_users(app, au)
+    if aul is not None:
+        body2["au"] = aul
+    else:
+        body2["auw"] = auw or "none"
     # scr_all entry
     vis, V_, A_, ta = [], [], [], []
     ni = len(app.items)

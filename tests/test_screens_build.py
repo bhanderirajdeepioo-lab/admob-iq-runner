@@ -8,7 +8,10 @@ the cause gates (units with no AdMob id their own gate), the developer report, t
 apps the catalog selects, the history cell (done and no skip day still read again), the write order and failure
 isolation, the too-big guard, the month cache (a previous CACHE_V's caches derived again), a store month file that
 cannot be read (counted, one health line, its days "x", never cached), a day the fetch never asked GA4 about ("skip":
-shipped "-", not read yet — in scr_l too), the counts-only line and the backtest CLI."""
+shipped "-", not read yet — in scr_l too), Ads / user (in file 2, never scr_all: each top screen's users on the FINAL
+days the users read and the ads by screen are whole — never Today / Yesterday — a recent users read replacing the month
+file's, whole or not; never added across screens, per user per day; the app's daily users from its Uninstall store of
+the same stream only, final days only), the counts-only line and the backtest CLI."""
 import gzip
 import hashlib
 import io
@@ -1050,6 +1053,11 @@ def test_run_files_pointer_report_and_stale_removal(tmp_path):
     assert (f2["v"], f2["key"], f2["td"], f2["d0"]) == (1, KEY, "2026-11-04", "2026-08-01")
     assert len(f2["days"]) == len(_days("2026-08-01", "2026-11-04")) and len(f2["adm"]["0"]) == len(f2["days"])
     one = fa["apps"][AID]
+    # scr_all: All apps' day arrays only — Ads / user's users ("U" / "Us", "au" / "auw") are file 2's, which only the
+    # app page loads (scr_all keeps its size)
+    assert set(one) == {"key", "ft", "td", "d0", "items", "vis", "V", "A", "ta", "st", "bf", "status", "app", "dq"}
+    assert set(f2) == {"v", "key", "app_id", "ft", "td", "d0", "screens", "units", "trig", "days", "adm", "rows", "notes",
+                       "Us", "U", "auw"} and f2["auw"] == "none" and len(f2["U"]) == len(f2["days"])
     assert len(one["vis"]) == len(f2["days"]) and all(len(s) == len(f2["days"]) for s in one["st"].values())
     assert set(one["st"]) == set(sb.READ_IDS) and one["st"]["a"].count("w") == len(f2["days"])
     assert one["items"][:2] == [[EDIT, "s", "in"], [MAIN, "s", "in"]]           # by class name, never by views
@@ -1239,6 +1247,169 @@ def test_the_small_cache_follows_the_screen_indexes(tmp_path):
     cold = {f: (tmp_path / "cold" / f).read_bytes() for f in sorted(os.listdir(tmp_path / "cold"))}
     assert warm == cold and gz(out / ("scr_%s.json.gz" % KEY))["screens"][1] == ["a.a.AaaActivity", "s"]
     assert cmap() == [i + 1 for i in before]                             # encoded again on the new indexes
+
+
+# ── Ads / user (owner, 6 Nov 2026: "1 user ko kitna impression mila") ───────────────────────────────────────────
+
+RARE = "x.y.RareActivity"                                          # a screen in "All other screens" (5 visits a day)
+
+
+def users_day(d):
+    """The fixture day + a rarely visited screen, and the users by screen (uV): Edit 100 · Main 200 · Rare 3 · not
+    recorded 8 · the ad SDK's Activity 40 a day; W's days each carry one case of the whole-days rule."""
+    r = core_recs(d, {})
+    r.update(layer_recs(d, {}))
+    r["v"]["r"].append([RARE, 5, 50])
+    r["a"]["r"].append([RARE, "Banner", "unit_a", 3])
+    rows = [[ADACT, 60, 40], [NS, 10, 8], [EDIT, 150, 100], [MAIN, 300, 200], [RARE, 4, 3]]
+    uv = {"st": "w", "g": "c", "r": rows}
+    main = lambda n: [x if x[0] != MAIN else [MAIN, 300, n] for x in rows]
+    case = {WD[0]: {"st": "s", "g": "c", "smp": 0.3},                            # GA4 sampled the users read
+            WD[1]: {"st": "p", "g": "c", "f": 0.3, "r": main(50)},              # 30 % grouped: not whole
+            WD[2]: {"st": "p", "g": "c", "f": 0.01, "r": main(190)},            # 1 % grouped: whole
+            WD[3]: {"st": "t", "g": "c", "thr": 1},                             # thresholded
+            WD[5]: {"st": "w", "g": "c", "r": [x for x in rows if x[0] != MAIN]},   # whole, no Main row: 0 users
+            WD[7]: {"st": "o", "g": "c", "cov": None, "loss": 1},               # a recent day, rows dropped
+            WD[8]: {"st": "w", "g": "c", "r": main(210)}}                       # a recent day, whole
+    r["uV"] = case.get(d, uv)
+    if d == WD[4]:
+        r["a"] = dict(r["a"], st="p", f=0.3)            # the ads by screen 30 % grouped: its ads ship, the day is not whole
+    return r
+
+
+def test_ads_per_user_counts_each_top_screens_users_on_whole_final_days_only(tmp_path):
+    data, out = tmp_path / "data", tmp_path / "site"
+    write_store(data, day_fn=users_day)
+    (data / "app_store_ids.json").write_text(json.dumps({"by_id": {}}))
+    assert sb.run(dashboard(), str(data), str(out), {}, NOW) == ["/scr_*"]
+    one = gz(out / "scr_all.json.gz")["apps"][AID]
+    f2 = gz(out / ("scr_%s.json.gz" % KEY))
+    days = _days(one["d0"], "2026-11-04")
+    items = [it[0] for it in one["items"]]
+    # file 2 carries them (only the app page reads them, never All apps): the top screens as its screen indexes ("Us"),
+    # per day their users ("U")
+    assert items[:3] == [EDIT, MAIN, "Other screens"] and len(f2["U"]) == len(days)
+    assert f2["Us"] == [f2["screens"].index([EDIT, "s"]), f2["screens"].index([MAIN, "s"])]
+    assert not {"U", "Us", "au", "auw"} & set(one)
+    U = {d: f2["U"][days.index(d)] for d in WD}
+    # one users number per TOP screen (Edit, Main) a day: Rare (All other screens), not recorded and the ad SDK's
+    # Activity never ship — no row gets users added across screens
+    assert U[WD[6]] == [100, 200] and U[WD[9]] == [100, 200] and {len(u) for u in f2["U"] if u} == {2}
+    # Today / Yesterday never — though their users read and their ads by screen are whole: not final, and the users (a
+    # layer read) and the ads (core) of those days are snapshots hours apart
+    assert days[-2:] == ["2026-11-03", "2026-11-04"] and f2["U"][-2:] == [None, None]
+    fl = gz(out / ("scr_l_%s.json.gz" % KEY))
+    assert [fl["days"][-k]["uV"]["st"] for k in (1, 2)] == ["w", "w"] and one["st"]["a"][-2:] == "ww"
+    # whole days only: sampled / 30 % grouped / thresholded / rows dropped → none; 1 % grouped is whole; a whole day
+    # without the screen's row has 0; ads by screen not whole that day (its ads still in "A") → none
+    assert [U[d] for d in WD] == [None, None, [100, 190], None, None, [100, 0], [100, 200], None, [100, 210], [100, 200]]
+    assert one["A"][days.index(WD[4])][1] is not None
+    # the per user per day math over W: Σ the day's ads ÷ Σ the day's users of that screen, on the days with users
+    ads = lambda d: counts(d, {})[1][(MAIN, "Banner", "unit_a")]
+    use = [d for d in WD if U[d] is not None]
+    got = sum(one["A"][days.index(d)][1] for d in use) / sum(U[d][1] for d in use)
+    assert got != pytest.approx(sum(one["A"][days.index(d)][1] / U[d][1] for d in use if U[d][1]) / 4)   # (Σ ÷ Σ: no mean)
+    assert use == [WD[2], WD[5], WD[6], WD[8], WD[9]]
+    assert got == pytest.approx(sum(ads(d) for d in use) / 800.0) and 1.15 < got < 1.35   # (190 + 0 + 200 + 210 + 200)
+    assert got != pytest.approx(sum(one["A"][days.index(d)][1] for d in WD) / 800.0)      # (not every W day's ads)
+    # scr_l keeps the users read as it was (its own day states)
+    fl = gz(out / ("scr_l_%s.json.gz" % KEY))
+    assert [fl["days"][days.index(d)]["uV"]["st"] for d in WD[:4]] == ["s", "p", "w", "t"]
+    # the small cache carries the users of its whole days by screen index: a cache from before them (no "sv") is
+    # encoded again, never served
+    cpath = data / "ga4_screens_cache" / KEY / "small_2026-10.json.gz"
+    c = gz(cpath)
+    si = c["map"][c["cls"].index(MAIN)]
+    assert c["sv"] == sb.SMALL_V and dict(map(tuple, c["u"][WD[2]]))[si] == 190
+    assert sorted(c["u"]) == [d for d in _days("2026-10-01", "2026-10-30") if d not in (WD[0], WD[1], WD[3])]
+    raw = {f: (out / f).read_bytes() for f in ("scr_all.json.gz", "scr_%s.json.gz" % KEY)}
+    write_json_gz_stable(str(cpath), {k: v for k, v in c.items() if k not in ("sv", "u")})
+    sb.run(dashboard(), str(data), str(out), {}, NOW)
+    assert {f: (out / f).read_bytes() for f in raw} == raw and gz(cpath)["sv"] == sb.SMALL_V
+    # an app with no whole users day ships neither "U" nor "Us"
+    data2, out2 = tmp_path / "d2", tmp_path / "s2"
+    write_store(data2, day_fn=lambda d: dict(users_day(d), uV={"st": "s", "g": "c", "smp": 0.2}))
+    (data2 / "app_store_ids.json").write_text(json.dumps({"by_id": {}}))
+    sb.run(dashboard(), str(data2), str(out2), {}, NOW)
+    assert not {"U", "Us"} & set(gz(out2 / ("scr_%s.json.gz" % KEY)))
+
+
+def test_a_recent_users_read_replaces_the_month_files_whole_or_not(tmp_path):
+    # the fetch re-reads recent days: a final day in a month file AND in recent takes recent's users read, whole or not —
+    # whole in the month file but not in recent: no users that day; the reverse: recent's users
+    d1, d2 = "2026-10-20", "2026-10-21"                                            # final days of small_2026-10
+    data, out = tmp_path / "data", tmp_path / "site"
+    write_store(data, day_fn=lambda d: dict(users_day(d), uV={"st": "s", "g": "c", "smp": 0.4}) if d == d2 else users_day(d))
+    (data / "app_store_ids.json").write_text(json.dumps({"by_id": {}}))
+    small = gz(data / "ga4_screens" / KEY / "small_2026-10.json.gz")["days"]
+    assert small[d1]["uV"]["st"] == "w" and small[d2]["uV"]["st"] == "s"
+    rp = data / "ga4_screens" / KEY / "recent.json.gz"
+    rec = gz(rp)
+    assert d1 not in rec["days"] and d2 not in rec["days"]
+    rec["days"][d1] = {"uV": {"st": "o", "g": "c", "cov": 0.8, "loss": 1}}       # recent: GA4 dropped rows
+    rec["days"][d2] = {"uV": {"st": "w", "g": "c", "r": [[ADACT, 60, 40], [NS, 10, 8], [EDIT, 150, 120], [MAIN, 300, 222]]}}
+    write_json_gz_stable(str(rp), rec)
+    sb.run(dashboard(), str(data), str(out), {}, NOW)
+    f2, fl = gz(out / ("scr_%s.json.gz" % KEY)), gz(out / ("scr_l_%s.json.gz" % KEY))
+    days = _days(f2["d0"], "2026-11-04")
+    assert [f2["U"][days.index(d)] for d in ("2026-10-19", d1, d2)] == [[100, 200], None, [120, 222]]
+    assert [fl["days"][days.index(d)]["uV"]["st"] for d in (d1, d2)] == ["o", "w"]       # scr_l: recent's, as shipped
+
+
+def uni_store(data, aid=AID, last="2026-11-02", **kw):
+    """A made-up Uninstall store (data/ga4_uninstall/<key>.json.gz) of the fixture's stream: daily a1 = 900 + a wiggle
+    up to `last` (its window end), none on 2026-09-15 (a1 0)."""
+    daily = {d: {"new": 10, "a1": 0 if d == "2026-09-15" else 900 + 10 * _j(d), "a28": 5000, "un": 3, "un_ev": 3,
+                 "upd": 0} for d in _days("2026-07-25", last)}
+    body = {"v": 3, "app_id": aid, "package": "x.y.app", "property_id": "0", "stream_id": "0", "time_zone": "UTC",
+            "daily": daily, "flags": {"truncated": [], "thresholded": False, "incomplete_days": {}}}
+    body.update(kw)
+    p = os.path.join(str(data), "ga4_uninstall", gu.file_key(aid) + ".json.gz")
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    write_json_gz_stable(p, body)
+    return daily
+
+
+def test_the_apps_daily_users_come_from_its_uninstall_store_of_the_same_stream(tmp_path):
+    data, out, dash = build(tmp_path)
+    daily = uni_store(data, last="2026-11-04")                         # (its Yesterday and Today: never shipped)
+    assert sb.run(dash, str(data), str(out), {}, NOW) == ["/scr_*"]
+    one = gz(out / "scr_all.json.gz")["apps"][AID]
+    f2 = gz(out / ("scr_%s.json.gz" % KEY))
+    days = _days(f2["d0"], "2026-11-04")
+    want = [daily[d]["a1"] if d in daily and daily[d]["a1"] and d <= "2026-11-02" else None for d in days]
+    assert f2["au"] == want and "auw" not in f2 and not {"au", "auw"} & set(one)        # file 2's, never scr_all's
+    assert f2["au"][days.index("2026-09-15")] is None                                   # no users: never 0
+    assert f2["au"][-2:] == [None, None] and daily["2026-11-03"]["a1"] > 0 and daily["2026-11-04"]["a1"] > 0   # not final
+    # the app's ads per active user per day over W: Σ GA4's labelled ad_impression (inline + full-screen) ÷ Σ its users
+    ks = [days.index(d) for d in WD]
+    got = sum(one["ta"][k][0] + one["ta"][k][1] for k in ks) / sum(f2["au"][k] for k in ks)
+    lab = lambda d: sum(n for (c, f, u), n in counts(d, {})[1].items() if sb.fgroup(sb.fmt(f)) in (0, 1))
+    assert got == pytest.approx(sum(lab(d) for d in WD) / sum(daily[d]["a1"] for d in WD))
+    meta = sb.load_meta(str(data), KEY)
+    au, why = sb.app_users(meta, str(data))
+    assert why is None and au == {d: e["a1"] for d, e in daily.items() if e["a1"]}
+    # thresholding only withholds rows (a withheld day reads 0: left out), never changes a day's number: kept
+    uni_store(data, flags={"truncated": ["cells"], "thresholded": True})
+    assert sb.app_users(meta, str(data))[1] is None
+    # another stream's users, or its days on another calendar, or another app's file: never used
+    for kw in ({"stream_id": "9"}, {"property_id": "9"}, {"time_zone": "Asia/Calcutta"}, {"app_id": AID2}):
+        uni_store(data, **kw)
+        assert sb.app_users(meta, str(data)) == ({}, "stream"), kw
+    uni_store(data, flags={"truncated": ["daily"]})                     # GA4 cut the daily report
+    assert sb.app_users(meta, str(data)) == ({}, "cut")
+    uni_store(data, daily={d: {"a1": 0} for d in WD})                   # no day with users
+    assert sb.app_users(meta, str(data)) == ({}, "none")
+    p = data / "ga4_uninstall" / (KEY + ".json.gz")
+    p.write_bytes(b"not gzip")
+    assert sb.app_users(meta, str(data)) == ({}, "none")
+    p.unlink()
+    assert sb.app_users(meta, str(data)) == ({}, "none")
+    # the tile's why ships instead of the series
+    uni_store(data, stream_id="9")
+    sb.run(dashboard(), str(data), str(out), {}, NOW)
+    f2 = gz(out / ("scr_%s.json.gz" % KEY))
+    assert "au" not in f2 and f2["auw"] == "stream"
 
 
 def test_caches_of_the_previous_version_are_derived_again(tmp_path, monkeypatch):

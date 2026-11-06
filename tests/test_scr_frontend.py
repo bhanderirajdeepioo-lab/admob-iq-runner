@@ -16,9 +16,16 @@ All apps' period sums / coverage strip kept per (build, period) with no date str
 could not be read ("x": store file unreadable), a day that is not whole never read as "GA4 sampled" (one GA4 was never
 asked about, one not read yet), the build's why shown whole and escaped, all formats because GA4 gave no screen ×
 format split (allf 2: its note with the measured full-screen share), a row under 1 % of the app's ads of its kind
-showing no score (and a "Too few ads" row never in Needs attention), and the wiring into the page (gated on DATA.scr).
+showing no score (and a "Too few ads" row never in Needs attention), Ads / user per user per day from file 2 (⏳ until
+it is here — the app page asks for it at once — its failed load "—" + Try again, its late arrival redrawing the tiles and
+the table; the Screens column: Σ ads ÷ Σ the screen's daily users on the final days with users, never the mean of the
+daily ratios; "—" + why for an aggregate row, Today / Yesterday and no whole users day; the tooltips, the sort; the app
+tile: inline + full-screen ÷ the app's daily users, "Format not recorded" left out, its parts adding up; Users who saw
+ads in the drill-down: Σ ÷ Σ, ⏳ while scr_l loads, why when none), the tiles' 1180 px rule, and the wiring into the page
+(gated on DATA.scr).
 Skipped where node is not installed. No real data."""
 import json
+import math
 import os
 import re
 import shutil
@@ -90,7 +97,7 @@ def test_sums_skip_days_without_the_quantity(out):
 
 def test_coverage_strip(out):
     want = [["v", 5, 6], ["a", 4, 6], ["w", 5, 6], ["r", 3, 6], ["c", 3, 6], ["n", 4, 6], ["k", 5, 6], ["e", 4, 6],
-            ["u", 5, 6], ["s", 5, 6], ["x", 5, 6]]
+            ["u", 4, 6], ["s", 5, 6], ["x", 5, 6]]                                  # (u: Alpha's users who saw ads sampled 26 Mar)
     assert out["cov"] == want and out["cov_fn"] == want                              # the hidden app is not counted
     ids = [x[0] for x in out["cov_list"]]
     assert ids == ["ca-app-pub-0000000000000000~22", "ca-app-pub-0000000000000000~23", "ca-app-pub-0000000000000000~25"]
@@ -129,7 +136,8 @@ def test_app_pages_render_for_every_kind_of_app(out):
 def test_app_page_parts(out):
     a = out["a_page"]
     assert a["crumb"] and a["mini"] and a["seg"] and a["period"] and a["cus_row"] and a["how"]
-    assert a["tiles"] == [["Visits", "58,245"], ["Inline ads / 100", "10.6"], ["Full-screen / 100", "3.3"], ["Status", "1 Worse · 1 Watch"]]
+    assert a["tiles"] == [["Visits", "58,245"], ["Inline ads / 100", "10.6"], ["Full-screen / 100", "3.3"], ["Ads / user", "0.49"],
+                          ["Status", "1 Worse · 1 Watch"]]
     assert a["attn"][0] == ["bigda", "Main", "ads/100 12.0 → 8.8 (−27%)"] and a["attn"][1][0] == "dhyan"
     assert a["editor"] and a["title"] and a["unjudged"] == 3                         # "Activity" dropped, the full class on hover
     assert a["folds"] == ["src", "ver", "cov", "rep", "how"]
@@ -154,8 +162,17 @@ def test_drill_down_sections(out):
     assert x["cc"] == [["[XA] Name XA", "16,800", "1,960", "11.7"], ["[XB] Name XB", "8,400", "560", "6.7"]]   # the edge month's shard
     assert x["cc_notes"] == [True, True]                                             # a too-big / failed month says so
     assert x["nvr"][:2] == [["Returning", "23,145", "2,400"], ["New", "9,000", "900"]]
+    # Users who saw ads = Σ the screen's users who saw ads ÷ Σ its users, over the days both users reads are whole (the
+    # sampled 26 Mar left out) — never the mean of the daily ratios (both vary by day); an aggregate row: "—" and why
+    ek = [k for k in K30 if k != 84]
+    sa, sv = sum(600 - 40 * (k % 3) for k in ek), sum(800 + 50 * (k % 5) for k in ek)
+    pct = lambda v: "%.1f%%" % (_jr(v * 1000) / 10.0)
+    assert pct(sa / float(sv)) != pct(sum((600 - 40 * (k % 3)) / float(800 + 50 * (k % 5)) for k in ek) / len(ek))
     assert x["eng"] == [["Time per visit", "28 s"], ["Ads per minute", "0.23"], ["Clicks", "90"], ["Exposure per visit", "0.04 s"],
-                        ["Saw ads ÷ users", "75.0%"], ["Sessions", "27,000"]]
+                        ["Users who saw ads", pct(sa / float(sv))], ["Sessions", "27,000"]]
+    tt = ("us screen ke ad dekhne wale users ka har din ka jod ÷ us screen ke users ka har din ka jod (GA4 me user sirf ek "
+          "din aur ek screen ke andar unique) · sirf wo din jin me dono users reads whole aaye")
+    assert x["eng_users"] == [[tt, pct(sa / float(sv)), "Σ ÷ Σ (har din ke users ka jod) · 29/30 days"], [None, "—", AGGW]]
     assert x["x"] and x["rep"] and x["rep_none"]
     assert "scr_c_a00000000001_202603.json.gz" in out["shard_loads"]               # only the partial edge month
     assert out["delta"] == {"un_noplace": True, "eng_noclick": True, "dq": True, "cov_exposure": True}
@@ -194,15 +211,122 @@ def test_rendered_labels(out):
 
 
 def test_phone_tiles_wrap_into_two_columns():
-    # ≤ 480 px: the KPI tiles in a 2-column grid (all four in view, no sideways scroll); wider phones / desktop unchanged
+    # ≤ 480 px: the KPI tiles in a 2-column grid (all in view, no sideways scroll; the app's five: Status across both
+    # columns); wider phones / desktop unchanged (the app's own row: five columns)
     p = _page()
     css = p[p.index("/* ---------- 🖼️ Screens"):p.index("/* ---------- 👥 Audience")]
     assert ".sc-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 14px}" in css
+    assert ".sc-tiles.sc-five{grid-template-columns:repeat(5,minmax(0,1fr))}" in css
     i760, i480 = css.index("@media (max-width:760px){"), css.index("@media (max-width:480px){")
     assert i480 > i760                                                               # after the 760 px rules: it wins
     rule = css[i480:css.index("}}", i480) + 2]
     assert ".sc-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;overflow-x:visible}" in rule
+    assert ".sc-tiles.sc-five{grid-template-columns:repeat(2,minmax(0,1fr))}.sc-five .sc-kst{grid-column:1/-1}" in rule
     assert ".sc-k{min-width:0;max-width:none}" in rule
+    # 761–1180 px (five tiles under ~175 px wrap their labels / the Status value): the app's five tiles in three columns,
+    # Status across the last two — a rule BEFORE the 760 / 480 px ones with the same selectors (same specificity), so
+    # those still win at their widths (375 / 480 / 1280 px unchanged)
+    i1180 = css.index("@media (max-width:1180px){")
+    assert i1180 < i760 < i480 and css.count("@media (max-width:1180px){") == 1
+    assert css[i1180:css.index("}}", i1180) + 2] == ("@media (max-width:1180px){\n  .sc-tiles.sc-five{grid-template-columns:"
+                                                     "repeat(3,minmax(0,1fr))}.sc-five .sc-kst{grid-column:span 2}}")
+
+
+def _jr(v):
+    """JS Math.round."""
+    return math.floor(v + 0.5)
+
+
+def _p2(v):
+    """The page's PU under 10: two places (JS Math.round)."""
+    return "%.2f" % (_jr(v * 100) / 100.0)
+
+
+# the harness's made-up Alpha (tests/scr_frontend.js): day k from 1 Jan 2026, ft = day 86 (28 Mar), its 30 days = 57 … 86;
+# file 2's users vary by day (none every 10th day, none after ft) — so Σ ÷ Σ and the mean of the daily ratios differ
+K30 = range(57, 87)
+U_DAYS = [k for k in K30 if k % 10 != 5]
+A_MAIN = lambda k: _jr((1000 + k) * (0.08 if k >= 79 else 0.12))                   # Main's inline ads a day
+U_MAIN, U_EDIT, AU = (lambda k: 500 + 100 * (k % 7)), (lambda k: 200 + 30 * (k % 4)), (lambda k: 400 + 60 * (k % 6))
+AGGW = "screens ke users jode nahi ja sakte (GA4 user sirf ek screen aur ek din ke andar unique)"
+NFW = "Today / Yesterday abhi final nahi — users aur ads alag samay pe padhe gaye"
+
+
+def test_ads_per_user_column_and_tile(out):
+    # Ads / user, per user per DAY (GA4's users are unique within one day and one screen), from file 2: Σ the row's ads ÷
+    # Σ its screen's daily users on the final days with users — the column after Score, its days when not every day, the
+    # tooltips say per user per day; an aggregate row "—" (never users added across screens); the sort; the app tile =
+    # inline + full-screen ÷ the app's daily users ("Format not recorded" left out), its parts adding up to it
+    u = out["pu"]
+    assert u["cols"] == ["st", "v", "a", "r", "n", "sc", "pu", "sh"]
+    assert u["head"].startswith("per user per day: period ke har final din ke inline ads ÷ us din ke screen users ka jod")
+    assert u["head"].endswith("sirf final din (Today / Yesterday nahi) jin me ads aur users dono whole aaye")
+    ads, users = sum(A_MAIN(k) for k in U_DAYS), sum(U_MAIN(k) for k in U_DAYS)
+    mean = sum(A_MAIN(k) / float(U_MAIN(k)) for k in U_DAYS) / len(U_DAYS)
+    assert u["fn"] == [27, 30, ads, users, False, False] and _p2(ads / float(users)) != _p2(mean)   # Σ ÷ Σ, never the mean
+    assert u["main"] == [' title="per user per day: {:,} inline ads ÷ {:,} users (har din ke users ka jod) · 27 days"'.format(ads, users),
+                         "<b>%s</b><small>27/30 days</small>" % _p2(ads / float(users))]
+    eu = sum(U_EDIT(k) for k in U_DAYS)
+    assert _p2(1350.0 / eu) != _p2(sum(50.0 / U_EDIT(k) for k in U_DAYS) / 27)
+    assert u["editor"] == [' title="per user per day: 1,350 inline ads ÷ {:,} users (har din ke users ka jod) · 27 days"'.format(eu),
+                           "<b>%s</b><small>27/30 days</small>" % _p2(1350.0 / eu)]
+    agg = [' title="%s"' % AGGW, "<b>—</b>"]
+    assert u["other"] == u["ns"] == agg and u["agg"]["agg"] and u["agg"]["r"] is None
+    assert u["nofile"]["wait"] and u["nofile"]["r"] is None and u["nofile"]["n"] == 0  # no file 2: no number
+    assert u["sort"] == [1, 0, 4, 2, 3, 5]                                           # 0.20, 0.15, then the "—" rows by visits
+    # the app tile: Σ inline + full-screen ÷ Σ the app's daily active users — not the every-4th-day "Format not
+    # recorded" copies, not the mean of the daily ratios
+    il, fl, au = sum(A_MAIN(k) + 88 for k in K30), 65 * 30, sum(AU(k) for k in K30)
+    tot = (il + fl) / float(au)
+    with_ns = (il + fl + sum(120 for k in K30 if k % 4 == 0)) / float(au)
+    assert u["app_fn"] == [30, 30, False] and u["tile"][1:] == [_p2(tot), "per user per day"]
+    assert _p2(tot) != _p2(with_ns) and _p2(tot) != _p2(sum((A_MAIN(k) + 153) / float(AU(k)) for k in K30) / 30)
+    m = re.match(r"per user per day: inline ([\d.]+) \+ full-screen ([\d.]+) = ([\d.]+) — GA4 ke inline \+ full-screen ads ÷ "
+                 r"us din ke app ke daily active users \(GA4, wahi stream\); not recorded ads gine nahi ", u["tile"][0])
+    assert m and m.group(1) == _p2(il / float(au)) and m.group(3) == _p2(tot)
+    assert _jr(float(m.group(1)) * 100) + _jr(float(m.group(2)) * 100) == _jr(float(m.group(3)) * 100)   # parts add up
+    # Today / Yesterday: never final (users and ads read hours apart) — "—" and why, the tile and the column
+    for k in ("today", "yday"):
+        assert u["tile_" + k] == [None, "—", NFW] and u["main_" + k] == [' title="per user per day"', "<b>—</b><small>%s</small>" % NFW]
+    assert u["nonfinal"] == [1, 4, U_MAIN(86), 2, 4]          # a file's users for Yesterday / Today: never counted
+    # the printed parts always add up to the printed total (the rounding difference to the part rounded furthest)
+    assert out["addup"] == [{"t": "0.50", "p": ["0.37", "0.13"]}, {"t": "1.00", "p": ["0.34", "0.33", "0.33"]},
+                            {"t": "123", "p": ["100", "23"]}, {"t": "12.3", "p": ["6.1", "6.2"]}]
+    # all formats (allf): the column counts the Ads column's ads, every format, and its tooltips say so
+    a = out["allf2"]["pu"]
+    assert ("ads (saare formats — Ads column wale: is app me screens ke ads ka format poora nahi milta, isliye "
+            "&quot;Format not recorded&quot; bhi gine)") in a[0]
+    assert a[1] == ' title="per user per day: {:,} ads (saare formats — Ads column wale) ÷ {:,} users (har din ke users ka jod) · 27 days"'.format(ads, users)
+    # no whole users day (GA4 sampled the users read): "—" and why; the app's daily users of another stream: never used
+    n = out["pu_none"]
+    assert n["one"] == [' title="per user per day"', "<b>—</b><small>GA4 sampled 7 din</small>"]
+    assert n["fn"] == {"r": None, "a": None, "u": None, "n": 0, "nd": 7, "agg": False, "wait": False}
+    assert n["tile"] == [None, "—", "app ke daily users doosre GA4 stream ke hain — gine nahi"]
+    # How this works says it
+    p = _page()
+    assert "<b>Ads / user</b> = per user per day: period ke har final din ke ads ÷ us din ke users ka jod" in p
+    assert '"Format not recorded" ads gine nahi' in p and "Today / Yesterday kabhi nahi" in p
+
+
+def test_ads_per_user_waits_for_file_2(out):
+    # the app page asks for file 2 the moment it opens; until it is here the column and the tile wait (⏳ — never a number,
+    # never a reason; an aggregate row needs no file); a failed load says so with Try again, and the retry loads it
+    w, u = out["pu_wait"], out["pu"]
+    assert w["loads"] == ["scr_a00000000001.json.gz"]
+    assert w["main"] == [' title="aa raha hai…"', "⏳"] and w["tile"] == [None, "⏳", "aa raha hai…"]
+    assert w["other"] == [' title="%s"' % AGGW, "<b>—</b>"]
+    assert w["after"] == [u["main"][1], u["tile"][1]]
+    assert w["err"]["main"] == [' title="data load nahi hua"', "<b>—</b><small>data load nahi hua</small>"]
+    assert w["err"]["tile"] == ["—", 'data load nahi hua <button type="button" class="sc-lnk" '
+                                     'data-sc-retry="scr_a00000000001.json.gz">Try again</button>']
+    assert w["retry"] == u["tile"][1]
+
+
+def test_users_who_saw_ads_waits_for_its_file_and_says_why(out):
+    # scr_l on its way: ⏳ "aa raha hai…" (never a reason); an aggregate row: "—" and why at once; a day whose users who
+    # saw ads GA4 sampled; a day GA4 gave them for the app only (not per screen)
+    assert out["eng_wait"] == [["⏳", "aa raha hai…"], ["—", AGGW]]
+    assert out["eng_none"] == [["—", "GA4 sampled 1 din"], ["—", "GA4 ne ad dekhne wale users screen-wise nahi diye"]]
 
 
 def test_a_section_needing_both_files_shows_a_failed_file_2(out):
@@ -364,11 +488,13 @@ def test_attention_details_goes_to_the_drill_down(out):
 
 def test_late_file_redraws_only_its_slots_and_keeps_scroll(out):
     r = out["arrive"]
-    assert r["f2"] == {"sc-ddb": 1, "sc-f-src": 0, "sc-f-ver": 0, "sc-f-cov": 1, "sc-f-rep": 0} and r["dd"]
+    assert r["f2"] == {"sc-ddb": 1, "sc-f-src": 0, "sc-f-ver": 0, "sc-f-cov": 1, "sc-f-rep": 0, "sc-tiles": 1, "sc-tb": 1} and r["dd"]
     assert r["kept"] == [300, 50, 25]                                               # the day box's place, sideways tables
+    # file 2 brings Ads / user: the app's tiles and the table drawn again with its numbers (no ⏳ left)
+    assert r["tiles"] == out["pu"]["tile"][1] and r["tb"] == [True, False, out["pu"]["main"][1]]
     assert r["c_on_ver"] == r["f2"]                                                 # a country shard while on Versions: nothing
-    assert r["r_on_ver"]["sc-ddb"] == 2 and r["r_on_ver"]["sc-f-src"] == 0
-    assert r["l_on_ver"] == {"sc-ddb": 3, "sc-f-src": 1, "sc-f-ver": 1, "sc-f-cov": 1, "sc-f-rep": 1}
+    assert r["r_on_ver"]["sc-ddb"] == 2 and r["r_on_ver"]["sc-f-src"] == 0 and r["r_on_ver"]["sc-tb"] == 1
+    assert r["l_on_ver"] == {"sc-ddb": 3, "sc-f-src": 1, "sc-f-ver": 1, "sc-f-cov": 1, "sc-f-rep": 1, "sc-tiles": 1, "sc-tb": 1}
 
 
 def test_whole_months_come_from_the_month_sums(out):
