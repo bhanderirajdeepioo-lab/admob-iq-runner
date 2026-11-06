@@ -924,6 +924,10 @@ def build_files(dashboard, D, apps, camps, ctys, extra, res, now):
         hl = res["healthy"].get(("app", aid)) or {}
         nrm = {f: normal_at(f, eps, hl, e0, a_iso, b_iso) for f in ("CPI", "ECPM", "ROAS_G")}
         st, since = status_of(eps, a["s"], nrm, D.d0, a_iso, b_iso, ts)
+        to = None
+        if st == "fixed":                                  # the closed alarm's last day, for its span on the page
+            to = max((ep["closed"] for ep in eps if ep["tier"] == "ALERT" and ep["c"] == since and ep["closed"]),
+                     default=None)
         lost = money_lost(eps, a["s"], extra["R"], D.d0, a_iso, b_iso, ts, hl, e0)
         w = window(a["s"], D.d0, a_iso, b_iso)
         if w["sp_inr"] > 0:
@@ -936,7 +940,7 @@ def build_files(dashboard, D, apps, camps, ctys, extra, res, now):
         fn = PREFIX + a["key"] + ".json.gz"
         files[fn] = body
         ptr_apps[aid] = {"name": a["name"], "key": a["key"], "file": fn, "v": hashlib.sha1(raw).hexdigest()[:12],
-                         "st": st, "since": since,
+                         "st": st, "since": since, "to": to,
                          "open": [[ep["fam"], ep["opener"], ep["tier"], ep["c"], ep["opened"], _r6(ep["base"])]
                                   for ep in eps if ep["closed"] is None],
                          "nrm": {f: _r6(v) for f, v in nrm.items()},

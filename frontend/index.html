@@ -8405,7 +8405,8 @@ function rowOf(id,a,s,lo,hi){ const p=ptr(), def=isDef(lo,hi), A=ALLF.raw&&ALLF.
   // is the problem the row says "since" still open at the period's end? (D1) — one found among the episodes by its change start;
   // the default view's pointer carries the open ones only, so one it does not find has closed
   if(r.since){ const ep=j&&j.e&&j.e.c===r.since?j.e:null; r.ep=ep;
-    r.sinceOpen=ep?!(ep.closed&&ep.closed<=hi):!def; r.sinceTo=ep&&ep.closed&&ep.closed<=hi?ep.closed:null; }
+    r.sinceOpen=ep?!(ep.closed&&ep.closed<=hi):!def; r.sinceTo=ep&&ep.closed&&ep.closed<=hi?ep.closed:null;
+    if(def&&!r.sinceTo&&r.st==='fixed'&&okD(a.to)) r.sinceTo=a.to; }   // (the default view: the pointer carries a Fixed alarm's last day)
   // money (D2: ONLY the D0 ROAS episodes — never the AdMob install-day line, never a CPI / eCPM "extra paid"): computed from DATA
   // on the episodes; the default view falls back on the build's own number and takes its "since c" line from the pointer's lost.sc
   if(!r.wait){ const pl=def&&a.lost&&a.lost.fam!=='ROAS_C0'&&ok(+a.lost.inr)?a.lost:null, g=lossG(r.name,L,lo,hi,A);
@@ -8435,7 +8436,7 @@ function cell(r,f,m){ const x=m[f], n=r.nrm[f], nt=[]; let sub;
   else sub=`<span class="cpx-dl ${dCls(f,x.d)}">${fP(x.d)}</span> <span class="cpx-nv">vs ${fmtF(f,x.n)}</span>`;
   if(!r.wait){ if(f==='ROAS_G'&&r.s.till&&!r.s.nf) nt.push('till '+fd(r.s.till));   // D4: Google D0 is final only up to t
     if(n&&n.src==='Hin'&&n.on) nt.push('normal = '+fd(n.on)+' level');                 // D3: which healthy level the normal is
-    if(n&&n.src==='Bpk') nt.push('normal = healthy level (alarm se pehle peak tha)'); }
+    if(n&&n.src==='Bpk') nt.push('healthy level'); }                                    // (the alarm's own baseline was a peak)
   return `<div class="cpx-v">${fmtF(f,x.v)}</div><div class="cpx-s">${sub}</div>`+nt.map(z=>`<div class="cpx-s cpx-nv">${E(z)}</div>`).join(''); }
 const stw=r=>r.wait?[r.wait==='err'?'—':'⏳','cpx-fnt']:(ST[r.st]||ST.ok);
 // the "since" of a row: the date + "N din se" only while that problem is still open at the period's end (D1), else its span

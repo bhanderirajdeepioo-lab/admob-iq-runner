@@ -246,7 +246,7 @@ def test_run_writes_files_pointer_and_removes_stale(built):
     assert sorted(p["apps"]) == sorted(IDS[k] for k in "abde")                     # Hidden: not on this screen
     for k, key in keys.items():
         a = p["apps"][IDS[k]]
-        assert sorted(a) == ["file", "key", "lost", "name", "nrm", "open", "since", "st", "v"]
+        assert sorted(a) == ["file", "key", "lost", "name", "nrm", "open", "since", "st", "to", "v"]
         assert (a["name"], a["key"], a["file"]) == (NAMES[k], key, "cpi_%s.json.gz" % key)
         assert re.fullmatch(r"[0-9a-f]{12}", a["v"])
     st = {k: p["apps"][IDS[k]]["st"] for k in "abde"}
