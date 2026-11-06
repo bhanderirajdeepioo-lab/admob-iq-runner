@@ -22,7 +22,9 @@ the table; the Screens column: Σ ads ÷ Σ the screen's daily users on the fina
 daily ratios; "—" + why for an aggregate row, Today / Yesterday and no whole users day; the tooltips, the sort; the app
 tile: inline + full-screen ÷ the app's daily users, "Format not recorded" left out, its parts adding up; Users who saw
 ads in the drill-down: Σ ÷ Σ, ⏳ while scr_l loads, why when none), the tiles' 1180 px rule, and the wiring into the page
-(gated on DATA.scr).
+(gated on DATA.scr); the time columns after Ads / user (Time / view, Time / user / day, Ads / min: Σ ÷ Σ on their own days,
+a day with views but no engagement left out, an aggregate row's "—" for users, ⏳ / "—" while file 2 loads, the format, the
+details tiles).
 Skipped where node is not installed. No real data."""
 import json
 import math
@@ -168,7 +170,7 @@ def test_drill_down_sections(out):
     sa, sv = sum(600 - 40 * (k % 3) for k in ek), sum(800 + 50 * (k % 5) for k in ek)
     pct = lambda v: "%.1f%%" % (_jr(v * 1000) / 10.0)
     assert pct(sa / float(sv)) != pct(sum((600 - 40 * (k % 3)) / float(800 + 50 * (k % 5)) for k in ek) / len(ek))
-    assert x["eng"] == [["Time per view", "28 s"], ["Ads per minute", "0.23"], ["Clicks", "90"], ["Exposure per view", "0.04 s"],
+    assert x["eng"] == [["Time / view", "28s"], ["Time / user / day", "38s"], ["Ads / min", "0.23"], ["Clicks", "90"], ["Exposure per view", "0.04 s"],
                         ["Users who saw ads", pct(sa / float(sv))], ["Sessions", "27,000"]]
     tt = ("us screen ke ad dekhne wale users ka har din ka jod ÷ us screen ke users ka har din ka jod (GA4 me user sirf ek "
           "din aur ek screen ke andar unique) · sirf wo din jin me dono users reads whole aaye")
@@ -258,7 +260,7 @@ def test_ads_per_user_column_and_tile(out):
     # tooltips say per user per day; an aggregate row "—" (never users added across screens); the sort; the app tile =
     # inline + full-screen ÷ the app's daily users ("Format not recorded" left out), its parts adding up to it
     u = out["pu"]
-    assert u["cols"] == ["st", "v", "a", "r", "n", "sc", "ud", "vu", "pu", "sh"]
+    assert u["cols"] == ["st", "v", "a", "r", "n", "sc", "ud", "vu", "pu", "tv", "tu", "am", "sh"]
     assert u["head"].startswith("per user per day: period ke har final din ke inline ads ÷ us din ke screen users ka jod")
     assert u["head"].endswith("sirf final din (Today / Yesterday nahi) jin me ads aur users dono whole aaye")
     ads, users = sum(A_MAIN(k) for k in U_DAYS), sum(U_MAIN(k) for k in U_DAYS)
@@ -538,7 +540,7 @@ def test_screen_views_wording(out):
     """'Visits' is 'Screen views' on the whole Screens tab (the data and sort keys keep their names)."""
     p = _page()
     for w in ("th('v','Screen views')", "th('vu','Views / user'", "th('sh','Share of views')", "th('r','Per 100 app views')",
-              "tile('Screen views'", "<th>Screen views</th>", "tile('Time per view'", "tile('Exposure per view'",
+              "tile('Screen views'", "<th>Screen views</th>", "tile('Time / view'", "tile('Exposure per view'",
               "Ads / 100 views", "Screen views (bars)", "['v','Screen views',['v']]", "<b>Screen views</b> = screen_view"):
         assert w in p, w
     a, b = p.index("const SCR=(()=>{"), p.index("function renderScreens(){")
@@ -567,3 +569,107 @@ def test_dates_carry_their_year_when_not_in_the_reference_year(out):
     assert y["tip_week"].startswith("<b>28 Dec 2025 – 3 Jan 2026</b>") and y["tip_one"].startswith("<b>28 Dec 2025</b>")   # the New Year week: both years
     assert y["ticks_all"] == ["20 Jun 2024", "1 Apr 2025", "1 Mar"]                      # the axis ticks of a multi-year chart (monthly buckets)
     assert y["ticks_jan"] == ["9 Dec 2025", "23 Dec 2025", "7 Jan"]                      # over New Year: the December ticks carry 2025
+
+
+def _ft(v):
+    """The page's fmtT: "38s", "9m 21s", "1h 05m"."""
+    t = _jr(v)
+    if t < 60:
+        return "%ds" % t
+    if t < 3600:
+        return "%dm %02ds" % (t // 60, t % 60)
+    m = _jr(t / 60.0)
+    return "%dh %02dm" % (m // 60, m % 60)
+
+
+def test_time_format(out):
+    # seconds as "38s", "9m 21s", "1h 05m" (minutes padded after an hour, seconds after a minute); under a second "<1s"
+    assert out["tm"]["fmt"] == ["0s", "<1s", "1s", "1s", "38s", "38s", "59s", "1m 00s", "1m 00s", "1m 20s", "9m 21s", "59m 59s",
+                                "1h 00m", "1h 00m", "1h 05m", "1h 59m", "2h 00m", "24h 00m", "—", "—", "—", "—"]
+    assert [_ft(v) for v in (38, 561, 3900, 79.5)] == ["38s", "9m 21s", "1h 05m", "1m 20s"]
+
+
+def test_time_columns_formulas(out):
+    # Time / view = Σ engagement seconds ÷ Σ screen views over the period's days; Time / user / day = Σ seconds ÷ Σ the screen's
+    # daily users on exactly Ads / user's days (27 of the 30: the users read is missing every 10th day); Ads / min = Σ ads ÷
+    # (Σ seconds ÷ 60) on exactly Ads / 100's days — never the mean of the daily ratios (the harness's views vary by day)
+    t = out["tm"]
+    assert t["cols"] == ["pu", "tv", "tu", "am", "sh"] and t["ths"] == 14                   # after Ads / user, before Share of views
+    views = sum(1000 + k for k in K30)
+    ads = sum(A_MAIN(k) for k in K30)
+    users, eu = sum(U_MAIN(k) for k in U_DAYS), sum(U_EDIT(k) for k in U_DAYS)
+    main = t["fn"][0]
+    assert main["tv"] == pytest.approx(30 * 30000 / float(views)) and main["tvN"] == 30
+    assert main["tv"] != pytest.approx(sum(30000.0 / (1000 + k) for k in K30) / 30)       # Σ ÷ Σ, never the mean of the ratios
+    assert main["tu"] == pytest.approx(27 * 30000 / float(users)) and main["tuN"] == 27 and main["nd"] == 30
+    assert main["am"] == pytest.approx(ads / (30 * 30000 / 60.0)) and main["amN"] == 30 and not main["agg"] and not main["wait"]
+    ed = t["fn"][1]
+    assert ed["tv"] == 18 and ed["tu"] == pytest.approx(27 * 9000 / float(eu)) and ed["am"] == pytest.approx(1500 / 4500.0)
+    # the table cells: value, its days when not every day of the period, the tooltip with the sums behind it
+    assert t["main"] == [
+        [' title="time ÷ views: 900,000 sec ÷ {:,} views · 30 days"'.format(views), "<b>%s</b>" % _ft(30 * 30000 / float(views))],
+        [' title="per user per day: 810,000 sec ÷ {:,} users (har din ke users ka jod) · 27 days"'.format(users),
+         "<b>%s</b><small>27/30 days</small>" % _ft(27 * 30000 / float(users))],
+        [' title="{:,} inline ads ÷ 15,000 min · 30 days"'.format(ads), "<b>%s</b>" % _p2(ads / 15000.0)]]
+    assert t["editor"][1][1] == "<b>%s</b><small>27/30 days</small>" % _ft(27 * 9000 / float(eu))
+    # an aggregate row: Time / view and Ads / min over its classes (Other screens = the non-top screens), Time / user / day "—"
+    # (users are never added across screens)
+    agg = [' title="%s"' % AGGW, "—"]
+    assert t["other"] == [[' title="time ÷ views: 120,000 sec ÷ 9,000 views · 30 days"', "<b>%s</b>" % _ft(120000 / 9000.0)], agg,
+                          [' title="900 inline ads ÷ 2,000 min · 30 days"', "<b>0.45</b>"]]
+    assert t["ns"][1] == t["ad"][1] == agg and t["ns"][0][1] == "<b>10s</b>" and t["ad"][0][1] == "<b>5s</b>"
+    assert t["fn"][2]["agg"] and t["fn"][2]["tu"] is None and t["fn"][2]["tuN"] == 0
+    assert t["fs"]["tv"] is None and t["fs"]["am"] is None                                  # a trigger has no screen time
+    assert t["noview"]["am"] is None and t["noview"]["tv"] is None                          # no screen views: no Ads / min, no Time / view
+
+
+def test_time_columns_days_and_waits(out):
+    t = out["tm"]
+    # Today / Yesterday: their time counts (Time / view, Ads / min) but never a users day — Ads / user's final-days rule
+    for k in ("today", "yday"):
+        assert t[k]["tvN"] == 1 and t[k]["amN"] == 1 and t[k]["tu"] is None and t[k]["tuN"] == 0
+    # a day the file has no "v" read for, and a day with views but no engagement anywhere (a GA4 gap, never "0 s"): neither
+    # counts on either side — Main's 70 and 71 are both users days, so Time / user / day drops to 25 days
+    g, e = t["gap"], t["gap_editor"]
+    assert g["tvN"] == g["amN"] == e["tvN"] == 28 and g["tuN"] == e["tuN"] == 25 and g["nd"] == 30
+    drop = (70, 71)
+    users = sum(U_MAIN(k) for k in U_DAYS if k not in drop)
+    assert g["tu"] == pytest.approx(25 * 30000 / float(users))
+    assert g["tv"] == pytest.approx(28 * 30000 / float(sum(1000 + k for k in K30 if k not in drop)))
+    assert g["am"] == pytest.approx(sum(A_MAIN(k) for k in K30 if k not in drop) / (28 * 30000 / 60.0))
+    assert e["tv"] == 18 and e["am"] == pytest.approx(1400 / (28 * 9000 / 60.0))
+    # a day with no views at all (an empty read: a known zero, not a GA4 gap) still counts as a day of the period
+    z = t["empty"]
+    assert z["tvN"] == 30 and z["tv"] == pytest.approx(29 * 30000 / float(sum(1000 + k for k in K30 if k != 70)))
+    # the users column belongs to the screen (by class), not to its position in the file
+    assert t["swapped"] == t["fn"][0]
+    # the sort: both directions, the rows with no value last (by views)
+    assert t["sort_tv"] == [0, 1, 2, 3, 4, 5] and t["sort_tu"] == [0, 1, 4, 2, 3, 5] and t["sort_am"] == [4, 0, 1, 2, 3, 5]
+    # file 2 not here yet: ⏳ in all three cells (never a number); its load failed: "—"
+    assert t["wait"] == [[' title="aa raha hai…"', "⏳"]] * 3
+    assert t["err"] == [[' title="data load nahi hua"', "—"]] * 3
+    assert t["nofile"]["wait"] and t["nofile"]["tv"] is None and t["nofile"]["tu"] is None and t["nofile"]["am"] is None
+
+
+def test_endsnap_class_toggle(out):
+    e = out["es"]          # [class on, scrollLeft after]
+    assert e["fits1136"] == [False, 0] and e["fitsWasOn"] == [False, 0]     # a table that fits is never stretched (1440 px laptops)
+    assert e["over1000"][0] is True and e["over1240"][0] is True and e["edge1250"] == [False, 0]  # overflow decides, not a width
+    assert e["hidden"][0] is False                                          # a box not shown (width 0) has it off
+    assert e["keepScroll"] == [True, 180] and e["argScroll"] == [True, 120]  # the sideways scroll is put back
+    assert e["none"] == "ok"                                                # no box: nothing happens
+
+
+def test_time_columns_labels_and_note(out):
+    t = out["tm"]
+    assert [t["heads"][k][1] for k in ("tv", "tu", "am")] == ["Time / view", "Time / user / day", "Ads / min"]      # English labels
+    assert t["heads"]["tu"][0].startswith("ek user roz is screen pe kitni der")                                      # Hinglish hints
+    assert t["note"] == ("Time = GA4 engagement time: app khuli aur ye screen saamne thi. <b>Time / view</b> = ek baar screen khulne pe "
+                         "kitni der · <b>Time / user / day</b> = ek user roz is screen pe kitni der · <b>Ads / min</b> = screen pe "
+                         "bitaye har minute me ads.")
+    # the end of the sideways scroll is a snap point: Cause (last of the 14 columns) is box width less the name column, but
+    # only under .sc-endsnap (the page puts it on only when the table really scrolls sideways) — no fixed width threshold;
+    # the 6-column table is left alone
+    assert t["t14"] is True and t["t14f"] is False and t["css"] is True and t["noq"] is True and t["box"] is True
+    p = _page()
+    assert "colspan=\"${seg==='f'?6:14}\"" in p          # the empty row spans every column (14 / 6)

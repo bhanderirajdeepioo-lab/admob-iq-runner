@@ -360,6 +360,43 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     { const f = F2A(), keepU = f.U[87], keepAu = f.au[87]; f.U[87] = [999, 999]; f.au[87] = 9999;
       try { const p = _.perUser(x, f, 0, '2026-03-27', TD), q = _.appUser(x, f, '2026-03-27', TD); out.pu.nonfinal = [p.n, p.nd, p.u, q.n, q.nd]; }
       finally { f.U[87] = keepU; f.au[87] = keepAu; } }
+    // ── Time on the screen (file 2's "v" seconds): Time / view, Time / user / day, Ads / min — the table cells (after Ads /
+    // user), the three formulas on their own days (users as Ads / user's, ads as Ads / 100's), an aggregate row, a day
+    // with no time read or no engagement anywhere, a file not here yet, the sort, the format ──
+    { _.set({ MORE: true, PER: '30', TS: { k: 'st', dir: 1 } }); SCR.paint(); const hh = SCREEN.innerHTML, tm = (f, i, lo, hi) => _.perTime(x, f, i, lo || P30[0], hi || P30[1]);
+      const pick = r => ({ tv: r.tv, tvN: r.tvN, tu: r.tu, tuN: r.tuN, am: r.am, amN: r.amN, nd: r.nd, agg: r.agg, wait: r.wait });
+      const f2 = F2A(), clone = () => JSON.parse(JSON.stringify(f2));
+      out.tm = { cols: [...hh.matchAll(/data-sc-tsort="([a-z]+)"/g)].map(m => m[1]).slice(8, 13), ths: [...(/<table class="sc-t sc-t14"><thead><tr>(.*?)<\/tr>/.exec(hh.slice(hh.indexOf('id="sc-ttw"'))) || [])[1].matchAll(/<th[ >]/g)].length,
+        main: tds(hh, 0).slice(9, 12), editor: tds(hh, 1).slice(9, 12), other: tds(hh, 2).slice(9, 12), ns: tds(hh, 3).slice(9, 12), ad: tds(hh, 4).slice(9, 12),
+        fn: [0, 1, 2, 3, 4, 5].map(i => pick(tm(f2, i))), nofile: pick(tm(null, 0)), fs: pick(_.perTime(x, f2, 6, ...P30)),
+        heads: Object.fromEntries(['tv', 'tu', 'am'].map(k => [k, (new RegExp('<th aria-sort="none" title="([^"]*)"><button type="button" data-sc-tsort="' + k + '">([^<]*)<').exec(hh) || []).slice(1)])),
+        t14: /<table class="sc-t sc-t14">/.test(hh), css: /#sc-ttw\.sc-endsnap \.sc-t\.sc-t14 th:last-child,#sc-ttw\.sc-endsnap \.sc-t\.sc-t14 td:last-child\{min-width:calc\(100cqw - var\(--sc-fc\)\)\}/.test(html), noq: !/@container \(max-width:1240px\)/.test(html), box: /#sc-ttw\{[^}]*container-type:inline-size/.test(html),
+        note: (/<p class="sc-note">(Time = GA4 engagement time[^<]*(?:<b>[^<]*<\/b>[^<]*)*)<\/p>/.exec(hh) || [])[1] || null };
+      // the Full-screen table (6 columns) is not stretched: it has no sc-t14 class
+      _.set({ SEG: 'f' }); SCR.paint(); out.tm.t14f = /<table class="sc-t sc-t14">/.test(SCREEN.innerHTML) || !/id="sc-ttw"><table class="sc-t">/.test(SCREEN.innerHTML); _.set({ SEG: 's' }); SCR.paint();
+      // Today / Yesterday: the days' time counts, never a users day (Ads / user's rule: final days only)
+      out.tm.today = pick(tm(f2, 0, TD, TD)); out.tm.yday = pick(tm(f2, 0, '2026-03-29', '2026-03-29'));
+      // a row whose classes have no screen views (GA4's ads tied to no screen): no Ads / min from its few seconds
+      { const z = clone(); (z.days || []).forEach(d => { if (d && Array.isArray(d.v)) d.v.forEach(t => { t[1] = 0; }); }); out.tm.noview = pick(_.perTime(x, z, 3, ...P30)); }
+      // a day the file has no "v" read for, and a day with views but no engagement anywhere: neither counts (never "0 s") —
+      // days 70 and 71, both in the period, both users days
+      { const g = clone(); delete g.days[70].v; g.days[71].v = g.days[71].v.map(q => [q[0], q[1], 0]); out.tm.gap = pick(tm(g, 0)); out.tm.gap_editor = pick(tm(g, 1)); }
+      // a day with no views at all (an empty "v": a known zero, not a gap) still counts as a day
+      { const g = clone(); g.days[70].v = []; out.tm.empty = pick(tm(g, 0)); }
+      // a file whose users columns are for other screens: Time / user / day follows the screen's own column
+      { const g = clone(); g.Us = [1, 0]; g.U = g.U.map(r => r && [r[1], r[0]]); out.tm.swapped = pick(tm(g, 0)); }
+      // sort: both directions, the "—" rows last
+      _.set({ TS: { k: 'tv', dir: -1 } }); out.tm.sort_tv = _.sortItems(_.tableRows(x, ...P30, 's', f2)).map(z => z.i);
+      _.set({ TS: { k: 'tu', dir: -1 } }); out.tm.sort_tu = _.sortItems(_.tableRows(x, ...P30, 's', f2)).map(z => z.i);
+      _.set({ TS: { k: 'am', dir: 1 } }); out.tm.sort_am = _.sortItems(_.tableRows(x, ...P30, 's', f2)).map(z => z.i);
+      _.set({ TS: { k: 'st', dir: 1 }, MORE: false });
+      // file 2 not here yet: ⏳ in all three cells; its load failed: "—"
+      const nA2 = 'scr_' + KEY.a + '.json.gz', keepA2 = _.FILES[nA2];
+      try { delete _.FILES[nA2]; _.set({ MORE: true }); SCR.paint(); out.tm.wait = tds(SCREEN.innerHTML, 0).slice(9, 12);
+        FAIL.add(nA2); delete _.FILES[nA2]; SCR.paint(); await tick(); SCR.paint(); out.tm.err = tds(SCREEN.innerHTML, 0).slice(9, 12);
+      } finally { FAIL.delete(nA2); _.FILES[nA2] = keepA2; _.set({ MORE: false }); }
+      out.tm.fmt = [0, 0.3, 0.6, 1, 38, 38.4, 59.4, 59.6, 60, 79.5, 561, 3599, 3599.6, 3600, 3900, 7140, 7170, 86400, null, undefined, NaN, -5].map(v => _.fmtT(v));
+    }
     // the printed parts add up to the printed total (the rounding difference to the part rounded furthest)
     out.addup = [_.addUp(0.5, [0.375, 0.125]), _.addUp(1, [1 / 3, 1 / 3, 1 / 3]), _.addUp(123.4, [100.2, 23.2]), _.addUp(12.34, [6.17, 6.17])];
     // file 2 not here yet: the Ads / user column and tile wait (⏳ — never a number, never a reason) and the page asked for
@@ -508,6 +545,16 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     _.arrive(ID.a, 'r'); out.arrive.r_on_ver = w();
     _.arrive(ID.a, 'l'); out.arrive.l_on_ver = w();
     ctx.document.getElementById = () => null; _.set({ OPEN: null, SEC: 'ov' });
+    // ── the Cause stretch (.sc-endsnap on #sc-ttw): ON only when the table, measured without it, is wider than its box; the
+    // box's sideways scroll is put back; a box that fits (or is not shown: width 0) has it OFF ──
+    { const mk = (natural, box, on) => { const cl = new Set(on ? ['sc-endsnap'] : []); let sl = 0;
+        const o = { clientWidth: box, classList: { add: c => cl.add(c), remove: c => cl.delete(c), contains: c => cl.has(c) },
+          get scrollWidth() { return !box ? 0 : Math.max(box, cl.has('sc-endsnap') ? natural + 800 : natural); },
+          get scrollLeft() { return Math.min(sl, Math.max(0, o.scrollWidth - o.clientWidth)); }, set scrollLeft(v) { sl = v; }, on: () => cl.has('sc-endsnap') }; return o; };
+      const run = (natural, box, on, left, arg) => { const o = mk(natural, box, on); o.scrollLeft = left || 0; ctx.document.getElementById = id => id === 'sc-ttw' ? o : null; _.endSnap(arg); return [o.on(), o.scrollLeft]; };
+      out.es = { fits1136: run(1100, 1136, false), fitsWasOn: run(1100, 1136, true), over1000: run(1250, 1000, false), over1240: run(1250, 1240, false), edge1250: run(1250, 1250, false),
+        hidden: run(1250, 0, true), keepScroll: run(1250, 1000, true, 180), argScroll: run(1250, 1000, false, 0, 120), none: (ctx.document.getElementById = () => null, _.endSnap(), 'ok') };
+      ctx.document.getElementById = () => null; }
     // ── a whole month: the build's month sums (cc_m / ver_m), no "not read" note ──
     const rowsOf = hh => [...hh.matchAll(/<tr><td class="sc-nm">([^<]+)<\/td><td>([^<]+)<\/td><td>([^<]+)<\/td><td><b>([^<]+)<\/b>/g)].map(m => m.slice(1));
     ctx.APP = 'Alpha App'; _.set({ PER: 'lm', OPEN: 0, SEC: 'cc' }); SCR.paint(); h = SCREEN.innerHTML.slice(SCREEN.innerHTML.indexOf('id="sc-dd"'));
