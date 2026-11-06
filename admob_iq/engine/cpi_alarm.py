@@ -38,7 +38,7 @@ import math
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-EPOCH = "2023-06-20"      # the weekly noise refresh runs on days with (day − EPOCH) % 7 == 0
+EPOCH = "2000-01-04"      # the weekly noise refresh runs on days with (day − EPOCH) % 7 == 0
 
 # num / den series, scale, bad direction (+1 = up is bad), day shift (matured cohort / GA4 lag)
 FAMILIES = {
