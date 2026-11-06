@@ -108,12 +108,12 @@ imports, so a missing module or export never reaches the Workers build); until t
 ## Database
 
 - **No manual migration:** the Worker creates its tables (`rv_meta`, `rv_state`, `rv_actions`, `rv_notes`,
-  `rv_flags`, `rv_snoozes`, `config_log`, `cmp_marks`, `cmp_marks_log`, `cmp_ranges`, `cmp_ranges_log`) on the first
-  request of each isolate (`CREATE … IF NOT EXISTS`, idempotent) and records `schema_version` (now 5). A new database
+  `rv_flags`, `rv_snoozes`, `config_log`, `cmp_marks`, `cmp_marks_log`, `cmp_ranges`, `cmp_ranges_log`, `lv_log`) on the
+  first request of each isolate (`CREATE … IF NOT EXISTS`, idempotent) and records `schema_version` (now 6). A new database
   gets the current DDL directly; an older one is upgraded by `MIGRATIONS` in `db.js` (2: `rv_flags.dec_day` /
   `done_day`, the review day of a flag decision; 3: `config_log`, the audit of Settings saves; 4: `cmp_marks` +
   `cmp_marks_log`, the 📌 saved dates and their audit; 5: `cmp_ranges` + `cmp_ranges_log`, the saved custom compares
-  — new tables only). Every migration only adds: the review, config and saved-date data stay as they are.
+  — new tables only; 6: `lv_log`, the audit of the CPI level actions). Every migration only adds: the review, config and saved-date data stay as they are.
 - `rv_actions` is append-only (the "who did what" history); every write adds its row in the same transaction.
 - **Backup / undo:** D1 Time Travel can restore the database to any minute of the last 30 days (Workers Paid;
   7 days on the Free plan) with `wrangler d1 time-travel restore <db> --timestamp=…`, run by the operator.
