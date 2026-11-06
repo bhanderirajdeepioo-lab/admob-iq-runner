@@ -131,6 +131,18 @@ def test_default_view_comes_from_the_pointer(out):
     assert "Money lost: ≈$2,100" in u and "$0.38 +56% vs $0.24" in u and "since 10 Mar: ≈$2,853" in u
 
 
+def test_not_linked_spend_follows_the_period_picked(out):
+    """The pointer ships the unlinked spend per day (+ each store id's runs of days): the footer sums the picked period
+    (₹ or $) and counts the store ids with spend inside it; the old one-total shape is shown as it is."""
+    f = out["foot"]
+    assert f["d14"] == "Not linked spend: ₹900 (2 store ids) —" and f["d7"] == "Not linked spend: ₹700 (2 store ids) —"
+    assert f["cus"] == "Not linked spend: ₹500 (1 store id) —"                          # 20–24 Mar: the second store id starts on 25 Mar
+    assert f["cus_late"] == "Not linked spend: ₹300 (2 store ids) —" and f["all"] == f["d14"]
+    assert f["d7_usd"] == "Not linked spend: $7.00 (2 store ids) —"                       # the $ view: the dated $ series
+    assert f["yday"] is None and f["before"] is None and f["junk"] is None                # nothing in the period / a bad shape: no line
+    assert f["old_shape"] == "Not linked spend: ₹12.3k (3 store ids) —"
+
+
 def test_other_periods_are_judged_by_the_page(out):
     w = out["p7_wait"]
     assert all(r["wait"] for r in w["rows"]) and "⏳ Loading…" in w["text"] and "● … Alarm" in w["text"]

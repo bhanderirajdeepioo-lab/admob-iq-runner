@@ -1835,14 +1835,6 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
             with _sc.stage("gads_spend"):
                 fresh_spend = fetch_app_spend(s, refetch_start, today.isoformat(), mode="live")
             spend = merge_spend(cached_spend, fresh_spend, refetch_start)
-            # the last day a spend fetch went through, on EVERY build (Install value, CPI vs eCPM: a stale cache's
-            # later days are "not in yet", never $0)
-            if isinstance(fresh_spend, dict) and not fresh_spend.get("error"):
-                try:
-                    from .value_build import record_spend_fetch
-                    s["roas_spend_ok_till"] = record_spend_fetch(data_dir, today)
-                except Exception as _se:
-                    print(f"value spend date skipped: {type(_se).__name__}", file=sys.stderr)
             # Backfill the adwords account onto OLD/paused campaigns the windowed spend fetch didn't
             # re-tag (they showed a '?' account). A cheap roster query maps campaign→account for all —
             # asked only when a cached campaign has no account (else it could fill nothing: every fresh
@@ -1856,13 +1848,23 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
             # (day-1 conversion value now comes RETROACTIVELY from Google's conversion-lag bucket in
             # fetch_app_spend — no forward-only snapshot needed. It is Google Ads' D0: merge_spend fixes each
             # date's number once complete, d1_fixed_till & co. ride along in the cache.)
+            cache_written = False
             if spend is not None and not spend.get("error"):
                 try:
                     os.makedirs(data_dir, exist_ok=True)
                     with open(cache_path, "w", encoding="utf-8") as _cf:
                         json.dump(spend, _cf)
+                    cache_written = True
                 except Exception as _ce:
                     print(f"roas cache write skipped: {_ce}", file=sys.stderr)
+            # the last day a spend fetch went through, on EVERY build (Install value, CPI vs eCPM: a stale cache's
+            # later days are "not in yet", never $0) — recorded only once the cache holding those days is written
+            if cache_written and isinstance(fresh_spend, dict) and not fresh_spend.get("error"):
+                try:
+                    from .value_build import record_spend_fetch
+                    s["roas_spend_ok_till"] = record_spend_fetch(data_dir, today)
+                except Exception as _se:
+                    print(f"value spend date skipped: {type(_se).__name__}", file=sys.stderr)
             _gads_geo_step(s, data_dir, spend, today)          # GADS_GEO only; its own try, reads `spend` only
             _gads_archive_step(s, data_dir, spend, today)      # GADS_ARCHIVE only; its own try, reads `spend` only
             _gads_inst_step(s, data_dir, spend, today)         # GADS_INST only; its own try, reads `spend` only

@@ -15,6 +15,7 @@ import gzip
 import json
 import os
 import re
+import zlib
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
@@ -268,12 +269,39 @@ def test_run_writes_files_pointer_and_removes_stale(built):
     assert d["nrm"] == {"CPI": None, "ECPM": None, "ROAS_G": None}
 
 
-def test_unlinked_spend_is_every_store_without_a_row(built):
+def test_unlinked_spend_is_shipped_per_day_for_the_period_picked(built):
+    """Every store id without a row (no AdMob app + Hidden): ₹ per day and $ at each day's own rate from the first day
+    with such spend, the number of store ids, and each store id's runs of days — the page sums any period."""
     u = built["dash"]["cpi"]["unlinked"]
-    a = addd(T, -13)
-    inr = sum(1000.0 + 5000.0 for _ in days(a, T))                   # the store with no AdMob app + Hidden
-    usd = sum((1000.0 + 5000.0) * fxd(x) for x in days(a, T))
-    assert u["n"] == 2 and u["inr"] == pytest.approx(inr, abs=0.01) and u["usd"] == pytest.approx(usd, abs=0.01)
+    assert sorted(u) == ["d0", "inr", "n", "runs", "usd"] and u["n"] == 2 and u["d0"] == DAY0
+    assert len(u["inr"]) == len(u["usd"]) == nd(DAY0, T) and u["runs"] == [[[0, nd(DAY0, T) - 1]]] * 2
+    for a, b in ((addd(T, -13), T), (addd(T, -29), addd(T, -15)), ("2025-12-01", "2025-12-31")):
+        i0, i1 = nd(DAY0, a) - 1, nd(DAY0, b)
+        assert sum(u["inr"][i0:i1]) == pytest.approx(6000.0 * nd(a, b), abs=0.01)         # whichever period is picked
+        assert sum(u["usd"][i0:i1]) == pytest.approx(sum(6000.0 * fxd(x) for x in days(a, b)), abs=0.01 * nd(a, b))
+
+
+def test_unlinked_spend_starts_at_its_first_day_and_keeps_each_store_ids_runs(tmp_path):
+    data, site, dash = make(tmp_path)
+    cache = json.load(open(os.path.join(data, "roas_spend_cache.json")))
+    cache["daily"][UNLINKED] = {x: int(1000 * 1e6) for x in days("2026-03-01", "2026-03-10") + days("2026-03-20", T)}
+    cache["daily"][SIDS["h"]] = {}
+    cache["daily"]["com.synth.late"] = {x: int(500 * 1e6) for x in days("2026-03-05", "2026-03-06")}
+    json.dump(cache, open(os.path.join(data, "roas_spend_cache.json"), "w"))
+    cb.run(dash, data, site, {}, NOW)
+    cb.pop_line()
+    u = dash["cpi"]["unlinked"]
+    assert u["d0"] == "2026-03-01" and len(u["inr"]) == nd("2026-03-01", T) and u["n"] == 2
+    assert sorted(u["runs"]) == [[[0, 9], [19, nd("2026-03-01", T) - 1]], [[4, 5]]]       # a gap = two runs
+    assert u["inr"][4] == 1500 and u["inr"][10] == 0 and u["inr"][19] == 1000
+    for d in ({"d0": T, "inr": [], "usd": [], "n": 0, "runs": []},):                       # nothing unlinked at all
+        cache["daily"] = {k: v for k, v in cache["daily"].items() if k.startswith("com.synth.") and k not in
+                          (UNLINKED, SIDS["h"], "com.synth.late")}
+        json.dump(cache, open(os.path.join(data, "roas_spend_cache.json"), "w"))
+        dash2 = copy.deepcopy(dash)
+        cb.run(dash2, data, site, {}, NOW)
+        cb.pop_line()
+        assert dash2["cpi"]["unlinked"] == d
 
 
 def test_the_shapes_the_page_reads(built):
@@ -725,3 +753,181 @@ def test_money_needs_the_alarm_opened_by_the_period_end_and_one_baseline_everywh
               max_worse=0.2, esc=[], ctx={}, money=None, stake=[], kind="app", id="x", app="x", base_show=0.35)
     assert cb._ep_row(ep)[7:] == [0.4, 0.35] and cb._ep_full(ep)["base_show"] == 0.35
     assert cb._ep_row({k: v for k, v in ep.items() if k != "base_show"})[8] == 0.4               # (no shown one: B)
+
+
+# ── hardening (review findings) ─────────────────────────────────────────────────────────────────────────────────────
+
+def _alert_app(roi_rows, fam="ROAS_G", confirm="no_data", opened="2026-03-27", esc=(), closed=None, tier="ALERT"):
+    ep = {"kind": "app", "id": IDS["a"], "app": IDS["a"], "fam": fam, "tier": tier, "c": "2026-03-24", "opened": opened,
+          "closed": closed, "why": None, "base": 0.4, "esc": [list(e) for e in esc], "confirm": confirm}
+    return {"app_id": IDS["a"], "name": NAMES["a"], "notes": {"roi_rows": roi_rows},
+            "view": {"eps": [ep], "w": {"CPI": None, "ECPM": None, "ROAS_G": 0.3}, "nrm": {}, "lost": None}}
+
+
+def test_a_new_d0_roas_alarm_without_roi_rows_is_seeded_and_provisional():
+    """An app with no ROI rows in this build has nothing to confirm a D0 ROAS alarm against: its NEW alarm is shown,
+    never sent (seeded) and its alert item is provisional; with ROI rows (or another family) it is due as before."""
+    t = date(2026, 3, 28)
+    st = {"v": cb.STATE_V, "eps": {}, "push": {}, "due": {}}
+    al, _ = cb.alerts(st, False, [_alert_app(0)], t, NOW)
+    assert len(al) == 1 and al[0]["provisional"] is True and al[0]["seeded"] is True and al[0]["notify"] is False
+    assert st["due"] == {} and all(n.get("seeded") for r in st["eps"].values() for n in r["notices"].values())
+    al, _ = cb.alerts(st, False, [_alert_app(0)], date(2026, 3, 29), NOW)                      # the next build: still not due
+    assert al[0]["notify"] is False and st["due"] == {}
+    st = {"v": cb.STATE_V, "eps": {}, "push": {}, "due": {}}
+    al, _ = cb.alerts(st, False, [_alert_app(120)], t, NOW)                                    # ROI rows: checked → due
+    assert al[0]["provisional"] is False and al[0]["seeded"] is False and al[0]["notify"] is True and st["due"]
+    st = {"v": cb.STATE_V, "eps": {}, "push": {}, "due": {}}
+    al, _ = cb.alerts(st, False, [_alert_app(0, confirm="confirmed")], t, NOW)                 # (confirmed = had data)
+    assert al[0]["notify"] is True and al[0]["provisional"] is False
+    al, _ = cb.alerts({"v": cb.STATE_V, "eps": {}, "push": {}, "due": {}}, False,
+                      [_alert_app(0, fam="CPI", confirm=None)], t, NOW)                        # other families unchanged
+    assert al[0]["notify"] is True and al[0]["provisional"] is False
+
+
+def test_a_seeded_opening_day_is_the_push_day_and_a_seeded_episode_is_never_re_noticed():
+    """(a) an opening shown but not sent (first seen late) counts as the push day: its first re-notice a few days later
+    joins it instead of going out as new; (b) every re-notice of a seeded episode (first build) is shown, never sent."""
+    t = date(2026, 3, 20)
+    st = {"v": cb.STATE_V, "eps": {}, "push": {}, "due": {}}
+    late = _alert_app(120, opened="2026-03-12", esc=[["2026-03-18", "step"]])                  # opened 8 days before t
+    led = cb._ledger(st, False, [late], t, NOW)
+    k, due = led[(IDS["a"], "ROAS_G", "2026-03-12")]
+    n = st["eps"][k]["notices"]
+    assert due == [] and n["open"] == {"day": "2026-03-12", "seeded": True} and st["eps"][k]["seeded"] is False
+    assert n["2026-03-18"] == {"day": "2026-03-18", "joined": "2026-03-12"}                    # 6 days after its opening
+    far = _alert_app(120, opened="2026-03-08", esc=[["2026-03-19", "step"]])                   # 11 days after: its own push
+    st = {"v": cb.STATE_V, "eps": {}, "push": {}, "due": {}}
+    cb._ledger(st, False, [dict(far, view=dict(far["view"], eps=[dict(far["view"]["eps"][0], esc=[])]))],
+               date(2026, 3, 18), NOW)                                                          # (the opening seen late)
+    led = cb._ledger(st, False, [far], date(2026, 3, 19), NOW)
+    assert led[(IDS["a"], "ROAS_G", "2026-03-08")][1] == ["2026-03-19"]
+    # (b) the first build seeds the open episode; a re-notice 4 days later is shown only
+    st = {"v": cb.STATE_V, "eps": {}, "push": {}, "due": {}}
+    first = _alert_app(120, opened="2026-03-16")
+    cb._ledger(st, True, [first], date(2026, 3, 17), NOW)
+    again = _alert_app(120, opened="2026-03-16", esc=[["2026-03-20", "step"]])
+    led = cb._ledger(st, False, [again], date(2026, 3, 20), NOW)
+    k, due = led[(IDS["a"], "ROAS_G", "2026-03-16")]
+    assert due == [] and st["eps"][k]["notices"]["2026-03-20"] == {"day": "2026-03-20", "seeded": True}
+    al, _ = cb.alerts(st, False, [again], date(2026, 3, 20), NOW)
+    assert al[0]["notify"] is False and al[0]["seeded"] is True and st["due"] == {}
+
+
+def test_d0_is_final_per_store_open_days_and_a_waiting_store_are_null():
+    """by_app d0_open days are null in d0_inr (spend, installs stay); a store whose D0 waits for an account that cannot
+    answer is null after its own last good D0 day; the window's D0 ROAS counts only the days D0 is final."""
+    D = cb._Days(date(2026, 3, 1), date(2026, 3, 10))
+    cache = {"daily": {"s": {x: 100 * 1000000 for x in days("2026-03-01", "2026-03-10")}}, "installs": {},
+             "convval_day1": {"s": {x: 40.0 for x in days("2026-03-01", "2026-03-07")}}}
+    R = [0.01] * D.n
+
+    def nulls(s):
+        return [i + 1 for i, v in enumerate(s["d0_inr"]) if v is None]
+    plain = cb._spend(D, cache, "s", None, R, None)
+    assert nulls(plain) == []                                                                  # (0 = fixed, no value)
+    opened = cb._spend(D, cache, "s", None, R, None, d0_open=["2026-03-04", "2026-03-06", "2025-01-01"])
+    assert nulls(opened) == [4, 6] and all(v == 100.0 for v in opened["sp_inr"])               # a day outside is ignored
+    waiting = cb._spend(D, cache, "s", None, R, None, d0_wait=True)
+    assert nulls(waiting) == [8, 9, 10] and waiting["d0_inr"][6] == 40.0                       # after its own last good day
+    both = cb._spend(D, cache, "s", None, R, None, d0_open=["2026-03-07"], d0_wait=True)
+    assert nulls(both) == [7, 8, 9, 10]                                                         # an open day is not "good"
+    none_yet = cb._spend(D, {"daily": cache["daily"], "installs": {}, "convval_day1": {}}, "s", None, R, None,
+                         d0_wait=True)
+    assert nulls(none_yet) == list(range(1, 11))
+    s = {"sp_inr": [100.0] * 10, "d0_inr": [40.0, 40.0, None, None, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0]}
+    w = cb.window(dict(s, sp_usd=[1.0] * 10, inst=[10.0] * 10, rev=[1.0] * 10, imp=[1000] * 10), date(2026, 3, 1),
+                  "2026-03-01", "2026-03-10")
+    assert w["ROAS_G"] == pytest.approx(0.4) and w["sp_inr"] == 1000.0                          # 8 final days: 320 ÷ 800
+    # in the files: an app whose D0 days are open ships them null (the engine skips those windows)
+
+
+def test_open_d0_days_reach_the_app_file_as_null(tmp_path):
+    data, site, dash = make(tmp_path)
+    e = dash["roas"]["by_app"][NAMES["b"]]
+    e["d0_open"] = [T, addd(T, -1)]
+    e["d0_wait"] = False
+    cb.run(dash, data, site, {}, NOW)
+    cb.pop_line()
+    f = load(site, dash["cpi"]["apps"][IDS["b"]]["file"])
+    assert at(f["d"]["d0_inr"], f["day0"], T) is None and at(f["d"]["d0_inr"], f["day0"], addd(T, -1)) is None
+    assert at(f["d"]["d0_inr"], f["day0"], addd(T, -2)) > 0 and at(f["d"]["sp_inr"], f["day0"], T) == 20000
+    g = load(site, dash["cpi"]["apps"][IDS["a"]]["file"])                                       # another app: untouched
+    assert at(g["d"]["d0_inr"], g["day0"], T) > 0
+
+
+def test_the_last_good_spend_fetch_day_is_recorded_after_the_cache_is_written():
+    src = open(os.path.join(ROOT, "admob_iq", "build_static.py"), encoding="utf-8").read()
+    body = src[src.index("def build("):]
+    i_w, i_c = body.index("json.dump(spend, _cf)"), body.index("cache_written = True")
+    i_r = body.index("s[\"roas_spend_ok_till\"] = record_spend_fetch(data_dir, today)")
+    assert i_w < i_c < i_r
+    gate = body[body.rindex("\n", 0, body.rindex("if ", 0, i_r)):i_r]
+    assert "cache_written" in gate and "not fresh_spend.get(\"error\")" in gate and "ga4_value" not in gate
+    assert body.index("cache_written = False") < i_w
+
+
+def test_a_day_before_a_stores_own_first_day_is_unknown_never_zero(tmp_path):
+    data, site, dash = make(tmp_path)
+    first = "2026-03-10"
+    for sub, fld in (("ads_campaign_day", {"v": 1, "first": first, "till": "2026-03-29", "done": True}),
+                     ("ads_geo_day", {"v": 1, "ccy": "INR", "first": first, "till": "2026-03-27"})):
+        write_json_gz_stable(os.path.join(data, sub, "state.json.gz"), fld)
+    # one geo cell whose download count is unknown (null), the next one a real 0
+    gm = os.path.join(data, "ads_geo_day", "2026-03.json.gz")
+    g = load(os.path.dirname(gm), "2026-03.json.gz")
+    g["days"][SIDS["a"]]["2026-03-12"]["XA"][1] = None
+    g["days"][SIDS["a"]]["2026-03-13"]["XA"][1] = 0.0
+    write_json_gz_stable(gm, g)
+    D = cb._Days(date(2026, 3, 1), date(2026, 3, 28))
+    R = [FX1] * D.n
+    camps = cb._camps(D, data, {SIDS["a"]: IDS["a"]}, {}, R, [None])
+    for c in camps.values():
+        for k, arr in c["s"].items():
+            assert arr[:9] == [None] * 9 and all(v is not None for v in arr[9:]), k              # 1–9 Mar unknown, 10 Mar on
+        assert c["s"]["sp_inr"][9] > 0
+    geo = cb._geo(D, data, {SIDS["a"]: IDS["a"]}, R, [None])
+    xa = geo[IDS["a"]]["XA"]
+    for k, arr in xa.items():
+        assert arr[:9] == [None] * 9 and arr[9] is not None, k
+    assert xa["sp_inr"][11] > 0 and xa["dl"][11] is None                                          # unknown stays unknown
+    assert xa["dl"][12] == 0.0 and xa["dl"][10] > 0 and xa["dl"][13] > 0                         # a real 0 stays 0
+    assert xa["dl"][-1] is None                                                                  # after the store's till
+    # the engine entity carries the unknowns as null (not 0 installs)
+    a = {"app_id": IDS["a"], "name": "x", "s": {k: D.zeros() for k in cb.ENG}}
+    a["s"]["sp_usd"] = [1.0] * D.n
+    ent = [e for e in cb.entities([a], {}, {IDS["a"]: {"XA": xa}}, D) if e.kind == "country"][0]
+    assert ent.s["inst"][11] is None and ent.s["inst"][12] == 0.0
+
+
+def test_a_damaged_gz_costs_only_that_file(tmp_path, monkeypatch):
+    raw = bytearray(gzip.compress(json.dumps({"a": list(range(2000))}).encode()))
+    raw[20:30] = b"\xff" * 10
+    bad = tmp_path / "bad.json.gz"
+    bad.write_bytes(bytes(raw))
+    with pytest.raises(zlib.error):
+        gzip.open(str(bad), "rt").read()                                       # (the failure this guards against)
+    assert cb._load_json(str(bad)) is None
+    short = tmp_path / "short.json.gz"
+    short.write_bytes(gzip.compress(json.dumps({"a": list(range(2000))}).encode())[:40])
+    assert cb._load_json(str(short)) is None                                   # truncated: EOFError
+    good = tmp_path / "good.json.gz"
+    good.write_bytes(gzip.compress(b'{"a":1}'))
+    assert cb._load_json(str(good)) == {"a": 1}
+    # a whole step with one damaged site file: the tab is still built (that app just has no GA4 users)
+    data, site, dash = make(tmp_path / "t")
+    key = gu.file_key(IDS["a"])
+    (tmp_path / "t" / "site" / ("active_%s.json.gz" % key)).write_bytes(bytes(raw))
+    assert cb.run(dash, data, site, {}, NOW) == ["/cpi*"] and "cpi" in dash and cb.pop_line().startswith("cpi: apps 4")
+    f = load(site, dash["cpi"]["apps"][IDS["a"]]["file"])
+    assert all(v is None for v in f["d"]["dau"])
+
+
+def test_an_app_whose_file_is_too_big_is_not_counted(tmp_path, monkeypatch):
+    data, site, dash = make(tmp_path)
+    monkeypatch.setattr(cb, "_fits", lambda raw: b'"name":"Beta App"' not in raw)
+    assert cb.run(dash, data, site, {}, NOW) == ["/cpi*"]
+    p = dash["cpi"]
+    assert IDS["b"] not in p["apps"] and sorted(p["apps"]) == sorted(IDS[k] for k in "ade")
+    assert p["counts"] == {"alarm": 1, "watch": 0, "fixed": 0, "ok": 0, "new": 1, "paused": 1}      # Beta (ok) not counted
+    assert sum(p["counts"].values()) == len(p["apps"]) and cb.pop_line().endswith(", too big 1")

@@ -21,7 +21,8 @@ engine.cpi_alarm (P_PROD) to the data day t, nothing trimmed:
                            "nrm": {fam: normal per day}, "camps": [...], "ctys": [...], "src": [], "ep": [Episode, …],
                            "notes": {...}}  (the details of one app)
   dashboard["cpi"]        the pointer: per app the default view (Last 14 days ending t: status, since, normal, money
-                           lost), counts, not linked spend, alerts (sent once: data/cpi/state.json) and closed.
+                           lost), counts, not linked spend (per day: the page sums the period picked), alerts (sent once:
+                           data/cpi/state.json) and closed.
   Units: CPI ₹ per install (as billed), eCPM $ per 1000, ROAS a ratio; money ₹ as billed and $ at each day's own rate.
   Money lost = Σ (cost − D0 value ÷ the frozen normal B) over the days of a ROAS alarm (measured inputs, the formula
   labelled ≈ on the page); a CPI / eCPM / GAP "since" sum is never a loss.
@@ -36,6 +37,7 @@ import json
 import os
 import re
 import sys
+import zlib
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -109,7 +111,7 @@ def _load_json(path):
                 return json.load(f)
         with open(path, encoding="utf-8") as f:
             return json.load(f)
-    except (OSError, ValueError, EOFError):
+    except (OSError, ValueError, EOFError, zlib.error):          # a damaged .gz costs only that file
         return None
 
 
@@ -241,10 +243,11 @@ def _first_day(dashboard, cache):
     return _d(first) if first else None
 
 
-def _spend(D, cache, sid, ok_till, R, dated):
+def _spend(D, cache, sid, ok_till, R, dated, d0_open=None, d0_wait=False):
     """One store's Google Ads days → sp_inr (cost as billed), sp_usd (the page's $ view: by_app.daily_dated, else at
     each day's own rate), inst (biddable installs), d0_inr (Google's D0 value). 0 = no spend; after the last good fetch
-    every day is null (never 0)."""
+    every day is null (never 0). D0 is final per store: its days still open (by_app d0_open) are null, and a store
+    whose D0 waits for an account that cannot answer (d0_wait) is null after its own last good D0 day."""
     s = {k: D.zeros() for k in ("sp_inr", "sp_usd", "inst", "d0_inr")}
     for key, fld in (("daily", "sp_inr"), ("installs", "inst"), ("convval_day1", "d0_inr")):
         for d, v in ((cache.get(key) or {}).get(sid) or {}).items():
@@ -255,6 +258,15 @@ def _spend(D, cache, sid, ok_till, R, dated):
         dd = _iso(D.d0, i)
         du = (dated or {}).get(dd)
         s["sp_usd"][i] = du / 1e6 if du is not None else s["sp_inr"][i] * R[i]
+    for d in d0_open or ():
+        i = D.ix.get(str(d)[:10])
+        if i is not None:
+            s["d0_inr"][i] = None
+    if d0_wait:
+        known = (cache.get("convval_day1") or {}).get(sid) or {}
+        good = [D.ix[d] for d in known if d in D.ix and s["d0_inr"][D.ix[d]] is not None]
+        for i in range(max(good, default=-1) + 1, D.n):
+            s["d0_inr"][i] = None
     if ok_till:
         cut = (_d(ok_till) - D.d0).days + 1
         for k in s:
@@ -337,7 +349,9 @@ def _ga4(D, s, out_dir, aid, ptrs):
             if len(u) >= 4:
                 s["fs_u"][i], s["rt_u"][i] = u[1], u[3]
     r = _site(out_dir, roi.get(aid))
+    notes["roi_rows"] = 0
     if isinstance(r, dict):
+        notes["roi_rows"] = len(r.get("rows") or [])
         for row in r.get("rows") or []:
             i = D.ix.get(row[0])
             if i is None:
@@ -348,6 +362,16 @@ def _ga4(D, s, out_dir, aid, ptrs):
                 if df > age and len(ser) > age:
                     s["c_r%d" % age][i] = ser[age]
     return notes
+
+
+def _unknown_outside(arr, D, first, till):
+    """A store's own series: a day before its first day or after its till was never read → null (unknown), never 0."""
+    if first:
+        for i in range(0, min(D.n, max(0, (_d(first) - D.d0).days))):
+            arr[i] = None
+    if till:
+        for i in range(max(0, (_d(till) - D.d0).days + 1), D.n):
+            arr[i] = None
 
 
 def _camps(D, data_dir, store_app, names, R, out_till):
@@ -389,12 +413,10 @@ def _camps(D, data_dir, store_app, names, R, out_till):
                     c["cv1"] = True
     till = st.get("till")
     out_till[0] = till
-    if till:
-        cut = (_d(till) - D.d0).days + 1
-        for c in out.values():
-            for arr in c["s"].values():
-                for i in range(max(0, cut), D.n):
-                    arr[i] = None
+    first = st.get("first")
+    for c in out.values():
+        for arr in c["s"].values():
+            _unknown_outside(arr, D, first, till)
     for cid, c in out.items():
         nm = names.get(cid) or {}
         c["name"], c["status"] = nm.get("name"), nm.get("status")
@@ -437,16 +459,17 @@ def _geo(D, data_dir, store_app, R, out_till):
                     c["sp_inr"][i] += amt
                     c["sp_usd"][i] += amt * r
                 if len(v) > 1 and v[1] is not None:
-                    c["dl"][i] += v[1]
+                    if c["dl"][i] is not None:
+                        c["dl"][i] += v[1]
+                else:
+                    c["dl"][i] = None                      # an unknown install count stays unknown (never 0 installs)
     till = st.get("till")
     out_till[0] = till
-    if till:
-        cut = (_d(till) - D.d0).days + 1
-        for g in out.values():
-            for c in g.values():
-                for arr in c.values():
-                    for i in range(max(0, cut), D.n):
-                        arr[i] = None
+    first = st.get("first")
+    for g in out.values():
+        for c in g.values():
+            for arr in c.values():
+                _unknown_outside(arr, D, first, till)
     return out
 
 
@@ -612,7 +635,7 @@ def gather(dashboard, data_dir, out_dir, s, t, counts=None):
     apps, store_app, names = [], {}, {}
     for nm, aid, sid in _apps(dashboard):
         e = by_app.get(nm) or {}
-        sp = _spend(D, cache, sid, ok_till, R, e.get("daily_dated"))
+        sp = _spend(D, cache, sid, ok_till, R, e.get("daily_dated"), e.get("d0_open"), e.get("d0_wait"))
         if not any(sp["sp_inr"]):
             continue
         ser = dict(sp)
@@ -802,7 +825,9 @@ def window(s, D0, a, b):
     def tot(k):
         return sum(x for x in s[k][max(0, i0):i1 + 1] if x)
     sp, n, rv, im, v = tot("sp_inr"), tot("inst"), tot("rev"), tot("imp"), tot("d0_inr")
-    return {"CPI": sp / n if n else None, "ECPM": rv / im * 1000 if im else None, "ROAS_G": v / sp if sp else None,
+    sg = sum(x for x, y in zip(s["sp_inr"][max(0, i0):i1 + 1], s["d0_inr"][max(0, i0):i1 + 1])
+             if x and y is not None)                      # D0 ROAS: the days D0 is final (as the page's fsum)
+    return {"CPI": sp / n if n else None, "ECPM": rv / im * 1000 if im else None, "ROAS_G": v / sg if sg else None,
             "sp_inr": sp, "sp_usd": tot("sp_usd")}
 
 
@@ -940,13 +965,13 @@ def build_files(dashboard, D, apps, camps, ctys, extra, res, now):
                      default=None)
         lost = money_lost(eps, a["s"], extra["R"], D.d0, a_iso, b_iso, ts, hl, e0)
         w = window(a["s"], D.d0, a_iso, b_iso)
-        if w["sp_inr"] > 0:
-            counts[st] += 1
         body = _app_file(a, D, a["lo"], res, camps, ctys, eps_by, extra, t)
         raw = _raw(body)
         if not _fits(raw):
             big += 1
             continue
+        if w["sp_inr"] > 0:                              # an app whose file is not shipped is not counted
+            counts[st] += 1
         fn = PREFIX + a["key"] + ".json.gz"
         files[fn] = body
         ptr_apps[aid] = {"name": a["name"], "key": a["key"], "file": fn, "v": hashlib.sha1(raw).hexdigest()[:12],
@@ -964,32 +989,48 @@ def build_files(dashboard, D, apps, camps, ctys, extra, res, now):
         all_h[aid] = {"h": h, "ep": [_ep_row(ep) for ep in eps]}
         a["view"] = {"st": st, "since": since, "nrm": nrm, "lost": lost, "w": w, "eps": eps}
     allb = {"v": V, "t": ts, "day0": _iso(D.d0, g0), "apps": all_h}
-    unl = _unlinked(D, extra, a_iso, b_iso, dashboard)
+    unl = _unlinked(D, extra)
     ptr = {"v": V, "t": ts, "at": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
            "day0": _iso(D.d0, g0), "file": FILE, "apps": ptr_apps, "counts": counts, "unlinked": unl}
     return ptr, allb, files, big
 
 
-def _unlinked(D, extra, a, b, dashboard):
-    """Google Ads spend in [a, b] on store ids with no row on this screen (not linked to a dashboard app, or the app is
-    not selected): ₹ as billed, $ at each day's own rate, the number of store ids."""
+def _unlinked(D, extra):
+    """Google Ads spend per day on store ids with no row on this screen (not linked to a dashboard app, or the app is
+    not selected), so the page sums it for the period picked: {"d0": the first day with such spend, "inr": [₹ as billed
+    per day … t], "usd": [$ at each day's own rate], "n": the store ids with spend, "runs": per store id its runs of days
+    with spend [first, last] as indexes into the arrays} — the page counts the store ids with spend inside its period."""
     cache, R = extra["cache"], extra["R"]
     linked = set(extra["store_app"])
-    inr = usd = 0.0
-    n = 0
-    for sid, dd in (cache.get("daily") or {}).items():
+    inr, usd = D.zeros(), D.zeros()
+    ids = []
+    for sid, dd in sorted((cache.get("daily") or {}).items()):
         if sid in linked:
             continue
-        x = 0.0
+        hit = []
         for d, v in (dd or {}).items():
-            if a <= d <= b and v:
+            i = D.ix.get(d)
+            if i is not None and v:
                 amt = v / 1e6
-                x += amt
-                usd += amt * R[D.ix[d]] if d in D.ix else 0.0
-        if x > 0:
-            inr += x
-            n += 1
-    return {"inr": _r(inr), "usd": _r(usd), "n": n}
+                inr[i] += amt
+                usd[i] += amt * R[i]
+                hit.append(i)
+        if hit:
+            ids.append(sorted(hit))
+    f = next((i for i, v in enumerate(inr) if v), None)
+    if f is None:
+        return {"d0": D.t.isoformat(), "inr": [], "usd": [], "n": 0, "runs": []}
+    runs = []
+    for hit in ids:
+        r = []
+        for i in hit:
+            if r and i == r[-1][1] + 1:
+                r[-1][1] = i
+            else:
+                r.append([i, i])
+        runs.append([[a - f, b - f] for a, b in r])
+    return {"d0": _iso(D.d0, f), "inr": [_r(x) for x in inr[f:]], "usd": [_r(x) for x in usd[f:]], "n": len(ids),
+            "runs": runs}
 
 
 # ── alerts (sent once) ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -1060,11 +1101,18 @@ def _notice_key(rec, day, is_open):
     return best[1] if best else day
 
 
+def _unchecked(a, ep):
+    """A D0 ROAS episode opened without the AdMob check: the app has no ROI rows in this build (the ROI step is off or
+    failed for it), so the engine had nothing to confirm it against (confirm "no_data")."""
+    return ep["fam"] == "ROAS_G" and ep.get("confirm") == "no_data" and not (a.get("notes") or {}).get("roi_rows")
+
+
 def _ledger(st, first, apps, t, now):
     """Every open (and lately closed) ALERT / WATCH app episode → its ledger record; each ALERT notice (the opening,
-    every re-notice) is due ONCE: never on the first build (seeded), never when first seen > LATE_DAYS after its day,
-    and joined (not sent) when the app had a push in the PUSH_GAP days before. → {(app id, fam, opened): (key, due)},
-    due = [notice key, …]."""
+    every re-notice) is due ONCE: never on the first build (seeded), never for a new D0 ROAS episode opened without the
+    AdMob check (seeded; its alert item is provisional), never when first seen > LATE_DAYS after its day, never a re-notice of a seeded
+    episode (shown only), and joined (not sent) when the app had a push in the PUSH_GAP days before — a seeded opening
+    day counts as that push day. → {(app id, fam, opened): (key, due)}, due = [notice key, …]."""
     used, out = set(), {}
     now_iso = gu._now_iso(now)
     for a in apps:
@@ -1080,8 +1128,8 @@ def _ledger(st, first, apps, t, now):
             k = _match(st, aid, ep["fam"], ep["opened"], used)
             if k is None:
                 k = "%s|%s|%s" % (aid, ep["fam"], ep["opened"])
-                st["eps"][k] = {"app_id": aid, "fam": ep["fam"], "opened": ep["opened"], "seeded": bool(first),
-                                "first_at": now_iso, "notices": {}}
+                st["eps"][k] = {"app_id": aid, "fam": ep["fam"], "opened": ep["opened"],
+                                "seeded": bool(first or _unchecked(a, ep)), "first_at": now_iso, "notices": {}}
             used.add(k)
             rec = st["eps"][k]
             rec["tier"], rec["closed"] = ep["tier"], ep["closed"]
@@ -1094,10 +1142,13 @@ def _ledger(st, first, apps, t, now):
                         if n.get("notified_at") is None and not n.get("seeded") and not n.get("joined"):
                             due.append(nk)
                         continue
-                    if first or (t - _d(day)).days > LATE_DAYS:
+                    if first or rec.get("seeded") or (t - _d(day)).days > LATE_DAYS:
                         rec["notices"][nk] = {"day": day, "seeded": True}
                         continue
                     last = st["push"].get(aid)
+                    op = rec["notices"].get("open") or {}
+                    if op.get("seeded") and op.get("day") and (not last or op["day"] > last):
+                        last = op["day"]                      # the seeded opening was shown: the push day to join to
                     if last and 0 <= (_d(day) - _d(last)).days <= PUSH_GAP:
                         rec["notices"][nk] = {"day": day, "joined": last}
                         continue
@@ -1145,7 +1196,8 @@ def _alert_item(a, ep, rec, due, t, others, closed=False):
             "opened": ep["opened"], "opened_at": rec.get("first_at"), "alert_at": _alert_at(rec) or rec.get("first_at"),
             "since": ep["c"], "started": ep["c"], "started_cap": False, "data_till": t.isoformat(),
             "now": _r6(now_v), "before": _r6(base), "rel": _r(rel, 4) if rel is not None else None,
-            "notify": bool(due) and not closed, "seeded": bool(rec.get("seeded")), "provisional": False,
+            "notify": bool(due) and not closed, "seeded": bool(rec.get("seeded")),
+            "provisional": _unchecked(a, ep),
             "estimate": False, "fresh": (t - _d(ep["opened"])).days < 7,
             "lost": {"inr": sc.get("inr"), "usd": sc.get("usd"), "from": lost["from"]} if sc else None,
             "text": text, "message": "%s: %s" % (nm, msg)}
