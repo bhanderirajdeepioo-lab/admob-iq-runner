@@ -8550,7 +8550,7 @@ function chartsHtml(r,F){ const t=ptr().t, end=r.hi<t?r.hi:t, e2=end<fEnd(F)?end
   const L=eps(F.ep);
   const cpi=series(F,from,e2,'CPI'), ec=series(F,from,e2,'ECPM'), ro=series(F,from,e2,'ROAS_G');
   return `<div class="cpx-chs">${chart('cpx-c1',VIN()?'CPI ₹ (cost ÷ installs)':'CPI $ (cost ÷ installs)',cpi,'CPI',L,'cpx-l1')}${chart('cpx-c2','eCPM $ (AdMob)',ec,'ECPM',L,'cpx-l2')}${chart('cpx-c3','D0 ROAS (Google D0 ÷ cost)',ro,'ROAS_G',L,'cpx-l3')}</div>`
-    +'<p class="cpx-fn">Har point: pichhle 14 din ka jod (aakhri point = upar wali line) · dashed = normal · laal patti = alarm ke din, peeli = watch.</p>'; }
+    +'<p class="cpx-fn">Har point = us din tak ke pichhle 14 din ka jod (jaise 18 Aug = 5–18 Aug): ek din ka number bahut upar-neeche hota hai, 14 din jodne se asli trend dikhta hai · aakhri point = upar wali line · dashed = normal · laal patti = alarm ke din, peeli = watch.</p>'; }
 // one family's 14-day points: v (CPI in the view's currency; the $ normal at the window's own rate), n (normal), raw sums
 function series(F,from,to,f){ const i0=fIx(F,from), i1=fIx(F,to), d=F.d, out=[];
   for(let i=i0;i<=i1;i++){ const x=addD(F.day0,i); let v=null, n=null;
@@ -8593,7 +8593,7 @@ function chart(id,title,P,f,L,cls){ const pts=P.map((p,i)=>[i,p.v]).filter(q=>q[
   CHD[id]={P,f,W,Lm,Rm,N};
   return `<div class="cpx-chw">${o.join('')}<div class="cpx-tip" hidden></div></div>`; }
 function tipHtml(c,i){ const p=c.P[i]; if(!p) return '';
-  return `<b>${E(fdy(p.x))}</b><br>14 din: <b>${E(fmtF(c.f,p.v))}</b>${p.n!=null?` · normal ${E(fmtF(c.f,p.n))}`:''}${p.v!=null&&p.n?` (${fP(p.v/p.n-1)})`:''}`; }
+  return `<b>${E(fd(addD(p.x,-13)))} – ${E(fdy(p.x))}</b> <span class="cpx-nv">(14 din ka jod)</span><br><b>${E(fmtF(c.f,p.v))}</b>${p.n!=null?` · normal ${E(fmtF(c.f,p.n))}`:''}${p.v!=null&&p.n?` (${fP(p.v/p.n-1)})`:''}`; }
 // ---- 📅 Day-wise: newest first (Today / Yesterday on top from DATA, marked ⏳), 30 rows + Show 30 more ----
 function dayRows(r,F){ const d=DD(), t=ptr().t, c=cal(), L=eps(F.ep), e=d&&d.roas&&d.roas.by_app&&d.roas.by_app[r.name], out=[];
   // the days after t (not final): from DATA, as the list's own sums
