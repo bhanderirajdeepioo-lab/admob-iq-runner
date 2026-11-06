@@ -302,6 +302,23 @@ const fresh = async (opt) => { opt = opt || {};   // a new page load: history, U
     run(`APP=''`); const ovAll = run(`(()=>{ const s=document.createElement('section'); hubOv(s); return s.children.length; })()`);
     return { usd, inr, small, none, head, headSp, rowSp, ov, ovAll, day: LAST }; });
 
+  // ── 💰 Marketing ROAS follows the 📉 CPI vs eCPM verdict (one verdict everywhere): a made-up CPI pointer with an Alarm for
+  // the big app — the Review card says N/A (frozen before) → the 📉 status + line; the Review card says the same → its own line;
+  // an app without a pointer row keeps the Review card ──
+  await step('cards_cpx', async () => { await fresh({ search: '?layout=hub' }); run(`hubGo('Demo Gallery','overview')`); await settle();
+    run(`HUB.rv.idx={open_day:'${LAST}',days:[{d:'${LAST}'}],studio:{}}; HUB.rv.idxAt=Date.now(); HUB.rv.files['${LAST}']=JSON.parse(JSON.stringify(__RVF));
+      DATA.cpi={v:1,t:'${DAYS[37]}',day0:'${DAYS[0]}',file:'cpi.json.gz',fv:'f0',counts:{},apps:{'${IDS.big}':{name:'Demo Gallery',key:'0123456789ab',file:'cpi_0123456789ab.json.gz',v:'a0',
+        st:'alarm',since:'${DAYS[30]}',to:null,open:[['ROAS_G','SUDDEN','ALERT','${DAYS[30]}','${DAYS[32]}',0.4]],nrm:{CPI:40,ECPM:4,ROAS_G:0.4},lost:null}}};`);
+    const by = h => Object.fromEntries(parse(h).map(x => [x.id, x]));
+    const stale = by(run(`hubCardsHtml('Demo Gallery')`));
+    run(`HUB.rv.files['${LAST}'].apps[0].f.ads={st:'red',line:'Alarm (Sudden step in Day-0 ROAS): Day-0 ROAS 40.0% → 30.0%'}`);
+    const same = by(run(`hubCardsHtml('Demo Gallery')`));
+    run(`DATA.cpi.apps={'${IDS.small}':Object.assign({},DATA.cpi.apps['${IDS.big}'],{name:'Puzzle Quest',st:'ok',since:null,open:[]})};
+      HUB.rv.files['${LAST}'].apps[0].f.ads={st:'na',line:'No Google Ads spend'}`);
+    const other = by(run(`hubCardsHtml('Demo Gallery')`));
+    run(`delete DATA.cpi; HUB.rv.files={}; HUB.rv.idx=null; HUB.rv.loading=false;`);
+    return { stale: { roas: stale.roas, cpx: stale.cpx }, same: { roas: same.roas, cpx: same.cpx }, other: { roas: other.roas, cpx: other.cpx || null } }; });
+
   // ── 🆕 First open in the hub (an app's tab): the page's own FO module on the same screen as the classic layout — the
   // Country control under the crumb AND inside the Every month / Every day cards, one pick for all three, the card titles
   // with the country + ✕ — byte for byte what the classic layout draws (synthetic files, the loader stubbed) ──

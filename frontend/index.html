@@ -5483,6 +5483,7 @@ function hubCardsHtml(name){ const o=hubRvOpen(), ra=o&&o.f?hubRvApp(o.f,name):n
   try{ cx=!!CPX.ptr(); }catch(e){}   // 📉 only when this build wrote its pointer
   return HUB_FC.filter(c=>(c[0]!=='audience'||au)&&(c[0]!=='firstopen'||fo)&&(c[0]!=='cpx'||cx)).map(c=>{ const x=hubCard(c,name,ra,o,fx);
     if(c[0]==='value') try{ roiCardLine(x,name); }catch(e){}   // 📈 + the ROI line (from the dashboard's own pointer)
+    if(c[0]==='roas') try{ cpxRoasLine(x,name); }catch(e){}    // 📉 the CPI vs eCPM verdict (one verdict everywhere)
     return `<div class="card hub-fc" data-st="${x.st}" data-fc="${c[0]}"><div class="hfc-h"><span class="hfc-i" aria-hidden="true">${c[3]}</span><span class="hfc-n">${c[2]}</span></div>`
       +`${hubStChip(x.st)}<div class="hfc-l">${x.line}</div><button type="button" class="hfc-o" onclick="hubTab('${c[1]}')" aria-label="Open ${hAttr(c[2])}">Open →</button></div>`; }).join(''); }
 function hubCard(c,name,ra,o,fx){ const src=c[4];
@@ -5523,6 +5524,10 @@ function hubCard(c,name,ra,o,fx){ const src=c[4];
     const rs=s&&s.st?(s.st==='flag'?'🚩 Re-review':s.st==='kal'?'🔁 Check again tomorrow':'✅ Reviewed'):(S?'⏳ Pending':'');
     return {st:n.red?'bigda':n.amber?'dhyan':'normal',line:`Card ${fmtD(o.f.day)}: <b>${n.red}</b> Worse · <b>${n.amber}</b> Watch${rs?' · '+rs:''}`}; }
   return {st:'lagu',line:''}; }
+// 💰 Marketing ROAS = the 📉 CPI vs eCPM verdict for an app in this build's CPI pointer: the Review card's own line while its
+// status says the same, else the 📉 card's status + line (today's Review card was frozen on an older pointer) — the hub, the
+// Review card and the CPI screen never disagree; an app without Google Ads keeps the Review card's 7-vs-7 line
+function cpxRoasLine(x,name){ const k=CPX.hubVerdict(name); if(!k||x.st===k.st) return; x.st=k.st; x.line=k.line; }
 function roiCardLine(x,name){ const id=hubAppId(name); const c=id?ROI.cardLine(id):null; if(!c) return; x.st=c.st; x.line=c.line; }   // ROI's numbers replace the card's
 function hubCardsPaint(){ const el=document.getElementById('hub-fcs'); if(!el||!HUB.on||!APP) return; el.innerHTML=hubCardsHtml(APP);
   const n=document.getElementById('hub-fn'); if(n) n.textContent=hubFcNote(); }
@@ -8804,7 +8809,10 @@ function card(name){ const p=ptr(); if(!p) return null; const id=Object.keys(p.a
   const pc=f=>m[f].d!=null?` (${fP(m[f].d)})`:'';
   const head=r.st==='alarm'||r.st==='watch'?`<b>${ST[r.st][0]}</b>${r.since?' since '+fd(r.since):''} · `:r.st==='fixed'?`<b>Fixed</b>${r.since?' '+fd(r.since)+(r.sinceTo?' – '+fd(r.sinceTo):''):''} · `:'';
   return {st:STK[r.st]||'lagu',line:`${head}CPI ${fmtF('CPI',m.CPI.v)}${pc('CPI')} · eCPM ${fE(m.ECPM.v)}${pc('ECPM')} · D0 ROAS ${fR(m.ROAS_G.v)}${pc('ROAS_G')}${r.lost&&!r.lost.na?` · ≈${fM(r.lost.inr,r.lost.usd)} lost`:''}`}; }
-return {ptr, render, paint, show:showMe, left, alarmN, alertNote, card,
+// the hub's 💰 Marketing ROAS card follows this verdict (one verdict everywhere): the 📉 card of an app in the pointer, null for
+// an app without one (no Google Ads spend: that card keeps today's Review card)
+function hubVerdict(name){ const p=ptr(); if(!p||!Object.keys(p.apps).some(k=>p.apps[k]&&p.apps[k].name===name)) return null; return card(name); }
+return {ptr, render, paint, show:showMe, left, alarmN, alertNote, card, hubVerdict,
   _:{rng, isDef, sums, rows, rowOf, judge, normal, hLvl, lossG, epOf, eps, now3, perRestore, perLoad, keep, cal, fI, fU, fP, series, dayRows, verdict, moneyLine, tabBody, ALLF, FILES, CHD,
     get:()=>({PER,PF,PTO,OPEN,TAB,DN}), set:o=>{ if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o) OPEN=o.OPEN; if('TAB' in o) TAB=o.TAB; if('DN' in o) DN=o.DN; if('PREAD' in o) PREAD=o.PREAD; }}};
 })();

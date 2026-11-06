@@ -186,9 +186,10 @@ def _how(ctx, n):
          f"baaki kamai (pichhle 7 din ka avg, {fr(ctx, w7[0], w7[-1])}) ke hisaab se."),
         f"Yesterday = {fd(ctx, y)} (AdMob ka aakhri poora din). Usual = {fr(ctx, u7[0], u7[-1])} ka daily avg.",
         (f"Uninstall, Active users, Install value, Update aur ad-unit ki baatein dashboard ke unhi tabs ke rules se "
-         f"bani. Ads: {fr(ctx, w7[0], w7[-1])} vs {fr(ctx, p7[0], p7[-1])}; ROAS 20%+ gira ya cost per install "
-         f"30%+ badha to 🟡. {ded}kisi ad unit ka 15%+ aur {money(20.0, din=False)}+ kata to 🔴. Mediation: kisi "
-         f"network ka hissa 10%+ se 1/3 se neeche gira to 🟡."),
+         f"bani. Ads: jis app ki line 📉 CPI screen pe hai, uska status wahi (Alarm 🔴 · Watch 🟡 · Fixed 🟢 · "
+         f"New ⏳ · Paused N/A); baaki apps: {fr(ctx, w7[0], w7[-1])} vs {fr(ctx, p7[0], p7[-1])}; ROAS 20%+ gira ya "
+         f"cost per install 30%+ badha to 🟡. {ded}kisi ad unit ka 15%+ aur {money(20.0, din=False)}+ kata to 🔴. "
+         f"Mediation: kisi network ka hissa 10%+ se 1/3 se neeche gira to 🟡."),
         f"Small apps: kamai + ads spend {money(CHHOTI)} se kam. Inke 🔴 bhi unke group me dikhte hain, upar nahi aate.",
         "Jin features ka is app ke liye data nahi, unka dot grey (“No data”).",
         ("States: ✅ Reviewed · 📝 Reviewed + note · 🚩 Re-review (Important) · 🔁 Check again tomorrow. 🚩 Important · "
