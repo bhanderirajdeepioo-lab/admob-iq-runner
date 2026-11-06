@@ -693,14 +693,20 @@ def _overlaps(ep, a, b, t):
 
 
 def normal_at(fam, eps, healthy, D0, a, b):
-    """SPEC §1.2: the frozen B of an app episode of `fam` open at b (not settled), else H on the day before a."""
+    """SPEC §1.2: the frozen B of an app episode of `fam` open at b (open until its close, whatever the close reason —
+    settled too, as the engine's own normal), else H on the day before a; H not known there (a period that starts
+    before the app's healthy level exists) → the first known H inside [a, b]."""
     for ep in eps:
-        if ep["fam"] == fam and ep["opened"] <= b and (ep["closed"] is None or ep["closed"] > b) \
-                and ep["why"] != "settled":
+        if ep["fam"] == fam and ep["opened"] <= b and (ep["closed"] is None or ep["closed"] > b):
             return ep["base"]
     h = healthy.get(fam) or []
     i = (_d(a) - D0).days - 1
-    return h[i] if 0 <= i < len(h) else None
+    if 0 <= i < len(h) and h[i] is not None:
+        return h[i]
+    for k in range(max(0, i + 1), min((_d(b) - D0).days, len(h) - 1) + 1):
+        if h[k] is not None:
+            return h[k]
+    return None
 
 
 def day_rate(s, R):
@@ -718,38 +724,28 @@ def day_rate(s, R):
 
 def money_lost(eps, s, R, D0, a, b, t):
     """SPEC §1.2: Σ (cost − D0 value ÷ B) over the days of [a, b] inside the app's ROAS_G episodes (₹ as billed, $ at
-    each day's own rate); without one, a ROAS_C0 episode's matured install days (c_sp − c_r0 ÷ B). → {"inr", "usd",
-    "from": the earliest c, "sc": the same sum from c to b} or None."""
+    each day's own rate) — the one money number of the list, the summary and the alerts. The AdMob install-day version
+    (ROAS_C0) is only beside it in the details' Loss math. → {"inr", "usd", "from": the earliest c, "sc": the same sum
+    from c to b, "fam"} or None."""
     rate = day_rate(s, R)
-    for fam in ("ROAS_G", "ROAS_C0"):
-        hit = [ep for ep in eps if ep["fam"] == fam and ep["base"] and _overlaps(ep, a, b, t)]
-        if not hit:
-            continue
-        per = [0.0, 0.0]
-        since = [0.0, 0.0]
-        c0 = min(ep["c"] for ep in hit)
-        for ep in hit:
-            for lo, acc in ((max(a, ep["c"]), per), (ep["c"], since)):
-                hi = min(b, _span_end(ep, t))
-                i0, i1 = (_d(lo) - D0).days, (_d(hi) - D0).days
-                for i in range(max(0, i0), i1 + 1):
-                    r = rate[i]
-                    if fam == "ROAS_G":
-                        sp, v, su = s["sp_inr"][i], s["d0_inr"][i], s["sp_usd"][i]
-                        if sp is None or v is None:
-                            continue
-                        acc[0] += sp - v / ep["base"]
-                        acc[1] += (su or 0.0) - v * r / ep["base"]
-                    else:
-                        sp, v = s["c_sp"][i], s["c_r0"][i]
-                        if sp is None or v is None:
-                            continue
-                        x = sp - v / ep["base"]
-                        acc[1] += x
-                        acc[0] += x / r if r else 0.0
-        return {"inr": _r(per[0]), "usd": _r(per[1]), "from": c0, "sc": {"inr": _r(since[0]), "usd": _r(since[1])},
-                "fam": fam}
-    return None
+    hit = [ep for ep in eps if ep["fam"] == "ROAS_G" and ep["base"] and _overlaps(ep, a, b, t)]
+    if not hit:
+        return None
+    per = [0.0, 0.0]
+    since = [0.0, 0.0]
+    c0 = min(ep["c"] for ep in hit)
+    for ep in hit:
+        for lo, acc in ((max(a, ep["c"]), per), (ep["c"], since)):
+            hi = min(b, _span_end(ep, t))
+            i0, i1 = (_d(lo) - D0).days, (_d(hi) - D0).days
+            for i in range(max(0, i0), i1 + 1):
+                sp, v, su = s["sp_inr"][i], s["d0_inr"][i], s["sp_usd"][i]
+                if sp is None or v is None:
+                    continue
+                acc[0] += sp - v / ep["base"]
+                acc[1] += (su or 0.0) - v * rate[i] / ep["base"]
+    return {"inr": _r(per[0]), "usd": _r(per[1]), "from": c0, "sc": {"inr": _r(since[0]), "usd": _r(since[1])},
+            "fam": "ROAS_G"}
 
 
 def status_of(eps, s, nrm, D0, a, b, t):

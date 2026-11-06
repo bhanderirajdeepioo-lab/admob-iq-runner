@@ -643,3 +643,29 @@ def test_build_static_runs_the_step_after_screens_and_before_health_and_alerts()
     assert " · ads cost vs earning (Google Ads + AdMob)" in sa
     mk = src[src.index("def _uninstall_mark_sent("):src.index("class _AppFilteredRepo")]
     assert "mark_notified_cpi(data_dir, dashboard[\"cpi\"], dry=s[\"notify_dry_run\"], ids=ids)" in mk
+
+
+def test_normal_follows_the_engine_and_falls_back_inside_the_period():
+    """An episode counts as open until its close whatever the reason (settled too, as the engine's own normal); with
+    none open at b, H on the day before a; a period that starts before H exists takes the first known H inside it."""
+    d0 = date(2026, 1, 1)
+    h = {"CPI": [None] * 40 + [20.0] * 60}
+    ep = {"fam": "CPI", "opened": "2026-02-01", "closed": "2026-03-01", "why": "settled", "base": 15.0}
+    assert cb.normal_at("CPI", [ep], h, d0, "2026-02-10", "2026-02-20") == 15.0       # open at b (settles later)
+    assert cb.normal_at("CPI", [ep], h, d0, "2026-03-05", "2026-03-18") == 20.0       # closed by b → H(a − 1)
+    assert cb.normal_at("CPI", [], h, d0, "2026-01-05", "2026-03-18") == 20.0         # H(a − 1) unknown → first inside
+    assert cb.normal_at("CPI", [], h, d0, "2026-01-05", "2026-01-20") is None         # truly no healthy level yet
+
+
+def test_money_lost_comes_from_the_d0_roas_alarm_only():
+    """The list's money is the Google D0 ROAS alarm's (cost − D0 value ÷ B); an AdMob install-day (ROAS_C0) episode
+    alone gives no money here — it is shown only in the details' Loss math."""
+    d0 = date(2026, 1, 1)
+    n = 30
+    s = {"sp_inr": [1000.0] * n, "sp_usd": [10.0] * n, "d0_inr": [300.0] * n, "c_sp": [10.0] * n, "c_r0": [3.0] * n}
+    c0 = {"fam": "ROAS_C0", "c": "2026-01-10", "closed": None, "base": 0.4, "tier": "LINE"}
+    assert cb.money_lost([c0], s, [0.01] * n, d0, "2026-01-17", "2026-01-30", "2026-01-30") is None
+    g = dict(c0, fam="ROAS_G", tier="ALERT")
+    m = cb.money_lost([g, c0], s, [0.01] * n, d0, "2026-01-17", "2026-01-30", "2026-01-30")
+    assert m["fam"] == "ROAS_G" and m["inr"] == pytest.approx(14 * (1000 - 300 / 0.4))
+    assert m["sc"]["inr"] == pytest.approx(21 * (1000 - 300 / 0.4)) and m["from"] == "2026-01-10"
