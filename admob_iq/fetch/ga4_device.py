@@ -690,7 +690,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
 def log_line(status):
     """The build log's ONE line for this step — counts only (the history merge's counts when it ran); an internal error,
     a staged file the merge could not take or a history job that stopped (bf_stalled) also gets the health banner's
-    line ("<step> skipped: <ErrorType>")."""
+    "skipped:" line, each on its own line."""
     c = (status or {}).get("counts") or {}
     err = (status or {}).get("error")
     mg = (", merged %d, staged bad %d" % (gaud._int(c.get("merged")), gaud._int(c.get("staged_bad")))
@@ -700,11 +700,11 @@ def log_line(status):
                                                                    "deferred", "waiting", "calls", "tokens")]
                                     + [mg, (", error " + err) if err else ""]))
     if err:
-        line += "\nga4 device skipped: %s" % err
+        line += "\n" + "ga4 device skipped: %s" % err
     if gaud._int(c.get("staged_bad")):
-        line += "\nga4 device history skipped: StagedFileError"
+        line += "\n" + "ga4 device history skipped: StagedFileError"
     if gaud._int(c.get("stalled")):                 # (the job's own log is public-only: the build says it too)
-        line += "\nga4 device history skipped: StalledError"
+        line += "\n" + "ga4 device history skipped: StalledError"
     return line
 
 
