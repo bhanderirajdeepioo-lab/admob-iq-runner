@@ -32,6 +32,7 @@ at a time per property, properties side by side; no request after BUDGET_SEC (wh
 
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -58,11 +59,14 @@ WORKERS = 8                             # properties side by side
 HEARTBEAT_SEC = 60
 SC, PP, PS, SN = gs.SC, "unifiedPagePathScreen", "unifiedPageScreen", "unifiedScreenName"
 FMT, UNIT, EVN, IMP = gs.FMT, gs.UNIT, gs.EVN, gs.IMP
+NVR, VER, CTY = gs.NVR, gs.VER, gs.CTY
 EC, PUB, PV, EXP = "eventCount", "publisherAdImpressions", "screenPageViews", "adUnitExposure"
+ENG, USR, SES = "userEngagementDuration", "activeUsers", "sessions"
 UNSET = frozenset(("(not set)", ""))
-# kind → (date dimension?, dims, metric, filter): "pe" the fetch's pin (platform Android + the app's stream) + eventName
-# == ad_impression · "p" the pin alone · "se" the stream + the event (no platform) · "e" the event alone (the whole
-# property) · "" nothing (the whole property, every event)
+# kind → (date dimension?, dims, metric, filter[, days: the range ends on the probed day, 1 when left out]): "pe" the
+# fetch's pin (platform Android + the app's stream) + eventName == ad_impression · "pk" the pin + the click events (the
+# fetch's "k") · "p" the pin alone · "se" the stream + the event (no platform) · "e" the event alone (the whole property)
+# · "" nothing (the whole property, every event)
 KINDS = {
     "t": (True, (), EC, "pe"),              # the day's ad_impression events now (the truth the fetch ties)
     "t_all": (True, (), EC, "p"),           # every event of the stream (the fetch's TE0)
@@ -91,13 +95,44 @@ KINDS = {
     "c_pub_prop": (True, (SC,), PUB, ""),
     "v": (True, (SC,), PV, "p"),            # views by class: the fetch's "v"
     "e": (True, (SC,), EXP, "p"),           # the fetch's "e"
+    # round 2 (6 Nov: the page path was whole wherever the class was sampled or lost rows): the page path in every
+    # shape the Screens reads use, and 31 days in one request
+    "t31": (True, (), EC, "pe", 31),
+    "t_k": (True, (), EC, "pk"),
+    "t_eng": (True, (), ENG, "p"),
+    "ppf": (True, (PP, FMT), EC, "pe"),
+    "ppfu": (True, (PP, FMT, UNIT), EC, "pe"),
+    "pp31": (True, (PP,), EC, "pe", 31),
+    "ppf31": (True, (PP, FMT), EC, "pe", 31),
+    "ppk": (True, (PP, EVN), EC, "pk"),         # "k": clicks by screen
+    "ppe": (True, (PP, EVN), EC, "p"),          # every event by screen ("x"'s shape)
+    "ppx": (True, (PP,), EXP, "p"),             # "e"
+    "ppv": (True, (PP,), PV, "p"),              # "v"
+    "ppeng": (True, (PP,), ENG, "p"),
+    "ppu": (True, (PP,), USR, "pe"),            # "uA" (users: not additive, flags only)
+    "ppsu": (True, (PP,), SES, "p"),            # "uV" (flags only)
+    "nppf": (True, (NVR, PP, FMT), EC, "pe"),
+    "npp": (True, (NVR, PP), EC, "pe"),
+    "nppv": (True, (NVR, PP), PV, "p"),
+    "rppf": (True, (VER, PP, FMT), EC, "pe"),
+    "rpp": (True, (VER, PP), EC, "pe"),
+    "rppv": (True, (VER, PP), PV, "p"),
+    "cppf": (True, (CTY, PP, FMT), EC, "pe"),
+    "cpp": (True, (CTY, PP), EC, "pe"),
+    "cppv": (True, (CTY, PP), PV, "p"),
+    "cfu": (True, (SC, FMT, UNIT), EC, "pe"),   # the fetch's "a" at "fu" (last: the class is the costly one)
+    "ncf": (True, (NVR, SC, FMT), EC, "pe"),    # the fetch's "nA" at "cf"
 }
 SWEEP_KINDS = ("c", "u", "t_prop")
 # a split kind → the day total (a kind above) its rows must add up to: the same metric under the same filter
 REF = {"c": "t", "cf": "t", "u": "t", "c_nodate": "t", "pp": "t", "ps": "t", "sn": "t", "ce": "t", "c_stream": "t_stream",
        "c_nopin": "t_nopin", "c_pub": "t_pub", "cf_pub": "t_pub", "pp_pub": "t_pub", "ppf_pub": "t_pub", "u_pub": "t_pub",
-       "c_pub_prop": "t_pub_prop", "v": "t_views", "e": "t_exp"}
-KEEP_KINDS = frozenset(k for k, (_, dims, _, _) in KINDS.items() if dims and dims[0] in (SC, PP, PS, SN))
+       "c_pub_prop": "t_pub_prop", "v": "t_views", "e": "t_exp",
+       "cfu": "t", "ppf": "t", "ppfu": "t", "pp31": "t31", "ppf31": "t31", "ppk": "t_k", "ppe": "t_all", "ppx": "t_exp",
+       "ppv": "t_views", "ppeng": "t_eng", "nppf": "t", "npp": "t", "nppv": "t_views", "rppf": "t", "rpp": "t",
+       "rppv": "t_views", "cppf": "t", "cpp": "t", "cppv": "t_views", "ncf": "t"}
+KEEP_KINDS = frozenset(k for k, v in KINDS.items() if v[1] and v[1][0] in (SC, PP, PS, SN))
+TAG_RE = re.compile(r"[a-z0-9]{1,12}")
 
 
 def _i(v):
@@ -116,19 +151,28 @@ def _http_class(e):
 
 def _flt(f, stream_id):
     ex = []
-    if f in ("pe", "p"):
+    if f in ("pe", "pk", "p"):
         ex.append(ga4._exact("platform", "Android"))
-    if f in ("pe", "p", "se"):
+    if f in ("pe", "pk", "p", "se"):
         ex.append(ga4._exact("streamId", stream_id))
     if f in ("pe", "se", "e"):
         ex.append(ga4._exact("eventName", IMP))
+    if f == "pk":
+        ex.append(ga4._in_list("eventName", gs.CLICKS))
     return {"andGroup": {"expressions": ex}} if ex else None
 
 
+def _kind(kind):
+    """KINDS[kind] → (date dimension?, dims, metric, filter, days)."""
+    v = KINDS[kind]
+    return tuple(v) + (1,) * (5 - len(v))
+
+
 def request(kind, day, stream_id):
-    """The runReport body of `kind` for one day."""
-    dated, dims, met, f = KINDS[kind]
-    b = {"dateRanges": [gu._rng(day, day)], "dimensions": ga4._dim(*((("date",) if dated else ()) + dims)),
+    """The runReport body of `kind` for the range of its days ending on `day`."""
+    dated, dims, met, f, n = _kind(kind)
+    b = {"dateRanges": [gu._rng(day - timedelta(days=n - 1), day)],
+         "dimensions": ga4._dim(*((("date",) if dated else ()) + dims)),
          "metrics": ga4._dim(met), "keepEmptyRows": False, "limit": LIMIT, "returnPropertyQuota": True}
     flt = _flt(f, stream_id)
     if flt:
@@ -139,7 +183,7 @@ def request(kind, day, stream_id):
 def measure(kind, j):
     """One answer → (its record without kind / day, {row key: value} of the rows that count). A row's key is its
     dimensions after date joined by "|"; "ce" keeps only its ad_impression rows (keyed by class)."""
-    dated, dims, met, _ = KINDS[kind]
+    dated, dims, met, _, _ = _kind(kind)
     meta = j.get("metadata") or {}
     rows = ga4._rows(j)
     rec = {"n": len(rows), "rc": _i(j.get("rowCount", len(rows))), "loss": bool(meta.get("dataLossFromOtherRow")),
@@ -250,14 +294,15 @@ def evenly(xs, n):
     return [xs[round(i * (len(xs) - 1) / float(n - 1))] for i in range(n)]
 
 
-def plan(days, final_end):
-    """{day: recs} of the store → (ALT days, SWEEP days) — final days with a whole truth only, ISO, newest first."""
+def plan(days, final_end, back=ALT_BACK):
+    """{day: recs} of the store → (ALT days: final_end − n for n in `back`, SWEEP days) — final days with a whole truth
+    only, ISO, newest first."""
     fe = final_end.isoformat()
     ok = sorted(d for d, r in days.items() if d <= fe and gs._whole(r.get("t")))
     if not ok:
         return [], []
     alt = []
-    for n in ALT_BACK:
+    for n in back:
         want = (final_end - timedelta(days=n)).isoformat()
         older = [d for d in ok if d <= want]
         if older and older[-1] not in alt:
@@ -303,18 +348,23 @@ def choose(data_dir, now, want=None):
 
 
 # ── one app ─────────────────────────────────────────────────────────────────────────────────────────────────────────
-def probe_app(ga, run, it, data_dir, now, keep):
-    """One app: ALT (every kind on its ALT days) then SWEEP → its private result. gf.Stop ends it (kept so far)."""
+def probe_app(ga, run, it, data_dir, now, keep, opts=None):
+    """One app: ALT (every kind — or opts["only"] — on its ALT days) then SWEEP (unless opts["sweep"] is False) → its
+    private result. gf.Stop ends it (kept so far)."""
+    opts = opts or {}
     key = gu.file_key(it["a"]["app_id"])
     sid = it["r"]["stream_id"]
     days = store_days(data_dir, key)
     fe = _final_end(it.get("tz"), now)
-    alt, sweep = plan(days, fe)
+    alt, sweep = plan(days, fe, opts.get("back") or ALT_BACK)
+    if opts.get("sweep") is False:
+        sweep = []
     res = {"final_end": fe.isoformat(), "alt": alt, "sweep": sweep, "ans": [], "rows": {}, "days": {},
            "stopped": None}
     for d in set(alt) | set(sweep):
         res["days"][d] = day_info(days.get(d) or {})
-    todo = [(k, d) for d in alt for k in KINDS] + [(k, d) for d in sweep if d not in alt for k in SWEEP_KINDS]
+    kinds = [k for k in KINDS if not opts.get("only") or k in opts["only"]]
+    todo = [(k, d) for d in alt for k in kinds] + [(k, d) for d in sweep if d not in alt for k in SWEEP_KINDS]
     try:
         for k, d in todo:
             rec, vals = ask(ga, run, k, gu._d(d), sid)
@@ -350,11 +400,13 @@ def summary(apps):
     return out
 
 
-def run_all(cfg, data_dir, apps_want, now=None, clock=time.monotonic, budget=BUDGET_SEC, workers=WORKERS):
-    """Every chosen app → {"v", "at", "control", "apps": {key: result}, "summary", "counts"}. Never raises."""
+def run_all(cfg, data_dir, apps_want, now=None, clock=time.monotonic, budget=BUDGET_SEC, workers=WORKERS, opts=None):
+    """Every chosen app → {"v", "at", "control", "opts", "apps": {key: result}, "summary", "counts"}. Never raises."""
     now = now or datetime.now(timezone.utc)
     run = Run(budget, clock)
-    out = {"v": 1, "at": now.isoformat(), "control": None, "apps": {}, "summary": {}, "counts": run.c}
+    opts = opts or {}
+    out = {"v": 1, "at": now.isoformat(), "control": None, "apps": {}, "summary": {}, "counts": run.c,
+           "opts": {k: sorted(v) if isinstance(v, (set, frozenset)) else v for k, v in opts.items()}}
     try:
         keys, ctrl = choose(data_dir, now, apps_want)
         out["control"] = ctrl
@@ -371,7 +423,7 @@ def run_all(cfg, data_dir, apps_want, now=None, clock=time.monotonic, budget=BUD
                     continue
                 ga = gs.App(it["tok"], pid, it["r"]["stream_id"], prop, over=run.over, max_calls=10 ** 6,
                             gate=gs.quota_gate, renew=it.get("renew"))
-                res = probe_app(ga, run, it, data_dir, now, KEEP_KINDS)
+                res = probe_app(ga, run, it, data_dir, now, KEEP_KINDS, opts)
                 with lock:
                     out["apps"][gu.file_key(it["a"]["app_id"])] = res
         with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
@@ -395,6 +447,19 @@ def line(out):
                _i(c.get("stopped")), (", error " + out["error"]) if out.get("error") else ""))
 
 
+def options(inp):
+    """The workflow inputs → (opts, the private path): `only` a comma list of kinds (unknown ones dropped; none left =
+    every kind), `sweep` "0" / "no" = no SWEEP, `back` a comma list of day offsets for the ALT days, `tag` [a-z0-9]{1,12}
+    → ga4/screens_probe_<tag>.json (a new round never overwrites an earlier one's file)."""
+    inp = inp or {}
+    only = {k.strip() for k in str(inp.get("only") or "").split(",") if k.strip() in KINDS}
+    back = tuple(int(x) for x in str(inp.get("back") or "").split(",") if x.strip().isdigit())
+    opts = {"only": only or None, "sweep": str(inp.get("sweep") or "").strip().lower() not in ("0", "no", "false"),
+            "back": back or None}
+    tag = str(inp.get("tag") or "").strip().lower()
+    return opts, ("ga4/screens_probe_%s.json" % tag) if TAG_RE.fullmatch(tag) else OUT
+
+
 def main(env=None, now=None):
     env = os.environ if env is None else env
     cid = env.get("GA4_CLIENT_ID") or env.get("GOOGLE_CLIENT_ID")
@@ -404,8 +469,10 @@ def main(env=None, now=None):
     data_dir = os.path.join(env.get("SCREENS_PROBE_DATA_DIR") or gs.DATA_ROOT, "data")
     cfg = {"client_id": cid, "client_secret": sec, "refresh_tokens": env.get("GA4_REFRESH_TOKENS") or "",
            "refresh_token": env.get("GA4_REFRESH_TOKEN") or ""}
-    out = run_all(cfg, data_dir, ap.wanted(ap.event_inputs(env).get("apps")), now=now)
-    ok = dp.write_private(OUT, json.dumps(out, separators=(",", ":"), sort_keys=True),
+    inp = ap.event_inputs(env)
+    opts, path = options(inp)
+    out = run_all(cfg, data_dir, ap.wanted(inp.get("apps")), now=now, opts=opts)
+    ok = dp.write_private(path, json.dumps(out, separators=(",", ":"), sort_keys=True),
                           "screens probe %s UTC" % time.strftime("%Y-%m-%d %H:%M", time.gmtime()))
     print(line(out) + (", written" if ok else ", NOT written"), flush=True)
     if not ok:

@@ -13,6 +13,22 @@ on:
         description: "only these apps: comma list of file keys (empty = every app not whole + one control)"
         required: false
         default: ""
+      only:
+        description: "only these request kinds: comma list (empty = every kind)"
+        required: false
+        default: ""
+      sweep:
+        description: "0 = no day sweep, only the ALT days"
+        required: false
+        default: ""
+      back:
+        description: "ALT days as offsets from the newest final day: comma list (empty = 0,30,95,200)"
+        required: false
+        default: ""
+      tag:
+        description: "a-z0-9 tag: the result goes to ga4/screens_probe_<tag>.json (empty = ga4/screens_probe.json)"
+        required: false
+        default: ""
 
 permissions:
   contents: read                 # this repo is never written to

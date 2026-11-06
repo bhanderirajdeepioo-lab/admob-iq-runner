@@ -68,9 +68,9 @@ def _fake(monkeypatch, refuse=(), low_after=None):
         dims = [d["name"] for d in body["dimensions"]]
         met = body["metrics"][0]["name"]
         ex = ((body.get("dimensionFilter") or {}).get("andGroup") or {}).get("expressions") or []
-        fl = {x["filter"]["fieldName"]: x["filter"]["stringFilter"]["value"] for x in ex}
+        fl = {x["filter"]["fieldName"]: x["filter"]["stringFilter"]["value"] for x in ex if "stringFilter" in x["filter"]}
         for k in refuse:
-            _, kd, km, _ = sp.KINDS[k]
+            _, kd, km, _, _ = sp._kind(k)
             if km == met and [d for d in dims if d != "date"] == list(kd):
                 raise RuntimeError("HTTP 400: made-up refusal text that must never be printed")
         day = body["dateRanges"][0]["startDate"].replace("-", "")
@@ -117,9 +117,12 @@ def test_it_asks_every_kind_one_day_at_a_time_and_keeps_each_answer(monkeypatch,
     assert "error" not in out
     kb, kc = gu.file_key(BAD), gu.file_key(CTRL)
     assert set(out["apps"]) == {kb, kc} and out["control"] == kc
-    for _, b in asked:                                  # one day per request, always
+    multi = {(tuple(sp.KINDS[k][1]), sp.KINDS[k][2]) for k in sp.KINDS if sp._kind(k)[4] > 1}
+    for _, b in asked:                                  # one day per request, but for the kinds asked over 31 days
         r = b["dateRanges"][0]
-        assert r["startDate"] == r["endDate"] and b["returnPropertyQuota"]
+        key = (tuple(d["name"] for d in b["dimensions"] if d["name"] != "date"), b["metrics"][0]["name"])
+        n = (date.fromisoformat(r["endDate"]) - date.fromisoformat(r["startDate"])).days + 1
+        assert b["returnPropertyQuota"] and (n == 1 or (n == 31 and key in multi)), (key, n)
     res = out["apps"][kb]
     assert res["final_end"] == FE.isoformat() and res["stopped"] is None
     assert res["alt"][0] == FE.isoformat()              # final_end − 0, then the nearest older days with a truth
@@ -190,3 +193,28 @@ def test_plan_spreads_the_sweep_and_keeps_only_days_with_a_whole_truth():
     bad = [d for d in sweep if days[d]["a"]["st"] == "s"]
     assert len(bad) <= sp.SWEEP_MAX + sp.NEWEST and sweep == sorted(sweep, reverse=True)
     assert FE.isoformat() in sweep and (FE - timedelta(days=119)).isoformat() in sweep
+
+
+def test_the_run_options_pick_kinds_days_and_the_private_path(monkeypatch, tmp_path):
+    data, cfg = _setup(monkeypatch, tmp_path)
+    asked = _fake(monkeypatch)
+    opts, path = sp.options({"only": "ppf,pp31,ppk,nope", "sweep": "0", "back": "0,20", "tag": "r2"})
+    assert opts == {"only": {"ppf", "pp31", "ppk"}, "sweep": False, "back": (0, 20)}
+    assert path == "ga4/screens_probe_r2.json"
+    assert sp.options({"tag": "../x"})[1] == sp.OUT and sp.options({})[0] == {"only": None, "sweep": True,
+                                                                              "back": None}
+    out = sp.run_all(cfg, data, {gu.file_key(BAD)}, now=NOW, workers=1, opts=opts)
+    res = out["apps"][gu.file_key(BAD)]
+    assert res["sweep"] == [] and len(res["alt"]) == 2
+    assert {a["k"] for a in res["ans"]} == {"ppf", "pp31", "ppk"} and len(res["ans"]) == 6
+    for _, b in asked:
+        r = b["dateRanges"][0]
+        dims = [d["name"] for d in b["dimensions"]]
+        if dims == ["date", sp.PP] and b["metrics"][0]["name"] == sp.EC:          # pp31: 31 days ending on the day
+            assert (date.fromisoformat(r["endDate"]) - date.fromisoformat(r["startDate"])).days == 30
+        else:
+            assert r["startDate"] == r["endDate"]
+        if sp.EVN in dims:                                                        # ppk: the click events, in a list
+            ex = b["dimensionFilter"]["andGroup"]["expressions"]
+            assert {"inListFilter": {"values": list(gs.CLICKS)}, "fieldName": "eventName"} in [x["filter"] for x in ex]
+    assert out["opts"] == {"only": ["pp31", "ppf", "ppk"], "sweep": False, "back": (0, 20)}
