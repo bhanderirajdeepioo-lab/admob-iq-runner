@@ -253,6 +253,93 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     out.lm_head = SCREEN.innerHTML.includes('<th>Month</th><th>Ratio</th><th>Days</th>');
     // the history's money: D0 ROAS episodes only
     out.hist = await lm({ PER: '14', TAB: 'hi' });
+    // ── 🕘 History · Levels (a synthetic level history on Alpha's file: sums from the fixture's closed forms) ──
+    const T = FX.T;
+    const FA = FX.FILES['cpi_' + KEY.a + '.json.gz'], sumOf = (f, a, b) => { const s = {}; for (const x of require(path.join(__dirname, 'cpx_fixture.js')).days(a, b)) { const m = FX.M.a(x);
+      const add = (k, v) => { s[k] = (s[k] || 0) + v; };
+      if (f === 'CPI') { add('sp_inr', m.sp); add('sp_usd', Math.round(m.sp * FX.fxd(x) * 100) / 100); add('inst', m.inst); }
+      if (f === 'ECPM') { add('rev', Math.round(m.imp * m.ecpm / 1000 * 100) / 100); add('imp', m.imp); }
+      if (f === 'ROAS_G') { add('d0_inr', Math.round(m.sp * m.d0 * 100) / 100); add('sp_inr', m.sp); } }
+      return s; };
+    const lvr = (o) => Object.assign({ id: 'L-0000000000', from: '2025-12-01', to: null, v: 1, days: null, sums: null, src: 'auto', ep: null, act: null, st: 'earlier', seen: '2026-03-30T05:22:00Z', rs: null, gone: null, rejected: null }, o);
+    const cA = sumOf('CPI', '2026-02-24', '2026-03-09'), cF = sumOf('CPI', '2025-11-01', '2025-11-14'), eF = sumOf('ECPM', '2025-11-01', '2025-11-14'), rP = sumOf('ROAS_G', '2026-03-01', '2026-03-28');
+    const tam = Object.assign({}, cF, { inst: cF.inst * 1.01 });
+    FA.lv = { CPI: [
+        lvr({ id: 'L-00000000a1', src: 'alarm', from: '2026-03-13', v: cA.sp_inr / cA.inst, days: ['2026-02-24', '2026-03-09'], sums: cA, st: 'now', ep: { opened: '2026-03-13', c: FX.C, why: null, opener: 'SUDDEN' } }),
+        lvr({ id: 'L-00000000a2', src: 'accepted', from: '2026-01-10', to: '2026-03-12', v: 21, days: ['2025-12-14', '2026-01-10'], sums: null, st: 'rest', ep: { opened: '2025-11-15', old: 20 } }),
+        lvr({ id: 'L-00000000a3', src: 'first', from: '2025-12-01', to: '2026-01-09', v: cF.sp_inr / cF.inst, days: ['2025-11-01', '2025-11-14'], sums: cF, st: 'earlier' }),
+        lvr({ id: 'L-00000000a4', src: 'auto', from: '2025-11-20', to: '2025-11-30', v: tam.sp_inr / tam.inst, days: ['2025-11-01', '2025-11-14'], sums: tam, st: 'gone', gone: '2026-03-01T00:00:00Z' }),
+        lvr({ id: 'L-00000000a5', src: 'manual', from: '2025-11-10', to: '2025-11-19', v: 19.5, days: null, sums: null, st: 'earlier', act: 'a-0000000000c1' })],
+      ECPM: [lvr({ id: 'L-00000000e1', src: 'first', from: '2025-12-01', v: eF.rev / eF.imp * 1000, days: ['2025-11-01', '2025-11-14'], sums: eF, st: 'now' })],
+      SPEND: [lvr({ id: 'L-00000000s1', src: 'first', from: '2025-12-01', v: 600, days: null, st: 'now' })] };
+    FA.lp = [{ fam: 'ROAS_G', opened: '2026-03-14', day: '2026-03-20', why: 'money', v: rP.d0_inr / rP.sp_inr, days: ['2026-03-01', '2026-03-28'], sums: rP, old: 0.4, gap: { inr: 123456, usd: 1500 } }];
+    FA.la = [{ id: 'a-0000000000c1', at: '2026-03-29T10:12:00Z', act: 'set', fam: 'CPI', from: '2025-11-10', value: 19.5, note: '<img src=x onerror=alert(2)>', st: 'applied' },
+      { id: 'a-0000000000c2', at: '2026-03-29T10:13:00Z', act: 'rollback', fam: 'CPI', from: T, level: 'L-ffffffffff', st: 'bad', why: 'UnknownLevel' }];
+    const POSTS = [], TOASTS = []; let ANS = null;
+    ctx.bToast = m => { TOASTS.push(String(m)); }; ctx.confirm = () => true;
+    ctx.fetch = async (u, o) => { const b = o && o.body ? JSON.parse(o.body) : null; if (o && o.method === 'POST') POSTS.push({ u, b });
+      const a = ANS ? ANS(u, o, b) : { status: 404, j: null }; return { status: a.status, type: 'basic', json: async () => a.j }; };
+    const settle = async () => { for (let i = 0; i < 6; i++) await tick(); };
+    const lvTab = async (o) => { reset(); _.set(Object.assign({ OPEN: ID.a, TAB: 'hi', LVQ: { st: 'ok', admin: true, save: true, acts: [] }, PEND: [] }, o || {})); CPX.paint(); await settle(); CPX.paint(); await settle(); CPX.paint(); return det2(SCREEN.innerHTML); };
+    const clickD = (sel, ds) => SCREEN._on.click[0]({ target: { closest: s => s === sel ? { dataset: ds || {} } : null } });
+    // read-only (no API: GET answers 404) — the history, ✓ / ⚠, no buttons
+    ANS = () => ({ status: 404, j: null });
+    reset(); _.set({ OPEN: ID.a, TAB: 'hi', LVQ: { st: null, admin: false, save: false, acts: [] }, PEND: [] }); CPX.paint(); await settle(); CPX.paint(); await settle(); CPX.paint();
+    const ro = det2(SCREEN.innerHTML);
+    out.lv = { ro: { text: strip(ro), checks: (ro.match(/class="cpx-lvc"/g) || []).length, warn: (ro.match(/Day-wise ka jod is level se nahi milta/g) || []).length, typed: (ro.match(/>typed</g) || []).length,
+      buttons: /data-cpx-lv(act|set|undo)=/.test(ro), q: _.LVQ().st, hostile_raw: ro.includes('<img src=x onerror=alert(2)>'), hostile_esc: ro.includes('&lt;img src=x onerror=alert(2)&gt;'),
+      fams: [...ro.matchAll(/data-cpx-lvf="([^"]+)"/g)].map(m => m[1]), more: ro.includes('data-cpx-lvmore'), classes: [...new Set([...ro.matchAll(/class="([^"]+)"/g)].flatMap(m => m[1].split(/\s+/)))] } };
+    ANS = () => ({ status: 403, j: { error: 'admin_only', msg: 'Sirf admin level badal sakta hai' } });
+    reset(); _.set({ OPEN: ID.a, TAB: 'hi', LVQ: { st: null, admin: false, save: false, acts: [] }, PEND: [] }); CPX.paint(); await settle(); CPX.paint(); await settle(); CPX.paint();
+    out.lv.ro403 = { q: _.LVQ().st, text: strip(det2(SCREEN.innerHTML)).includes('Sirf admin level badal sakta hai'), buttons: /data-cpx-lv(act|set|undo)=/.test(SCREEN.innerHTML) };
+    // the checks against the fixture's hand math (₹ and $)
+    const rowA3 = FA.lv.CPI[2]; CURV = 'INR'; out.lv.v_inr = _.lvV(FA, 'CPI', rowA3); out.lv.chk = _.lvCheck(FA, 'CPI', rowA3).k; CURV = 'USD'; out.lv.v_usd = _.lvV(FA, 'CPI', rowA3);
+    out.lv.chk_tam = _.lvCheck(FA, 'CPI', FA.lv.CPI[3]).k; out.lv.chk_typed = _.lvCheck(FA, 'CPI', FA.lv.CPI[4]).k; out.lv.chk_e = _.lvCheck(FA, 'ECPM', FA.lv.ECPM[0]).k; CURV = 'INR';
+    out.lv.v_ecpm = _.lvV(FA, 'ECPM', FA.lv.ECPM[0]);
+    // admin: the buttons and every POST body
+    const ACTION = (b) => Object.assign({ id: 'a-00000000ab' + String(POSTS.length).padStart(2, '0'), at: '2026-03-30T06:40:00Z', by: 'x@example.test' }, b);
+    ANS = (u, o, b) => o && o.method === 'POST' ? { status: 200, j: { ok: true, action: ACTION(b), actions: [] } } : { status: 200, j: { actions: [], me: 'x', admin: true, server_save: true } };
+    const adm = await lvTab();
+    out.lv.adm = { set: adm.includes('data-cpx-lvset'), rollback: [...adm.matchAll(/data-cpx-lvact="rollback" data-cpx-lvid="([^"]+)"/g)].map(m => m[1]),
+      reject: [...adm.matchAll(/data-cpx-lvact="reject" data-cpx-lvid="([^"]+)"/g)].map(m => m[1]), auto: adm.includes('data-cpx-lvact="auto"'),
+      undo: [...adm.matchAll(/data-cpx-lvundo="([^"]+)"/g)].map(m => m[1]), fams: [...adm.matchAll(/data-cpx-lvf="([^"]+)"/g)].map(m => m[1]) };
+    _.set({ LVF: 'ROAS_G' }); CPX.paint(); out.lv.adm.accept = SCREEN.innerHTML.includes('data-cpx-lvact="accept" data-cpx-lvp="0"'); out.lv.adm.prop = strip(det2(SCREEN.innerHTML)).includes('🆕 New level ready: 33.2%'); _.set({ LVF: 'CPI' }); CPX.paint();
+    clickD('[data-cpx-lvact]', { cpxLvact: 'rollback', cpxLvid: 'L-00000000a3' }); await tick(); await tick();
+    clickD('[data-cpx-lvact]', { cpxLvact: 'reject', cpxLvid: 'L-00000000a2' }); await tick(); await tick();
+    clickD('[data-cpx-lvact]', { cpxLvact: 'auto' }); await tick(); await tick();
+    _.set({ LVF: 'ROAS_G' }); clickD('[data-cpx-lvact]', { cpxLvact: 'accept', cpxLvp: '0' }); await tick(); await tick(); _.set({ LVF: 'CPI' });
+    clickD('[data-cpx-lvundo]', { cpxLvundo: 'a-0000000000c1' }); await tick(); await tick();
+    clickD('[data-cpx-lvset]'); const form = det2(SCREEN.innerHTML); out.lv.form = { open: form.includes('id="cpx-lvx"'), set: _.get().LVSET, text: strip(form) };
+    SCREEN._on.change[0]({ target: { value: '2026-03-10', closest: s => s === '[data-cpx-lva]' ? {} : null } }); out.lv.form.after = _.get().LVSET;
+    out.lv.form.preview = strip(det2(SCREEN.innerHTML)).match(/Level [^·]+= [^✓]+✓/) ? strip(det2(SCREEN.innerHTML)).match(/Level [^·]+= [^✓]+✓/)[0] : null;
+    SCREEN._on.input && SCREEN._on.input[0]({ target: { value: 'naya normal <b>', closest: s => s === '[data-cpx-lvnote]' ? {} : null } });
+    clickD('[data-cpx-lvsave]'); await tick(); await tick();
+    _.set({ LVSET: { fam: 'CPI', mode: 'val', a: addD(T, -27), b: T, val: '31.5', note: '' } }); clickD('[data-cpx-lvsave]'); await tick(); await tick();
+    _.set({ LVF: 'ROAS_G', LVSET: { fam: 'ROAS_G', mode: 'val', a: addD(T, -27), b: T, val: '35', note: '' } }); clickD('[data-cpx-lvsave]'); await tick(); await tick(); _.set({ LVF: 'CPI' });
+    _.set({ LVSET: { fam: 'CPI', mode: 'days', a: addD(T, -3), b: T, val: '', note: '' } }); const nP = POSTS.length; clickD('[data-cpx-lvsave]'); await tick(); out.lv.short_days = POSTS.length - nP;
+    out.lv.posts = POSTS.map(p => ({ u: p.u, b: p.b })); out.lv.toasts = TOASTS.slice();
+    // pending: the saved actions show until the build's la has them
+    _.set({ LVSET: null }); CPX.paint(); const pend = strip(det2(SCREEN.innerHTML)); out.lv.pending = (pend.match(/⏳ Saved/g) || []).length; out.lv.pending_txt = pend.includes('agle update me lagega (1–1½ ghante)');
+    const ids = _.PEND().map(a => a.id), LF = _.FILES['cpi_' + KEY.a + '.json.gz'].raw, la0 = LF.la;
+    LF.la = la0.concat(ids.map(id => ({ id, at: '2026-03-30T06:40:00Z', act: 'set', fam: 'CPI', st: 'applied' })));
+    CPX.paint(); out.lv.pending_after = (strip(det2(SCREEN.innerHTML)).match(/⏳ Saved/g) || []).length; LF.la = la0;
+    // an error answer: the API's Hinglish reason + the HTTP status in the toast
+    TOASTS.length = 0; ANS = (u, o) => o && o.method === 'POST' ? { status: 409, j: { error: 'github_conflict', msg: 'Kisi aur ne abhi save kiya — dobara try karo', gh_status: 409 } } : { status: 200, j: { actions: [], admin: true, server_save: true } };
+    clickD('[data-cpx-lvact]', { cpxLvact: 'auto' }); await tick(); await tick(); out.lv.err_toast = TOASTS.slice();
+    // keep(): the family switch puts the tapped button back (1280 / 375)
+    out.lv.keep = {};
+    for (const w of [1280, 375]) { await lvTab(); ctx.window.innerWidth = w; SCROLL = []; let n = 0;
+      const BTN = { getBoundingClientRect: () => ({ top: n++ === 0 ? 400 : 520 }) }; SCREEN.querySelector = s => s === '[data-cpx-lvf="ECPM"]' ? BTN : null;
+      clickD('[data-cpx-lvf]', { cpxLvf: 'ECPM' }); out.lv.keep[w] = { dy: SCROLL.slice(), f: _.get().LVF }; SCREEN.querySelector = () => null; }
+    ctx.window.innerWidth = 1280;
+    // the chart: a marker + printed label per level change inside the days; the proposal hollow; the tooltip names the level
+    await lvTab({ TAB: 'ch', PER: 'all' }); const chH = SCREEN.innerHTML;
+    out.lv.chart = { marks: (chH.match(/class="cpx-lvm"/g) || []).length, labels: [...chH.matchAll(/class="cpx-lvn"[^>]*>([^<]+)</g)].map(m => m[1]), hollow: (chH.match(/class="cpx-lvo"/g) || []).length };
+    const c1 = _.CHD['cpx-c1']; out.lv.tip = c1 ? strip(_.tipHtml(c1, c1.P.length - 1)) : null;
+    // the row tag (pointer lp) and the proposal line in the details
+    const pA2 = FX.DATA.cpi.apps[ID.a]; FX.DATA.cpi.apps[ID.a] = Object.assign({}, pA2, { lp: 1 }); reset(); _.set({ OPEN: ID.a }); CPX.paint(); await tick(); await tick(); CPX.paint();
+    out.lv.tag = { row: SCREEN.innerHTML.includes('class="cpx-lvt"'), det: strip(det2(SCREEN.innerHTML)).includes('D0 ROAS: new level ready') };
+    FX.DATA.cpi.apps[ID.a] = pA2; delete FA.lv; delete FA.lp; delete FA.la; delete ctx.fetch;
   } catch (e) { errors.push(String(e && e.stack || e)); }
   console.log(JSON.stringify({ errors, out }));
 })();

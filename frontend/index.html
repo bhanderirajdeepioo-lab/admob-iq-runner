@@ -2976,6 +2976,22 @@ h2.cpx-h{font-size:20px;margin:0 0 3px;font-weight:800}.cpx-d{margin:0;color:var
 .cpx-tip{position:absolute;top:4px;z-index:6;min-width:150px;max-width:240px;background:#0b1220;border:1px solid #38507a;border-radius:9px;padding:6px 9px;font-size:12px;color:var(--ink2);box-shadow:0 8px 24px rgba(0,0,0,.5);line-height:1.45;pointer-events:none}.cpx-tip b{color:#fff}
 .cpx-fn{color:var(--faint);font-size:12px;margin:8px 0 0}.cpx-fn b{color:var(--ink2)}
 .cpx-h4{margin:14px 0 6px;font-size:13px;color:var(--ink)}
+.cpx-lvfs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 6px}
+.cpx-lvf{font:inherit;font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:9px;border:1px solid var(--line2);background:var(--panel);color:var(--ink2);cursor:pointer}
+.cpx-lvf[aria-pressed="true"]{border-color:var(--cyan);color:var(--cyan)}
+.cpx-lvmo{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;font-weight:700}
+.cpx-lvmo select{background:var(--panel);color:var(--ink);border:1px solid var(--line2);border-radius:8px;padding:4px 6px;font:inherit;max-width:190px}
+.cpx-lvb{font:inherit;font-size:12px;font-weight:700;padding:4px 9px;border-radius:8px;border:1px solid var(--line2);background:var(--panel);color:var(--ink2);cursor:pointer;white-space:nowrap}
+.cpx-lvb.cpx-lvgo{border-color:var(--cyan);color:var(--cyan)}.cpx-lvb:disabled{opacity:.45;cursor:default}
+.cpx-lvc{color:var(--good);font-weight:800}
+.cpx-lvt{display:inline-block;margin-top:2px;font-size:11.5px;font-weight:800;color:var(--cyan)}
+.cpx-lvp{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 10px}
+.cpx-lvx{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:8px 0}
+.cpx-lvxr{display:flex;gap:8px 12px;flex-wrap:wrap;align-items:center;margin:4px 0;color:var(--muted);font-size:12.5px}
+.cpx-lvxr input{background:var(--panel);color:var(--ink);border:1px solid var(--line2);border-radius:8px;padding:4px 6px;font:inherit;max-width:100%}
+.cpx-lvnl{display:flex;gap:6px;align-items:center;flex:1 1 220px}.cpx-lvnl input{flex:1;min-width:0}
+.cpx-svg .cpx-lvm{fill:var(--ink);stroke:var(--panel2);stroke-width:1.5}.cpx-svg .cpx-lvo{fill:none;stroke:var(--cyan);stroke-width:2}
+.cpx-svg .cpx-lvn{fill:var(--ink2);font-size:11.5px;font-weight:700;paint-order:stroke;stroke:var(--panel2);stroke-width:4px}
 .cpx-x{overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch}
 .cpx-t{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
 .cpx-t th{text-align:left;color:var(--faint);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:6px 8px;border-bottom:1px solid var(--line2);white-space:nowrap}
@@ -8264,7 +8280,7 @@ const FAMW={CPI:'CPI',ECPM:'eCPM',ROAS_G:'D0 ROAS',GAP:'Ads to pay back an insta
   ROAS_C1:'Install-day ROAS D1 (AdMob)',ROAS_C7:'Install-day ROAS D7 (AdMob)',SPEND:'Spend'};
 const UP={CPI:1,GAP:1};                    // up is bad; every other family: down is bad
 const OPW={SUDDEN:'Sudden step',DRIFT:'Slow drift',ABSOLUTE:'Below the usual'};
-const WHYW={recovered:'recovered',stopped:'spend stopped',no_paid:'no paid users',settled:'new level accepted'};
+const WHYW={recovered:'recovered',stopped:'spend stopped',no_paid:'no paid users',settled:'new level accepted',owner:'level set by owner'};
 const TIERW={ALERT:'Alarm',WATCH:'Watch',LINE:'Line'};
 const MINW={CPI:0.25,ECPM:0.15,ROAS_G:0.10};      // a move this big is coloured (the families' smallest alarm step)
 const SCALE={CPI:100,ECPM:10000,ROAS_G:10000};    // cpi.json.gz h: scaled ints
@@ -8467,11 +8483,12 @@ function sinceOf(r){ if(!r.since) return {a:'—',b:''};
 function rowHtml(r,on,one){ const c=stw(r), m=now3(r), lv=lostV(r), ls=lostS(r), sw=sinceOf(r);
   const sn=sw.b?`<span class="cpx-mob">${sw.b}</span>`:'';
   const nm=one?'':`<span class="cpx-nm">${E(r.name)}</span>`;   // one app: its name is in the top bar already (once per page)
+  const lt=+r.a.lp>0?`<span class="cpx-lvt">🆕 New level ready</span>`:'';
   const sc=ls!=null?`<span class="cpx-lsc">since ${fd(r.lost.from)}: ≈${fM(r.lost.sinr,r.lost.susd)}</span>`:'';
   const loss=(lv!=null?`<span class="cpx-lv cpx-bad">≈${fM(r.lost.inr,r.lost.usd)}</span>`:`<span class="cpx-lv">—</span>`)+sc;
   return `<div class="cpx-row${on?' cpx-on':''}" data-cpx-app="${E(r.id)}" role="button" tabindex="0" aria-expanded="${!!on}">`
     +`<div class="cpx-c cpx-cst"><span class="cpx-sw ${c[1]}">${c[0]}</span></div>`
-    +`<div class="cpx-c cpx-app">${one?'':icon(r.id,r.name,26)}<span class="cpx-nmw">${nm}<span class="cpx-spd">spend ${fM(r.s.spi,r.s.sp)}${sn}</span></span></div>`
+    +`<div class="cpx-c cpx-app">${one?'':icon(r.id,r.name,26)}<span class="cpx-nmw">${nm}<span class="cpx-spd">spend ${fM(r.s.spi,r.s.sp)}${sn}</span>${lt}</span></div>`
     +['CPI','ECPM','ROAS_G'].map(f=>`<div class="cpx-c cpx-m">${cell(r,f,m)}</div>`).join('')
     +`<div class="cpx-c cpx-since">${sw.a}</div>`
     +`<div class="cpx-c cpx-loss"><span class="cpx-sw ${c[1]} cpx-mob">${c[0]}</span>${loss}</div>`
@@ -8538,8 +8555,10 @@ function moneyLine(r){ const g=r.lost; if(!g) return '';
   const fm=v=>VIN()?fI(v):fU(v);
   return `💸 <b>≈${fM(g.sinr,g.susd)}</b> zyada kharch hua — ${fd(g.from)} se ab tak ${fm(g.scost)} spend pe utni hi D0 value normal ROAS (${fR(g.B)}) pe sirf ${fm(g.sval/g.B)} me milti.`; }
 function detHtml(r){ const n=TABS.map(([k,l])=>`<button type="button" class="cpx-tab" role="tab" data-cpx-tab="${k}" aria-selected="${TAB===k}">${l}</button>`).join('');
-  const ml=moneyLine(r);
-  return `<div class="cpx-det" id="cpx-det" data-cpx-det="${E(r.id)}"><p class="cpx-vd">${verdict(r)}</p>${ml?`<p class="cpx-vm">${ml}</p>`:''}`
+  const ml=moneyLine(r), F=fOf(r.id), lp=F&&Array.isArray(F.lp)?F.lp:[];
+  const pl=lp.map(p=>{ const v=lvV(F,p.fam,{v:p.v,sums:p.sums,from:p.days&&p.days[1]}), g=p.gap&&ok(+p.gap.inr)?` · gap vs old level ≈${fM(+p.gap.inr,+p.gap.usd)} since ${E(fd(p.day))}`:'';
+    return `<p class="cpx-vm">🆕 ${E(FAMW[p.fam]||p.fam)}: new level ready <b>${E(lvFmt(p.fam,v))}</b> (${E(PROPW[p.why]||p.why||'')})${g} — <button type="button" class="cpx-lnk" data-cpx-tab="hi">History → Levels</button></p>`; }).join('');
+  return `<div class="cpx-det" id="cpx-det" data-cpx-det="${E(r.id)}"><p class="cpx-vd">${verdict(r)}</p>${ml?`<p class="cpx-vm">${ml}</p>`:''}${pl}`
     +`<div class="cpx-tabs" role="tablist" aria-label="Details">${n}</div><div class="cpx-tb" id="cpx-tb">${tabBody(r)}</div></div>`; }
 function tabBody(r){ const a=apPtr(r.id);
   if(!a) return '<p class="cpx-note cpx-wait">Is build me is app ki detail file nahi bani.</p>';
@@ -8564,8 +8583,14 @@ function chartsHtml(r,F){ const t=ptr().t, end=r.hi<t?r.hi:t, e2=end<fEnd(F)?end
   const s0=addD(F.day0,13), from=lo<s0?s0:lo; if(from>e2) return '<p class="cpx-note">Is period me chart ke liye din kam hain.</p>';
   const L=eps(F.ep);
   const cpi=series(F,from,e2,'CPI'), ec=series(F,from,e2,'ECPM'), ro=series(F,from,e2,'ROAS_G');
-  return `<div class="cpx-chs">${chart('cpx-c1',VIN()?'CPI ₹ (cost ÷ installs)':'CPI $ (cost ÷ installs)',cpi,'CPI',L,'cpx-l1')}${chart('cpx-c2','eCPM $ (AdMob)',ec,'ECPM',L,'cpx-l2')}${chart('cpx-c3','D0 ROAS (Google D0 ÷ cost)',ro,'ROAS_G',L,'cpx-l3')}</div>`
-    +'<p class="cpx-fn">Har point = us din tak ke pichhle 14 din ka jod (jaise 18 Aug = 5–18 Aug): ek din ka number bahut upar-neeche hota hai, 14 din jodne se asli trend dikhta hai · aakhri point = upar wali line · dashed = normal · laal patti = alarm ke din, peeli = watch.</p>'; }
+  return `<div class="cpx-chs">${chart('cpx-c1',VIN()?'CPI ₹ (cost ÷ installs)':'CPI $ (cost ÷ installs)',cpi,'CPI',L,'cpx-l1',F)}${chart('cpx-c2','eCPM $ (AdMob)',ec,'ECPM',L,'cpx-l2',F)}${chart('cpx-c3','D0 ROAS (Google D0 ÷ cost)',ro,'ROAS_G',L,'cpx-l3',F)}</div>`
+    +'<p class="cpx-fn">Har point = us din tak ke pichhle 14 din ka jod (jaise 18 Aug = 5–18 Aug): ek din ka number bahut upar-neeche hota hai, 14 din jodne se asli trend dikhta hai · aakhri point = upar wali line · dashed = normal · laal patti = alarm ke din, peeli = watch · ◆ = naya level (History → Levels me kab, kis din se, kyun).</p>'; }
+// the level changes inside the chart's days (resting levels in force; gone / rejected / alarm baselines left out), newest 4
+function lvMarks(F,f,P){ const L=F&&F.lv&&Array.isArray(F.lv[f])?F.lv[f]:[], a=P[0].x, b=P[P.length-1].x;
+  return L.filter(x=>x&&x.src!=='alarm'&&x.st!=='gone'&&x.st!=='rejected'&&okD(x.from)&&x.from>=a&&x.from<=b).sort((x,y)=>x.from<y.from?1:-1).slice(0,4); }
+function lvAt(F,f,day){ const L=F&&F.lv&&Array.isArray(F.lv[f])?F.lv[f]:[]; let o=null;
+  for(const x of L){ if(!x||x.st==='gone'||x.st==='rejected'||!okD(x.from)||x.from>day) continue; if(x.src==='alarm'&&x.to&&x.to<day) continue; if(!o||x.from>o.from||(x.from===o.from&&x.src==='alarm')) o=x; }
+  return o; }
 // one family's 14-day points: v (CPI in the view's currency; the $ normal at the window's own rate), n (normal), raw sums
 function series(F,from,to,f){ const i0=fIx(F,from), i1=fIx(F,to), d=F.d, out=[];
   for(let i=i0;i<=i1;i++){ const x=addD(F.day0,i); let v=null, n=null;
@@ -8576,7 +8601,7 @@ function series(F,from,to,f){ const i0=fIx(F,from), i1=fIx(F,to), d=F.d, out=[];
     else if(ok(nr)&&f!=='CPI') n=+nr;
     out.push({x,v,n}); }
   return out; }
-function chart(id,title,P,f,L,cls){ const pts=P.map((p,i)=>[i,p.v]).filter(q=>q[1]!=null), N=P.length;
+function chart(id,title,P,f,L,cls,F){ const pts=P.map((p,i)=>[i,p.v]).filter(q=>q[1]!=null), N=P.length;
   if(pts.length<2) return `<div class="cpx-chw"><div class="cpx-note cpx-chn"><b>${E(title)}</b><br>Is period me kaafi din nahi (14 din ka jod nahi bana).</div></div>`;
   const W=360, H=176, Lm=10, Rm=12, Tp=32, Bm=22, ns=P.map(p=>p.n).filter(ok), vals=pts.map(q=>q[1]).concat(ns);
   let lo=Math.min(...vals), hi=Math.max(...vals); const pad=(hi-lo)*0.12||hi*0.1||1; lo=Math.max(0,lo-pad); hi=hi+pad;
@@ -8604,11 +8629,20 @@ function chart(id,title,P,f,L,cls){ const pts=P.map((p,i)=>[i,p.v]).filter(q=>q[
     o.push(`<text x="${X(i).toFixed(1)}" y="${y.toFixed(1)}" class="${c}" text-anchor="${anchor}">${E(txt)}</text>`); });
   const nl=[...P].reverse().find(p=>p.n!=null);
   if(nl){ const txt='normal '+fmtF(f,nl.n), xm=Lm+(W-Lm-Rm)*0.42, y=put(xm,Y(nl.n)-5,txt,'middle'); o.push(`<text x="${xm.toFixed(1)}" y="${y.toFixed(1)}" class="cpx-nt" text-anchor="middle">${E(txt)}</text>`); }
+  // each level change: a marker on the normal line + its value and how it formed; an open proposal: a hollow one at the end
+  lvMarks(F,f,P).forEach(x=>{ const i=P.findIndex(p=>p.x>=x.from), v=lvV(F,f,x); if(i<0||!ok(v)||v<lo||v>hi) return;
+    o.push(`<path d="M${X(i).toFixed(1)} ${(Y(v)-5).toFixed(1)}l5 5l-5 5l-5 -5z" class="cpx-lvm"/>`);
+    const txt=fmtF(f,v)+' · '+(HOWS[x.src]||x.src), an=i<N*0.2?'start':i>N*0.8?'end':'middle', y=put(X(i),Y(v)+(Y(v)>Tp+22?-9:19),txt,an);
+    o.push(`<text x="${X(i).toFixed(1)}" y="${y.toFixed(1)}" class="cpx-lvn" text-anchor="${an}">${E(txt)}</text>`); });
+  ((F&&Array.isArray(F.lp)?F.lp:[]).filter(p=>p&&p.fam===f)).slice(0,1).forEach(p=>{ const v=lvV(F,f,{v:p.v,sums:p.sums,from:p.days&&p.days[1]}); if(!ok(v)||v<lo||v>hi) return;
+    o.push(`<circle cx="${X(N-1).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="4.5" class="cpx-lvo"/>`);
+    const txt='new? '+fmtF(f,v), y=put(X(N-1),Y(v)+(Y(v)>Tp+22?-9:19),txt,'end'); o.push(`<text x="${X(N-1).toFixed(1)}" y="${y.toFixed(1)}" class="cpx-lvn" text-anchor="end">${E(txt)}</text>`); });
   o.push(`<line class="cpx-rule" x1="0" x2="0" y1="${Tp-6}" y2="${H-Bm}" visibility="hidden"/><text x="6" y="16" class="cpx-tt">${E(title)}</text></svg>`);
-  CHD[id]={P,f,W,Lm,Rm,N};
+  CHD[id]={P,f,W,Lm,Rm,N,F};
   return `<div class="cpx-chw">${o.join('')}<div class="cpx-tip" hidden></div></div>`; }
-function tipHtml(c,i){ const p=c.P[i]; if(!p) return '';
-  return `<b>${E(fd(addD(p.x,-13)))} – ${E(fdy(p.x))}</b> <span class="cpx-nv">(14 din ka jod)</span><br><b>${E(fmtF(c.f,p.v))}</b>${p.n!=null?` · normal ${E(fmtF(c.f,p.n))}`:''}${p.v!=null&&p.n?` (${fP(p.v/p.n-1)})`:''}`; }
+function tipHtml(c,i){ const p=c.P[i]; if(!p) return ''; const x=c.F?lvAt(c.F,c.f,p.x):null;
+  return `<b>${E(fd(addD(p.x,-13)))} – ${E(fdy(p.x))}</b> <span class="cpx-nv">(14 din ka jod)</span><br><b>${E(fmtF(c.f,p.v))}</b>${p.n!=null?` · normal ${E(fmtF(c.f,p.n))}`:''}${p.v!=null&&p.n?` (${fP(p.v/p.n-1)})`:''}`
+    +(x?`<br><span class="cpx-nv">Level: ${E(HOWW[x.src]||x.src)} · ${E(fd(x.from))} se${x.days?' · measured '+E(fd(x.days[0]))+' – '+E(fd(x.days[1])):''}</span>`:''); }
 // ---- 📅 Day-wise: newest first (Today / Yesterday on top from DATA, marked ⏳), 30 rows + Show 30 more ----
 function dayRows(r,F){ const d=DD(), t=ptr().t, c=cal(), L=eps(F.ep), e=d&&d.roas&&d.roas.by_app&&d.roas.by_app[r.name], out=[];
   // the days after t (not final): from DATA, as the list's own sums
@@ -8723,16 +8757,137 @@ function lossHtml(r,F){ const [lo,hi]=span(r), L=eps(F.ep), G=L.filter(e=>e.fam=
   o.push(`<h4 class="cpx-h4">Google D0 ÷ AdMob D0 (month-wise, measured)</h4>`+(ms.length?`<div class="cpx-x"><table class="cpx-t"><thead><tr><th>Month</th><th>Ratio</th><th>Days</th><th>Google D0 ($)</th><th>AdMob D0 ($)</th></tr></thead><tbody>${ms.map(m=>`<tr><td>${E(monName(m))}</td><td><b>${M[m].a>0?(M[m].g/M[m].a).toFixed(2)+'×':'—'}</b></td><td>${M[m].n}</td><td>${fU(M[m].g)}</td><td>${fU(M[m].a)}</td></tr>`).join('')}</tbody></table></div>`
     +'<p class="cpx-fn">1.00× = Google ka D0 aur AdMob ka install-day D0 barabar. Ratio badla to Google ki tROAS bidding galat value pe chal rahi hai.</p>':'<p class="cpx-fn">Dono ka data ek saath kisi din nahi.</p>'));
   return o.join(''); }
+// ---- 🕘 History · Levels: every level the alarm compared against, each the exact value of named days (the page adds the
+// same days of "d" up again: ✓), how it formed, the owner's actions (admins: POST /api/levels/act → the next update) ----
+const LVK={CPI:['sp_inr','sp_usd','inst'],ECPM:['rev','imp'],GAP:['sp_usd','inst','imp','rev'],IPU:['imp','dau'],ROAS_G:['d0_inr','sp_inr'],
+  ROAS_C0:['c_r0','c_sp'],ROAS_C1:['c_r1','c_sp'],ROAS_C7:['c_r7','c_sp'],SPEND:['sp_usd']};
+const LVINT=new Set(['imp','dau']);                                  // whole numbers in "d" (the rest: 2 decimals)
+const LVMAIN=['CPI','ECPM','ROAS_G'], LVREST=['GAP','IPU','ROAS_C0','ROAS_C1','ROAS_C7','SPEND'];
+const HOWW={first:'Auto · first level',auto:'Auto',accepted:'Accepted after 56 days',alarm:'Alarm baseline',manual:'Set by owner',rollback:'Rolled back',accepted_owner:'Accepted by owner'};
+const HOWS={first:'first',auto:'auto',accepted:'accepted',manual:'set',rollback:'rollback',accepted_owner:'accepted'};
+const STW={now:['In force','cpx-good'],rest:['Resting level','cpx-fnt'],earlier:['Earlier','cpx-fnt'],rejected:['Rejected','cpx-wat'],gone:['Gone','cpx-fnt']};
+const PROPW={money:'12 hafte steady',open:'120+ din se khula',held:'8 hafte steady (aapke set / reject ki wajah se auto nahi laga)'};
+const LAW={applied:'Applied',waiting:'Waiting for its data day',undone:'Undone',bad:'Not applied'};
+const ACTW={set:'Set level',rollback:'Use earlier level',reject:'Reject auto acceptance',accept:'Accept new level',auto:'Back to auto',undo:'Undo'};
+const UNITW={CPI:'₹ per install',ECPM:'$ per 1000 impressions',GAP:'ads',IPU:'ads per user',ROAS_G:'% (jaise 40)',ROAS_C0:'% (jaise 40)',ROAS_C1:'% (jaise 40)',ROAS_C7:'% (jaise 40)',SPEND:'$ per day'};
+let LVF='CPI', LVSET=null, LVQ={st:null,admin:false,save:false,acts:[]}, PEND=[];
+// a level from the sums of its days (the build's level_of; CPI in ₹ as billed)
+function lvOf(f,s,n){ const g=k=>+s[k];
+  const v=f==='CPI'?g('sp_inr')/g('inst'):f==='ECPM'?g('rev')/g('imp')*1000:f==='GAP'?(g('sp_usd')/g('inst'))*(g('imp')/g('rev')):f==='IPU'?g('imp')/g('dau')
+    :f==='ROAS_G'?g('d0_inr')/g('sp_inr'):/^ROAS_C/.test(f)?g(LVK[f][0])/g('c_sp'):f==='SPEND'?g('sp_usd')/n:null;
+  return ok(v)?v:null; }
+// ✓: the shipped sums give the level, and the page's own sum of "d" over the named days is those sums (to the rounding of d)
+function lvCheck(F,f,r){ if(!r.days||!okD(r.days[0])||!okD(r.days[1])) return {k:'typed'};
+  const n=nD(r.days[0],r.days[1]); if(!r.sums||r.days[0]<F.day0) return {k:'na',n};
+  const w=fsum(F.d,F.day0,LVK[f],r.days[0],r.days[1]); if(w.n!==n) return {k:'na',n};
+  const v=lvOf(f,r.sums,n); if(!ok(v)||Math.abs(v/r.v-1)>1e-6) return {k:'bad',n,w};
+  for(const k of LVK[f]){ const tol=n*(LVINT.has(k)?0.5:0.005)+1e-6; if(!ok(+r.sums[k])||Math.abs(w[k]-r.sums[k])>tol) return {k:'bad',n,w}; }
+  return {k:'ok',n,w}; }
+// the view's value of a level: CPI ₹ (as billed) or $ (Σ$ cost ÷ Σ installs of the same days; a typed one at its day's rate)
+function lvK(F,day){ const w=fsum(F.d,F.day0,['sp_inr','sp_usd'],addD(day,-13),day); return w.sp_inr>0?w.sp_usd/w.sp_inr:null; }
+function lvV(F,f,r){ const v=+r.v; if(!ok(v)) return null; if(f!=='CPI'||VIN()) return v;
+  if(r.sums&&+r.sums.inst>0&&ok(+r.sums.sp_usd)) return +r.sums.sp_usd/+r.sums.inst; const k=lvK(F,r.from); return k?v*k:null; }
+const lvFmt=(f,v)=>f==='CPI'?fCpi(v):f==='ECPM'?fE(v):/^ROAS/.test(f)?fR(v):f==='SPEND'?fU(v)+'/day':fX(v);
+function lvMeas(f,r){ const s=r.sums; if(!r.days) return 'Typed by owner (no named days)';
+  const dd=`${fd(r.days[0])} – ${fdy(r.days[1])}`; if(!s) return dd; const n=nD(r.days[0],r.days[1]);
+  const q=f==='CPI'?`${fM(+s.sp_inr,+s.sp_usd)} ÷ ${fN(+s.inst)} installs`:f==='ECPM'?`${fU(+s.rev)} ÷ ${fN(+s.imp)} impressions × 1000`
+    :f==='GAP'?`(${fU(+s.sp_usd)} ÷ ${fN(+s.inst)} installs) × (${fN(+s.imp)} ÷ ${fU(+s.rev)})`:f==='IPU'?`${fN(+s.imp)} impressions ÷ ${fN(+s.dau)} users`
+    :f==='ROAS_G'?`${fI(+s.d0_inr)} D0 value ÷ ${fI(+s.sp_inr)} cost`:/^ROAS_C/.test(f)?`${fU(+s[LVK[f][0]])} revenue ÷ ${fU(+s.c_sp)} cost`:`${fU(+s.sp_usd)} ÷ ${n} days`;
+  return `${dd} (${n} din) · ${q}`; }
+// the owner side: GET /api/levels (admins; anyone else 403 → read-only, no API → read-only) and POST /api/levels/act
+async function lvFetch(method,path,body){ try{ const r=await fetch('/api/levels'+path,{method,credentials:'same-origin',redirect:'manual',cache:'no-store',
+      headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
+    if(r.type==='opaqueredirect') return {status:401,data:null}; let j=null; try{ j=await r.json(); }catch(e){ j=null; } return {status:r.status,data:j}; }
+  catch(e){ return {status:0,data:null}; } }
+function lvLoad(){ if(LVQ.st) return; LVQ.st='busy';
+  lvFetch('GET','',null).then(r=>{ const j=r.data;
+    LVQ=r.status===200&&j&&Array.isArray(j.actions)?{st:'ok',admin:j.admin===true,save:j.server_save===true,acts:j.actions.filter(a=>a&&typeof a==='object')}:{st:r.status===403?'ro':'no',admin:false,save:false,acts:[]};
+    if(OPEN&&TAB==='hi') arrive(OPEN); }); }
+const toast=m=>{ try{ if(typeof bToast==='function') bToast(m); }catch(e){} };
+const canAct=()=>LVQ.st==='ok'&&LVQ.admin&&LVQ.save;
+async function lvSend(body,sel){ toast('⏳ Saving…'); const r=await lvFetch('POST','/act',body);
+  if(r.status===200&&r.data&&r.data.ok===true&&r.data.action){ PEND.push(r.data.action); if(Array.isArray(r.data.actions)) LVQ.acts=r.data.actions; LVSET=null;
+    toast('✅ Saved — agle update me lagega (1–1½ ghante)'); }
+  else{ let m=''; try{ m=typeof cfgApiErrMsg==='function'?cfgApiErrMsg(r.status||0,r.data):''; }catch(e){ m=''; }
+    toast(m||'❌ Save fail — '+((r.data&&typeof r.data.msg==='string'&&r.data.msg)||'network')+' (HTTP '+(r.status||0)+')'); }
+  if(onScreen()) keep(sel||'#cpx-lvs',()=>paint()); return r.status===200; }
+// this app's actions as the page shows them: the build's list (la: what it did) + saved ones it has not read yet (pending)
+function lvActs(r,F){ const la=Array.isArray(F.la)?F.la:[], seen=new Set(la.map(a=>a&&a.id)), mine=[], all=[...LVQ.acts,...PEND,...la];
+  [...LVQ.acts,...PEND].forEach(a=>{ if(!a||seen.has(a.id)) return; const ref=a.act==='undo'?all.find(z=>z&&z.id===a.ref):null;
+    const app=a.app||(ref&&(ref.app||(la.includes(ref)?r.id:null)));                  // (the build's list is this app's own)
+    if(app!==r.id||mine.some(z=>z.id===a.id)) return; mine.push(Object.assign({},a,{st:'pending'})); });
+  return mine.sort((x,y)=>(x.at<y.at?1:-1)).concat(la); }
+function lvSetHtml(F,f){ const t=ptr().t, s=LVSET, n=nD(s.a,s.b), okN=n>=7&&n<=120&&s.a<=s.b;
+  let pv='';
+  if(s.mode==='val'){ pv=`Typed value · ${E(UNITW[f])} · named din nahi, isliye ✓ check nahi hoga`; }
+  else if(!okN) pv='<span class="cpx-wat">7 se 120 din chuno</span>';
+  else{ const w=fsum(F.d,F.day0,LVK[f],s.a,s.b), v=w.n===n?lvOf(f,w,n):null, row={v,sums:w,from:s.b,days:[s.a,s.b]};
+    pv=ok(v)?`Level <b>${E(lvFmt(f,lvV(F,f,row)))}</b> = ${E(lvMeas(f,row))} <span class="cpx-good">✓</span>`:'<span class="cpx-wat">In dino ka data poora nahi — doosre din chuno</span>'; }
+  return `<div class="cpx-lvx" id="cpx-lvx"><div class="cpx-lvxr"><label><input type="radio" name="cpx-lvm" data-cpx-lvmode="days"${s.mode!=='val'?' checked':''}> Days se</label><label><input type="radio" name="cpx-lvm" data-cpx-lvmode="val"${s.mode==='val'?' checked':''}> Type a value</label></div>`
+    +(s.mode==='val'?`<div class="cpx-lvxr"><label>Value <input type="number" step="any" min="0" data-cpx-lvval="1" value="${E(s.val||'')}" aria-label="Value"></label><span class="cpx-nv">${E(UNITW[f])}</span></div>`
+      :`<div class="cpx-lvxr"><label>From <input type="date" data-cpx-lva="1" value="${s.a}" min="${F.day0}" max="${t}" aria-label="From"></label><label>To <input type="date" data-cpx-lvb2="1" value="${s.b}" min="${F.day0}" max="${t}" aria-label="To"></label></div>`)
+    +`<div class="cpx-lvxr"><label class="cpx-lvnl">Note <input type="text" maxlength="200" data-cpx-lvnote="1" value="${E(s.note||'')}" aria-label="Note"></label></div>`
+    +`<p class="cpx-fn">${pv}</p><p class="cpx-fn">Ye level ${E(fdy(t))} (data day) se lagega — purane alarms waise hi rahenge.</p>`
+    +`<div class="cpx-lvxr"><button type="button" class="cpx-lvb cpx-lvgo" data-cpx-lvsave="1"${s.mode!=='val'&&!okN?' disabled':''}>💾 Save</button><button type="button" class="cpx-lvb" data-cpx-lvcancel="1">Cancel</button></div></div>`; }
+function levelsHtml(r,F){ const LV=F.lv&&typeof F.lv==='object'?F.lv:null;
+  if(!LV) return '<h4 class="cpx-h4">Levels</h4><p class="cpx-note">Is build me level history nahi bani — agle update me aayegi.</p>';
+  lvLoad();
+  const LP=Array.isArray(F.lp)?F.lp:[], fams=LVMAIN.concat(LVREST).filter(f=>(Array.isArray(LV[f])&&LV[f].length)||LP.some(p=>p&&p.fam===f));
+  if(!fams.length) return '<h4 class="cpx-h4">Levels</h4><p class="cpx-note">Is app ka abhi tak koi level nahi bana (kaafi din ka data chahiye).</p>';
+  const f=fams.includes(LVF)?LVF:fams[0], rows=Array.isArray(LV[f])?LV[f]:[], act=canAct();
+  const btn=(k,l)=>`<button type="button" class="cpx-lvf" data-cpx-lvf="${k}" aria-pressed="${f===k}">${E(l)}</button>`;
+  const sw=fams.filter(k=>LVMAIN.includes(k)).map(k=>btn(k,FAMW[k]||k)).join('')
+    +(fams.some(k=>LVREST.includes(k))?`<label class="cpx-lvmo"><span>More</span><select data-cpx-lvmore="1" aria-label="More families"><option value="">—</option>${fams.filter(k=>LVREST.includes(k)).map(k=>`<option value="${k}"${f===k?' selected':''}>${E(FAMW[k]||k)}</option>`).join('')}</select></label>`:'');
+  const pins=rows.some(x=>(x.src==='manual'||x.src==='rollback'||x.src==='accepted_owner')&&(x.st==='now'||x.st==='rest'));
+  const lp=LP.filter(p=>p&&p.fam===f);
+  const prop=lp.map((p,i)=>{ const g=p.gap&&ok(+p.gap.inr)?` · gap vs old level ≈${fM(+p.gap.inr,+p.gap.usd)} since ${E(fd(p.day))}`:'';
+    const pv=lvV(F,f,{v:p.v,sums:p.sums,from:p.days&&p.days[1]});
+    return `<p class="cpx-vm cpx-lvp">🆕 New level ready: <b>${E(lvFmt(f,pv))}</b> (${E(PROPW[p.why]||p.why||'')}) · ${E(lvMeas(f,{v:p.v,sums:p.sums,days:p.days}))} · old ${E(lvFmt(f,lvV(F,f,{v:p.old,from:p.opened})))}${g}`
+      +(act?` <button type="button" class="cpx-lvb cpx-lvgo" data-cpx-lvact="accept" data-cpx-lvp="${i}">✅ Accept</button>`:'')+'</p>'; }).join('');
+  const body=rows.map(x=>{ const c=lvCheck(F,f,x), s=STW[x.st]||STW.earlier, how=HOWW[x.src]||x.src;
+    const ex=x.src==='accepted'&&x.ep&&ok(+x.ep.old)?` <small>old ${E(lvFmt(f,lvV(F,f,{v:x.ep.old,from:x.ep.opened})))} · alarm ${E(fd(x.ep.opened))}</small>`:x.src==='alarm'&&x.ep?` <small>${E(OPW[x.ep.opener]||'')} · ${x.ep.why?E(WHYW[x.ep.why]||x.ep.why):'open'}</small>`:'';
+    const rs=x.rs&&ok(+x.rs.v_old)?`<small>value corrected after Google / AdMob restated data (was ${E(lvFmt(f,lvV(F,f,{v:x.rs.v_old,sums:null,from:x.from})))})</small>`:'';
+    const ck=c.k==='ok'?`<span class="cpx-lvc" title="Day-wise ke in ${c.n} din ka jod = ye level">✓</span>`:c.k==='bad'?'<span class="cpx-wat" title="Day-wise ka jod is level se nahi milta">⚠</span>':c.k==='typed'?'<span class="cpx-nv">typed</span>':'<span class="cpx-nv">—</span>';
+    const b=[]; if(act){ if(x.st!=='now'&&x.st!=='rest') b.push(`<button type="button" class="cpx-lvb" data-cpx-lvact="rollback" data-cpx-lvid="${E(x.id)}">↩ Use this level</button>`);
+      if(x.src==='accepted'&&x.st!=='rejected') b.push(`<button type="button" class="cpx-lvb" data-cpx-lvact="reject" data-cpx-lvid="${E(x.id)}">✖ Reject</button>`); }
+    return `<tr data-cpx-lvrow="${E(x.id)}"${x.st==='gone'||x.st==='rejected'?' class="cpx-rest"':''}><td><b>${E(lvFmt(f,lvV(F,f,x)))}</b></td><td>${E(fdy(x.from))}</td><td>${x.to?E(fdy(x.to)):x.st==='now'||x.st==='rest'?'now':'—'}</td>`
+      +`<td>${E(lvMeas(f,x))}${rs}</td><td>${E(how)}${ex}</td><td><span class="${s[1]}">${s[0]}</span></td><td>${ck}</td>${act?`<td>${b.join(' ')}</td>`:''}</tr>`; }).join('');
+  const A=lvActs(r,F), ref=id=>A.find(a=>a.id===id)||{};
+  const al=A.length?`<h4 class="cpx-h4">Owner actions</h4><div class="cpx-x" id="cpx-lvax"><table class="cpx-t"><thead><tr><th>Saved</th><th>Action</th><th>Family</th><th>Status</th>${act?'<th></th>':''}</tr></thead><tbody>${A.map(a=>{ const u=a.act==='undo'?ref(a.ref):a;
+      const st=a.st==='pending'?`<span class="cpx-wat">⏳ Saved ${E(istAt(a.at))} — agle update me lagega (1–1½ ghante)</span>`:`<span class="${a.st==='bad'?'cpx-wat':a.st==='applied'?'cpx-good':'cpx-nv'}">${E(LAW[a.st]||a.st||'—')}${a.why?' · '+E(a.why):''}</span>`;
+      const dn=a.act!=='undo'&&a.st!=='undone'&&!A.some(z=>z.act==='undo'&&z.ref===a.id);
+      return `<tr><td>${E(istAt(a.at))}</td><td>${E(ACTW[a.act]||a.act)}${a.act==='undo'&&u.act?' · '+E(ACTW[u.act]||u.act):''}${a.note?`<small>${E(a.note)}</small>`:''}</td><td>${E(FAMW[u.fam]||u.fam||'—')}</td><td>${st}</td>${act?`<td>${dn?`<button type="button" class="cpx-lvb" data-cpx-lvundo="${E(a.id)}">Undo</button>`:''}</td>`:''}</tr>`; }).join('')}</tbody></table></div>`:'';
+  const tools=act?`<div class="cpx-lvxr">${LVSET&&LVSET.fam===f?'':`<button type="button" class="cpx-lvb" data-cpx-lvset="1">✏️ Set level</button>`}${pins?`<button type="button" class="cpx-lvb" data-cpx-lvact="auto">🔄 Back to auto</button>`:''}</div>`
+    :LVQ.st==='busy'?'':`<p class="cpx-fn">${LVQ.st==='ro'?'Sirf admin level badal sakta hai — aapke liye history read-only hai.':'History read-only (level badalne ka server abhi nahi mila).'}</p>`;
+  return `<div class="cpx-lvs" id="cpx-lvs"><h4 class="cpx-h4">Levels</h4><div class="cpx-lvfs" role="group" aria-label="Family">${sw}</div>`
+    +`<p class="cpx-fn">Level = in dino ka exact average. Day-wise tab me same din jod ke dekh sakte ho (✓ = page ne khud jod ke mila liya).</p>${prop}${tools}`
+    +(LVSET&&LVSET.fam===f&&act?lvSetHtml(F,f):'')
+    +`<div class="cpx-x" id="cpx-lvtx"><table class="cpx-t"><thead><tr><th>Level</th><th>From</th><th>To</th><th>Measured on</th><th>How</th><th>Status</th><th>Check</th>${act?'<th></th>':''}</tr></thead><tbody>${body}</tbody></table></div>${al}</div>`; }
+// the owner's click → one action (from = the data day shown: D3; a reject applies from the start of its alarm)
+function lvAct(kind,id,pi){ const F=fOf(OPEN); if(!F||!canAct()) return; const f=LVF, t=ptr().t, rows=(F.lv&&F.lv[f])||[], x=rows.find(z=>z.id===id);
+  const cf=m=>{ try{ return typeof confirm!=='function'||confirm(m); }catch(e){ return true; } };
+  if(kind==='rollback'&&x){ if(!cf(`${FAMW[f]||f}: level ${lvFmt(f,lvV(F,f,x))} (${fd(x.from)} wala) ${fdy(t)} se lagaye?`)) return; lvSend({act:'rollback',app:OPEN,fam:f,from:t,level:x.id}); return; }
+  if(kind==='reject'&&x){ if(!cf(`${FAMW[f]||f}: ${fd(x.from)} ka auto accept reject karein? Alarm apne shuru se khula rahega.`)) return; lvSend({act:'reject',app:OPEN,fam:f,level:x.id}); return; }
+  if(kind==='auto'){ if(!cf(`${FAMW[f]||f}: ${fdy(t)} se automatic level pe wapas?`)) return; lvSend({act:'auto',app:OPEN,fam:f,from:t}); return; }
+  if(kind==='accept'){ const p=(Array.isArray(F.lp)?F.lp:[]).filter(z=>z&&z.fam===f)[pi]; if(!p||!Array.isArray(p.days)) return;
+    if(!cf(`${FAMW[f]||f}: naya level ${lvFmt(f,lvV(F,f,{v:p.v,sums:p.sums,from:p.days[1]}))} ${fdy(t)} se accept karein?`)) return;
+    lvSend({act:'accept',app:OPEN,fam:f,from:t,proposal:{day:p.day,days:[p.days[0],p.days[1]]}}); } }
+function lvSave(){ const F=fOf(OPEN), s=LVSET; if(!F||!s||!canAct()) return; const t=ptr().t, f=s.fam;
+  const q=sel=>{ try{ const b=EL&&EL.querySelector?EL.querySelector(sel):null; return b?String(b.value||''):null; }catch(e){ return null; } };
+  const qn=q('[data-cpx-lvnote]'), qv=q('[data-cpx-lvval]'), note=String(qn!=null?qn:s.note||'').trim().slice(0,200), body={act:'set',app:OPEN,fam:f,from:t};
+  if(s.mode==='val'){ let v=parseFloat(qv!=null?qv:s.val); if(/^ROAS/.test(f)) v=v/100; if(!ok(v)||v<=0){ toast('❌ Value 0 se badi number chahiye'); return; } body.value=v; }
+  else{ const n=nD(s.a,s.b); if(!(n>=7&&n<=120)) return; body.days=[s.a,s.b]; }
+  if(note) body.note=note; lvSend(body,'#cpx-lvs'); }
 // ---- 🕘 History: every app episode, newest first ----
-function histHtml(r,F){ const L=eps(F.ep).sort((a,b)=>(a.opened<b.opened?1:a.opened>b.opened?-1:0));
-  if(!L.length) return '<p class="cpx-note">Is app pe abhi tak koi alarm nahi khula.</p>';
+function histHtml(r,F){ const L=eps(F.ep).sort((a,b)=>(a.opened<b.opened?1:a.opened>b.opened?-1:0)), lv=levelsHtml(r,F);
+  if(!L.length) return lv+'<h4 class="cpx-h4">Alarms</h4><p class="cpx-note">Is app pe abhi tak koi alarm nahi khula.</p>';
   const k=e=>{ const w=fsum(F.d,F.day0,['sp_inr','sp_usd'],addD(e.c,-14),addD(e.c,-1)); return VIN()?1:w.sp_inr>0?w.sp_usd/w.sp_inr:null; };
   const base=e=>{ const b=baseOf(e,null).v; if(!ok(b)) return '—'; if(e.fam==='CPI'){ const q=k(e); return q?fCpi(b*q):'—'; } if(e.fam==='ECPM') return fE(b); if(/^ROAS/.test(e.fam)) return fR(b); return fX(b); };
   const mon=e=>e.money&&e.fam==='ROAS_G'&&ok(+e.money.since_c_inr)?'≈'+fM(+e.money.since_c_inr,+e.money.since_c_usd):'—';
   const body=L.map(e=>`<tr><td>${E(FAMW[e.fam]||e.fam)} ${UP[e.fam]?'up':'down'}</td><td>${E(OPW[e.opener]||e.opener||'—')}</td>`
     +`<td>${e.closed?`Closed · ${E(WHYW[e.why]||e.why||'—')}`:`<b class="${e.tier==='ALERT'?'cpx-bad':e.tier==='WATCH'?'cpx-wat':''}">Open</b>`} <small class="cpx-nv">${E(TIERW[e.tier]||e.tier||'')}</small></td>`
-    +`<td>${E(fdy(e.c))}</td><td>${E(fdy(okD(e.seen)?e.seen:e.opened))}</td><td>${e.closed?E(fdy(e.closed)):'—'}</td><td>${base(e)}</td><td>${ok(+e.max_worse)?fP(UP[e.fam]?+e.max_worse:-e.max_worse):'—'}</td><td>${mon(e)}</td></tr>`).join('');
-  return `<div class="cpx-x"><table class="cpx-t"><thead><tr><th>Family</th><th>Opener</th><th>Status</th><th>Change start</th><th title="data day + 2 (IST)">Opened (seen)</th><th>Closed</th><th>Baseline</th><th>Worst</th><th>Money</th></tr></thead><tbody>${body}</tbody></table></div>`
+    +`<td>${E(fdy(e.c))}</td><td>${E(fdy(okD(e.seen)?e.seen:e.opened))}</td><td>${e.closed?E(fdy(e.closed)):'—'}</td><td>${base(e)}${Array.isArray(e.bspan)&&okD(e.bspan[0])&&okD(e.bspan[1])?`<small>measured ${E(fd(e.bspan[0]))} – ${E(fd(e.bspan[1]))}</small>`:''}</td><td>${ok(+e.max_worse)?fP(UP[e.fam]?+e.max_worse:-e.max_worse):'—'}</td><td>${mon(e)}</td></tr>`).join('');
+  return lv+`<h4 class="cpx-h4">Alarms</h4><div class="cpx-x"><table class="cpx-t"><thead><tr><th>Family</th><th>Opener</th><th>Status</th><th>Change start</th><th title="data day + 2 (IST)">Opened (seen)</th><th>Closed</th><th>Baseline</th><th>Worst</th><th>Money</th></tr></thead><tbody>${body}</tbody></table></div>`
     +'<p class="cpx-fn">Money sirf D0 ROAS alarms pe (≈ cost − value ÷ baseline, change se band hone tak); AdMob install-day ka hisaab Loss math tab me. Campaign / country alarms unke apne tabs me.</p>'; }
 // ---- the reader's place (the SCR pattern): a tap that repaints puts the tapped control back where it was, the page holds its
 // height THROUGH the repaint and gives the blank back afterwards (the 2 Nov rule) ----
@@ -8778,10 +8933,23 @@ function onClick(e){ const t=e.target; if(!t||!t.closest) return; let b;
   if((b=t.closest('[data-cpx-retry]'))){ const n=b.dataset.cpxRetry, st=FILES[n]; if(st){ st.err=false; st.v=null; } if(OPEN) ensureApp(OPEN); paint(); return; }
   if(t.closest('[data-cpx-allretry]')){ ALLF.err=false; ALLF.v=null; ensureAll(()=>{ if(onScreen()) late(()=>paint()); }); paint(); return; }
   if(t.closest('[data-cpx-roas]')){ try{ window.show('roas'); }catch(err){} return; }   // (the page's show: this module's own is the screen's)
+  if((b=t.closest('[data-cpx-lvf]'))){ const k=b.dataset.cpxLvf; keep(`[data-cpx-lvf="${sq(k)}"]`,()=>{ LVF=k; paint(); }); return; }
+  if(t.closest('[data-cpx-lvset]')){ const c=ptr().t; keep('#cpx-lvs',()=>{ LVSET={fam:LVF,mode:'days',a:addD(c,-27),b:c,val:'',note:''}; paint(); }); return; }
+  if(t.closest('[data-cpx-lvcancel]')){ keep('#cpx-lvs',()=>{ LVSET=null; paint(); }); return; }
+  if(t.closest('[data-cpx-lvsave]')){ lvSave(); return; }
+  if((b=t.closest('[data-cpx-lvact]'))){ lvAct(b.dataset.cpxLvact,b.dataset.cpxLvid,+b.dataset.cpxLvp||0); return; }
+  if((b=t.closest('[data-cpx-lvundo]'))){ const id=b.dataset.cpxLvundo; let go=true; try{ go=typeof confirm!=='function'||confirm('Ye action undo karein? Agle update me aisa hoga jaise kabhi kiya hi nahi.'); }catch(err){} if(go&&canAct()) lvSend({act:'undo',ref:id}); return; }
   if(t.closest('.cpx-det')) return;   // (a tap inside the details never folds them)
   if((b=t.closest('[data-cpx-app]'))){ const id=b.dataset.cpxApp; if(APP) return;   // one app: its details stay open
     keep(`[data-cpx-app="${sq(id)}"]`,()=>{ setOpen(OPEN===id?null:id); paint(); }); } }
 function onChange(e){ const t=e.target; if(!t||!t.closest) return;
+  if(t.closest('[data-cpx-lvmore]')){ const k=String(t.value||''); if(!LVREST.includes(k)) return; keep('[data-cpx-lvmore]',()=>{ LVF=k; paint(); }); return; }
+  const lm=t.closest('[data-cpx-lvmode]'); if(lm&&LVSET){ const k=lm.dataset.cpxLvmode==='val'?'val':'days'; keep('#cpx-lvs',()=>{ LVSET.mode=k; paint(); }); return; }
+  if(LVSET&&t.closest('[data-cpx-lvval]')){ LVSET.val=String(t.value||''); return; }
+  if(LVSET&&t.closest('[data-cpx-lvnote]')){ LVSET.note=String(t.value||''); return; }
+  const la=t.closest('[data-cpx-lva]'), lb=t.closest('[data-cpx-lvb2]');
+  if((la||lb)&&LVSET){ const v=String(t.value||''); if(!okD(v)) return; const c=ptr().t, w=v>c?c:v;
+    keep(la?'[data-cpx-lva]':'[data-cpx-lvb2]',()=>{ if(la) LVSET.a=w; else LVSET.b=w; if(LVSET.a>LVSET.b){ const x=LVSET.a; LVSET.a=LVSET.b; LVSET.b=x; } paint(); }); return; }
   if(t.closest('[data-cpx-sel]')){ const k=String(t.value||''); if(!PERK.has(k)&&!MON_RE.test(k)) return; keep('[data-cpx-sel]',()=>{ PER=k; perSave(); paint(); }); return; }
   const f=t.closest('[data-cpx-pf]'), to=t.closest('[data-cpx-pto]'); if(!f&&!to) return; const v=String(t.value||''); if(!okD(v)) return;
   keep(f?'[data-cpx-pf]':'[data-cpx-pto]',()=>{ const [lo,hi]=rng(); PF=f?v:lo; PTO=to?v:hi; PER='cus'; perSave(); paint(); }); }
@@ -8793,6 +8961,7 @@ function onMove(e){ const t=e.target, s=EL; if(!s||!s.querySelectorAll) return; 
   tip.innerHTML=tipHtml(c,i); tip.hidden=false; const px=X*r.width/c.W; tip.style.left=Math.max(0,Math.min(r.width-tip.offsetWidth,px-tip.offsetWidth/2))+'px'; }
 function wire(){ const s=EL; if(!s||!s.dataset||s.dataset.cpxWired) return; s.dataset.cpxWired='1';
   if(s.addEventListener){ s.addEventListener('click',onClick); s.addEventListener('change',onChange); s.addEventListener('pointermove',onMove); s.addEventListener('click',onMove);
+    s.addEventListener('input',e=>{ const t=e.target; if(!LVSET||!t||!t.closest) return; if(t.closest('[data-cpx-lvval]')) LVSET.val=String(t.value||''); else if(t.closest('[data-cpx-lvnote]')) LVSET.note=String(t.value||''); });
     s.addEventListener('pointerleave',()=>onMove({target:null}));
     s.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ')&&e.target&&e.target.matches&&e.target.matches('.cpx-row[data-cpx-app]')){ e.preventDefault&&e.preventDefault(); onClick(e); } }); }
   WIRED=true; }
@@ -8833,7 +9002,8 @@ function card(name){ const p=ptr(); if(!p) return null; const id=Object.keys(p.a
 function hubVerdict(name){ const p=ptr(); if(!p||!Object.keys(p.apps).some(k=>p.apps[k]&&p.apps[k].name===name)) return null; return card(name); }
 return {ptr, render, paint, show:showMe, left, alarmN, alertNote, card, hubVerdict,
   _:{rng, isDef, sums, rows, rowOf, judge, normal, hLvl, lossG, epOf, eps, now3, perRestore, perLoad, keep, cal, fI, fU, fP, series, dayRows, verdict, moneyLine, tabBody, ALLF, FILES, CHD,
-    get:()=>({PER,PF,PTO,OPEN,TAB,DN}), set:o=>{ if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o) OPEN=o.OPEN; if('TAB' in o) TAB=o.TAB; if('DN' in o) DN=o.DN; if('PREAD' in o) PREAD=o.PREAD; }}};
+    lvCheck, lvOf, lvV, lvActs, levelsHtml, tipHtml, LVQ:()=>LVQ, PEND:()=>PEND,
+    get:()=>({PER,PF,PTO,OPEN,TAB,DN,LVF,LVSET}), set:o=>{ if('LVF' in o) LVF=o.LVF; if('LVSET' in o) LVSET=o.LVSET; if('LVQ' in o) LVQ=o.LVQ; if('PEND' in o) PEND=o.PEND; if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o) OPEN=o.OPEN; if('TAB' in o) TAB=o.TAB; if('DN' in o) DN=o.DN; if('PREAD' in o) PREAD=o.PREAD; }}};
 })();
 function renderCpx(){ return CPX.render(); }
 // ---- 📈 ROI — a section of the 💸 Install value tab (owner, 13 Oct: "every date wise uska incremental day wise revenue from

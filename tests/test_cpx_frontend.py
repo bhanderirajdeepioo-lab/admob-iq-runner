@@ -394,3 +394,77 @@ def test_no_owner_data_in_the_fixture():
     ids = set(re.findall(r"ca-app-pub-\d{16}~\d+", src))
     assert ids and all(i.startswith("ca-app-pub-0000000000000000~") for i in ids)
     assert set(re.findall(r"com\.[a-z0-9_.]+", src)) <= {"com.synth."}
+
+
+# ── 🕘 History · Levels: the level history, the ✓ recompute, the owner's actions ──
+def test_levels_history_read_only_with_the_page_recompute(out):
+    lv = out["lv"]
+    ro = lv["ro"]
+    assert ro["q"] == "no" and not ro["buttons"]                                   # no API: the history, read-only
+    assert "History read-only" in ro["text"] and "Level = in dino ka exact average" in ro["text"]
+    assert ro["checks"] == 2 and ro["warn"] == 1 and ro["typed"] == 1              # ✓ ✓, the tampered one ⚠, the typed one
+    assert ro["fams"] == ["CPI", "ECPM", "ROAS_G"] and ro["more"]                  # CPI · eCPM · D0 ROAS first; the rest under More
+    for w in ("Alarm baseline", "Accepted after 56 days", "Auto · first level", "Set by owner", "In force", "Resting level",
+              "Gone", "₹7.0 L ÷ 35,000 installs", "24 Feb – 9 Mar 2026 (14 din)", "Owner actions", "Not applied · UnknownLevel",
+              "Alarms"):
+        assert w in ro["text"], w
+    assert ro["text"].index("Levels") < ro["text"].index("Alarms")                 # the Levels block on top
+    assert not ro["hostile_raw"] and ro["hostile_esc"]                             # the owner's note escaped
+    assert all(c.startswith("cpx-") or c in ("aicon",) for c in ro["classes"]), ro["classes"]
+    assert lv["ro403"] == {"q": "ro", "text": True, "buttons": False}              # not an admin: read-only, says so
+
+
+def test_levels_check_against_hand_math(out):
+    lv = out["lv"]
+    # the first level: 1–14 Nov, ₹50,000 a day ÷ 2,500 installs a day = ₹20 (₹ as billed); $: Σ ₹50,000 × the day's rate ÷ Σ installs
+    usd = sum(round(50000 * fxd(d), 2) for d in days("2025-11-01", "2025-11-14")) / (14 * 2500)
+    assert lv["v_inr"] == pytest.approx(20.0, rel=1e-12) and lv["v_usd"] == pytest.approx(usd, rel=1e-12)
+    assert lv["chk"] == "ok" and lv["chk_e"] == "ok" and lv["v_ecpm"] == pytest.approx(6.0, rel=1e-9)
+    assert lv["chk_tam"] == "bad" and lv["chk_typed"] == "typed"
+
+
+def test_levels_owner_buttons_and_every_post_body(out):
+    lv = out["lv"]
+    adm = lv["adm"]
+    assert adm["set"] and adm["accept"] and adm["prop"] and not adm["auto"]        # no pin in force: no "Back to auto"
+    assert adm["fams"] == ["CPI", "ECPM", "ROAS_G"]                                # a family with only a proposal is listed
+    assert adm["rollback"] == ["L-00000000a3", "L-00000000a4", "L-00000000a5"]     # every earlier level (not the ones in force)
+    assert adm["reject"] == ["L-00000000a2"] and adm["undo"] == ["a-0000000000c1", "a-0000000000c2"]
+    t, app = T.isoformat(), A
+    bodies = [p["b"] for p in lv["posts"]]
+    assert all(p["u"] == "/api/levels/act" for p in lv["posts"])
+    assert bodies == [
+        {"act": "rollback", "app": app, "fam": "CPI", "from": t, "level": "L-00000000a3"},
+        {"act": "reject", "app": app, "fam": "CPI", "level": "L-00000000a2"},
+        {"act": "auto", "app": app, "fam": "CPI", "from": t},
+        {"act": "accept", "app": app, "fam": "ROAS_G", "from": t, "proposal": {"day": "2026-03-20", "days": ["2026-03-01", t]}},
+        {"act": "undo", "ref": "a-0000000000c1"},
+        {"act": "set", "app": app, "fam": "CPI", "from": t, "days": ["2026-03-10", t], "note": "naya normal <b>"},
+        {"act": "set", "app": app, "fam": "CPI", "from": t, "value": 31.5},
+        {"act": "set", "app": app, "fam": "ROAS_G", "from": t, "value": 0.35},        # typed 35 (%) → 0.35
+    ]
+    assert lv["short_days"] == 0                                                   # 4 days: Save does nothing (7–120)
+    f = lv["form"]
+    assert f["open"] and f["set"]["a"] == "2026-03-10" and f["set"]["b"] == t
+    # the live preview: Σ ₹ cost ÷ Σ installs of 10–28 Mar (₹50,000 ÷ 1,600 a day) = ₹31.25, with the page's own ✓
+    assert f["preview"].endswith("Level ₹31.3 = 10 Mar – 28 Mar 2026 (19 din) · ₹9.5 L ÷ 30,400 installs ✓")
+
+
+def test_levels_pending_until_the_build_has_read_it_and_the_error_toast(out):
+    lv = out["lv"]
+    assert lv["toasts"].count("✅ Saved — agle update me lagega (1–1½ ghante)") == 8
+    assert lv["pending"] == 8 and lv["pending_txt"] and lv["pending_after"] == 0
+    assert lv["err_toast"] == ["⏳ Saving…", "❌ Save fail — Kisi aur ne abhi save kiya — dobara try karo (HTTP 409)"]
+
+
+def test_levels_controls_keep_the_page_in_place(out):
+    for w in ("375", "1280"):
+        assert out["lv"]["keep"][w] == {"dy": [120], "f": "ECPM"}, w               # the tapped switch back where it was
+
+
+def test_levels_on_the_chart_and_the_list(out):
+    ch = out["lv"]["chart"]
+    assert ch["marks"] == 4 and ch["hollow"] == 1                                  # 3 CPI level changes + 1 eCPM; the proposal hollow
+    assert ch["labels"] == ["₹21.0 · accepted", "₹20.0 · first", "₹19.5 · set", "$6.00 · first", "new? 33.2%"]
+    assert out["lv"]["tip"].endswith("Level: Alarm baseline · 13 Mar se · measured 24 Feb – 9 Mar")
+    assert out["lv"]["tag"] == {"row": True, "det": True}                          # 🆕 on the row (pointer lp), the line in details
