@@ -49,4 +49,7 @@ CREATE TABLE IF NOT EXISTS cmp_ranges_log (       -- append-only: every add / de
   id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, who TEXT NOT NULL,
   act TEXT NOT NULL CHECK (act IN ('add','delete')), cmp INTEGER NOT NULL, app TEXT NOT NULL,
   b_from TEXT NOT NULL, b_to TEXT NOT NULL, a_from TEXT NOT NULL, a_to TEXT NOT NULL, name TEXT NOT NULL);
-INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '5');
+CREATE TABLE IF NOT EXISTS lv_log (               -- append-only: every CPI level action through /api/levels/act
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, who TEXT NOT NULL, act TEXT NOT NULL,
+  app TEXT, fam TEXT, action_id TEXT, result TEXT NOT NULL, commit_sha TEXT);
+INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '6');

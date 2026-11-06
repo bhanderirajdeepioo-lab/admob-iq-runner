@@ -212,6 +212,33 @@ A date can be saved with a name, for that app or for every app (`"*"`), and the 
 - The page works without this API (a static host, the Worker down): the comparison is drawn as usual, the 📌 list
   says it could not be read and 💾 Save says why it failed.
 
+## CPI level actions (`/api/levels`)
+
+The 📉 CPI vs eCPM screen's History tab lists every level (each one the exact value of named days) and lets an admin
+change them. One click = one action appended to `config/cpi_levels.json` in `CONFIG_REPO` (the same `GITHUB_TOKEN`
+Secret as Settings); the next build applies it (`admob_iq/cpi_build.py`, ≈ 1–1½ hours). The file is append-only and
+is **not** one of the Settings files (a whole-file save could rewrite the action log).
+
+| Method | Path | What |
+|---|---|---|
+| GET | `/api/levels` | admin: `{actions: [{id, at, by, act, app, fam, …}], me, admin, server_save}` — the file through the contents API, cached 30 s per isolate; anyone else `403` (the page then shows the history read-only) |
+| POST | `/api/levels/act` | admin: one action → `{ok: true, action, actions, commit_url?}`; `by` = the verified Access email (never the body), `at` = server time, `id` = `a-<12 random hex>` |
+
+- **Actions:** `set` (`app`, `fam`, `from`, and `days` [first, last] *or* `value`), `rollback` (`level` = an earlier
+  row's `L-<10 hex>`, `from`), `reject` (`level` of an automatic acceptance; applies from the start of that alarm),
+  `accept` (`proposal` {`day`, `days`}, `from`), `auto` (`from`: back to the automatic rule), `undo` (`ref` = an
+  action id; unknown / already undone / an undo → `409`). `note` optional on all.
+- **Validation** (`400` + `field` + Hinglish `msg`): only the act's own keys; `app` = `ca-app-pub-<digits>~<digits>`;
+  `fam` one of the 9 app families; dates real `YYYY-MM-DD`, not after today (IST), not older than 1,500 days; `days`
+  7–120 days, first ≤ last ≤ `from`; `value` a number > 0 and < 1e9; `note` ≤ 200 characters after NFC + trim, no
+  control / bidi character (refused).
+- **The write:** GET content + sha → a damaged file is `409 levels_broken` (nothing written) → append → PUT with that
+  sha → on `409` / `422` re-read and append to the **new** content (a concurrent action is never lost), up to 3
+  times, then `409 github_conflict`. The file after the append ≤ 256 KiB (`413`).
+- **Audit:** D1 `lv_log` (schema v6, append-only): at, who, act, app, fam, action id, result, commit sha.
+- Same request rules as everywhere: Access JWT (`401`), JSON + same-origin `Origin`, ≤ 8 KiB, no CORS, `OPTIONS` →
+  `405`; errors reuse the Settings messages (`token_missing`, `repo_missing`, `github_auth`, …).
+
 ## Tests
 
 ```bash
@@ -226,6 +253,9 @@ in the test (valid, expired, wrong `aud`/`iss`/`kid`, bad signature, `alg` confu
 each file, the sha retry on 409/422, the error mapping, the audit row, and that the token never leaks.
 `test/marks.test.js` covers the saved dates: auth, CSRF / body rules, validation, add / list / delete (author,
 another user, admin), `"*"` marks, concurrent saves / deletes, the audit rows and the v3 → v4 migration.
+`test/levels.test.js` covers the CPI level actions: admin only, CSRF / body rules, every validator, the append on a
+fake GitHub, the conflict re-read + re-append, a broken file, undo rules, `by` from the login, the `lv_log` row, the
+read cache and that the token never leaks.
 `test/repo.test.js` also runs the robot's sync step — read straight from `.github/workflows/refresh.yml` — under
 `bash -eo pipefail` in seven states (folder missing, remote-only, syntax error, parses but does not link, no
 `package.json`, ok, no node) and

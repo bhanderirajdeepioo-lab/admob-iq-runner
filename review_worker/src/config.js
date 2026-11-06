@@ -22,7 +22,7 @@ const APP_RE = /^ca-app-pub-(\d{1,24})~\d{1,24}$/;
 const REPO_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/;
 const SHA_RE = /^[0-9a-f]{40}$/;
 const COMMIT_URL_RE = /^https:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\/commit\/[0-9a-f]{40}$/;
-const CTRL_RE = /[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/;
+export const CTRL_RE = /[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/;
 const CTRL_RE_G = new RegExp(CTRL_RE.source, "g");
 const REPO_PLACEHOLDER = "owner/private-repo";   // the value in wrangler.example.toml (an unedited copy saves nothing)
 
@@ -258,6 +258,73 @@ export async function commitConfig(cfg, file, text, message) {
     if ((res.status === 409 || res.status === 422) && attempt < GH_RETRIES) continue;
     throw ghError(res.status);
   }
+}
+
+/** Base64 (as the contents API returns it, with line breaks) → UTF-8 text. */
+function utf8b64(b64) {
+  const bin = atob(String(b64).replace(/\s+/g, ""));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+}
+
+/**
+ * Read config/<file>.json from CONFIG_REPO: {text, sha} — {text: null, sha: null} when the file does not exist yet.
+ * A file the contents API cannot hand back as text (no base64 content) → {text: undefined, sha}: the caller decides.
+ * @throws {ApiError} 502 github_auth / github_forbidden / github_unavailable
+ */
+export async function readConfig(cfg, file) {
+  const url = `${GH_API}/repos/${cfg.repo}/contents/config/${file}.json`;
+  const res = await gh(cfg, url, "GET");
+  if (res.status === 404) {
+    await discard(res);
+    return { text: null, sha: null };
+  }
+  if (res.status !== 200) {
+    await discard(res);
+    throw ghError(res.status);
+  }
+  let j = null;
+  try {
+    j = await res.json();
+  } catch {
+    j = null;
+  }
+  if (!isObj(j) || typeof j.sha !== "string" || !SHA_RE.test(j.sha)) throw ghError(502);
+  let text;
+  try {
+    text = j.encoding === "base64" && typeof j.content === "string" ? utf8b64(j.content) : undefined;
+  } catch {
+    text = undefined;
+  }
+  return { text, sha: j.sha };
+}
+
+/**
+ * ONE PUT of `text` to config/<file>.json against the blob sha it was built on (null = a new file). No retry here: a
+ * 409 / 422 (the file changed in between) is thrown as github_conflict, so the caller can re-read and rebuild its
+ * text on the new content (an append-only file is never overwritten with an older copy).
+ * @returns {Promise<{sha: string|null, commit_url: string|null}>}
+ */
+export async function putConfig(cfg, file, text, message, sha) {
+  const url = `${GH_API}/repos/${cfg.repo}/contents/config/${file}.json`;
+  const content = b64utf8(text);
+  const res = await gh(cfg, url, "PUT", sha ? { message, content, sha } : { message, content });
+  if (res.status === 200 || res.status === 201) {
+    let j = null;
+    try {
+      j = await res.json();
+    } catch {
+      j = null;
+    }
+    const commit = isObj(j) && isObj(j.commit) ? j.commit : {};
+    return {
+      sha: typeof commit.sha === "string" && SHA_RE.test(commit.sha) ? commit.sha : null,
+      commit_url: typeof commit.html_url === "string" && COMMIT_URL_RE.test(commit.html_url) ? commit.html_url : null,
+    };
+  }
+  await discard(res);
+  throw ghError(res.status);
 }
 
 // ── audit (D1 table config_log; created by db.js SCHEMA / MIGRATIONS[3]) ─────────────────────────
