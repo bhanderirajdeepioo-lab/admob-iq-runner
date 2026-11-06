@@ -136,7 +136,7 @@ def test_app_pages_render_for_every_kind_of_app(out):
 def test_app_page_parts(out):
     a = out["a_page"]
     assert a["crumb"] and a["mini"] and a["seg"] and a["period"] and a["cus_row"] and a["how"]
-    assert a["tiles"] == [["Visits", "58,245"], ["Inline ads / 100", "10.6"], ["Full-screen / 100", "3.3"], ["Ads / user", "0.49"],
+    assert a["tiles"] == [["Screen views", "58,245"], ["Inline ads / 100", "10.6"], ["Full-screen / 100", "3.3"], ["Ads / user", "0.49"],
                           ["Status", "1 Worse · 1 Watch"]]
     assert a["attn"][0] == ["bigda", "Main", "ads/100 12.0 → 8.8 (−27%)"] and a["attn"][1][0] == "dhyan"
     assert a["editor"] and a["title"] and a["unjudged"] == 3                         # "Activity" dropped, the full class on hover
@@ -168,7 +168,7 @@ def test_drill_down_sections(out):
     sa, sv = sum(600 - 40 * (k % 3) for k in ek), sum(800 + 50 * (k % 5) for k in ek)
     pct = lambda v: "%.1f%%" % (_jr(v * 1000) / 10.0)
     assert pct(sa / float(sv)) != pct(sum((600 - 40 * (k % 3)) / float(800 + 50 * (k % 5)) for k in ek) / len(ek))
-    assert x["eng"] == [["Time per visit", "28 s"], ["Ads per minute", "0.23"], ["Clicks", "90"], ["Exposure per visit", "0.04 s"],
+    assert x["eng"] == [["Time per view", "28 s"], ["Ads per minute", "0.23"], ["Clicks", "90"], ["Exposure per view", "0.04 s"],
                         ["Users who saw ads", pct(sa / float(sv))], ["Sessions", "27,000"]]
     tt = ("us screen ke ad dekhne wale users ka har din ka jod ÷ us screen ke users ka har din ka jod (GA4 me user sirf ek "
           "din aur ek screen ke andar unique) · sirf wo din jin me dono users reads whole aaye")
@@ -264,7 +264,7 @@ def test_ads_per_user_column_and_tile(out):
     ads, users = sum(A_MAIN(k) for k in U_DAYS), sum(U_MAIN(k) for k in U_DAYS)
     mean = sum(A_MAIN(k) / float(U_MAIN(k)) for k in U_DAYS) / len(U_DAYS)
     assert u["fn"] == [27, 30, ads, users, False, False] and _p2(ads / float(users)) != _p2(mean)   # Σ ÷ Σ, never the mean
-    # Users / day and Visits / user on the same days: Σ users ÷ days; Σ screen views ÷ Σ users (100 users, 300 views → 3)
+    # Users / day and Views / user on the same days: Σ users ÷ days; Σ screen views ÷ Σ users (100 users, 300 views → 3)
     views = sum(1000 + k for k in U_DAYS)
     assert u["uv"][0] == pytest.approx(users / 27.0) and u["uv"][1] == pytest.approx(views / float(users))
     assert u["uv"][2] == views and u["ud"][1] == "{:,}".format(int(round(users / 27.0))) and u["vu"][1] == _p2(views / float(users))
@@ -461,10 +461,10 @@ def test_period_memory(out):
 
 def test_chart(out):
     c = out["chart"]
-    assert c["d"][:2] == ["d", 30] and c["d"][2] is None and c["d"][3] is None     # < 100 visits / not whole: no point
+    assert c["d"][:2] == ["d", 30] and c["d"][2] is None and c["d"][3] is None     # < 100 views / not whole: no point
     assert c["d"][4] == "GA4 sampled" and c["d"][5] is True and c["d"][6] is False
     assert c["d"][7] == {"last": "10.0", "avg": "Avg 10.0", "norm": "Normal 12.3"}
-    assert c["w"][:2] == ["w", 29] and c["w"][4] == 10                              # > 120 days: weekly, Σ ads ÷ Σ visits
+    assert c["w"][:2] == ["w", 29] and c["w"][4] == 10                              # > 120 days: weekly, Σ ads ÷ Σ views
     assert c["m"][:2] == ["m", 20] and c["m"][2] is None                            # > 540 days: monthly
     s = out["chart_svg"]
     assert s["normal"] and s["last"] and s["avg"] and s["bars"] == 30
@@ -532,3 +532,26 @@ def test_wiring():
         for w in c.split():
             assert w.startswith("sc-") or w in ("card", "ct"), w                     # (the page's own card base)
     assert m.index("localStorage") > m.index("function perLoad")
+
+
+def test_screen_views_wording(out):
+    """'Visits' is 'Screen views' on the whole Screens tab (the data and sort keys keep their names)."""
+    p = _page()
+    for w in ("th('v','Screen views')", "th('vu','Views / user'", "th('sh','Share of views')", "th('r','Per 100 app views')",
+              "tile('Screen views'", "<th>Screen views</th>", "tile('Time per view'", "tile('Exposure per view'",
+              "Ads / 100 views", "Screen views (bars)", "['v','Screen views',['v']]", "<b>Screen views</b> = screen_view"):
+        assert w in p, w
+    a, b = p.index("const SCR=(()=>{"), p.index("function renderScreens(){")
+    scr = p[a:b]
+    assert not re.search(r"Visits|visits|visit\b", "\n".join(l for l in scr.split("\n") if not l.lstrip().startswith("//"))), "a 'visit' word is left"
+
+
+def test_banner_refresh_line(out):
+    """More than 1 ad per screen view (Ads / 100 above 100) and a known time per view: a line under the Ads / 100 cell."""
+    b = out["bn"]
+    assert b["hot"] == ["screen khuli rahe to banner har ~30–90 sec me dobara load hota hai: har refresh ek naya impression",
+                        "1 view me 1 se zyada ad — banner refresh · avg 45 sec"]       # 44,600 s ÷ 1,000 views, rounded
+    assert b["rates"] == ["150", "150", "90.0", "150"]
+    assert b["notime"] == [] and b["calm"] == [] and b["agg"] == [] and b["n"] == 1    # no engagement / 0.9 per view / aggregate row
+    assert b["fn"] == [45, None, None, None]                                           # exactly 100 is not above 1 · aggregate · no file 2
+    assert b["full"] is False and out["bn_alpha"] is False                             # not in Full-screen; Alpha is ~10 / 100

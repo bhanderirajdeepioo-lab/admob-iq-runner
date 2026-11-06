@@ -5,7 +5,7 @@
 //     day; Today / Yesterday not final), the period's normal = the max(28, length) final days before it, the score muted
 //     under 7 final days and "—" for All time;
 //   * the sums: a row counts only the days whose grain carries its quantity (a day split per screen without the format
-//     has no inline ads), visits on every day beside them;
+//     has no inline ads), screen views on every day beside them;
 //   * the coverage strip: N / M apps whole per piece from the day-state strings (each app on its own calendar);
 //   * the status words → chips (WD keys) and the Worse-first order of apps and rows;
 //   * All apps and an app page (+ every drill-down section and fold, with its lazy files) for a normal app, an app whose ads
@@ -14,7 +14,7 @@
 //   * the Copy report helper: the clipboard, a rejected clipboard → the selected textarea + execCommand, no API at all,
 //     execCommand failing → "Select karke copy karein";
 //   * the period saved per viewer: bad keys / months / half a Custom ignored, a throwing localStorage harmless;
-//   * the chart's model (daily / weekly / monthly, no point under 100 visits, the printed labels) and its drawing;
+//   * the chart's model (daily / weekly / monthly, no point under 100 views, the printed labels) and its drawing;
 //   * keep(): the tapped control back to its place and its sideways row's scroll kept, the page's height held THROUGH the
 //     repaint (paint() inside a keep() leaves the hold for unholdLater);
 //   * the drill-down belongs to its app: another app opens with it closed (Back step dropped), "Show more" per app;
@@ -256,7 +256,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       pg.attn = SCREEN.innerHTML.includes('id="sc-attn"'); pg.ok_all = SCREEN.innerHTML.includes('✅ Sab screens normal');
       pg.rows = [...SCREEN.innerHTML.matchAll(/<tr class="sc-clk[^"]*" data-sc-open="(\d+)"/g)].map(m => +m[1]);
       pg.more = (/Show (\d+) more screens/.exec(SCREEN.innerHTML) || [])[1] || null;
-      pg.basis = (/<small>[\d,]+ visits · (\d+\/\d+ [a-z]+)<\/small>/.exec(SCREEN.innerHTML) || [])[1] || null;   // a row's days
+      pg.basis = (/<small>[\d,]+ views · (\d+\/\d+ [a-z]+)<\/small>/.exec(SCREEN.innerHTML) || [])[1] || null;   // a row's days
       pg.crumb = (/<div class="sc-crumb">.*?<\/span> <small>([^<]*)<\/small> · history/.exec(SCREEN.innerHTML) || [])[1] || null;   // the app's why
       pg.attn_why = (/Abhi koi screen judge nahi ho saki: ([^<]*) — numbers neeche hain/.exec(SCREEN.innerHTML) || [])[1] || null;
       if (k !== 'e') {
@@ -311,7 +311,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     ctx.APP = 'Alpha App'; _.set({ OPEN: null, SEG: 's', MORE: false, SEC: 'ov', PER: '30' }); SCR.paint(); h = SCREEN.innerHTML;
     out.a_page = {
       crumb: h.includes('data-sc-all="1"') && h.includes('history from 1 Jan 2026'),
-      visits_sub: h.includes('<div class="sc-kl">Visits</div><div class="sc-kv">58,245</div><div class="sc-ks">30 days</div>'),
+      visits_sub: h.includes('<div class="sc-kl">Screen views</div><div class="sc-kv">58,245</div><div class="sc-ks">30 days</div>'),
       tiles: [...h.matchAll(/<div class="sc-kl">([^<]+)<\/div><div class="sc-kv">([^<]*)<\/div>/g)].map(m => m.slice(1)),
       attn: [...h.slice(h.indexOf('id="sc-attn"'), h.indexOf('Today · Yesterday')).matchAll(/<span class="hub-st st-([a-z]+)">[a-z]+<\/span><span class="sc-atn"[^>]*>([^<]+(?:<wbr>[^<]+)*)<\/span><span class="sc-atr">([^<]+)<\/span>/g)].map(m => [m[1], m[2].replace(/<wbr>/g, ''), m[3]]),
       mini: h.includes('Today <small>30 Mar</small>') && h.includes('Yesterday <small>29 Mar</small>') && h.includes('<th>Normal <small>28 days before</small></th>')
@@ -327,7 +327,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       // how a day that is not whole reads: the N/A line and the score's days (never "GA4 sampled" for every such day)
       how_na: [(/Kam data = Too early; ([^<]*) = N\/A\./.exec(h) || [])[1] || null, (/Jis din ([^<]*?), us din ka wo hissa gina nahi jata/.exec(h) || [])[1] || null],
       how_low: h.includes('"short period"; period aur normal dono me row ke ads app ke us kism ke ads ka 1% se kam = "score —" (itne kam ads ka ratio kuch nahi batata).'),
-      cov_fold: h.includes('<td class="sc-nm">Visits</td><td>30</td><td>0</td><td>0</td><td>0</td>'),
+      cov_fold: h.includes('<td class="sc-nm">Screen views</td><td>30</td><td>0</td><td>0</td><td>0</td>'),
       rep_fold: h.includes('data-sc-copy="app"') && h.includes('3 lines'),
       src_fold: h.includes('Network &lt;B&gt;') && !h.includes('Network <B>'),
       notes: h.includes('AdMob account ka time zone nahi mila') && h.includes('Duplicate ad_impression 1 Feb 2026 – 5 Feb 2026: AdMob se confirm (copy hata di).'),
@@ -586,7 +586,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     const cvx = _.cover(xs, ['v'], '2026-03-01', '2026-03-30'), fx = _.foldsHtml(xs, 'nope', '2026-03-01', '2026-03-30');
     out.xstate = { c: [cvx.c.x, cvx.c['?'], cvx.c.w, cvx.nd, cvx.whole], why: _.covWhy(xs, ['v'], cvx),
       day: [_.dayState(xs, ['v', 'a'], 12), _.dayState(xs, ['v'], 15), _.dayState(xs, ['v'], 0)],
-      vrow: (/<td class="sc-nm">Visits<\/td>(.*?)<\/tr>/.exec(fx) || [])[1] || null };
+      vrow: (/<td class="sc-nm">Screen views<\/td>(.*?)<\/tr>/.exec(fx) || [])[1] || null };
     // ── all formats because GA4 gave no screen × format split (allf 2): the header, the table's line, the note with the
     // measured full-screen share on app screens (none measured: says so); allf 1 keeps its own note ──
     const xA = _.apps().find(r => r.id === ID.a).x;
@@ -595,7 +595,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     try {
       xA.allf = 2; xA.allfs = 0.0023; SCR.paint(); h = SCREEN.innerHTML;
       out.allf2 = { head: h.includes('<button type="button" data-sc-tsort="a">Ads (all formats)</button>'),
-        sub: h.includes('<p class="sc-sub">Ads (all formats) har 100 screen visits pe — kyun, Data coverage me · row pe tap = details</p>'), note: noteOf(h),
+        sub: h.includes('<p class="sc-sub">Ads (all formats) har 100 screen views pe — kyun, Data coverage me · row pe tap = details</p>'), note: noteOf(h),
         pu: [(/<th aria-sort="none" title="([^"]*)"><button type="button" data-sc-tsort="pu">/.exec(h) || [])[1] || null, (tds(h, 0)[8] || [])[0] || null] };
       xA.allfs = null; SCR.paint(); out.allf2.none = noteOf(SCREEN.innerHTML);
       xA.allf = 1; delete xA.allfs; SCR.paint(); out.allf2.one = noteOf(SCREEN.innerHTML);
@@ -635,6 +635,26 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       out.pu_none = { one: tds(h, 0)[8], tile: puTile(h), fn: _.perUser(nu, _.FILES[nu2].raw, 0, '2026-03-22', '2026-03-28') };
     } finally { delete ALLF.apps.nu; delete ctx.DATA.scr.apps.nu; delete FILES[nu2]; ctx.DATA.scr.fv = 'f7'; _.set({ PER: '30' }); ctx.APP = 'Alpha App'; }
     SCR.paint(); await tick();
+    // ── more than one ad per screen view (Ads / 100 above 100) with a known time per view: the banner-refresh line under the
+    // Ads / 100 cell — a top screen only (never an aggregate row), never at or under 1 ad per view, never without time per
+    // view (no engagement), never in the Full-screen table ──
+    const bn = { key: 'a0000000000c', ft: FT, td: TD, d0: '2026-03-01', items: [['x.y.HotActivity', 's', 'inline'], ['x.y.NoTimeActivity', 's', 'inline'], ['x.y.CalmActivity', 's', 'inline'], ['', 'o', 'inline']],
+      vis: [], V: [], A: [], ta: [], st: {}, bf: {}, dq: [], app: ['Normal', '', 0, 0], status: {} };
+    for (let k = 0; k < 30; k++) { bn.V.push([1000, 1000, 1000, 1000]); bn.A.push([1500, 1500, 900, 1500]); bn.vis.push(4000); bn.ta.push([5400, 0, 0]); }
+    const bn2 = 'scr_' + bn.key + '.json.gz';
+    FILES[bn2] = { v: 1, key: bn.key, d0: bn.d0, ft: FT, td: TD, screens: [['x.y.HotActivity', 's'], ['x.y.NoTimeActivity', 's'], ['x.y.CalmActivity', 's'], ['x.y.RareActivity', 's']], units: [], trig: [],
+      days: Array.from({ length: 30 }, () => ({ v: [[0, 1000, 44600], [1, 1000, 0], [2, 1000, 30000], [3, 1000, 20000]] })), adm: {}, rows: {}, notes: {}, auw: 'none' };
+    ALLF.apps.bn = bn; ctx.DATA.scr.apps.bn = { key: bn.key, v: 'b', vl: 'b', from: bn.d0, ft: FT }; ctx.DATA.scr.fv = 'f8';
+    try {
+      ctx.APP = 'bn'; _.set({ PER: '7', OPEN: null, SEG: 's', MORE: true }); SCR.paint(); await tick(); SCR.paint(); h = SCREEN.innerHTML;
+      const bnOf = i => (/<small class="sc-bn" title="([^"]*)">([^<]*)<\/small>/.exec(cellsOf(h, i)[3] || '') || []).slice(1);
+      out.bn = { hot: bnOf(0), notime: bnOf(1), calm: bnOf(2), agg: bnOf(3), rates: [0, 1, 2, 3].map(i => (/<b>([^<]*)<\/b>/.exec(cellsOf(h, i)[3]) || [])[1]),
+        fn: [_.bannerSec(bn, _.FILES[bn2].raw, 0, 150, '2026-03-22', '2026-03-28'), _.bannerSec(bn, _.FILES[bn2].raw, 0, 100, '2026-03-22', '2026-03-28'), _.bannerSec(bn, _.FILES[bn2].raw, 3, 150, '2026-03-22', '2026-03-28'), _.bannerSec(bn, null, 0, 150, '2026-03-22', '2026-03-28')],
+        n: (h.match(/class="sc-bn"/g) || []).length };
+      _.set({ SEG: 'f' }); SCR.paint(); out.bn.full = SCREEN.innerHTML.includes('sc-bn');
+    } finally { delete ALLF.apps.bn; delete ctx.DATA.scr.apps.bn; delete FILES[bn2]; ctx.DATA.scr.fv = 'f9'; _.set({ PER: '30', SEG: 's', MORE: false }); ctx.APP = 'Alpha App'; }
+    SCR.paint(); await tick();
+    out.bn_alpha = SCREEN.innerHTML.includes('sc-bn');                                       // Alpha: ~10 ads / 100 — never
     // hub card none: the pointer alone never loads a file
     out.ready = SCR.ready();
   } catch (e) { errors.push(String(e && e.stack || e)); }
