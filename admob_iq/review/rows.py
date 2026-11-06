@@ -9,6 +9,7 @@ import re
 from collections import defaultdict
 from datetime import date, timedelta
 
+from . import cpx
 from .const import (ADS_CPI_UP, ADS_ROAS_DROP, ADS_ROAS_UP, ADUNIT_MIN_LOSS, ADUNIT_RED_DAYS, DED_AMB_PCT,
                     DED_AMB_USD, DED_RED_PCT, DED_RED_USD, DROP_DAYS, KAL_DROP_ABS, KAL_DROP_REL, MED_DROP_SHARE,
                     NAYA_DAYS, PURANA_DAYS, PURANI_HALAT_DAYS, RED_REV_ABS, RED_REV_REL, UPDATE_DAYS)
@@ -572,6 +573,10 @@ def _ads_row(ctx, aid, a):
     ctx.ads[aid] = dict(sp=sp, spp=spp, i7=i7, ip7=ip7, roas=roas, roasp=roasp, cpi=cpi, cpip=cpip,
                         camps=len(camps), active=sum(1 for c in camps if str(c.get("status")) == "ENABLED"),
                         has=bool(e))
+    c = ctx.cpi.get(aid)
+    if c is not None:                          # one verdict everywhere: the 📉 CPI vs eCPM alarm decides (no 7-vs-7 row)
+        _cpx_row(ctx, aid, a, c)
+        return
     st, fact, met = None, None, None
     if spp >= 1 and sp < spp * 0.3:
         pass                                   # spend cut hard: ROAS/cost per install not comparable, told as a line
@@ -615,6 +620,27 @@ def _ads_row(ctx, aid, a):
                   rel=((roas / roasp - 1) if (roas and roasp) else 0), topic="T4")
     row["kab"] = (f"4+ weeks ({fd(ctx, row['started'])} se pehle se)" if capped else
                   f"{fd(ctx, row['started'])} · {umar_se(row['age'])}" + ("" if start else " (7 din ki tulna)"))
+    ctx.extra[aid].append(row)
+
+
+def _cpx_row(ctx, aid, a, c):
+    """ads, for an app in this build's CPI vs eCPM pointer: its Alarm / Watch / Fixed → one red / amber / green row
+    (the pointer's status, since and reason; the CPI screen's normal → now numbers over its Last 14 days). OK / New /
+    Paused add no row: text.fallback says them."""
+    tier = cpx.TIER[c["st"]]
+    if tier not in ("red", "amber", "green"):
+        return
+    lo, t = cpx.span(ctx.cpi_t)
+    nrm = c.get("nrm") if isinstance(c.get("nrm"), dict) else {}
+    now = cpx.now3(ctx, a, lo, t)
+    ep = cpx.episode(c)
+    first = ep[0] if ep else next((f for f in cpx.FAMS if cpx.move(f, now, nrm) is not None), None)
+    since = D(c.get("since")) or t
+    row = new_row(ctx, aid, src="ads", kind="ads", metric="cpx_" + (ep[0] if ep else c["st"]),
+                  sev={"red": "critical", "amber": "warning"}.get(tier, "good"), tier=tier, started=since,
+                  fact=cpx.fact(ctx, c, now, nrm, ep), cpx=c["st"], lost=c.get("lost"), lo=lo, t=t,
+                  period=f"📉 CPI screen · Google Ads + AdMob {fr(ctx, lo, t)} · vs normal",
+                  rel=(cpx.move(first, now, nrm) or 0) if first else 0, topic="T4")
     ctx.extra[aid].append(row)
 
 

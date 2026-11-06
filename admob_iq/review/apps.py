@@ -6,6 +6,7 @@ import re
 from collections import Counter, defaultdict
 from datetime import timedelta
 
+from . import cpx
 from .const import BADI, CHHOTI
 from .fmt import D, days_back
 
@@ -54,6 +55,7 @@ class Ctx:
         self.shown = {}                   # aid -> the app's shown rows
         self.extra = defaultdict(list)    # aid -> review-only rows (range / ads / mediation)
         self.ads = {}
+        self.cpi, self.cpi_t = {}, None   # this build's 📉 CPI vs eCPM pointer rows (aid -> row) + its data day
         self.deda = {}
         self.ded_dates, self.ded_win, self.ded_from, self.ded_to = [], set(), None, None
         self.med = {}
@@ -118,6 +120,10 @@ def make_ctx(site, day):
     if not ctx.apps:
         raise ReviewBuildError("no apps")
     _money(ctx)
+    try:
+        ctx.cpi, ctx.cpi_t = cpx.pointer(db, ctx.apps)
+    except Exception:                      # a damaged pointer: every app keeps the ads feature's 7-vs-7 rule
+        ctx.cpi, ctx.cpi_t = {}, None
     _first_runs(ctx)
     return ctx
 

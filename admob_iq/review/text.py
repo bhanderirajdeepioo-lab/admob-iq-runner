@@ -5,6 +5,7 @@ lines. Plain strings with money tokens (fmt.money), never HTML."""
 import re
 from datetime import timedelta
 
+from . import cpx
 from .const import MON, TIER_RANK, UPDATE_DAYS
 from .fmt import (D, age_days, back_w, cap, fd, fr, gone_w, mon_lab, money, p100, pct, pct1k, rate_txt, umar, umar_se,
                   unit_word, usd2, users, ver_of)
@@ -317,6 +318,8 @@ def q_extra(ctx, r, a):
             kit = app_size_txt(ctx, aid)
             karo = "Kal ka AdMob data check karo; aaj bhi 0 ho to AdMob console dekho."
         return dict(kya=r["fact"], kit=kit, karo=karo)
+    if k == "ads" and r.get("cpx"):
+        return _q_cpx(ctx, r, aid)
     if k == "ads":
         x = ctx.ads[aid]
         kit = (f"Spend {money(x['spp'], din=False)} → {money(x['sp'])} · revenue {money(a['kp7'], din=False)} → "
@@ -356,6 +359,27 @@ def q_extra(ctx, r, a):
                          f"({money(r['now'] - r['before'], din=False, sign=True)})"),
                     karo="Aaj ka number bhi dekho; do din lagatar kam ho to ad units check karo.")
     return dict(kya=r["fact"], kit="", karo="Detail dekho.")
+
+
+def _q_cpx(ctx, r, aid):
+    """The 5 answers of an ads row that comes from the 📉 CPI alarm (Alarm red / Watch amber)."""
+    x = ctx.ads[aid]
+    lost = r.get("lost") if isinstance(r.get("lost"), dict) else {}
+    usd = lost.get("usd")
+    if isinstance(usd, (int, float)) and usd > 0:
+        kit = f"≈{money(usd, din=False)} lost {fr(ctx, r['lo'], r['t'])} (Day-0 ROAS below normal)"
+        sc, fr0 = lost.get("sc") if isinstance(lost.get("sc"), dict) else {}, lost.get("from")
+        if isinstance(fr0, str) and fr0 < r["lo"].isoformat() and isinstance(sc.get("usd"), (int, float)):
+            kit += f" · since {fd(ctx, fr0)} ≈{money(sc['usd'], din=False)}"
+    else:
+        kit = f"Spend {money(x['spp'], din=False)} → {money(x['sp'])} (7 days vs the 7 before)"
+    if r["cpx"] == "alarm":
+        karo = ("📉 CPI screen kholo — Campaigns / Countries me dekho kahan CPI badha ya Day-0 ROAS gira; usi "
+                "campaign ka budget / tROAS theek karo.")
+    else:
+        karo = ("Abhi budget mat badhao — 2-3 din nazar rakho; Alarm bane to 📉 CPI screen pe campaign-wise "
+                "dekho.")
+    return dict(kya=r["fact"], kit=kit, karo=karo)
 
 
 EXTRA_Q = ("range", "ads", "med", "kal_drop", "setup", "ded", "ah_ivt", "upd")
@@ -476,6 +500,9 @@ def fallback(ctx, f, aid, a):
              "halt": "🛑 Stop update"}.get(lv, "No clear change")
         return "normal", f"{v} ({fd(ctx, u['date'])}) · {w}"
     if f == "ads":
+        c = ctx.cpi.get(aid)
+        if c is not None:                      # one verdict everywhere: the 📉 CPI screen's status (OK / New / Paused)
+            return cpx.line(ctx, c, cpx.now3(ctx, a, *cpx.span(ctx.cpi_t)), c.get("nrm") or {}, ctx.cpi_t)
         x = ctx.ads[aid]
         if x["sp"] < 1 and x["spp"] < 1:
             return "na", "No Google Ads spend (last 14 days)"

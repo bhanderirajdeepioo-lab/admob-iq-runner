@@ -189,6 +189,21 @@ def test_refresh_and_bookmarks(report):
 
 
 @needs_node
+def test_roas_card_follows_the_cpi_verdict(report):
+    """💰 Marketing ROAS = the 📉 CPI vs eCPM verdict for an app in this build's CPI pointer (one verdict everywhere)."""
+    r = O(report, "cards_cpx")
+    s = r["stale"]                                     # today's Review card says N/A (frozen on an older pointer)
+    assert s["cpx"]["st"] == "bigda" and s["cpx"]["line"].startswith("Alarm since ")
+    assert (s["roas"]["st"], s["roas"]["chip"], s["roas"]["line"]) == ("bigda", "🔴 Worse", s["cpx"]["line"])
+    assert s["roas"]["tab"] == "roas"
+    m = r["same"]                                      # the Review card says the same: its own line stays
+    assert (m["roas"]["st"], m["roas"]["line"]) == ("bigda", "Alarm (Sudden step in Day-0 ROAS): Day-0 ROAS 40.0% → 30.0%")
+    o = r["other"]                                     # no pointer row for this app: the Review card as before
+    assert (o["roas"]["st"], o["roas"]["line"]) == ("lagu", "No Google Ads spend")
+    assert o["cpx"]["st"] == "lagu"
+
+
+@needs_node
 def test_switch_off_live(report):
     r = O(report, "switch_off_live")
     assert r["before"]["hubOn"] and r["before"]["depth"] == 2 and r["before"]["hash"].startswith("#home/")
