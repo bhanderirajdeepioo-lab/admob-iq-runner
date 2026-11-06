@@ -241,14 +241,16 @@ def test_run_writes_files_pointer_and_removes_stale(built):
     keys = {k: gu.file_key(IDS[k]) for k in "abde"}
     files = sorted(f for f in os.listdir(site) if f.startswith("cpi"))
     assert files == sorted(["cpi.json.gz"] + ["cpi_%s.json.gz" % v for v in keys.values()])      # stale one gone
-    assert sorted(p) == ["alerts", "apps", "at", "closed", "counts", "day0", "file", "fv", "t", "till", "unlinked", "v"]
+    assert sorted(p) == ["alerts", "apps", "at", "closed", "counts", "day0", "file", "fv", "la", "t", "till", "unlinked",
+                         "v"]
+    assert p["la"] is None                                                          # no owner action read
     assert (p["v"], p["t"], p["file"], p["at"]) == (1, T, "cpi.json.gz", "2026-03-30T05:22:00Z")
     assert p["till"] == {"spend": "2026-03-29", "d0": "2026-03-29", "admob": "2026-03-29", "ga4": "2026-03-27"}
     assert re.fullmatch(r"[0-9a-f]{12}", p["fv"])
     assert sorted(p["apps"]) == sorted(IDS[k] for k in "abde")                     # Hidden: not on this screen
     for k, key in keys.items():
         a = p["apps"][IDS[k]]
-        assert sorted(a) == ["file", "key", "lost", "name", "nrm", "open", "since", "st", "to", "v"]
+        assert sorted(a) == ["file", "key", "lost", "lp", "name", "nrm", "open", "since", "st", "to", "v"]
         assert (a["name"], a["key"], a["file"]) == (NAMES[k], key, "cpi_%s.json.gz" % key)
         assert re.fullmatch(r"[0-9a-f]{12}", a["v"])
     st = {k: p["apps"][IDS[k]]["st"] for k in "abde"}
@@ -322,8 +324,8 @@ def test_the_shapes_the_page_reads(built):
     for k in "abde":
         a = p["apps"][IDS[k]]
         f = load(site, a["file"])
-        assert sorted(f) == ["app_id", "camps", "ctys", "d", "day0", "ep", "key", "name", "notes", "nrm", "src", "t",
-                             "v"]
+        assert sorted(f) == ["app_id", "camps", "ctys", "d", "day0", "ep", "key", "la", "lp", "lv", "name", "notes", "nrm",
+                             "src", "t", "v"]
         assert (f["v"], f["app_id"], f["name"], f["key"], f["t"]) == (1, IDS[k], NAMES[k], a["key"], T)
         n = nd(f["day0"], T)
         assert sorted(f["d"]) == sorted(cb.ROWS) and all(len(v) == n for v in f["d"].values())
@@ -931,3 +933,213 @@ def test_an_app_whose_file_is_too_big_is_not_counted(tmp_path, monkeypatch):
     assert IDS["b"] not in p["apps"] and sorted(p["apps"]) == sorted(IDS[k] for k in "ade")
     assert p["counts"] == {"alarm": 1, "watch": 0, "fixed": 0, "ok": 0, "new": 1, "paused": 1}      # Beta (ok) not counted
     assert sum(p["counts"].values()) == len(p["apps"]) and cb.pop_line().endswith(", too big 1")
+
+
+# ── levels: history ledger + the owner's actions (config/cpi_levels.json) ───────────────────────────────────────────
+AT = "2026-03-30T04:00:00Z"
+
+
+def write_actions(tmp_path, acts):
+    cfg = tmp_path / "config"
+    cfg.mkdir(exist_ok=True)
+    (cfg / "cpi_levels.json").write_text(json.dumps({"v": 1, "actions": acts}))
+
+
+def act(n, kind, fam="CPI", app="a", **kw):
+    a = {"id": "a-%012x" % n, "at": "2026-03-30T04:%02d:00Z" % n, "by": "owner@example.com", "app": IDS[app],
+         "fam": fam, "act": kind}
+    a.update(kw)
+    return a
+
+
+def build(tmp_path, acts=None, data=None):
+    if data is None:
+        data, site, dash = make(tmp_path)
+    else:
+        data, site, dash = data
+    if acts is not None:
+        write_actions(tmp_path, acts)
+    cb.run(dash, data, site, {}, NOW)
+    cb.pop_line()
+    files = {k: load(site, dash["cpi"]["apps"][IDS[k]]["file"]) for k in "ab"}
+    return (data, site, dash), files
+
+
+def eps_of(f, fam):
+    return [e for e in f["ep"] if e["fam"] == fam]
+
+
+def test_levels_without_actions_ship_the_exact_history(tmp_path):
+    (data, site, dash), f = build(tmp_path)
+    a = f["a"]
+    assert a["la"] == [] and a["lp"] == [] and dash["cpi"]["la"] is None
+    cpi = a["lv"]["CPI"]
+    assert [(r["src"], r["st"]) for r in cpi] == [("alarm", "now"), ("first", "rest")]       # newest first
+    assert [(r["src"], r["st"]) for r in f["b"]["lv"]["CPI"]] == [("first", "now")]
+    d0 = a["day0"]
+    for fam, rows in a["lv"].items():
+        for r in rows:
+            assert re.fullmatch(r"L-[0-9a-f]{10}", r["id"]) and r["seen"] == "2026-03-30T05:22:00Z"
+            i0, i1 = nd(d0, r["days"][0]) - 1, nd(d0, r["days"][1]) - 1
+            for k, v in r["sums"].items():                 # the page's own sums of d over the named days (₹ and $)
+                tot = sum(x for x in a["d"][k][i0:i1 + 1] if x is not None)
+                assert tot == pytest.approx(v, abs=0.006 * (i1 - i0 + 1) + 1e-6), (fam, k)
+            assert CA.level_of(fam, r["sums"], i1 - i0 + 1, CA.P_PROD) == pytest.approx(r["v"], rel=1e-6), fam
+    alarm = cpi[0]
+    ep = eps_of(a, "CPI")[0]
+    assert (alarm["v"], alarm["days"], alarm["from"]) == (pytest.approx(ep["base"], rel=1e-6), ep["bspan"], ep["opened"])
+    led = json.load(open(cb.levels_path(data)))
+    assert led["v"] == 1 and led["rule"] == "L1" and set(led["apps"]) <= {IDS[k] for k in "abde"}
+    assert {x["what"] for x in led["log"]} == {"new"}
+
+
+def test_levels_ledger_is_stable_across_re_runs_and_records_restated_values(tmp_path):
+    got, f1 = build(tmp_path)
+    data = got[0]
+    first = open(cb.levels_path(data), "rb").read()
+    got2, f2 = build(tmp_path, data=make(tmp_path))
+    assert open(cb.levels_path(data), "rb").read() == first and f2["a"]["lv"] == f1["a"]["lv"]
+    # Google restates Beta's installs on two days inside its first CPI level's fortnight: same id, the value recorded
+    r1 = f1["b"]["lv"]["CPI"][0]
+    data, site, dash = make(tmp_path)
+    cache = json.load(open(os.path.join(data, "roas_spend_cache.json")))
+    for x in r1["days"][:2]:
+        cache["installs"][SIDS["b"]][x] = round(cache["installs"][SIDS["b"]][x] * 1.2, 2)
+    json.dump(cache, open(os.path.join(data, "roas_spend_cache.json"), "w"))
+    _, f3 = build(tmp_path, data=(data, site, dash))
+    r3 = [r for r in f3["b"]["lv"]["CPI"] if r["src"] == "first"][0]
+    assert r3["id"] == r1["id"] and r3["seen"] == r1["seen"] and r3["v"] < r1["v"]
+    assert r3["rs"]["v_old"] == r1["v"] and r3["rs"]["v_new"] == r3["v"]
+    led = json.load(open(cb.levels_path(data)))
+    assert [x["what"] for x in led["log"] if x["id"] == r1["id"]] == ["new", "restated"]
+
+
+def test_levels_a_saved_level_no_longer_produced_is_kept_as_gone(tmp_path):
+    data, site, dash = make(tmp_path)
+    os.makedirs(os.path.join(data, "cpi"), exist_ok=True)
+    old = {"v": 1, "rule": "L1", "proposals": {}, "log": [], "apps": {IDS["b"]: {"CPI": [
+        {"id": "L-00000000aa", "from": "2025-11-01", "to": None, "v": 12.5, "days": None, "sums": None, "src": "auto",
+         "ep": None, "act": None, "seen": "2026-03-01T00:00:00Z", "restated": [], "gone": None, "rejected": None}]}}}
+    json.dump(old, open(cb.levels_path(data), "w"))
+    _, f = build(tmp_path, data=(data, site, dash))
+    g = [r for r in f["b"]["lv"]["CPI"] if r["id"] == "L-00000000aa"][0]
+    assert g["st"] == "gone" and g["gone"] == "2026-03-30T05:22:00Z" and g["v"] == 12.5
+    assert [r["st"] for r in f["b"]["lv"]["CPI"] if r["src"] == "first"] == ["now"]
+
+
+def test_levels_set_by_days_closes_the_open_alarm_from_the_data_day(tmp_path):
+    days_ = [C, "2026-03-28"]                                                      # the days after the change
+    (data, site, dash), f = build(tmp_path, [act(1, "set", **{"from": T, "days": days_, "note": "naya normal"})])
+    a = f["a"]
+    ep = eps_of(a, "CPI")[0]
+    assert (ep["closed"], ep["why"]) == (T, "owner")
+    man = [r for r in a["lv"]["CPI"] if r["src"] == "manual"][0]
+    assert (man["from"], man["days"], man["act"], man["st"]) == (T, days_, "a-000000000001", "now")
+    i0, i1 = nd(a["day0"], days_[0]) - 1, nd(a["day0"], days_[1]) - 1
+    want = sum(a["d"]["sp_inr"][i0:i1 + 1]) / sum(a["d"]["inst"][i0:i1 + 1])
+    assert man["v"] == pytest.approx(want, rel=1e-6) and man["v"] == pytest.approx(31.25, rel=0.03)
+    assert [(x["id"], x["st"], x["note"], x["days"]) for x in a["la"]] == [("a-000000000001", "applied", "naya normal",
+                                                                             days_)]
+    assert "by" not in a["la"][0]                                                   # never the email on the page
+    assert dash["cpi"]["la"] == "2026-03-30T04:01:00Z"
+    assert dash["cpi"]["apps"][IDS["a"]]["st"] == "alarm"                           # D0 ROAS still open
+
+
+def test_levels_typed_value_rollback_accept_auto(tmp_path):
+    _, f0 = build(tmp_path)
+    first = [r for r in f0["a"]["lv"]["CPI"] if r["src"] == "first"][0]
+    acts = [act(1, "set", fam="ECPM", **{"from": T, "value": 5.0}),
+            act(2, "rollback", level=first["id"], **{"from": T}),
+            act(3, "accept", fam="ROAS_G", proposal={"day": T, "days": [C, "2026-03-28"]}, **{"from": T}),
+            act(4, "auto", fam="GAP", **{"from": T})]
+    (data, site, dash), f = build(tmp_path, acts, data=make(tmp_path))
+    a = f["a"]
+    assert [(x["id"], x["st"]) for x in a["la"]] == [("a-%012x" % n, "applied") for n in (4, 3, 2, 1)]
+    ec = [r for r in a["lv"]["ECPM"] if r["src"] == "manual"][0]
+    assert (ec["v"], ec["days"], ec["sums"]) == (5.0, None, None)
+    rb = [r for r in a["lv"]["CPI"] if r["src"] == "rollback"][0]
+    assert rb["days"] == first["days"] and rb["v"] == pytest.approx(first["v"], rel=1e-12)
+    ac = [r for r in a["lv"]["ROAS_G"] if r["src"] == "accepted_owner"][0]
+    assert ac["v"] == pytest.approx(0.30, rel=0.03) and ac["st"] == "now"
+    for fam in ("ECPM", "CPI", "ROAS_G"):
+        assert [(e["closed"], e["why"]) for e in eps_of(a, fam)][-1] == (T, "owner"), fam
+    assert [(e["closed"], e["why"]) for e in eps_of(a, "GAP")][-1] == (None, None)      # "auto": no pin, still open
+
+
+def test_levels_undo_drops_the_action_as_if_it_never_was(tmp_path):
+    _, f0 = build(tmp_path)
+    acts = [act(1, "set", **{"from": T, "days": ["2026-03-01", "2026-03-28"]}),
+            {"id": "a-%012x" % 2, "at": "2026-03-30T04:02:00Z", "act": "undo", "ref": "a-%012x" % 1}]
+    _, f = build(tmp_path, acts, data=make(tmp_path))
+    assert [(x["id"], x["st"]) for x in f["a"]["la"]] == [("a-000000000002", "applied"), ("a-000000000001", "undone")]
+    assert f["a"]["ep"] == f0["a"]["ep"] and f["a"]["lv"] == f0["a"]["lv"]
+
+
+def test_levels_a_bad_action_costs_only_itself(tmp_path, capsys):
+    good = act(1, "set", fam="ECPM", **{"from": T, "value": 5.0})
+    bad = [act(2, "rollback", level="L-ffffffffff", **{"from": T}),
+           act(3, "set", **{"from": T, "days": ["2026-03-25", "2026-03-28"]}),             # 4 days: too few
+           act(4, "set", app="h", **{"from": T, "value": 9.0}),                             # not on this screen
+           act(5, "reject", level=None),
+           {"id": "a-%012x" % 6, "at": "2026-03-30T04:06:00Z", "act": "undo", "ref": "a-0000000000ff"}]
+    capsys.readouterr()
+    _, f = build(tmp_path, [good] + bad)
+    err = capsys.readouterr().err
+    st = {x["id"]: (x["st"], x.get("why")) for x in f["a"]["la"]}
+    assert st["a-000000000001"] == ("applied", None)
+    assert st["a-000000000002"] == ("bad", "UnknownLevel") and st["a-000000000003"] == ("bad", "BadDays")
+    assert st["a-000000000005"] == ("bad", "UnknownLevel")
+    for why in ("UnknownLevel", "BadDays", "UnknownApp", "UnknownRef"):
+        line = "cpi level action skipped: %s" % why
+        assert line in err and health.SKIP.search(line)
+    assert [e["why"] for e in eps_of(f["a"], "ECPM")] == ["owner"]
+
+
+def test_levels_reject_marks_the_accepted_row_and_waits_on_a_later_day(tmp_path):
+    data, site, dash = make(tmp_path)
+    os.makedirs(os.path.join(data, "cpi"), exist_ok=True)
+    row = {"id": "L-00000000bb", "from": "2026-01-10", "to": None, "v": 21.0, "days": ["2025-12-14", "2026-01-10"],
+           "sums": None, "src": "accepted", "ep": {"opened": "2025-11-15", "old": 20.0}, "act": None,
+           "seen": "2026-03-01T00:00:00Z", "restated": [], "gone": None, "rejected": None}
+    json.dump({"v": 1, "rule": "L1", "proposals": {}, "log": [], "apps": {IDS["a"]: {"CPI": [row]}}},
+              open(cb.levels_path(data), "w"))
+    acts = [act(1, "reject", level="L-00000000bb"), act(2, "set", fam="IPU", **{"from": "2026-03-29", "value": 3.0})]
+    _, f = build(tmp_path, acts, data=(data, site, dash))
+    r = [x for x in f["a"]["lv"]["CPI"] if x["id"] == "L-00000000bb"][0]
+    assert r["st"] == "rejected" and r["rejected"] == "2026-03-30T04:01:00Z" and r["gone"] is None
+    assert {x["id"]: x["st"] for x in f["a"]["la"]} == {"a-000000000001": "applied", "a-000000000002": "waiting"}
+    led = json.load(open(cb.levels_path(data)))
+    assert [x["what"] for x in led["log"] if x["id"] == "L-00000000bb"] == ["rejected"]
+
+
+def test_levels_failures_cost_the_levels_only(tmp_path, monkeypatch, capsys):
+    data, site, dash = make(tmp_path)
+    write_actions(tmp_path, [])
+    (tmp_path / "config" / "cpi_levels.json").write_text("{broken")
+    capsys.readouterr()
+    _, f = build(tmp_path, data=(data, site, dash))
+    assert "cpi levels skipped: JSONDecodeError" in capsys.readouterr().err
+    assert "lv" not in f["a"] and "la" not in dash["cpi"] and f["a"]["ep"]                # the tab, automatic only
+    assert not os.path.exists(cb.levels_path(data))
+
+    def boom(*a, **k):
+        raise RuntimeError("x")
+    monkeypatch.setattr(cb, "merge_ledger", boom)
+    write_actions(tmp_path, [])
+    _, f = build(tmp_path, data=make(tmp_path))
+    assert "cpi levels skipped: RuntimeError" in capsys.readouterr().err and "lv" not in f["a"]
+
+
+def test_levels_a_level_that_is_not_exact_is_never_shipped(tmp_path, monkeypatch, capsys):
+    real = CA.measure
+
+    def off(ent, P, fam, a, b):
+        m = real(ent, P, fam, a, b)
+        if m and fam == "CPI" and ent.id == IDS["b"]:
+            m = dict(m, v=m["v"] * 1.01)
+        return m
+    monkeypatch.setattr(CA, "measure", off)
+    capsys.readouterr()
+    _, f = build(tmp_path)
+    assert "cpi levels skipped: LevelMismatch" in capsys.readouterr().err
+    assert f["b"]["lv"] == {} and f["a"]["lv"]["CPI"]                              # Beta: its saved history only (none)
