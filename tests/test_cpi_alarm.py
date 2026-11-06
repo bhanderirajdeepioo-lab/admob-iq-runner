@@ -4,6 +4,7 @@ the same on every Python), 420 days from a day0 on the EPOCH's weekly phase. Eac
 what the engine says about it: P_PARITY must give the investigation's reference values (the replay the owner's
 backtest was run on), P_PROD each production change. No real data."""
 import copy
+import math
 from datetime import date, timedelta
 
 import pytest
@@ -349,6 +350,23 @@ def test_weekly_noise_refresh_is_on_the_epoch_phase():
     assert a and a == b
 
 
+@pytest.mark.parametrize("name", ["M", "M2"])
+@pytest.mark.parametrize("k", [1, 3, 5])
+@pytest.mark.parametrize("P", [E.P_PARITY, E.P_PROD], ids=["parity", "prod"])
+def test_episodes_do_not_depend_on_day0(name, k, P):
+    """The weekly noise refresh is anchored to the calendar (EPOCH), not to index 0: the same series with k idle days
+    in front (day0 − k) gives the same episodes by DATE, whatever its day0 weekday."""
+    s = CASES[name][0]
+    pre = {key: ([None] * k if key == "dau" else [0.0] * k) + list(v) for key, v in s.items()}
+    d0 = (date.fromisoformat(DAY0) - timedelta(days=k)).isoformat()
+
+    def eps(e):
+        return [(x["fam"], x["opener"], x["c"], x["opened"], x["closed"], x["why"], x["base"])
+                for x in E.run([e], P, T)["episodes"] if x["fam"] == "CPI"]
+    a, b = eps(ent(s)), eps(ent(pre, day0=d0))
+    assert a and a == b
+
+
 def test_data_after_t_is_never_read():
     s = case_A()
     long = {k: v + [9e9] * 30 for k, v in s.items() if v[0] is not None}
@@ -476,6 +494,124 @@ def test_prod_unknown_days_never_recover_or_stop_an_alarm():
     r = E.run([ent(tail)], E.P_PROD, T)
     assert [x["why"] for x in r["episodes"] if x["fam"] == "CPI"] == [None]
     assert r["state"][("app", APP)]["CPI"] == "open" and r["state"][("app", APP)]["SPEND"] == "gated"
+
+
+def day_of(i):
+    return (date.fromisoformat(DAY0) + timedelta(days=i)).isoformat()
+
+
+def cpi_eps(s, P=E.P_PROD, t_ix=N - 1, fam="CPI"):
+    r = E.run([ent(s)], P, day_of(t_ix))
+    return r, [x for x in r["episodes"] if x["fam"] == fam]
+
+
+def test_prod_healthy_follows_the_new_level_after_a_settle():
+    r, eps = cpi_eps(step_held())
+    assert [x["why"] for x in eps] == ["settled"]
+    c, H = ix(eps[0]["closed"]), r["healthy"][("app", APP)]["CPI"]
+    assert c + 40 < N
+    new = 94.5 * 0.2 * 1.4
+    for d in range(c + 1, c + 41):                    # never None, never the old level, from the first day on
+        assert H[d] is not None and H[d] == pytest.approx(new, rel=0.03), d
+    # an episode that closed 'recovered' still leaves its days out of H (the contrast)
+    r, eps = cpi_eps(CASES["A"][0])
+    assert eps[0]["why"] == "recovered"
+    assert all(r["healthy"][("app", APP)]["CPI"][ix(eps[0]["closed"]) + j] is None for j in range(1, 11))
+
+
+def test_prod_a_settled_level_is_the_base_of_the_next_alarm():
+    s = step_held()                                   # settles on day 364; then it slides on at +1 % a day
+    for d in range(370, N):
+        s["inst"][d] /= 1.01 ** (d - 369)
+    _, eps = cpi_eps(s)
+    assert [(x["opener"], x["why"], x["base_src"]) for x in eps] == [("SUDDEN", "settled", "before"),
+                                                                     ("DRIFT", None, "healthy")]
+    assert eps[1]["base"] == pytest.approx(94.5 * 0.2 * 1.4, rel=0.03)     # the new level, not the old one
+
+
+def test_prod_settle_needs_a_flat_level_not_a_slope():
+    def slope(rate):
+        s = synth()
+        for d in range(100, N):
+            s["inst"][d] /= (1 + rate) ** (d - 99)
+        return s
+    # +0.3 %/day: every 56-day stretch of L14 stays inside ±10 % of its median: accepted
+    _, eps = cpi_eps(slope(0.003))
+    assert eps[0]["why"] == "settled"
+    # +0.5 %/day, held 176 days in this alarm (open far longer than 80 days): the 56 days always span > ±10 %
+    _, eps = cpi_eps(slope(0.005))
+    assert [(x["opener"], x["why"]) for x in eps] == [("DRIFT", None)]
+    assert N - 1 - ix(eps[0]["opened"]) >= 80
+
+
+def test_prod_settle_waits_the_full_56_days():
+    s = synth()
+    for d in range(100, N):                                     # a gentle slope: flat enough for the band at once
+        s["inst"][d] /= 1.003 ** (d - 99)
+    _, eps = cpi_eps(s)
+    o = ix(eps[0]["opened"])
+    assert ix(eps[0]["closed"]) == o + 56 and eps[0]["why"] == "settled"
+    r, eps = cpi_eps(s, t_ix=o + 55)
+    assert [(x["opened"], x["why"]) for x in eps] == [(day_of(o), None)]
+    assert r["state"][("app", APP)]["CPI"] == "open"
+    r, eps = cpi_eps(s, t_ix=o + 56)
+    assert eps[0]["why"] == "settled" and r["state"][("app", APP)]["CPI"] == "ok"
+
+
+def test_prod_settle_band_is_ten_percent():
+    assert E.P_PROD["settle"]["days"] == 56 and E.P_PROD["settle"]["band"] == 0.10
+
+    def waving(amp):
+        s = synth()
+        mul(s, "inst", 300, N, 1 / 2.0)
+        for d in range(300, N):
+            s["inst"][d] *= 1 + amp * math.sin(2 * math.pi * (d - 300) / 112)
+        return s
+    _, eps = cpi_eps(waving(0.08))
+    assert [x["why"] for x in eps] == ["settled"]
+    _, eps = cpi_eps(waving(0.25))
+    assert [x["why"] for x in eps] == [None]
+    # the test itself, on a bare L14: ±9 % around the median is inside the band, ±11 % is not, an unknown day is not
+    band = E.P_PROD["settle"]["band"]
+    for amp, ok in ((0.09, True), (0.11, False)):
+        v = [1.0 + (amp if i % 2 else -amp) for i in range(60)]
+        assert E._settled(v, 59, 0, 56, band) is ok
+    v = [1.0] * 60
+    v[30] = None
+    assert E._settled(v, 59, 0, 56, band) is False
+
+
+def test_prod_roas_never_settles():
+    assert not {"ROAS_G", "ROAS_C0", "ROAS_C1", "ROAS_C7"} & set(E.P_PROD["settle"]["fams"])
+    s = synth(cohort=True)
+    mul(s, "d0_inr", 300, N, 0.8)
+    for key in ("c_r0", "c_r1", "c_r7"):
+        mul(s, key, 300, N, 0.8)
+    eps = run(s, E.P_PROD, fams=["ROAS_G", "ROAS_C0", "ROAS_C1", "ROAS_C7"])
+    assert {x["fam"] for x in eps} >= {"ROAS_G", "ROAS_C0"}
+    for x in eps:                                              # a 110-day-old flat level: still open, still a loss
+        assert x["why"] is None and N - 1 - ix(x["opened"]) >= 100, x["fam"]
+
+
+def test_prod_strict_unknown_spend_blocks_recovery_and_opening():
+    def holes(s, a):
+        for d in range(a, N):
+            if d % 7 in (0, 2, 4):                                 # spend unknown on 3 of every 7 days
+                s["sp_usd"][d] = s["sp_inr"][d] = None
+    # AdMob's eCPM is back to normal from day 340, but only 4 of 7 spend days are known: never 'recovered'
+    s = synth()
+    mul(s, "rev", 300, 340, 0.75)
+    holes(s, 340)
+    assert [(x["why"], ix(x["opened"])) for x in run(s, E.P_PARITY, fams=["ECPM"])] == [("recovered", 306)]
+    eps = run(s, E.P_PROD, fams=["ECPM"])
+    assert [(x["why"], x["closed"], ix(x["opened"])) for x in eps] == [(None, None, 306)]
+    # a drop that starts on such days opens nothing under strict (the lenient reading opens it)
+    s = synth()
+    mul(s, "rev", 300, N, 0.75)
+    holes(s, 300)
+    assert [ix(x["opened"]) for x in run(s, E.P_PARITY, fams=["ECPM"])] == [306]
+    assert run(s, E.P_PROD, fams=["ECPM"]) == []
+    assert E.run([ent(s)], E.P_PROD, T)["state"][("app", APP)]["ECPM"] == "gated"
 
 
 # ── pushes and cards ──────────────────────────────────────────────────────────────────────────────────────────────
