@@ -1,10 +1,14 @@
 """🖼️ Screens tab — the build (admob_iq.screens_build), on made-up stores written straight in the fetch's §2.7 layout (meta,
 recent.json.gz, <grp>_<YYYY-MM>.json.gz month files) and a made-up dashboard (placements, apps_catalog, latest_complete,
 report_tz): formats / kinds, what each grain gives, duplicate copies decided in runs, the package rule, the AdMob blend,
-trigger labels, every status rule, the exact LMDI split, unit stopped / changed, the cause gates (units with no AdMob id
-their own gate), the developer report, the files / pointer / regex, the write order and failure isolation, the too-big
-guard, the month cache, a store month file that cannot be read (counted, one health line, its days "x", never cached),
-the counts-only line and the backtest CLI."""
+trigger labels, every status rule (N/A "Not whole": the missing W days counted by their state, the days with nothing to
+read left out; N/A "Too few ads" under 1 % of the app's ads of the row's kind), screens judged on all formats when GA4
+gives no screen × format split (allf 2 + the measured full-screen share), the exact LMDI split, unit stopped / changed,
+the cause gates (units with no AdMob id their own gate), the developer report, the files / pointer / regex, only the
+apps the catalog selects, the history cell (done and no skip day still read again), the write order and failure
+isolation, the too-big guard, the month cache (a previous CACHE_V's caches derived again), a store month file that
+cannot be read (counted, one health line, its days "x", never cached), a day the fetch never asked GA4 about ("skip":
+shipped "-", not read yet — in scr_l too), the counts-only line and the backtest CLI."""
 import gzip
 import hashlib
 import io
@@ -161,7 +165,9 @@ def dashboard(sc=None, first="2026-07-01", last="2026-11-04", latest="2026-11-03
             daily[u].append([d, 0, round(imp), round(req), round(mt), 0])
     pl = [{"id": IDS[u], "name": u, "app": app, "account": acct, "format": FMT[u], "daily": daily[u]}
           for u in IDS if any(r[2] or r[3] for r in daily[u])] if placements else []
-    return {"placements": pl, "apps_catalog": [{"account_id": acct, "app_id": aid, "app_name": app}],
+    return {"placements": pl, "apps_catalog": [{"account_id": acct, "app_id": aid, "app_name": app, "selected": True},
+                                               {"account_id": acct, "app_id": AID2, "app_name": "App B",
+                                                "selected": True}],
             "latest_complete": latest, "report_tz": "Asia/Calcutta"}
 
 
@@ -407,7 +413,7 @@ def series(rate_n=0.2, rate_w=0.2, v=1000, n_days=None, w_days=None, n_rates=Non
 def test_status_rules_in_order():
     j = lambda s, **k: sb.judge(s, WD, ND, **k)
     st = j(series(w_days=WD[:4]))
-    assert (st["word"], st["why"]) == ("N/A", "GA4 sampled — 4 whole days of inline ads in the last 10")
+    assert (st["word"], st["why"]) == ("N/A", "Not whole — 4 whole days of inline ads in the last 10")
     assert j(series(), guard="Logging changed — format not recorded 40%")["word"] == "N/A"
     assert j(series(rate_n=0, rate_w=0))["why"] == "No inline ads"
     assert j(series(rate_n=0, rate_w=0), full=True)["why"] == "No full-screen ads"
@@ -423,6 +429,22 @@ def test_status_rules_in_order():
     assert j(series(rate_w=0.17))["word"] == "Watch"
     assert j(series(rate_w=0.26))["word"] == "Better"
     assert j(series(rate_w=0.195))["word"] == "Normal"
+
+
+def test_not_whole_counts_the_missing_days_by_their_state():
+    # the N/A why counts the W days the series lacks by the state each ships (miss): non-zero parts, in a fixed order
+    miss = dict(zip(WD[4:], "-xs-fo")).get
+    st = sb.judge(series(w_days=WD[:4]), WD, ND, miss=miss)
+    assert (st["word"], st["why"], st["dW"]) == (
+        "N/A", "Not whole — 4 whole days of inline ads in the last 10 (GA4 sampled 1 · GA4 dropped rows 1 · not read "
+               "yet 2 · format not split 1 · store file unreadable 1)", 4)
+    st = sb.judge(series(w_days=WD[:2]), WD, ND, miss=dict(zip(WD[2:], "pppttt--")).get)
+    assert st["why"] == ("Not whole — 2 whole days of inline ads in the last 10 (GA4 grouped 3 · thresholding 3 · not "
+                         "read yet 2)")
+    st = sb.judge(series(w_days=[]), WD, ND, what="interstitial", full=True, miss=lambda d: "s")
+    assert st["why"] == "Not whole — 0 whole days of interstitial ads in the last 10 (GA4 sampled 10)"   # sampled only
+    st = sb.judge(series(w_days=WD[:5]), WD, ND, miss=lambda d: "s")                # MIN_A_W (5) whole days: next rule
+    assert (st["word"], st["why"]) == ("Too early", "last 10 days have 5 whole days (needs 7)")
 
 
 def test_watch_and_better_need_a_z_of_3():
@@ -451,6 +473,70 @@ def test_both_halves_must_agree():
     assert st["score"] == 70 and st["z"] < -3 and st["h"] == [100, 40] and st["word"] == "Normal"
     st = sb.judge(series(w_rates=[0.15] * 5 + [0.09] * 5), WD, ND)
     assert st["h"] == [75, 45] and st["word"] == "Worse"
+
+
+TINY, BIG = "x.y.TinyActivity", "x.y.BigActivity"
+
+
+def mat_day(d):
+    """The fixture day + TinyActivity (600 visits, 4 banner ads a day; 24 in W: a sliver of the app's ads at 6× its
+    rate), BigActivity (1,500 visits, 4,000 banner ads a day), EditActivity's native ads gone in W, and two more
+    interstitial units on the ad SDK's Activity: zz_splash_1 (1 a day) and inter_bulk (300 a day)."""
+    r = core_recs(d, {})
+    win = d >= W0
+    r["v"]["r"] += [[TINY, 600, 6000], [BIG, 1500, 15000]]
+    if win:
+        r["a"]["r"] = [x for x in r["a"]["r"] if x[2] != "unit_n"]
+        r["w"]["r"] = [x for x in r["w"]["r"] if x[1] != "unit_n"]
+        r["t"]["a"] = [x for x in r["t"]["a"] if x[0] != "Native advanced"]
+    add = [[TINY, "Banner", "unit_tiny", 24 if win else 4], [BIG, "Banner", "unit_big", 4000],
+           [ADACT, "Interstitial", "zz_splash_1", 1], [ADACT, "Interstitial", "inter_bulk", 300]]
+    ta = {f: n for f, n in r["t"]["a"]}
+    for c, f, u, n in add:
+        r["a"]["r"].append([c, f, u, n])
+        r["w"]["r"].append([f, u, n])
+        ta[f] = ta.get(f, 0) + n
+    r["t"]["a"] = [[f, n] for f, n in ta.items()]
+    return r
+
+
+def test_a_row_with_too_few_ads_is_not_judged(tmp_path):
+    # owner, 6 Nov: screens holding a sliver of the app's ads showed scores many times 100 — ratios of near-zero rates.
+    # A row is judged only while it holds ≥ 1 % of the app's ads of its kind (inline / all-format, a trigger's format)
+    # in W or in N, its share taken over its own series days: else N/A "Too few ads"
+    data = tmp_path / "data"
+    write_store(data, day_fn=mat_day)
+    meta = sb.load_meta(str(data), KEY)
+    app = sb.App(meta, sb.core_days(str(data), KEY, meta, sb.load_recent(str(data), KEY)), NOW, dashboard(), {})
+    rows = {r[2]: r for r in sb.statuses(app)[0]}
+    st = rows[TINY][6]
+    assert (st["word"], st["why"], st["score"], st["z"]) == ("N/A", "Too few ads — 0.5% of the app's inline ads", None,
+                                                              None)
+    assert 0.0055 < st["mat"] < 0.006 and (st["AW"], st["AN"]) == (240, 112)      # W 24 / 4,228 a day; N 4 / 4,258
+    alone = sb.judge(rows[TINY][5], WD, ND)                                        # the same row without the gate
+    assert (alone["word"], alone["score"]) == ("Better", 600)
+    st = rows[EDIT][6]                                                             # 1.2 % in N, nothing in W: judged
+    assert (st["word"], st["AW"], st["score"]) == ("Worse", 0, 0) and 0.0115 < st["mat"] < 0.012
+    assert rows[MAIN][6]["word"] == rows[BIG][6]["word"] == "Normal"
+    st = rows["interstitial · Splash"][6]                                          # 1 of 331 interstitials a day
+    assert (st["word"], st["why"]) == ("N/A", "Too few ads — 0.3% of the app's interstitial ads")
+    assert rows["interstitial · Back press"][6]["word"] == "Normal"                # 30 of 331: 9 %
+    assert sb.judge(series(), WD, ND, tot={d: 1000 for d in WD + ND})["mat"] == 0.2   # exactly the row's share
+    st = sb.judge(series(), WD, ND, tot={d: 20000 for d in WD + ND})              # 200 of 20,000 a day: 1 % → judged
+    assert st["word"] == "Normal" and st["mat"] == 0.01
+    # the files: N/A in scr_all's status (Needs attention lists only Worse / Watch: never this row), no report block
+    out = tmp_path / "site"
+    (data / "app_store_ids.json").write_text(json.dumps({"by_id": {}}))
+    assert sb.run(dashboard(), str(data), str(out), {}, NOW) == ["/scr_*"]
+    one = gz(out / "scr_all.json.gz")["apps"][AID]
+    st_of = {it[0]: one["status"].get(str(i)) for i, it in enumerate(one["items"])}
+    assert st_of[TINY] == ["N/A", "Too few ads — 0.5% of the app's inline ads", None, ""]
+    assert st_of["Splash"][:2] == ["N/A", "Too few ads — 0.3% of the app's interstitial ads"]
+    assert st_of[EDIT][0] == "Worse" and one["app"][2:] == [1, 0]     # (the app's word: its rows with ≥ 3 % of N ads)
+    f2, fl = gz(out / ("scr_%s.json.gz" % KEY)), gz(out / ("scr_l_%s.json.gz" % KEY))
+    rid = {c: "s%d" % i for i, (c, k) in enumerate(f2["screens"])}
+    assert rid[EDIT] in fl["report"]["rows"] and rid[TINY] not in fl["report"]["rows"]
+    assert f2["rows"][rid[TINY]]["cause"] == "" and f2["rows"][rid[TINY]]["st"][2] is None
 
 
 def test_app_status_is_the_worst_row_with_enough_ads():
@@ -508,7 +594,8 @@ def test_ga4_grouped_days_never_read_as_a_drop(tmp_path):
     # every W day: 30 % of MainActivity folded into "(other)" → those days are not whole for the screen: never "Worse"
     app = fold_app(tmp_path / "a", 0.3, set(WD))
     st = _main_row(app)[6]
-    assert st["word"] == "N/A" and st["why"].startswith("GA4 sampled — 0 whole days") and st["dW"] == 0
+    assert (st["word"], st["why"], st["dW"]) == ("N/A", "Not whole — 0 whole days of inline ads in the last 10 (GA4 "
+                                                        "grouped 10)", 0)
     assert not set(WD) & set(app.screen_series(MAIN, False))
     # 4 of the 10 W days folded: 6 whole days stay, the grouped class share moved 0 → 8 points → Logging changed
     app = fold_app(tmp_path / "b", 0.3, set(WD[:4]))
@@ -559,13 +646,112 @@ def test_a_small_grouped_part_ships_as_whole(tmp_path):
     assert [sh["days"][9]["V"]["st"], sh["days"][10]["V"]["st"]] == ["w", "p"]   # the shards' day parts alike
 
 
+def test_a_day_ga4_was_never_asked_ships_not_read_yet(tmp_path):
+    # the fetch keeps a day it never sent to GA4 (its shape dead, or the volume gate) as a record with "skip" and the st
+    # "s" / "o" it stands in with: it ships "-" (not read yet) everywhere, never "GA4 sampled" / "GA4 dropped rows"; a
+    # status row's N/A counts its W days by the states shipped (screen rows: visits, then ads by screen; trigger rows:
+    # visits, then the units read)
+    gate = {"st": "s", "g": "c", "skip": "gate", "tried": [], "fv": 1}
+    dead = {"st": "o", "g": "c", "skip": "dead", "tried": ["fu", "f"], "fv": 1}
+    assert [sb._ch(r) for r in (gate, dead, dict(dead, st="t"), {"st": "s"})] == ["-", "-", "-", "s"]
+    assert sb._ch(dict(gate, st="w", r=[])) == "w"                        # (a usable record keeps its own state)
+    a_w = [gate] * 5 + [{"st": "s", "g": "c", "smp": 0.4}] * 2 + [{"st": "o", "g": "c", "cov": 0.9}, dead, "c"]
+    lay = "2026-09-15"                                                     # a final day of the layer month files
+
+    def day(d):
+        r = core_recs(d, {})
+        r.update(layer_recs(d, {}))
+        if d in WD:
+            x = a_w[WD.index(d)]
+            if x == "c":                                                   # whole, but per screen only (no format)
+                tot = {}
+                for c, f, u, n in r["a"]["r"]:
+                    tot[c] = tot.get(c, 0) + n
+                x = {"st": "w", "g": "c", "r": [[c, n] for c, n in sorted(tot.items())]}
+            r["a"] = dict(x)
+            r["w"] = {"st": "s", "g": "u", "smp": 0.5}                      # the units read: GA4 sampled every W day
+        if d == lay:
+            r["nA"], r["cA"] = dict(gate, g="cf"), dict(dead, g="cf")
+        return r
+    data, out = tmp_path / "data", tmp_path / "site"
+    write_store(data, day_fn=day)
+    (data / "app_store_ids.json").write_text(json.dumps({"by_id": {}}))
+    assert sb.run(dashboard(), str(data), str(out), {}, NOW) == ["/scr_*"]
+    one = gz(out / "scr_all.json.gz")["apps"][AID]
+    days = _days(one["d0"], "2026-11-04")
+    assert "".join(one["st"]["a"][days.index(d)] for d in WD) == "-----sso-w"
+    assert "".join(one["st"]["w"][days.index(d)] for d in WD) == "s" * 10
+    k = days.index(lay)
+    assert [one["st"][i][k - 1:k + 2] for i in ("nA", "cA")] == ["w-w", "w-w"]       # the small group, a layer group
+    f2 = gz(out / ("scr_%s.json.gz" % KEY))
+    assert f2["days"][days.index(WD[0])]["st"] == {"t": "w", "v": "w", "w": "s", "a": "-"}         # file 2's day states
+    assert gz(out / ("scr_c_%s_202609.json.gz" % KEY))["days"][14]["A"]["st"] == "-"   # the shard's day part
+    why = {it[0]: one["status"][str(i)][1] for i, it in enumerate(one["items"]) if str(i) in one["status"]}
+    scr = ("Not whole — 0 whole days of inline ads in the last 10 (GA4 sampled 2 · GA4 dropped rows 1 · not read yet 6 "
+           "· format not split 1)")
+    assert why[MAIN] == why[EDIT] == scr and one["app"] == ["N/A", scr, 0, 0]
+    assert why["Back press"] == "Not whole — 0 whole days of interstitial ads in the last 10 (GA4 sampled 10)"
+    fl = gz(out / ("scr_l_%s.json.gz" % KEY))
+    rep = fl["report"]["app"]
+    assert "Status: N/A — %s (0 Worse, 0 Watch)" % scr in rep and "GA4 sampled —" not in rep
+    # scr_l's own record of that day ships the same state as scr_all's string (never the "s" it is stored with)
+    assert fl["days"][k]["nA"] == {"st": "-", "g": "cf", "skip": "gate", "tried": [], "fv": 1}
+    assert fl["days"][k - 1]["nA"]["st"] == "w" and fl["days"][k]["nV"]["st"] == "w"
+    # the first read a row cannot use names its day: GA4 grouped visits stop a screen row, not a trigger row
+    meta = sb.load_meta(str(data), KEY)
+    app = sb.App(meta, sb.core_days(str(data), KEY, meta, sb.load_recent(str(data), KEY)), NOW, dashboard(), {})
+    app.st["v"][WD[0]] = "p"
+    assert [app.day_why(d, fs) for d in (WD[0], WD[9]) for fs in (False, True)] == ["p", "s", "f", "s"]
+    # a core month file that cannot be read: its W days ship "x" and the N/A names them, never "not read yet"
+    data, out, dash = build(tmp_path / "x")
+    (data / "ga4_screens" / KEY / "core_2026-10.json.gz").write_bytes(b"not gzip")
+    sb.run(dash, str(data), str(out), {}, NOW)
+    one = gz(out / "scr_all.json.gz")["apps"][AID]
+    i = [it[0] for it in one["items"]].index(MAIN)
+    assert one["status"][str(i)][:2] == ["N/A", "Not whole — 3 whole days of inline ads in the last 10 (store file "
+                                                "unreadable 7)"]
+
+
+def test_not_whole_leaves_out_the_days_with_nothing_to_read(tmp_path):
+    # a W day before the app's first day (the page's coverage starts there too), or before a read's history start once
+    # that read's history is done, is no day of the row: never "not read yet"; a split never read under a truth GA4 did
+    # not give whole counts under the truth's state (the fetch reads a split only after its truth)
+    data = tmp_path / "new" / "data"
+    write_store(data, first=WD[6])                                 # a new app: its first day is W's 7th
+    meta = sb.load_meta(str(data), KEY)
+    app = sb.App(meta, sb.core_days(str(data), KEY, meta, sb.load_recent(str(data), KEY)), NOW, dashboard(), {})
+    assert _main_row(app)[6]["why"] == "Not whole — 4 whole days of inline ads in the last 10"
+    assert [app.day_why(d, fs) for d in WD[:6] for fs in (False, True)] == [None] * 12
+
+    def day(d):
+        r = core_recs(d, {})
+        if d < WD[6]:
+            del r["a"]                         # ads by screen: no record before W's 7th day (its history: from W's 3rd)
+        if d == WD[2]:
+            r["t"] = {"st": "s", "smp": 0.4}   # W's 3rd day: the truth sampled, its splits never asked
+        return r
+    data = tmp_path / "hist" / "data"
+    write_store(data, day_fn=day)
+    meta = sb.load_meta(str(data), KEY)
+    meta["reads"]["a"] = {"oldest": WD[2], "done": True}             # GA4 has nothing for it before W's 3rd day
+    app = sb.App(meta, sb.core_days(str(data), KEY, meta, sb.load_recent(str(data), KEY)), NOW, dashboard(), {})
+    assert app.d0 == "2026-08-01" and [app.st["t"].get(d) for d in WD[1:4]] == ["w", "s", "w"]
+    assert _main_row(app)[6]["why"] == ("Not whole — 4 whole days of inline ads in the last 10 (GA4 sampled 1 · not "
+                                        "read yet 3)")
+    assert [app.day_why(d) for d in WD[:6]] == [None, None, "s", "-", "-", "-"]
+    meta["reads"]["a"]["done"] = False                              # its history still filling: those days are unread
+    app = sb.App(meta, sb.core_days(str(data), KEY, meta, sb.load_recent(str(data), KEY)), NOW, dashboard(), {})
+    assert _main_row(app)[6]["why"] == ("Not whole — 4 whole days of inline ads in the last 10 (GA4 sampled 1 · not "
+                                        "read yet 5)")
+
+
 def test_a_steady_unconfirmed_copy_is_judged_on_all_formats(tmp_path):
     rng = random.Random(11)
     lab_ratio = {d: rng.uniform(0.82, 0.84) for d in _days("2026-06-01", "2026-11-05")}
     copy = {d: round(200 * rng.uniform(0.95, 1.05)) for d in _days("2026-09-01", "2026-11-04")}
     app = dup_app(tmp_path / "a", lambda d: lab_ratio[d], lambda d: copy[d])
     assert len(app.runs) == 1 and not app.runs[0]["ok"] and app.runs[0]["open"]      # pattern-only, before N
-    assert app.allf() and (app._ns_fmt(WD, dup=True) or 0) > 0.4                      # the copy: ~50 % notset
+    assert app.allf() == 1 and (app._ns_fmt(WD, dup=True) or 0) > 0.4                 # the copy: ~50 % notset
     assert app.guard() is None and app.guard(screen=False) is None
     st = _main_row(app)[6]
     assert st["word"] in sb.JUDGED and not st["why"].startswith("Logging changed")
@@ -574,6 +760,67 @@ def test_a_steady_unconfirmed_copy_is_judged_on_all_formats(tmp_path):
     app = dup_app(tmp_path / "b", lambda d: lab_ratio[d], lambda d: copy[d] if d >= "2026-10-10" else 0)
     assert app.runs[0]["a"] == "2026-10-10"
     assert app.guard() == "Logging changed — duplicate ad_impression logging started 2026-10-10"
+
+
+def nosplit_day(c_from, fs_to="2026-07-21"):
+    """The fixture day + interstitials on MainActivity (5 a day up to fs_to, then 1) — and from c_from on, ads by screen
+    whole but per screen only (grain c: GA4 sampled every screen × format split, the screen totals whole)."""
+    def day(d):
+        r = core_recs(d, {})
+        k = 5 if d <= fs_to else 1
+        r["a"]["r"].append([MAIN, "Interstitial", "zz_back_1", k])
+        r["w"]["r"] = [[f, u, n + (k if u == "zz_back_1" else 0)] for f, u, n in r["w"]["r"]]
+        r["t"]["a"] = [[f, n + (k if f == "Interstitial" else 0)] for f, n in r["t"]["a"]]
+        if d >= c_from:
+            tot = {}
+            for c, f, u, n in r["a"]["r"]:
+                tot[c] = tot.get(c, 0) + n
+            r["a"] = {"st": "w", "g": "c", "r": [[c, n] for c, n in sorted(tot.items())]}
+        return r
+    return day
+
+
+def test_no_format_split_from_ga4_judges_screens_on_all_formats(tmp_path):
+    # the biggest apps: GA4 gives every screen × format split sampled, the screen totals whole — their days come as
+    # grain c only. Over W ∪ N those are more than half the whole ads days → screen rows judged on all formats (allf 2),
+    # shipped with the full-screen share on app screens measured on the newest ≤ 60 final days that had the split
+    data, out = tmp_path / "data", tmp_path / "site"
+    write_store(data, day_fn=nosplit_day("2026-09-20"), first="2026-06-01")
+    (data / "app_store_ids.json").write_text(json.dumps({"by_id": {}}))
+    assert sb.run(dashboard(), str(data), str(out), {}, NOW) == ["/scr_*"]
+    one, f2 = gz(out / "scr_all.json.gz")["apps"][AID], gz(out / ("scr_%s.json.gz" % KEY))
+    fu = _days("2026-06-01", "2026-09-19")[-60:]                   # 22 Jul – 19 Sep: one interstitial a day
+    tot = sum(counts(d, {})[1][(MAIN, "Banner", "unit_a")] + counts(d, {})[1][(EDIT, "Native advanced", "unit_n")] + 1
+              for d in fu)
+    assert fu[0] == "2026-07-22" and (one["allf"], one["allfs"]) == (2, round(60 / tot, 4)) == (2, 0.004)
+    assert (f2["notes"]["allf"], f2["notes"]["allfs"]) == (2, one["allfs"])
+    # judged on every format, c days included: status, score; the cause still needs the units (fu) — as before
+    rid = "s%d" % f2["screens"].index([MAIN, "s"])
+    row = f2["rows"][rid]
+    assert row["st"][0] == "Normal" and row["st"][1].startswith("ads/100 ") and 90 < row["st"][2] < 110
+    assert row["W"][2] == 10 and row["N"][2] == 28 and row["cause"] == "Not measurable (units not split)"
+    st = one["status"][str([it[0] for it in one["items"]].index(MAIN))]
+    assert st[0] == "Normal" and st[2] == row["st"][2]
+    # the period table's numbers on those days: the screen's every format (tot), as on the days with the split
+    i, days = [it[0] for it in one["items"]].index(MAIN), _days(one["d0"], "2026-11-04")
+    for d in (WD[5], "2026-09-01"):
+        assert one["A"][days.index(d)][i] == counts(d, {})[1][(MAIN, "Banner", "unit_a")] + 1, d
+    # the rule's edge: more than half of W ∪ N's whole ads days (38 here) without the format — 19 is not, 20 is
+    got = {}
+    for c_from in ("2026-10-15", "2026-10-14"):
+        d2 = tmp_path / c_from / "data"
+        write_store(d2, day_fn=nosplit_day(c_from))
+        meta = sb.load_meta(str(d2), KEY)
+        app = sb.App(meta, sb.core_days(str(d2), KEY, meta, sb.load_recent(str(d2), KEY)), NOW, dashboard(), {})
+        got[c_from] = (app.allf(), _main_row(app)[6]["why"])
+    assert got["2026-10-15"] == (0, "Not whole — 0 whole days of inline ads in the last 10 (format not split 10)")
+    assert got["2026-10-14"][0] == 2 and got["2026-10-14"][1].startswith("ads/100 ")
+    # no split day at all: allf 2 with no measured share
+    d3 = tmp_path / "all_c" / "data"
+    write_store(d3, day_fn=nosplit_day("2026-01-01"))
+    meta = sb.load_meta(str(d3), KEY)
+    app = sb.App(meta, sb.core_days(str(d3), KEY, meta, sb.load_recent(str(d3), KEY)), NOW, dashboard(), {})
+    assert (app.allf(), app.allf_share()) == (2, None)
 
 
 def test_full_screen_ads_losing_their_format_still_stop_trigger_rows(tmp_path):
@@ -896,6 +1143,43 @@ def test_a_broken_app_loses_only_its_own_files(tmp_path, monkeypatch, capsys):
     assert ", failed 1," in sb.pop_line()
 
 
+def test_only_the_apps_the_catalog_selects_are_built(tmp_path):
+    # the history job may have read an app the owner does not select: it is in the store, never built (its files from
+    # a build when it was selected go with the stale ones); no catalog at all (or an empty one): every store app
+    data, out, dash = build(tmp_path, apps=(AID, AID2))
+    dash["apps_catalog"][1]["selected"] = False
+    (out / ("scr_%s.json.gz" % gu.file_key(AID2))).write_bytes(b"old")
+    assert sb.run(dash, str(data), str(out), {}, NOW) == ["/scr_*"]
+    assert set(dash["scr"]["apps"]) == set(gz(out / "scr_all.json.gz")["apps"]) == {AID}
+    assert not any(gu.file_key(AID2) in f for f in os.listdir(out))
+    assert re.match(r"^scr: apps 1, .*, failed 0, broken 0, ", sb.pop_line())
+    dash = dashboard()
+    dash["apps_catalog"] = dash["apps_catalog"][:1]                  # not in the catalog: not selected either
+    sb.run(dash, str(data), str(out), {}, NOW)
+    assert set(dash["scr"]["apps"]) == {AID}
+    for cat in (None, []):
+        dash = dict(dashboard(), apps_catalog=cat)
+        sb.run(dash, str(data), str(out), {}, NOW)
+        assert set(dash["scr"]["apps"]) == {AID, AID2}, cat
+    assert sb.selected({"apps_catalog": [{"app_id": AID, "selected": True}, {"app_id": AID2}]}) == {AID}
+    assert sb.selected({}) is None and sb.selected({"apps_catalog": []}) is None
+
+
+def test_the_history_cell_waits_for_the_skip_days_read_again(tmp_path):
+    # a read's history is complete when its backfill reached the history start ("done") AND no skip day from before is
+    # still being read again ("redo" non-empty: not yet)
+    data, out, dash = build(tmp_path)
+    p = data / "ga4_screens" / (KEY + ".json.gz")
+    meta = gz(p)
+    meta["reads"] = {"t": {"oldest": "2026-08-01", "done": True, "redo": []},
+                     "a": {"oldest": "2026-08-01", "done": True, "redo": ["2026-09-10"]},
+                     "v": {"oldest": "2026-08-01", "done": True}, "w": {"oldest": "2026-08-20", "redo": []}}
+    write_json_gz_stable(str(p), meta)
+    sb.run(dash, str(data), str(out), {}, NOW)
+    assert gz(out / "scr_all.json.gz")["apps"][AID]["bf"] == {"t": ["2026-08-01", True], "a": ["2026-08-01", False],
+                                                              "v": ["2026-08-01", True], "w": ["2026-08-20", False]}
+
+
 def test_too_big_guard(tmp_path, monkeypatch):
     data, out, dash = build(tmp_path)
     monkeypatch.setattr(sb, "MAX_GZ", 10)
@@ -955,6 +1239,52 @@ def test_the_small_cache_follows_the_screen_indexes(tmp_path):
     cold = {f: (tmp_path / "cold" / f).read_bytes() for f in sorted(os.listdir(tmp_path / "cold"))}
     assert warm == cold and gz(out / ("scr_%s.json.gz" % KEY))["screens"][1] == ["a.a.AaaActivity", "s"]
     assert cmap() == [i + 1 for i in before]                             # encoded again on the new indexes
+
+
+def test_caches_of_the_previous_version_are_derived_again(tmp_path, monkeypatch):
+    # caches written by the code before this CACHE_V (a "skip" record then shipped the "s" / "o" it is stored with, in
+    # the layer states, the shards and scr_l's small records): the next build uses none of them — versions, countries
+    # and the small group ship "-" (not read yet) on that day — and the caches it writes are served after
+    assert sb.CACHE_V >= 4                                  # (3 wrote scr_l's stored "st": a skip day's "s" / "o")
+    gate = {"st": "s", "g": "c", "skip": "gate", "tried": [], "fv": 1}
+    sk, ids = "2026-09-15", ("rV", "rA", "cV", "cA", "nV", "nA", "k")
+
+    def day(d):
+        r = core_recs(d, {})
+        r.update(layer_recs(d, {}))
+        if d == sk:
+            r.update({i: dict(gate, g=r[i]["g"]) for i in ids})
+        return r
+    data, out = tmp_path / "data", tmp_path / "site"
+    write_store(data, day_fn=day)
+    (data / "app_store_ids.json").write_text(json.dumps({"by_id": {}}))
+
+    def old_ch(rec):                                               # the state before: the stored st, skip or not
+        st = rec.get("st") if isinstance(rec, dict) else None
+        return "w" if st == "p" and sb._whole(rec) else st if st in sb.ST_CH else "-"
+    with monkeypatch.context() as m:
+        m.setattr(sb, "CACHE_V", sb.CACHE_V - 1)
+        m.setattr(sb, "_ch", old_ch)
+        sb.run(dashboard(), str(data), str(out), {}, NOW)
+    one = gz(out / "scr_all.json.gz")["apps"][AID]
+    k = _days(one["d0"], "2026-11-04").index(sk)
+    assert {one["st"][i][k] for i in ids} == {"s"} and sb.pop_line().endswith("cached 0")   # what those caches hold
+    assert len(os.listdir(data / "ga4_screens_cache" / KEY)) > 9
+
+    def shipped():                                                 # scr_all's strings, the shards' day parts, scr_l
+        a = gz(out / "scr_all.json.gz")["apps"][AID]
+        sh = [gz(out / ("scr_%s_%s_202609.json.gz" % (g, KEY)))["days"][14] for g in "rc"]
+        fl = gz(out / ("scr_l_%s.json.gz" % KEY))["days"][k]
+        return ({i: a["st"][i][k] for i in ids}, [[x["V"]["st"], x["A"]["st"]] for x in sh],
+                {i: fl[i]["st"] for i in ("nV", "nA", "k")})
+    sb.run(dashboard(), str(data), str(out), {}, NOW)
+    assert sb.pop_line().endswith("cached 0")                       # none of the older caches used
+    want = ({i: "-" for i in ids}, [["-", "-"], ["-", "-"]], {"nV": "-", "nA": "-", "k": "-"})
+    assert shipped() == want
+    files = {f: (out / f).read_bytes() for f in sorted(os.listdir(out))}
+    sb.run(dashboard(), str(data), str(out), {}, NOW)
+    assert not sb.pop_line().endswith("cached 0") and shipped() == want
+    assert {f: (out / f).read_bytes() for f in sorted(os.listdir(out))} == files
 
 
 def test_an_unchanged_store_builds_and_writes_no_shard(tmp_path, monkeypatch):

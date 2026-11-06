@@ -34,18 +34,32 @@ grain): a multi-day read that is not whole is read again at half the days (31 �
 size double it; a day not whole alone tries the next coarser shape — the shapes tried are saved at once, so a stop never
 sends a failed read again; a shape failing 3 final days in a row is dead until 14 more days were read, then tried once;
 a shape is not sent for a day whose events (TE0) are at or above what GA4 sampled at that shape before (the gate).
+Both skip only the FINER shapes on a final day (GA4's sampling is no function of a day's events): the coarsest is
+always asked, through the ladder (a gated volume a day at a time), so a final day is only ever stored with GA4's own
+answer and a stop leaves it with no record; a skip record from before ("skip": nothing asked, stored as final) counts
+as unread: pass 2 reads its day first ("redo"). A one-day retry never changes a shape's grain.
+SCREEN: the ads, clicks, own-events and exposure reads (PP_READS) ask GA4's page path and screen class
+(unifiedPagePathScreen), the views and users reads the screen class (unifiedScreenClass) — the same names for an app;
+by class GA4 sampled or dropped rows of the biggest apps' ad events every day it was asked, by page path it gave them
+whole (6 Nov 2026). Their records carry "pp": 1; one read by class that is not whole is asked again by page path, a
+whole one stays; what the reads learned by class (grain, dead, gate) starts again ("dim").
 
 Store (private repo, kept for good):
     data/ga4_screens/<key>.json.gz                   meta {"v", "app_id", "package", "property_id", "stream_id",
                                                      "time_zone", "reads": {id: {"recent_at", "upto", "oldest",
                                                      "done", "top", "d", "dead", "gate", "streak", "read", "pend",
-                                                     "cop" {day: [coarser shape owed, tries]}}},
+                                                     "cop" {day: [coarser shape owed, tries]}, "redo" [the days of
+                                                     its skip records from before — and, a page path read's, its
+                                                     class records that are not whole — looked for once, still to
+                                                     read], "dim" (a page path read: what its dead / gate were
+                                                     learned by)}},
                                                      "events": {"at", "names"}, "months": {grp: ["YYYY-MM", …]}}
     data/ga4_screens/<key>/recent.json.gz            {"v", "days": {day: {id: record}}} today − 4 … today (rewritten)
     data/ga4_screens/<key>/<grp>_<YYYY-MM>.json.gz   {"v", "days": {day: {id: record}}} final days; grp core = t v w
                                                      a, small = k e uV uA s x nV nA, ver = rV rA, cc = cV cA
-  record {"st", "g" shape, "f" fold share (p), "cov" (o), "smp" (s), "thr", "loss", "tried", "fv", "r" rows, "co" the
-  coarser shape's record (p over 2 %), "rc" (read while recent)}; t adds "v" [views, eng], "a" [[format, n]], "ev";
+  record {"st", "g" shape, "f" fold share (p), "cov" (o), "smp" (s), "thr", "loss", "tried", "fv", "pp" (read by
+  page path), "r" rows, "co" the coarser shape's record (p over 2 %), "rc" (read while recent)}; t adds "v" [views,
+  eng], "a" [[format, n]], "ev";
   k / e / x add "t" (their own truth), x "ev" (the names it read). Rows are positional and sorted (§2.7 of the spec).
 A recent day turning final moves into its month file (a whole record never gives way to one that is not, a final read
 never to one made while recent) and is read once more as final (the read's "upto" catches it up). A store file that is
@@ -61,7 +75,7 @@ The history job (backfill_all, .github/workflows/screens-backfill.yml) runs the 
 properties side by side for 5.5 h (access tokens renewed on the way), under floors above the other GA4 steps' 50 %: an
 hourly bucket under 65 % rests the property until the next clock hour. It writes only the private repo's
 ga4_screens_bf/; merge_staged copies its records in (whole ones over what is not whole; a final day's other outcome
-where the build has none).
+where the build has none or a skip record; a skip record never).
 Switched by GA4_SCREENS. Never raises; never prints except log_line (counts only).
 """
 import base64
@@ -88,6 +102,7 @@ from . import ga4_uninstall as gu
 DIR = "ga4_screens"
 BF_DIR = "ga4_screens_bf"               # the history job's own folder in the private repo (same layout as DIR)
 STORE_V = 1
+MERGE_V = 2                             # merge_staged's rules (a change looks at every staged file once more)
 RECENT_DAYS = 5                         # today … today − 4: re-read on refresh (GA4 still adds to them)
 FINAL_LAG = 5                           # final = today − 5 and older (written once)
 CORE_HOURS = 3.0                        # t v w a: due again after this long …
@@ -135,6 +150,10 @@ TICK_SEC = 5.0
 DATA_ROOT = "_private"                  # the history job's private clone (SCREENS_DATA_DIR)
 
 SC, FMT, UNIT, SRC, EVN = "unifiedScreenClass", "adFormat", "adUnitName", "adSourceName", "eventName"
+# the screen of the ads, clicks, own-events and exposure reads (PP_READS): GA4's "page path and screen class" — for an app
+# the same screen class names as SC (equal counts wherever both are whole), and GA4 answers it whole where SC ×
+# ad_impression comes back sampled or drops rows on the biggest apps (probe 6 Nov 2026, every app and day asked)
+PP = "unifiedPagePathScreen"
 NVR, VER, CTY = "newVsReturning", "appVersion", "countryId"
 IMP = "ad_impression"
 CLICKS = ("ad_click", "ad_reward")
@@ -163,15 +182,16 @@ READS = {
     "t": {"shapes": (("t", ()),), "tie": None},
     "v": {"shapes": (("c", (SC,)),), "mets": VM, "tie": "tv"},
     "w": {"shapes": (("u", (FMT, UNIT)),), "mets": EC, "ev": IMP, "tie": "ta"},
-    "a": {"shapes": (("fu", (SC, FMT, UNIT)), ("f", (SC, FMT)), ("c", (SC,))), "mets": EC, "ev": IMP, "tie": "ta"},
+    "a": {"shapes": (("fu", (PP, FMT, UNIT)), ("f", (PP, FMT)), ("c", (PP,))), "mets": EC, "ev": IMP, "tie": "ta"},
     **_layers(),
-    "k": {"shapes": (("c", (SC, EVN)),), "mets": EC, "evs": CLICKS, "tie": "own", "own": ((EVN,), EC)},
-    "e": {"shapes": (("c", (SC,)),), "mets": ("adUnitExposure",), "tie": "own", "own": ((), ("adUnitExposure",))},
+    "k": {"shapes": (("c", (PP, EVN)),), "mets": EC, "evs": CLICKS, "tie": "own", "own": ((EVN,), EC)},
+    "e": {"shapes": (("c", (PP,)),), "mets": ("adUnitExposure",), "tie": "own", "own": ((), ("adUnitExposure",))},
     "uV": {"shapes": (("c", (SC,)),), "mets": ("sessions", "activeUsers"), "tie": None},
     "uA": {"shapes": (("c", (SC,)), ("a", ())), "mets": ("activeUsers",), "ev": IMP, "tie": None},
     "s": {"shapes": (("fs", (FMT, SRC)),), "mets": EC, "ev": IMP, "tie": "ta"},
-    "x": {"shapes": (("c", (SC, EVN)),), "mets": EC, "evs": "@names", "tie": "own", "own": ((EVN,), EC)},
+    "x": {"shapes": (("c", (PP, EVN)),), "mets": EC, "evs": "@names", "tie": "own", "own": ((EVN,), EC)},
 }
+PP_READS = frozenset(r for r, R in READS.items() if any(PP in dims for _, dims in R["shapes"]))
 ORDER = ("t", "v", "w", "a", "nV", "nA", "rV", "rA", "cV", "cA", "k", "e", "s", "x", "uV", "uA")
 CORE = frozenset(("t", "v", "w", "a"))
 AD_READS = frozenset(("w", "a", "nA", "rA", "cA", "uA", "s"))
@@ -235,24 +255,33 @@ def _gated(g, ev):
 
 def merge_rec(old, new):
     """A (day, read) record already stored vs a new one → the one kept: a whole record never gives way to one that is
-    not, and a final read never to one made while the day was recent ("rc"); otherwise the newer."""
+    not, a final read never to one made while the day was recent ("rc"), and GA4's answer never to a skip record (no
+    shape asked: never whole either); otherwise the newer."""
     if not old:
         return new
     if _whole(old) and not _whole(new):
         return old
     if _whole(old) and not old.get("rc") and new.get("rc"):
         return old
+    if "skip" in new and "skip" not in old:
+        return old
     return new
 
 
 def _status(rec):
-    return {"st": rec.get("st"), "rc": bool(rec.get("rc")), "fv": _i(rec.get("fv")),
+    return {"st": rec.get("st"), "rc": bool(rec.get("rc")), "fv": _i(rec.get("fv")), "sk": "skip" in rec,
+            "pp": bool(rec.get("pp")),
             "ev": frozenset(rec["ev"]) if isinstance(rec.get("ev"), list) else None}     # (x's names; t's is a count)
 
 
 def _complete(s, rid, names):
-    """A stored record that needs no read: made as final, of the read's format, x with every current name."""
-    if not s or s["rc"] or s["fv"] < FV[rid]:
+    """A stored record that needs no read: made as final, GA4's own answer (a skip record — from before a final day
+    had to be asked — never is), of the read's format, x with every current name; for a page path read (PP_READS) a
+    record that is not whole and was read by screen class ("pp" missing: before 6 Nov) is asked again by page path —
+    a whole one stays (the same counts)."""
+    if not s or s["rc"] or s["sk"] or s["fv"] < FV[rid]:
+        return False
+    if rid in PP_READS and not s["pp"] and s["st"] not in WHOLE:
         return False
     return rid != "x" or set(names or ()) <= (s["ev"] or frozenset())
 
@@ -590,9 +619,18 @@ def _judge(job, rid, shape, dims, day, rows, info, und, own):
 
 def read_chunk(job, rid, shape, a, b):
     """One read of `rid` at `shape` for [a, b] (+ its own truth first: k / e / x) → ({day: record}, clean: no sampling,
-    nothing cut, no undated row, info)."""
+    nothing cut, no undated row, info); a page path read's records carry "pp": 1."""
     if rid == "t":
         return _read_t(job, a, b)
+    out, clean, info = _read_split(job, rid, shape, a, b)
+    if rid in PP_READS:
+        for rec in out.values():
+            rec["pp"] = 1
+    return out, clean, info
+
+
+def _read_split(job, rid, shape, a, b):
+    """read_chunk of a split read (not the truth)."""
     R, ga, days = READS[rid], job.ga, _days(a, b)
     dims = dict(R["shapes"])[shape]
     ev, evs = R.get("ev"), R.get("evs")
@@ -761,6 +799,11 @@ class Job:
 
     def rd(self, rid):
         rd = self.meta["reads"].setdefault(rid, {})
+        if rid in PP_READS and rd.get("dim") != PP:     # learned by screen class: dead shapes, the gate and the
+            for k in ("dead", "gate", "streak", "pend"):    # pending cascades start again for the page path (its
+                rd[k] = {}                              # grain and owed coarser reads stay: the ladder halves and
+            rd.pop("redo", None)                        # doubles from there), and "redo" is looked for again
+            rd["dim"] = PP                              # (_skips: also the class records that are not whole)
         for k in ("d", "dead", "gate", "streak", "pend", "cop"):
             if not isinstance(rd.get(k), dict):
                 rd[k] = {}
@@ -788,16 +831,14 @@ class Job:
         return t
 
     def needs(self, rid, day):
-        """A FINAL day `rid` must still read: no complete record here (the history job: nor a whole one in the
-        build's store)."""
+        """A FINAL day `rid` must still read: no complete record here (the history job: nor in the build's store —
+        GA4's own final answer there, whole or not, is the day's: the same day is never asked twice)."""
         if day in self.rd(rid)["pend"]:
             return True
         if _complete(self.store.status(day, rid), rid, self.names):
             return False
-        if self.store.also is not None:
-            s = self.store.also.status(day, rid)
-            if _complete(s, rid, self.names) and s["st"] in WHOLE:
-                return False
+        if self.store.also is not None and _complete(self.store.also.status(day, rid), rid, self.names):
+            return False
         return True
 
     def put(self, rid, recs, final, called=True, again=False):
@@ -864,16 +905,19 @@ def _events(job, chunk):
     return None if any(e is None for e in ev) else sum(ev)
 
 
-def ladder(job, rid, s, days, final, on_ok, on_fail, one=False):
+def ladder(job, rid, s, days, final, on_ok, on_fail, one=False, halt=None):
     """`days` (walk order) of `rid` at shape `s`, in chunks of the read's size: a multi-day read not whole is read again
     at the ladder's next smaller size (its whole days kept when the read itself was clean); two whole reads at a size
     double it (final days only: a recent read never changes the grain). on_ok({day: record}) / on_fail(day, record)
-    as each chunk is back."""
+    as each chunk is back; halt() true before a chunk → the walk ends there (the shape died on the way: fill passes the
+    days left to the next shape)."""
     rd = job.rd(rid)
     cap = CHUNK0[rid]
     d = 1 if one else min(cap, _i(rd["d"].get(s)) or cap)
     walk = list(days)
     while walk:
+        if halt is not None and halt():
+            return
         chunk = _take(walk, d)
         ev = None if rid == "t" else _events(job, chunk)
         if len(chunk) > 1 and _gated(rd["gate"].get(s), ev):
@@ -896,7 +940,7 @@ def ladder(job, rid, s, days, final, on_ok, on_fail, one=False):
                 on_ok(ok)
             for x in bad:
                 on_fail(x, recs.get(x) or {"st": "o", "g": s, "cov": None, "fv": FV[rid]})
-            if final:
+            if final and not one:                       # (a one-day retry says nothing about the multi-day size)
                 if bad:
                     rd["streak"][s] = 0
                 elif len(chunk) >= d:
@@ -910,7 +954,7 @@ def ladder(job, rid, s, days, final, on_ok, on_fail, one=False):
         if keep:
             on_ok(keep)
         d = _down(len(chunk))
-        if final:
+        if final and not one:
             rd["d"][s] = d
             rd["streak"][s] = 0
         walk = [x for x in chunk if x not in keep] + walk
@@ -920,7 +964,9 @@ def fill(job, rid, days, final):
     """Read `rid` for `days` (ISO, walk order: newest first in the backfill, oldest first otherwise), shape by shape,
     finest first: each day stores the first shape whole for it ("g"), the shapes it tried ("tried") — saved at once on
     a final day, so a stop never sends a failed read again — or, none whole, its last failure. Dead shapes and the
-    volume gate are kept on final days and only obeyed on recent ones. Raises gf.Stop."""
+    volume gate skip the finer shapes; the coarsest is never skipped on a final day (dead or gated, it goes through the
+    ladder, which reads gated volumes a day at a time), so a final day is only ever stored with GA4's own answer — a
+    stop first leaves it with no record. Raises gf.Stop."""
     if not days:
         if final:
             _coarser(job, rid, {}, True)                # (earlier runs' coarser reads still waiting)
@@ -945,19 +991,48 @@ def fill(job, rid, days, final):
     tried = {d: list((pend.get(d) or {}).get("tried") or []) for d in todo}
     last = {d: {k: v for k, v in pend[d].items() if k != "tried"} for d in todo if pend.get(d)}
     skipped, left, stored = {}, list(todo), {}
+
+    def on_ok(recs, s):
+        for d, rec in recs.items():
+            rec["tried"] = tried[d] + [s]
+            stored[d] = rec
+            if d in left:
+                left.remove(d)
+            if final:
+                rd["dead"].pop(s, None)                 # whole on a final day: alive (again)
+                cs = _co_shape(rid, rec)
+                if cs:                                  # its coarser shape is owed — saved with the record, so a
+                    rd["cop"].setdefault(d, [cs, 0])    # stop before that read never loses it
+        job.put(rid, recs, final)
+
+    def on_fail(d, rec, s):
+        tried[d].append(s)
+        last[d] = rec
+        job.failed.add((rid, s, d))
+        if not final:
+            return
+        dz = rd["dead"].setdefault(s, {"n": 0})
+        dz["n"] = _i(dz.get("n")) + 1
+        dz["st"] = rec.get("st")
+        if dz["n"] >= DEAD_AFTER:
+            dz["until"] = rd["read"] + DEAD_RETRY
+        pend[d] = dict(rec, tried=list(tried[d]))
+        job.store.save_meta()
+
     for s in shapes:
         cand = [d for d in left if s not in tried[d] and (rid, s, d) not in job.failed]
         if not cand:
             continue
+        keep_all = final and s == shapes[-1]            # the coarsest on a final day: always asked (never skipped)
         dz = rd["dead"].get(s) or {}
         one = False
-        if "until" in dz:                               # a dead shape: skipped — tried again on one final day once
+        if "until" in dz and not keep_all:              # a dead shape: skipped — tried again on one final day once
             retry = cand[:1] if final and rd["read"] >= _i(dz["until"]) else []
             for d in cand[len(retry):]:
                 skipped[d] = skipped.get(d) or ("dead", dz.get("st") or "o")
                 job.c["dead"] += 1
             cand, one = retry, bool(retry)
-        if rid != "t" and not one:                      # (the dead shape's one retry is sent whatever the volume)
+        if rid != "t" and not one and not keep_all:     # (the dead shape's one retry is sent whatever the volume)
             g, keep = rd["gate"].get(s), []
             for d in cand:
                 if _gated(g, (job.truth(d) or {}).get("ev")):
@@ -966,39 +1041,12 @@ def fill(job, rid, days, final):
                 else:
                     keep.append(d)
             cand = keep
-        if not cand:
-            continue
-
-        def on_ok(recs, s=s):
-            for d, rec in recs.items():
-                rec["tried"] = tried[d] + [s]
-                stored[d] = rec
-                if d in left:
-                    left.remove(d)
-                if final:
-                    rd["dead"].pop(s, None)             # whole on a final day: alive (again)
-                    cs = _co_shape(rid, rec)
-                    if cs:                              # its coarser shape is owed — saved with the record, so a
-                        rd["cop"].setdefault(d, [cs, 0])  # stop before that read never loses it
-            job.put(rid, recs, final)
-
-        def on_fail(d, rec, s=s):
-            tried[d].append(s)
-            last[d] = rec
-            job.failed.add((rid, s, d))
-            if not final:
-                return
-            dz = rd["dead"].setdefault(s, {"n": 0})
-            dz["n"] = _i(dz.get("n")) + 1
-            dz["st"] = rec.get("st")
-            if dz["n"] >= DEAD_AFTER:
-                dz["until"] = rd["read"] + DEAD_RETRY
-            pend[d] = dict(rec, tried=list(tried[d]))
-            job.store.save_meta()
-
-        ladder(job, rid, s, cand, final, on_ok, on_fail, one)
+        if cand:                                        # (a finer shape that dies on the way stops walking: the dead rule
+            halt = None if keep_all or one else (lambda s=s: "until" in (rd["dead"].get(s) or {}))   # holds in a walk)
+            ladder(job, rid, s, cand, final, lambda recs, s=s: on_ok(recs, s), lambda d, rec, s=s: on_fail(d, rec, s),
+                   one, halt)
     done = {}
-    for d in left:                                      # no shape whole: the last failure (or the skip) is final
+    for d in left:                                      # no shape whole: the last failure is final (skip: recent only)
         if d in last:
             rec = dict(last[d], tried=tried[d])
         else:
@@ -1008,7 +1056,8 @@ def fill(job, rid, days, final):
                 rec["ev"] = list(job.names)
         done[d] = rec
     job.put(rid, {d: r for d, r in done.items() if d in last}, final)
-    job.put(rid, {d: r for d, r in done.items() if d not in last}, final, called=False)
+    if not final:                                       # (a final day always has GA4's answer by here: a skip record
+        job.put(rid, {d: r for d, r in done.items() if d not in last}, final, called=False)   # is a recent day's only)
     _coarser(job, rid, stored, final)
 
 
@@ -1029,8 +1078,9 @@ def _coarser(job, rid, stored, final):
     """Days stored "p" with more than FOLD_CO folded (`stored`, and on final days the read's "cop" {day: [shape,
     tries]} left by earlier runs): the next coarser shape read beside them ("co", whole numbers next to GA4's grouped
     split) through the ladder at that shape's own size and volume gate (learning from final days), unless the shape is
-    dead or gated for the day. A final day whose coarser read was not whole keeps that outcome in "co" and stays in
-    "cop" for the next run's retry (never twice a run, at most DEAD_AFTER tries)."""
+    dead or gated for the day (the day keeps its own record: "co" is beside it, never instead of it). A final day whose
+    coarser read was not whole keeps that outcome in "co" and stays in "cop" for the next run's retry (never twice a
+    run, at most DEAD_AFTER tries)."""
     rd = job.rd(rid)
     cop = rd["cop"] if final else {}
     base = dict(stored)
@@ -1129,12 +1179,59 @@ def step_recent(job):
         job.store.save_meta()
 
 
+def _skips(job):
+    """The days of every skip record from before a final day had to be asked (nothing asked: dead / gated) — and, for
+    a page path read, of every record read by screen class that is not whole — in this store and, the history job's,
+    the build's → {read id: [day, …] newest first}, final days from the history start; a skipped truth's day is every
+    read's (each was left unread for want of it). Every month file read once, an unreadable one passed over (it is
+    never written over either)."""
+    lo, hi, found = _iso(job.hs or job.final_end), _iso(job.final_end), {}
+    for st in (job.store, job.store.also):
+        if st is None:
+            continue
+        disk = _months_on_disk(st.root, st.key)
+        for grp in GRPS:
+            for m in sorted(set((st.meta.get("months") or {}).get(grp) or ()) | set(disk.get(grp) or ())):
+                if not lo[:7] <= m <= hi[:7]:
+                    continue
+                for d, v in ((_read_gz(month_path(st.root, st.key, grp, m)) or {}).get("days") or {}).items():
+                    for rid, rec in (v.items() if isinstance(v, dict) and lo <= d <= hi else ()):
+                        if not (rid in GRP and isinstance(rec, dict)):
+                            continue
+                        if "skip" in rec:
+                            for r in (ORDER if rid == "t" else (rid,)):
+                                found.setdefault(r, set()).add(d)
+                        elif rid in PP_READS and not rec.get("pp") and not _whole(rec) and not rec.get("rc"):
+                            found.setdefault(rid, set()).add(d)
+    return {r: sorted(ds, reverse=True) for r, ds in found.items()}
+
+
 def backfill(job, floor):
-    """Pass 2 for one app, down to `floor` (and the history start): newest first BY CHUNK ACROSS EVERY READ — for the
-    days [x − t's size + 1, x] (x: the newest day any read still lacks) t first, then each read in ORDER; days already
-    complete are not read. A read's cursor ("oldest") moves once its part of the chunk is stored. Raises gf.Stop."""
+    """Pass 2 for one app, down to `floor` (and the history start): first, wherever the cursors and "done" stand, each
+    read's "redo" days ≥ floor (_skips, looked for once), t first, then the page path reads, then the rest, newest
+    first, at most t's chunk a fill; then newest first BY
+    CHUNK ACROSS EVERY READ — for the days [x − t's size + 1, x] (x: the newest day any read still lacks) t first, then
+    each read in ORDER; days already complete are not read. A read's cursor ("oldest") moves once its part of the chunk
+    is stored. Raises gf.Stop."""
     hs = job.hs or job.final_end
     floor = max(floor, hs)
+    if any(not isinstance(job.rd(rid).get("redo"), list) for rid in ORDER):
+        found = _skips(job)
+        for rid in ORDER:
+            if not isinstance(job.rd(rid).get("redo"), list):
+                job.rd(rid)["redo"] = found.get(rid, [])
+        job.store.save_meta()
+    lo = _iso(floor)
+    for rid in sorted(ORDER, key=lambda r: (r != "t", r not in PP_READS, ORDER.index(r))):   # t, page path, the rest
+        rd = job.rd(rid)
+        while True:
+            part = [d for d in rd["redo"] if d >= lo][:CHUNK0["t"]]    # (newest first; each part its own fill: a
+            if not part:                                # shape that dies in one is skipped in the next — a stop keeps
+                break                                   # the rest listed: the next run reads what is left)
+            fill(job, rid, [d for d in part if job.needs(rid, d)], True)
+            done = set(part)
+            rd["redo"] = [d for d in rd["redo"] if d not in done]
+            job.store.save_meta()
     while True:
         tops = {}
         for rid in ORDER:
@@ -1200,8 +1297,9 @@ def _merge_reads(meta, smeta, copied=None):
     """The history job's progress → the build's meta: a read's backfill reaches the older of the two fills when they
     touch (the staged fill's top ≥ the build's oldest − 1) and is done when either is — x's only when the job read
     every event name the build reads (a name the build GAINED reset its x: the job's older progress never undoes
-    that); its grain / dead / gate come from the staged meta when the build has none; a copied day (`copied`: read id
-    → days) still waiting for its coarser shape keeps waiting here ("cop")."""
+    that); its grain / dead / gate come from the staged meta when the build has none (a page path read's only when
+    both were learned by page path); a copied day (`copied`: read id → days) still waiting for its coarser shape keeps
+    waiting here ("cop")."""
     reads = meta.setdefault("reads", {})
     names = set((meta.get("events") or {}).get("names") or ())
     snames = set(((smeta or {}).get("events") or {}).get("names") or ())
@@ -1214,8 +1312,9 @@ def _merge_reads(meta, smeta, copied=None):
                 m["oldest"] = min(m["oldest"], s["oldest"])
                 if s.get("done"):
                     m["done"] = True
+        same = rid not in PP_READS or (s.get("dim") == PP and m.get("dim") == PP)   # (learned by screen class: no)
         for k in ("d", "dead", "gate"):
-            if not m.get(k) and s.get(k):
+            if same and not m.get(k) and s.get(k):
                 m[k] = json.loads(json.dumps(s[k]))
         scop = s.get("cop") if isinstance(s.get("cop"), dict) else {}
         for d in sorted((copied or {}).get(rid) or ()):
@@ -1230,14 +1329,17 @@ def _merge_reads(meta, smeta, copied=None):
 def merge_staged(data_dir, staged_dir, state=None):
     """Copy every (day, read) record of the history job's folder into data/ga4_screens where the store lacks it or
     holds it not whole and the staged one is whole — and a staged FINAL record that is not whole (sampled, grouped
-    away, skipped) where the store has none, since the build's cursor moves past those days with the job's progress
-    (a later whole read still replaces it: merge_rec); merge the reads' progress (_merge_reads). Idempotent; an
-    unchanged staged file (its sha1 in state["staged"]) is not read again; a broken one is skipped and counted. →
-    {"merged": whole records copied, "not_whole": records copied that are not whole, "bad": files skipped}."""
+    away) where the store has none, since the build's cursor moves past those days with the job's progress (a later
+    whole read still replaces it: merge_rec); a skip record (nothing asked) counts as none here and is never copied
+    (the job reads its day again); merge the reads' progress (_merge_reads). Idempotent; an unchanged staged file (its
+    sha1 in state["staged"]) is not read again; a broken one is skipped and counted. → {"merged": whole records
+    copied, "not_whole": records copied that are not whole, "bad": files skipped}."""
     out = {"merged": 0, "not_whole": 0, "bad": 0}
     if not staged_dir or not os.path.isdir(staged_dir):
         return out
     root = os.path.join(data_dir, DIR)
+    if isinstance(state, dict) and _i(state.get("merge_v")) < MERGE_V:
+        state["staged"], state["merge_v"] = {}, MERGE_V     # (merged under older rules: every staged file once more)
     seen = state.setdefault("staged", {}) if isinstance(state, dict) else {}
     for fn in sorted(os.listdir(staged_dir)):
         if not (fn.endswith(".json.gz") and KEY_RE.fullmatch(fn[:-8])):
@@ -1270,14 +1372,18 @@ def merge_staged(data_dir, staged_dir, state=None):
                 for d, v in (j.get("days") or {}).items():
                     for rid, rec in (v or {}).items():
                         if not (rid in GRP and GRP[rid] == grp and isinstance(rec, dict) and rec.get("st")) \
-                                or rec.get("rc"):
+                                or rec.get("rc") or "skip" in rec:
                             continue
                         have = store.status(d, rid)
+                        if have and (have["sk"] or (rid in PP_READS and rec.get("pp") and not have["pp"]
+                                                    and have["st"] not in WHOLE)):
+                            have = None                         # (no answer, or one by screen class that is not
+                                                                # whole: GA4's page path answer replaces it)
                         if _whole(rec) and not _whole_status(have):
                             take.setdefault(d, {})[rid] = rec
-                        elif not _whole(rec) and not have:     # the day's final outcome (sampled / grouped away /
-                            rest.setdefault(d, {})[rid] = rec  # skipped): the page says so; the build's cursor is
-                out["merged"] += store.put(take) if take else 0        # past it and would never read it itself
+                        elif not _whole(rec) and not have:     # the day's final outcome (sampled / grouped away):
+                            rest.setdefault(d, {})[rid] = rec  # the page says so; the build's cursor is past it and
+                out["merged"] += store.put(take) if take else 0        # would never read it itself
                 out["not_whole"] += store.put(rest) if rest else 0
                 for d, v in list(take.items()) + list(rest.items()):
                     for rid in v:
@@ -1493,7 +1599,7 @@ def _bf_job(staged_dir, data_dir, it, now, ga, clock):
         rd = job.init_read(rid)
         m = (mmeta.get("reads") or {}).get(rid) or {}
         for k in ("d", "dead", "gate", "streak"):
-            if not rd.get(k) and isinstance(m.get(k), dict) and m[k]:
+            if (rid not in PP_READS or m.get("dim") == PP) and not rd.get(k) and isinstance(m.get(k), dict) and m[k]:
                 rd[k] = json.loads(json.dumps(m[k]))
         rd["read"] = max(rd["read"], _i(m.get("read")))
         if rid == "x" and not set(job.names) <= set((mmeta.get("events") or {}).get("names") or ()):
@@ -1711,13 +1817,32 @@ def bf_line(status):
             "push failed %d%s" % tuple([_i(c.get(k)) for k in BF_COUNTS] + [(", error " + err) if err else ""]))
 
 
+def _selected(data_dir):
+    """The app ids the dashboard has SELECTED (the private clone's site/dashboard.json.gz beside data/: its
+    apps_catalog) → a set, or None (no readable catalog: no filter)."""
+    try:
+        with gzip.open(os.path.join(os.path.dirname(os.path.abspath(data_dir)), "site", "dashboard.json.gz"), "rt",
+                       encoding="utf-8") as f:
+            d = json.load(f)
+    except Exception:                                   # (no published dashboard beside the data: no filter)
+        return None
+    cat = d.get("apps_catalog") if isinstance(d, dict) else None
+    if not isinstance(cat, list) or not cat:
+        return None
+    return {str(c.get("app_id")) for c in cat if isinstance(c, dict) and c.get("selected")}
+
+
 def bf_apps(data_dir, want=None):
     """The apps the build's Screens fetch reads (its state's app ids first, then the Uninstall fetch's), one per Play
-    package → [{app_id, package}]; want: lower-case tokens (12-hex keys, app ids or packages; empty = all)."""
+    package, SELECTED in the dashboard (an app taken off it is not fetched; no readable catalog: every app) →
+    [{app_id, package}]; want: lower-case tokens (12-hex keys, app ids or packages; empty = all)."""
     ust = gu.load_state(data_dir)
     sst = load_state(data_dir)
+    sel = _selected(data_dir)
     out, seen = [], set()
     for aid in list(sorted(sst["fetch"])) + list(sorted(ust["fetch"])):
+        if sel is not None and str(aid) not in sel:
+            continue
         pkg = ((ust["fetch"].get(aid) or {}).get("package")
                or (_read_gz(meta_path(os.path.join(data_dir, DIR), gu.file_key(aid))) or {}).get("package"))
         if not pkg or pkg in seen:

@@ -13,7 +13,10 @@ drill-down tied to its app, "Details ▸" going to the drill-down, late files re
 boxes kept, whole months from the build's month sums (ver_m / cc_m), labels in simple English (hints stay Hinglish), the
 status sort's direction, the report's Copy control holding its place while its files load (Try again on a failed load),
 All apps' period sums / coverage strip kept per (build, period) with no date string per day, a day whose store file
-could not be read ("x": store file unreadable), and the wiring into the page (gated on DATA.scr).
+could not be read ("x": store file unreadable), a day that is not whole never read as "GA4 sampled" (one GA4 was never
+asked about, one not read yet), the build's why shown whole and escaped, all formats because GA4 gave no screen ×
+format split (allf 2: its note with the measured full-screen share), a row under 1 % of the app's ads of its kind
+showing no score (and a "Too few ads" row never in Needs attention), and the wiring into the page (gated on DATA.scr).
 Skipped where node is not installed. No real data."""
 import json
 import os
@@ -247,6 +250,57 @@ def test_unreadable_store_days_say_so(out):
     assert x["why"] == ("store file unreadable 5 din (build store ki month file padh nahi saka — ye din gine nahi) · "
                         "2 din aur wajah se not whole")
     assert x["vrow"] == "<td>23</td><td>0</td><td>7</td><td>0</td><td>—</td><td class=\"sc-why\">%s</td>" % x["why"]
+
+
+def test_a_day_not_whole_is_never_called_ga4_sampled(out):
+    # a day the fetch never asked GA4 about ships "-" (not read yet): no line puts every day that is not whole on GA4 —
+    # the N/A line says the status names each part, a layer note counts the days not read beside the ones GA4 gave
+    na, score = out["a_page"]["how_na"]
+    assert na == ('whole din kam ("Not whole" — kitne din kis wajah se, saath me likha: GA4 sampled / rows chhodi / '
+                  'grouped / abhi padhe nahi …) / logging badli / ads nahi / ads bahut kam ("Too few ads" — W aur N '
+                  'dono me app ke us kism ke ads ka 1% se kam)')
+    assert score == "koi hissa whole nahi (GA4 ne sampled / grouped / rows chhodi, ya wo din abhi padha nahi)"
+    assert out["nvr_note"] == "2/30 din ye layer whole nahi aayi ya abhi padhi nahi (us din ka hissa nahi gina)."
+    p = _page()
+    m = p[p.index("const SCR=(()=>{"):p.index("function renderScreens(){")]
+    for old in ("GA4 sampled / logging badli", "GA4 se whole nahi", "Jis din GA4 ne koi hissa whole nahi diya"):
+        assert old not in m, old
+
+
+def test_the_apps_why_shows_whole_and_escaped(out):
+    # the build's N/A why ("Not whole" + the missing W days by their state): the crumb, the All apps row and Needs
+    # attention show it whole (never cut at its dash) and through the page's escaping
+    why = "Not whole — 0 whole days of inline ads in the last 10 (GA4 sampled 10)"
+    b = out["pages"]["b"]
+    assert out["all_why_b"] == b["crumb"] == b["attn_why"] == why
+    assert out["pages"]["h"]["crumb"] == "&lt;b&gt;bold&lt;/b&gt;"                  # (a why with markup: escaped)
+
+
+def test_all_formats_when_ga4_gives_no_format_split(out):
+    # allf 2: GA4 gave the screens without the format on most whole days — the header stays "Ads (all formats)", the
+    # table's line says why is in Data coverage, whose note carries the measured full-screen share on app screens
+    a = out["allf2"]
+    assert a["head"] and a["sub"]
+    head = "GA4 is app ke screen × format split ko sampled deta hai, isliye screens ke ads saare formats pe gine aur judge hue"
+    assert a["note"] == [head + "; jin dinon split poora tha, app screens pe full-screen ads 0.23% the."]
+    assert a["none"] == [head + " (split poora kisi din nahi mila)."]                 # no split day measured
+    assert a["one"] == ["Format kam record hota hai (5% se zyada &quot;not set&quot;): screens ke ads sab formats pe gine "
+                        "aur judge hue."]                                           # allf 1: its own note, as before
+    assert a["off"] == [[], True]
+
+
+def test_a_row_with_too_few_ads_shows_no_score(out):
+    # under 1 % of the app's ads of its kind in the period AND its normal: "score —" (titled, no colour) in the table and
+    # the drill-down, the score left out of the sort; a row the build left N/A "Too few ads" never in Needs attention
+    low, mut = out["low"], '<span class="sc-mut" title="kam ads: app ke ads ka 1% se kam">score —</span>'
+    assert low["share"] == [0.0244, 0.0098, 0.0049, 1]                 # Not recorded · Ad screens · GA4 grouped · a trigger
+    assert low["cells"] == ['score <b class="">100</b>'] * 2 + [mut] * 2
+    assert low["ps"] == [[False, 100], [False, 100], [True, None], [True, None]]
+    assert low["dd"].endswith(" · " + mut)
+    t = out["tiny"]
+    assert t["attn"] == [0] and t["big"] == 'score <b class="sc-dn">60</b>' and t["small"] == mut
+    assert t["why"].endswith("<small>Too few ads — 0.5% of the app&#39;s inline ads</small>")
+    assert out["a_page"]["how_low"]                                                  # How this works says so
 
 
 def test_hostile_names_are_escaped(out):

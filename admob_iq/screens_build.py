@@ -33,14 +33,18 @@ AdMob days D and D+1 (0.7708 / 0.2292 for UTC vs IST), only when both are ≤ la
 
 Status (fixed window, the picker never changes it — the First open precedent): W = the 10 final days ending ft, N = the
 28 final days before W; the z gate allows for each row's own day-to-day spread (overdispersion from N) and both halves of
-W must agree. Cause: a stopped / changed ad unit first, else an exact LMDI split of the change in ads per visit over the
-row's units — tie (GA4 ÷ AdMob), share of the unit on this screen, show rate, fill, requests per app visit, the screen's
-share of visits — whose terms add up to the change exactly (no leftover is ever named a cause).
+W must agree; a row holding under 1 % of the app's ads of its kind in W and in N is not judged ("Too few ads"). Screen
+rows count inline ads, or every format (allf: 1 formats not recorded, 2 GA4 gave the screens without the format on most
+whole days of W ∪ N — the full-screen share measured where it did ships beside it). Cause: a stopped / changed ad unit
+first, else an exact LMDI split of the change in ads per visit over the row's units — tie (GA4 ÷ AdMob), share of the
+unit on this screen, show rate, fill, requests per app visit, the screen's share of visits — whose terms add up to the
+change exactly (no leftover is ever named a cause).
 
 run(dashboard, data_dir, out_dir, s) → the _headers no-store paths (["/scr_*"], ONE splat rule) or [] (no store / switched
-off / a failure: every scr_ file removed, no pointer). Failure-isolated; ONE counts-only line. A store month file that
-cannot be read or parsed is never skipped silently: counted ("broken N"), ONE "scr store skipped: <Type>" health line per
-build, and the days it held ship the state "x" (store file unreadable), never "not read yet". Read-only history check:
+off / a failure: every scr_ file removed, no pointer); only the apps the dashboard's apps_catalog selects (when it has
+one). Failure-isolated; ONE counts-only line. A store month file that cannot be read or parsed is never skipped
+silently: counted ("broken N"), ONE "scr store skipped: <Type>" health line per build, and the days it held ship the
+state "x" (store file unreadable), never "not read yet". Read-only history check:
   python -m admob_iq.screens_build backtest <data_dir> [--dashboard <dashboard.json.gz>]
 """
 import gzip
@@ -66,7 +70,9 @@ V = 1
 MAX_GZ = 8 * 1024 * 1024
 STORE_DIR = "ga4_screens"
 CACHE_DIR = "ga4_screens_cache"
-CACHE_V = 2                            # 2: a "p" day with GA4 grouped ≤ FOLD_OK is cached as "w" (older caches re-derived)
+CACHE_V = 4                            # 4: scr_l's small-group records carry _ch's state (a "skip" record "-"); 3: a
+                                       # "skip" record (GA4 never asked) is cached as "-"; 2: a "p" day with GA4 grouped
+                                       # ≤ FOLD_OK as "w" (older caches re-derived)
 GZ_LEVEL = 6                           # the scr_ files' gzip level (9 took ~4× the time for files under a tenth smaller)
 IDX_V, IDX_APP, IDX_ALL = 1, "shards.json", "all.json"      # the out-file index (_idx_path)
 SHARD_V = 1                            # bump when shard_body's output changes for the same inputs (a shard key part)
@@ -80,10 +86,18 @@ FOLD_OK = 0.02                         # a "p" day counts for status / cause onl
 
 # ── status (§3.2; thresholds change only here, then the backtest) ──
 W_DAYS, N_DAYS, HALF = 10, 28, 5
-MIN_A_W = 5                            # whole days of the row's ads in W, else N/A "GA4 sampled"
+MIN_A_W = 5                            # whole days of the row's ads in W, else N/A "Not whole" + why (WHY_PARTS)
+# that why: the W days the row's series lacks, counted by the state each ships (App.day_why) — non-zero parts, in order
+WHY_PARTS = (("s", "GA4 sampled"), ("o", "GA4 dropped rows"), ("p", "GA4 grouped"), ("t", "thresholding"),
+             ("-", "not read yet"), ("f", "format not split"), ("x", "store file unreadable"))
 MIN_N, MIN_W, MIN_VN, MIN_E = 14, 7, 300, 30
 LOG_SHIFT, LOG_MAX = 0.05, 0.30        # unset-class / notset-format share: moved > 5 points or > 30 % in W
-ALLF_SHARE = 0.05                      # notset formats above this in N or W: screen rows judged on all formats
+ALLF_SHARE = 0.05                      # notset formats above this in N or W: screen rows judged on all formats (allf 1)
+ALLF_NOSPLIT = 0.5                     # … or, over W ∪ N, the whole ads-by-screen days without the format (grain c) above
+                                       # this share of the whole ones (allf 2: GA4 sampled every screen × format split)
+ALLF_FS_DAYS = 60                      # allf's why: the full-screen share on app screens over the newest ≤ 60 split days
+MAT_SHARE = 0.01                       # a row is judged only holding ≥ 1 % of the app's ads of its kind in W or in N (a
+                                       # ratio of near-zero rates is no finding: owner, 6 Nov)
 APP_SHARE = 0.03                       # a row counts for the app status with ≥ 3 % of its kind's N ads
 PHI_MIN_E = 5
 WATCH_Z = 3                            # Watch / Better need |z| ≥ 3 too (the real-store backtest: |z| 2–3 flagged too many
@@ -297,7 +311,11 @@ def _whole(rec):
 
 def _ch(rec):
     """A record's day state for the shipped state strings: a "p" whose GA4 grouped share is ≤ FOLD_OK is whole enough to
-    judge on (_whole) and ships "w" — the page's coverage counts exactly the days the build judges on; above it, "p"."""
+    judge on (_whole) and ships "w" — the page's coverage counts exactly the days the build judges on; above it, "p". A
+    record with "skip" that is not usable (the fetch never asked GA4 that day: its shape dead, or the volume gate) ships
+    "-" (not read yet), never the "s" / "o" it is stored with: GA4 did not sample or drop that day."""
+    if isinstance(rec, dict) and "skip" in rec and not _ok(rec):
+        return "-"
     st = rec.get("st") if isinstance(rec, dict) else None
     if st == "p" and _whole(rec):
         return "w"
@@ -474,12 +492,24 @@ def _better(old, new):
     return new
 
 
-def _oldest(meta, i):
-    """Read i's oldest filled day (the fetch's backfill cursor in meta reads), or None."""
+def _read_of(meta, i):
+    """Read i's entry of the meta's reads ({} when there is none)."""
     reads = meta.get("reads") if isinstance(meta, dict) else None
     r = reads.get(i) if isinstance(reads, dict) else None
-    o = r.get("oldest") if isinstance(r, dict) else None
+    return r if isinstance(r, dict) else {}
+
+
+def _oldest(meta, i):
+    """Read i's oldest filled day (the fetch's backfill cursor in meta reads), or None."""
+    o = _read_of(meta, i).get("oldest")
     return o if isinstance(o, str) and re.match(r"^\d{4}-\d{2}-\d{2}$", o) else None
+
+
+def _bf(r):
+    """A meta reads entry → its history cell [oldest, complete]: complete = the backfill reached the history start
+    ("done") and no skip day from before is still being read again ("redo", a list: non-empty = not complete)."""
+    redo = r.get("redo")
+    return [r.get("oldest"), bool(r.get("done")) and not (isinstance(redo, list) and redo)]
 
 
 def lost_span(meta, i, m, td):
@@ -898,6 +928,8 @@ class App:
             w = w_day(r.get("w"))
             if w is not None:
                 self.w[d] = w
+        # … and those days are "x" before any row is judged: a status row's N/A names them, never "not read yet"
+        mark_lost(self, [b for b in broken or () if b[0] == "core"], lambda i: self.st[i])
         # AdMob
         ids = admob_ids(meta, by_id)
         self.placements = app_placements(dashboard, ids)
@@ -1060,10 +1092,34 @@ class App:
         return w, n
 
     def allf(self, ft=None):
-        """Notset formats above 5 % of the app's ads in N or W → screen rows are judged on ALL formats (copy days
-        included: an unconfirmed copy is the "Format not recorded" bucket, judged with the rest)."""
+        """Screen rows judged on ALL formats → 1: notset formats above 5 % of the app's ads in N or W (copy days
+        included: an unconfirmed copy is the "Format not recorded" bucket, judged with the rest); else 2: over W ∪ N the
+        whole ads-by-screen days GA4 gave without the format (grain c — on the biggest apps every screen × format
+        split comes sampled, the screen totals whole) are more than ALLF_NOSPLIT of the whole ones (on app screens
+        full-screen ads are a fraction of a percent of a screen's ads where the split is whole — allf_share — so a
+        screen's all-format ads are its inline ads within that share); else 0."""
         w, n = self.windows(ft)
-        return any((self._ns_fmt(ds, dup=True) or 0) > ALLF_SHARE for ds in (w, n))
+        if any((self._ns_fmt(ds, dup=True) or 0) > ALLF_SHARE for ds in (w, n)):
+            return 1
+        ds = [d for d in w + n if d in self.whole["a"] and d in self.ads]
+        return 2 if ds and sum(1 for d in ds if self.ads[d]["g"] == "c") > ALLF_NOSPLIT * len(ds) else 0
+
+    def allf_share(self, ft=None):
+        """The measured full-screen share of all ads on app screens (kind "s") over the newest ≤ ALLF_FS_DAYS final
+        days whose ads by screen are whole WITH the format (fu / f), 4 places; None when there is none."""
+        ft, n, fs, tot = _iso(_d(ft or self.ft)), 0, 0, 0
+        for d in reversed(self.days):
+            a = self.ads.get(d)
+            if d > ft or d not in self.whole["a"] or not a or a["cls"] is None:
+                continue
+            for c, x in a["cls"].items():
+                if kind(c) == "s":
+                    fs += x[1]
+                    tot += x[0] + x[1] + x[2]
+            n += 1
+            if n >= ALLF_FS_DAYS:
+                break
+        return _r(fs / tot, 4) if tot else None
 
     def _ns_fmt(self, ds, dup=False):
         """The notset-format share of the truth's ads over days ds; dup=False leaves out the duplicate-copy days (a
@@ -1149,6 +1205,46 @@ class App:
             out[d] = (vis, sum(w.get((self.units[u][0], self.units[u][1]), 0) for u in uis))
         return out
 
+    # the app's ads of a row's kind per day: the materiality's whole (judge takes them over the row's own series days)
+    def kind_ads(self, allf):
+        """{day: the app's ads by screen} — every class's inline ads (a GA4 grouped format with them), or every format's
+        when screen rows are judged on all formats — on the days the ads-by-screen read gives that quantity."""
+        out = {}
+        for d, a in self.ads.items():
+            if allf and a["tot"] is not None:
+                out[d] = sum(a["tot"].values())
+            elif not allf and a["cls"] is not None:
+                out[d] = sum(x[0] for x in a["cls"].values())
+        return out
+
+    def fmt_ads(self, f):
+        """{day: the units read's ads of format f} (every trigger group of that format)."""
+        return {d: sum(n for (u, g), n in w.items() if g == f) for d, w in self.w.items()}
+
+    def day_why(self, d, fs=False):
+        """Why a row's series lacks day d, from the day states this build ships: the first of the row's reads it cannot
+        use gives its state — visits (whole; a full-screen row takes GA4 grouped visits too), then ads by screen / the
+        units read (whole): "p" GA4 grouped, "s", "o", "t", "x" or "-" not read yet; a "-" under a truth that is not
+        whole takes the truth's s / o / t / x (a split is read only after its truth); both usable → "f" (format not
+        split: ads by screen without the format have no inline ads, nor all-format ones on a confirmed copy day). None
+        (left out of the parts): no day of the row — before the app's first day d0 (where the page's coverage starts
+        too), or a "-" before the read's history start once that read's history is done (GA4 has nothing to give)."""
+        if not self.d0 or d < self.d0:
+            return None
+        for i in ("v", "w" if fs else "a"):
+            s = self.st[i].get(d, "-")
+            if s == "w" or fs and i == "v" and s == "p":
+                continue
+            if s == "-":
+                t = self.st["t"].get(d, "-")
+                if t in ("s", "o", "t", "x"):
+                    return t
+                o = _oldest(self.meta, i)
+                if o and d < o and _read_of(self.meta, i).get("done"):
+                    return None
+            return s
+        return "f"
+
 
 # ── status (§3.2) ────────────────────────────────────────────────────────────────────────────
 
@@ -1156,11 +1252,21 @@ def _score(a, v, rn):
     return round(100 * (a / v) / rn) if v and rn else None
 
 
-def judge(series, w_days, n_days, guard=None, what="inline", full=False):
+def _parts(states):
+    """The states of the W days a row's series lacks → " (GA4 sampled 8 · not read yet 2)": the non-zero WHY_PARTS in
+    their order ("" for none; None, no day of the row, is never counted)."""
+    s = " · ".join("%s %d" % (lab, states.count(c)) for c, lab in WHY_PARTS if c in states)
+    return " (%s)" % s if s else ""
+
+
+def judge(series, w_days, n_days, guard=None, what="inline", full=False, miss=None, tot=None):
     """A row's {day: (V, A)} → its status {word, why, score, z, h, VW, AW, VN, AN, dW, dN, rw, rn}. First that applies:
-    N/A GA4 sampled · N/A Logging changed · N/A No ads · N/A Ads started · Too early · Worse (score < 80, z ≤ −3, both
-    halves < 90) · Watch (score < 90, z ≤ −WATCH_Z, both halves < 95) · Better (score > 110, z ≥ WATCH_Z, both halves
-    > 105) · Normal."""
+    N/A Not whole · N/A Logging changed · N/A No ads · N/A Ads started · N/A Too few ads · Too early · Worse (score < 80,
+    z ≤ −3, both halves < 90) · Watch (score < 90, z ≤ −WATCH_Z, both halves < 95) · Better (score > 110, z ≥ WATCH_Z,
+    both halves > 105) · Normal. miss(day) → why the series lacks a W day (App.day_why): "Not whole" counts them by
+    part. tot {day: the app's ads of the row's kind}: "Too few ads" when the row's share of them over its own series
+    days stays under MAT_SHARE in W and in N (a row material in N that fell to 0 in W is still judged); "mat" = the
+    larger share."""
     W = [(d, series[d]) for d in w_days if d in series]
     N = [(d, series[d]) for d in n_days if d in series]
     VW, AW = sum(v for _, (v, a) in W), sum(a for _, (v, a) in W)
@@ -1174,7 +1280,8 @@ def judge(series, w_days, n_days, guard=None, what="inline", full=False):
         out.update(word=word, why=why)
         return out
     if len(W) < MIN_A_W:
-        return done("N/A", "GA4 sampled — %d whole days of %s ads in the last %d" % (len(W), what, W_DAYS))
+        parts = _parts([miss(d) for d in w_days if d not in series]) if miss else ""
+        return done("N/A", "Not whole — %d whole days of %s ads in the last %d%s" % (len(W), what, W_DAYS, parts))
     if guard:
         return done("N/A", guard)
     noun = "full-screen" if full else what
@@ -1182,6 +1289,12 @@ def judge(series, w_days, n_days, guard=None, what="inline", full=False):
         return done("N/A", "No %s ads" % noun)
     if AN == 0:
         return done("N/A", "Ads started — no %s ads in the %d days before" % (noun, N_DAYS))
+    if tot is not None:
+        sw, sn = sum(tot.get(d, 0) for d, _ in W), sum(tot.get(d, 0) for d, _ in N)
+        out["mat"] = mat = max(AW / sw if sw else 0.0, AN / sn if sn else 0.0)
+        if mat < MAT_SHARE:                      # (shown cut, never rounded up to the 1 % it is under; under 0.1 %
+            pct = ("%.1f%%" % (math.floor(1000 * mat) / 10)) if mat >= 0.001 else "under 0.1%"    # never "0.0%")
+            return done("N/A", "Too few ads — %s of the app's %s ads" % (pct, what))
     E = rn * VW if rn is not None else 0.0
     if len(N) < MIN_N:
         return done("Too early", "normal has %d whole days (needs %d)" % (len(N), MIN_N))
@@ -2157,9 +2270,10 @@ def _si(app, c):
 
 
 def _enc(app, d, i, rec, seen=None):
-    """A small-group record → the same record with classes as screen indexes (formats normalized). seen (a dict): gets
-    each class in the order met (the small cache's registration order)."""
-    e = {k: v for k, v in rec.items() if k != "r"}
+    """A small-group record → the same record with classes as screen indexes (formats normalized) and the state scr_all
+    ships for it (_ch: a "skip" record "-", not read yet — scr_l and scr_all agree). seen (a dict): gets each class in
+    the order met (the small cache's registration order)."""
+    e = dict({k: v for k, v in rec.items() if k != "r"}, st=_ch(rec))     # scr_all's state ("skip": "-", never "s")
     if not _ok(rec):
         return e
     if seen is None:
@@ -2229,17 +2343,19 @@ def statuses(app, ft=None):
     allf = app.allf(ft)
     gs, gt = app.guard(ft, True), app.guard(ft, False)
     tix = {c: i for i, c in enumerate(app.top)}
-    out = []
+    out, sa, fa = [], app.kind_ads(allf), {}
     for c in app.screens:
         if kind(c) != "s":
             continue
         row = ("s", c, allf)
         ser = app.screen_series(c, allf)
-        st = judge(ser, w, n, gs, "all-format" if allf else "inline")
+        st = judge(ser, w, n, gs, "all-format" if allf else "inline", miss=app.day_why, tot=sa)
         out.append(("s%d" % app.six[c], row, c, "s", tix.get(c), ser, st))
     for gi, (f, lab, _) in enumerate(app.trig):
         ser = app.trig_series(gi)
-        st = judge(ser, w, n, gt, f, full=True)
+        if f not in fa:
+            fa[f] = app.fmt_ads(f)
+        st = judge(ser, w, n, gt, f, full=True, miss=lambda d: app.day_why(d, True), tot=fa[f])
         out.append(("t%d" % gi, ("t", gi), "%s · %s" % (f, lab), "fs", app.fs0 + gi, ser, st))
     ast = app_status([(st, k, st["AN"]) for _, _, _, k, _, _, st in out])
     return out, ast
@@ -2332,8 +2448,10 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
                       "W": [st["VW"], st["AW"], st["dW"]], "N": [st["VN"], st["AN"], st["dN"]],
                       "cause": cz.get("cause", ""), "terms": cz.get("terms"), "units": cz.get("units"),
                       "fbd": fbd.get(rid)}
+    allf = app.allf()
+    allfs = app.allf_share() if allf else None
     notes = {"zone": "assumed" if app.adm.assumed else ("account" if app.adm else "none"),
-             "admob": "ok" if app.adm else "none", "allf": 1 if app.allf() else 0,
+             "admob": "ok" if app.adm else "none", "allf": allf, "allfs": allfs,
              "runs": [[r["a"], r["b"], 1 if r["ok"] else 0, 1 if r["open"] else 0] for r in app.runs],
              "w": [w[0], w[-1]], "n": [n[0], n[-1]], "dq": dq}
     # scr_l (after the shards; the screens list is final once the small records are encoded)
@@ -2347,7 +2465,6 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
              "screens": [[c, kind(c)] for c in app.screens], "units": app.units, "trig": app.trig, "days": days2,
              "adm": adm, "rows": rows2, "notes": notes}
     # scr_all entry
-    allf = app.allf()
     vis, V_, A_, ta = [], [], [], []
     ni = len(app.items)
     for d in app.days:
@@ -2390,12 +2507,11 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
             cz = causes.get(rid) or {}
             status[str(ii)] = [st["word"], st["why"], st["score"],
                                cz.get("cause", "") if st["word"] in ("Worse", "Watch") else ""]
-    bf = {i: [r.get("oldest"), bool(r.get("done"))] for i, r in ((meta.get("reads") or {}).items())
-          if isinstance(r, dict)}
+    bf = {i: _bf(r) for i, r in ((meta.get("reads") or {}).items()) if isinstance(r, dict)}
     entry = {"key": key, "ft": _iso(app.ft), "td": _iso(app.td), "d0": app.d0, "items": app.items, "vis": vis,
              "V": V_, "A": A_, "ta": ta, "st": stall, "bf": bf, "status": status, "app": ast, "dq": dq}
-    if allf:
-        entry["allf"] = 1
+    if allf:                                         # why the screens count every format: 1 format not recorded, 2 no
+        entry["allf"], entry["allfs"] = allf, allfs  # split from GA4; allfs its measured full-screen share on screens
     c = counts
     c["rows"] += len(rows)
     c["judged"] += sum(1 for r in rows if r[6]["word"] in JUDGED)
@@ -2429,6 +2545,14 @@ def _by_id(data_dir):
         return {}
 
 
+def selected(dashboard):
+    """The app ids selected in the dashboard's apps_catalog (rows with "selected" true), or None when there is no
+    catalog (every store app is built). A store app the catalog does not select is not built (the history job may
+    have fetched it): its files go with the stale ones."""
+    cat = [c for c in dashboard.get("apps_catalog") or [] if isinstance(c, dict)]
+    return {str(c.get("app_id")) for c in cat if c.get("selected")} if cat else None
+
+
 def run(dashboard, data_dir, out_dir, s=None, now=None):
     """This build's files → HEADER_PATHS, or [] (no store yet / a failure: the files removed, no pointer). Never raises."""
     global LINE
@@ -2442,11 +2566,14 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
         counts = {"rows": 0, "judged": 0, "worse": 0, "watch": 0, "big": 0, "failed": 0, "cached": 0}
         apps, entries, keep = {}, {}, set()
         bad = []                                    # (key, group, month, error type): store month files not readable
+        sel = selected(dashboard)
         for key in store_keys(data_dir):
             meta = load_meta(data_dir, key)
             if not meta or gu.file_key(str(meta["app_id"])) != key:
                 continue
             aid = str(meta["app_id"])
+            if sel is not None and aid not in sel:
+                continue                            # not selected: never built (no counter of the line fits it)
             mine, bk = set(), []
             ip = _idx_path(data_dir, key)
             idx = _idx_load(ip)

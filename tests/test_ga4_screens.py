@@ -1,10 +1,11 @@
 """🖼️ Screens — the GA4 fetch (admob_iq.fetch.ga4_screens), offline with a fake GA4 and made-up apps, screen classes,
 ad units and numbers: every read's dimensions / metrics / event filter per shape, the whole check (whole, partial,
 silent loss, sampled, cut, thresholded), the grain (chunk ladder, coarser shapes per day with the shapes tried saved
-before a stop, the volume gate, dead shapes and their retry — final days only), the skips without calls, the event list,
-the recent window and its truth, the gap fill, the two passes, quota floors and 429s, the store (recent file, month
-files by group, the move, damaged files left alone), the loaders, the history job (token renewal, its heartbeat, its
-staged files and their merge), and counts-only lines."""
+before a stop, the volume gate, dead shapes and their retry — final days only — and a final day they leave unasked,
+asked anyway), the skips without calls, the event list, the recent window and its truth, the gap fill, the two passes,
+quota floors and 429s, the store (recent file, month files by group, the move, damaged files left alone, old skip
+records read again), the loaders, the history job (token renewal, its heartbeat, its staged files and their merge), and
+counts-only lines."""
 import gzip
 import hashlib
 import json
@@ -40,11 +41,17 @@ ADS = [(MAIN, "Banner", "unit_a", "new", "1.0", "XA", "src_a", 15, 5),
 EVS = [(MAIN, "ad_click", 3), (ADACT, "ad_reward", 2), (MAIN, "inter_shown", 5), (LIST_, "banner_load_fail", 4),
        (MAIN, "screen_view", 100), (MAIN, "my_event", 50)]
 EXPO = [(MAIN, 9000), (LIST_, 4000)]
-VCOL = {gs.SC: 0, gs.NVR: 1, gs.VER: 2, gs.CTY: 3}
+VCOL = {gs.SC: 0, gs.PP: 0, gs.NVR: 1, gs.VER: 2, gs.CTY: 3}
 VMET = {"screenPageViews": 4, "userEngagementDuration": 5, "sessions": 6, "activeUsers": 7}
-ACOL = {gs.SC: 0, gs.FMT: 1, gs.UNIT: 2, gs.NVR: 3, gs.VER: 4, gs.CTY: 5, gs.SRC: 6}
+ACOL = {gs.SC: 0, gs.PP: 0, gs.FMT: 1, gs.UNIT: 2, gs.NVR: 3, gs.VER: 4, gs.CTY: 5, gs.SRC: 6}
 AMET = {"eventCount": 7, "activeUsers": 8}
 Q = namedtuple("Q", "dims mets event events a b")
+
+
+def _scr(q):
+    """The screen dimension a call asks: the page path (ads, clicks, own events, exposure) or the class (views,
+    users, the layers), else None."""
+    return gs.PP if gs.PP in q.dims else gs.SC if gs.SC in q.dims else None
 
 
 class Model:
@@ -57,13 +64,14 @@ class Model:
         if event == gs.IMP:
             return ([] if day.isoformat() in self.no_ads else ADS), ACOL, AMET
         if events:
-            return [r for r in EVS if r[1] in events], {gs.SC: 0, gs.EVN: 1}, {"eventCount": 2}
+            return [r for r in EVS if r[1] in events], {gs.SC: 0, gs.PP: 0, gs.EVN: 1}, {"eventCount": 2}
         if "adUnitExposure" in mets:
-            return EXPO, {gs.SC: 0}, {"adUnitExposure": 1}
+            return EXPO, {gs.SC: 0, gs.PP: 0}, {"adUnitExposure": 1}
         if list(mets) == ["eventCount"]:
             ads = 0 if day.isoformat() in self.no_ads else sum(r[7] for r in ADS)
             rest = self.events_per_day - ads - sum(r[2] for r in EVS)
-            return EVS + [(MAIN, "ad_impression", ads), (MAIN, "session_start", rest)], {gs.SC: 0, gs.EVN: 1}, \
+            return EVS + [(MAIN, "ad_impression", ads), (MAIN, "session_start", rest)], {gs.SC: 0, gs.PP: 0,
+                                                                                         gs.EVN: 1}, \
                 {"eventCount": 2}
         return VIEW, VCOL, VMET
 
@@ -174,23 +182,24 @@ def test_every_read_asks_its_dimensions_metrics_and_event_filter(tmp_path):
     want = {
         ("v", "c"): ([("date", "unifiedScreenClass")], ("screenPageViews", "userEngagementDuration"), None, None),
         ("w", "u"): ([("date", "adFormat", "adUnitName")], ("eventCount",), "ad_impression", None),
-        ("a", "fu"): ([("date", "unifiedScreenClass", "adFormat", "adUnitName")], ("eventCount",), "ad_impression", None),
-        ("a", "f"): ([("date", "unifiedScreenClass", "adFormat")], ("eventCount",), "ad_impression", None),
-        ("a", "c"): ([("date", "unifiedScreenClass")], ("eventCount",), "ad_impression", None),
+        ("a", "fu"): ([("date", "unifiedPagePathScreen", "adFormat", "adUnitName")], ("eventCount",), "ad_impression",
+                      None),
+        ("a", "f"): ([("date", "unifiedPagePathScreen", "adFormat")], ("eventCount",), "ad_impression", None),
+        ("a", "c"): ([("date", "unifiedPagePathScreen")], ("eventCount",), "ad_impression", None),
         ("nV", "c"): ([("date", "newVsReturning", "unifiedScreenClass")], ("screenPageViews",), None, None),
         ("rV", "a"): ([("date", "appVersion")], ("screenPageViews",), None, None),
         ("cA", "cf"): ([("date", "countryId", "unifiedScreenClass", "adFormat")], ("eventCount",), "ad_impression",
                        None),
         ("nA", "f"): ([("date", "newVsReturning", "adFormat")], ("eventCount",), "ad_impression", None),
         ("rA", "a"): ([("date", "appVersion")], ("eventCount",), "ad_impression", None),
-        ("k", "c"): ([("date", "eventName"), ("date", "unifiedScreenClass", "eventName")], ("eventCount",), None,
+        ("k", "c"): ([("date", "eventName"), ("date", "unifiedPagePathScreen", "eventName")], ("eventCount",), None,
                      ("ad_click", "ad_reward")),
-        ("e", "c"): ([("date",), ("date", "unifiedScreenClass")], ("adUnitExposure",), None, None),
+        ("e", "c"): ([("date",), ("date", "unifiedPagePathScreen")], ("adUnitExposure",), None, None),
         ("uV", "c"): ([("date", "unifiedScreenClass")], ("sessions", "activeUsers"), None, None),
         ("uA", "c"): ([("date", "unifiedScreenClass")], ("activeUsers",), "ad_impression", None),
         ("uA", "a"): ([("date",)], ("activeUsers",), "ad_impression", None),
         ("s", "fs"): ([("date", "adFormat", "adSourceName")], ("eventCount",), "ad_impression", None),
-        ("x", "c"): ([("date", "eventName"), ("date", "unifiedScreenClass", "eventName")], ("eventCount",), None,
+        ("x", "c"): ([("date", "eventName"), ("date", "unifiedPagePathScreen", "eventName")], ("eventCount",), None,
                      ("inter_shown",)),
     }
     for (rid, s), (dims, mets, ev, evs) in want.items():
@@ -232,30 +241,31 @@ def test_whole_partial_silent_loss_sampled_cut_and_thresholded(tmp_path):
         job.ga.model.hook = fn
         return gs.read_chunk(job, rid, s, a, b)
 
-    fold = lambda q, rows: (rows + [dict(rows[0], unifiedScreenClass="(other)", eventCount=10)] if q.event and
-                            gs.SC in q.dims else rows, {})
+    fold = lambda q, rows: (rows + [dict(rows[0], **{_scr(q): "(other)", "eventCount": 10})] if q.event and
+                            _scr(q) else rows, {})
     # a fold row inside the tie: the main screen loses 1 to "(other)": partial at 1/70 > 0.5 %, the rows and share kept
     def moved(q, rows):
-        if q.event != gs.IMP or gs.SC not in q.dims:
+        if q.event != gs.IMP or not _scr(q):
             return rows, {}
         rows = [dict(r) for r in rows]
         rows[-1]["eventCount"] -= 5
-        return rows + [dict(rows[-1], unifiedScreenClass="(other)", eventCount=5)], {}
+        return rows + [dict(rows[-1], **{_scr(q): "(other)", "eventCount": 5})], {}
     recs, clean, _ = run(moved)
     assert clean and recs[d]["st"] == "p" and recs[d]["f"] == round(5 / 70, 4) and len(recs[d]["r"]) == 4
     # silent loss: a screen's row missing, no fold row → "o", coverage kept, no rows
-    drop = lambda q, rows: ([r for r in rows if r.get(gs.SC) != LIST_] if q.event else rows, {"dataLossFromOtherRow": True})
+    drop = lambda q, rows: ([r for r in rows if r.get(_scr(q)) != LIST_] if q.event else rows,
+                            {"dataLossFromOtherRow": True})
     recs, clean, _ = run(drop)
-    assert clean and recs[d] == {"g": "fu", "fv": 1, "st": "o", "cov": round(50 / 70, 4), "loss": 1}
+    assert clean and recs[d] == {"g": "fu", "fv": 1, "st": "o", "cov": round(50 / 70, 4), "loss": 1, "pp": 1}
     # reads without a truth (uV, uA): GA4's loss flag alone makes the day not whole (no rows), and uA's cascade then
     # tries its coarser shape "a"
     for rid in ("uV", "uA"):
         recs, _, _ = run(drop if rid == "uA" else lambda q, rows: (
-            [r for r in rows if r.get(gs.SC) != LIST_], {"dataLossFromOtherRow": True}), rid, "c")
+            [r for r in rows if r.get(_scr(q)) != LIST_], {"dataLossFromOtherRow": True}), rid, "c")
         assert recs[d] == {"g": "c", "fv": 1, "st": "o", "cov": None, "loss": 1}, rid
     job = _job(tmp_path / "ua", FakeGA())
     _t_days(job, [FE])
-    job.ga.model.hook = lambda q, rows: (rows, {"dataLossFromOtherRow": True} if gs.SC in q.dims else {})
+    job.ga.model.hook = lambda q, rows: (rows, {"dataLossFromOtherRow": True} if _scr(q) else {})
     n = len(job.ga.asked)
     gs.fill(job, "uA", [d], True)
     assert [_rid(q) for q in job.ga.asked[n:]] == ["uA:c", "uA:a"]
@@ -267,7 +277,7 @@ def test_whole_partial_silent_loss_sampled_cut_and_thresholded(tmp_path):
     job.ga.model.hook = lambda q, rows: (rows, {"dataLossFromOtherRow": True} if q.events == gs.CLICKS else {})
     n = len(job.ga.asked)
     recs, clean, _ = gs.read_chunk(job, "k", "c", FE, FE)
-    assert not clean and recs[d] == {"st": "o", "cov": None, "loss": 1, "g": "c", "fv": 1}
+    assert not clean and recs[d] == {"st": "o", "cov": None, "loss": 1, "g": "c", "fv": 1, "pp": 1}
     assert [_rid(q) for q in job.ga.asked[n:]] == ["k:own"]
     # 10 events over a truth of 70: never "whole" either (1 over would be inside the 2 % / 1 tie)
     recs, _, _ = run(fold)
@@ -276,7 +286,7 @@ def test_whole_partial_silent_loss_sampled_cut_and_thresholded(tmp_path):
     smp = lambda q, rows: (rows, {"samplingMetadatas": [{"samplesReadCount": "25", "samplingSpaceSize": "100"}]}
                            if q.event else {})
     recs, clean, info = run(smp)
-    assert not clean and info["s"] and recs[d] == {"g": "fu", "fv": 1, "st": "s", "smp": 0.25}
+    assert not clean and info["s"] and recs[d] == {"g": "fu", "fv": 1, "st": "s", "smp": 0.25, "pp": 1}
     # cut: fewer rows than GA4's row count
     cut = lambda q, rows: (rows[:-1], {"_rc": len(rows)}) if q.event else (rows, {})
     recs, clean, _ = run(cut)
@@ -313,8 +323,8 @@ def test_chunk_ladder_halves_on_a_bad_multi_day_read_and_doubles_after_two_whole
     days = gs._days(FE - timedelta(days=13), FE)
     _t_days(job, days)
     # GA4 loses a screen's ads in any read of more than 3 days at the finest shape
-    ga.model.hook = lambda q, rows: (([r for r in rows if r.get(gs.SC) != LIST_]
-                                      if q.event and gs.UNIT in q.dims and gs.SC in q.dims and (q.b - q.a).days >= 3
+    ga.model.hook = lambda q, rows: (([r for r in rows if r.get(_scr(q)) != LIST_]
+                                      if q.event and gs.UNIT in q.dims and _scr(q) and (q.b - q.a).days >= 3
                                       else rows), {})
     n = len(ga.asked)
     gs.fill(job, "a", list(reversed(days)), True)
@@ -339,7 +349,7 @@ def test_coarser_shapes_per_day_and_the_shapes_tried_saved_before_a_stop(tmp_pat
     d = FE.isoformat()
     sampled = {"samplingMetadatas": [{"samplesReadCount": "1", "samplingSpaceSize": "4"}]}
     # fu and f sampled, c whole
-    hook = lambda q, rows: (rows, sampled if q.event and gs.SC in q.dims and len(q.dims) > 2 else {})
+    hook = lambda q, rows: (rows, sampled if q.event and _scr(q) and len(q.dims) > 2 else {})
     ga = FakeGA(Model())
     job = _job(tmp_path, ga)
     _t_days(job, [FE])
@@ -489,7 +499,7 @@ def test_a_dead_shape_is_skipped_until_14_more_days_were_read_then_tried_once(tm
     days = list(reversed(gs._days(FE - timedelta(days=25), FE)))
     _t_days(job, days)
     ga.model.hook = lambda q, rows: (rows, {"samplingMetadatas": [{"samplesReadCount": "1", "samplingSpaceSize": "5"}]}
-                                     if q.event and gs.UNIT in q.dims and gs.SC in q.dims else {})
+                                     if q.event and gs.UNIT in q.dims and _scr(q) else {})
     rd = job.rd("a")
     rd["d"]["fu"] = 1
     n = len(ga.asked)
@@ -510,6 +520,140 @@ def test_a_dead_shape_is_skipped_until_14_more_days_were_read_then_tried_once(tm
     gs.fill(job, "a", days[20:22], True)
     assert "fu" not in rd["dead"]
     assert _final(tmp_path, "core", "2026-10")[days[20]]["a"]["g"] == "fu"        # the retry day
+
+
+SAMPLED = {"samplingMetadatas": [{"samplesReadCount": "1", "samplingSpaceSize": "4"}]}
+
+
+def _a_shape(q):
+    """Which shape of the "a" read a call was (None: another read)."""
+    return {3: "fu", 2: "f", 1: "c"}[len(q.dims) - 1] if q.event == gs.IMP and gs.PP in q.dims else None
+
+
+def test_a_final_day_every_shape_is_dead_for_is_still_asked_its_coarsest_shape(tmp_path):
+    # no "skip" record stored as final (never read again): the finer shapes are skipped (dead), the coarsest is asked
+    # — and its answer (sampled) is the day's record; the dead rule counts the finer skips, the gate learns from the call
+    ga = FakeGA(Model(lambda q, rows: (rows, SAMPLED if _a_shape(q) else {})))
+    job = _job(tmp_path, ga)
+    d = FE.isoformat()
+    _t_days(job, [FE])
+    rd = job.rd("a")
+    for s in ("fu", "f", "c"):
+        rd["dead"][s] = {"n": 3, "st": "s", "until": gs.DEAD_RETRY}     # its one retry not due (nothing read yet)
+    n = len(ga.asked)
+    gs.fill(job, "a", [d], True)
+    assert [(_rid(q), q.a, q.b) for q in ga.asked[n:]] == [("a:c", FE, FE)] and job.c["dead"] == 2
+    assert _final(tmp_path, "core", "2026-10")[d]["a"] == {"g": "c", "fv": 1, "st": "s", "smp": 0.25, "tried": ["c"],
+                                                          "pp": 1}
+    assert rd["gate"]["c"] == {"bad": 1000} and rd["dead"]["c"]["n"] == 4 and rd["read"] == 1 and rd["pend"] == {}
+    assert not job.needs("a", d)
+
+
+def test_a_dead_coarsest_shape_is_read_at_its_grain_never_a_day_at_a_time(tmp_path):
+    # every shape dead, GA4 whole at c: the 3 final days go out in ONE read of the coarsest (its grain), never 3
+    # one-day reads; the whole answer revives it; the finer shapes stay dead (their own retry brings them back)
+    ga = FakeGA()
+    job = _job(tmp_path, ga)
+    days = gs._days(FE - timedelta(days=2), FE)
+    _t_days(job, days)
+    rd = job.rd("a")
+    for s in ("fu", "f", "c"):
+        rd["dead"][s] = {"n": 3, "st": "s", "until": gs.DEAD_RETRY}
+    n = len(ga.asked)
+    gs.fill(job, "a", list(reversed(days)), True)
+    assert [(_rid(q), q.a, q.b) for q in ga.asked[n:]] == [("a:c", FE - timedelta(days=2), FE)]
+    core = _final(tmp_path, "core", "2026-10")
+    assert all(core[d]["a"]["g"] == "c" and core[d]["a"]["st"] == "w" and core[d]["a"]["tried"] == ["c"] for d in days)
+    assert set(rd["dead"]) == {"fu", "f"} and job.c["dead"] == 6 and rd["pend"] == {}
+
+
+def test_a_dead_shapes_one_day_retry_never_changes_its_grain(tmp_path):
+    # fu dead with its retry due: one day of it goes out (whole: alive again) — its grain stays what it was
+    ga = FakeGA()
+    job = _job(tmp_path, ga)
+    days = gs._days(FE - timedelta(days=2), FE)
+    _t_days(job, days)
+    rd = job.rd("a")
+    rd["d"]["fu"], rd["streak"]["fu"] = 14, 1
+    rd["dead"]["fu"] = {"n": 3, "st": "s", "until": 0}
+    n = len(ga.asked)
+    gs.fill(job, "a", list(reversed(days)), True)
+    asked = [(_rid(q), q.a, q.b) for q in ga.asked[n:]]
+    assert asked[0] == ("a:fu", FE, FE) and "fu" not in rd["dead"]
+    assert rd["d"]["fu"] == 14 and rd["streak"]["fu"] == 1
+
+
+def test_a_gated_final_day_is_still_asked_its_coarsest_and_the_gate_learns_from_it(tmp_path):
+    # GA4 sampled every shape at 500 events before and both days have 1,000: the finer shapes skipped (gated), the
+    # coarsest asked anyway — the ladder a day at a time (the volume) — whole, kept; the gate now knows c whole at 1,000
+    ga = FakeGA()
+    job = _job(tmp_path, ga)
+    days = gs._days(FE - timedelta(days=1), FE)
+    _t_days(job, days)
+    rd = job.rd("a")
+    for s in ("fu", "f", "c"):
+        rd["gate"][s] = {"bad": 500}
+    n = len(ga.asked)
+    gs.fill(job, "a", list(reversed(days)), True)
+    d0 = FE - timedelta(days=1)
+    assert [(_rid(q), q.a, q.b) for q in ga.asked[n:]] == [("a:c", FE, FE), ("a:c", d0, d0)]
+    core = _final(tmp_path, "core", "2026-10")
+    assert all(core[d]["a"]["g"] == "c" and core[d]["a"]["tried"] == ["c"] and "skip" not in core[d]["a"]
+               for d in days)
+    assert job.c["gated"] == 4 and rd["gate"] == {"fu": {"bad": 500}, "f": {"bad": 500}, "c": {"bad": 500, "ok": 1000}}
+    # w's one shape gated, GA4 sampled: one call, one day; the answer is the day's record
+    ga.model.hook = lambda q, rows: (rows, SAMPLED if q.event == gs.IMP and gs.UNIT in q.dims else {})
+    job.rd("w")["gate"]["u"] = {"bad": 500}
+    n = len(ga.asked)
+    gs.fill(job, "w", [FE.isoformat()], True)
+    assert [(_rid(q), q.a, q.b) for q in ga.asked[n:]] == [("w:u", FE, FE)]
+    assert _final(tmp_path, "core", "2026-10")[FE.isoformat()]["w"] == {"g": "u", "fv": 1, "st": "s", "smp": 0.25,
+                                                                        "tried": ["u"]}
+
+
+def test_a_stop_while_reading_the_coarsest_leaves_the_days_left_with_no_record(tmp_path):
+    hook = lambda q, rows: (rows, SAMPLED if q.event == gs.IMP and gs.UNIT in q.dims else {})
+    ga = FakeGA(Model(hook))
+    job = _job(tmp_path, ga)
+    days = gs._days(FE - timedelta(days=2), FE)
+    _t_days(job, days)
+    job.rd("w")["dead"]["u"] = {"n": 3, "st": "s", "until": gs.DEAD_RETRY}
+    ga.stop_after = ga.calls + 1                            # the 3-day read goes out (sampled), then the run stops
+    with pytest.raises(gf.Stop):
+        gs.fill(job, "w", list(reversed(days)), True)
+    core = _final(tmp_path, "core", "2026-10")
+    assert all("w" not in core[d] for d in days)            # nothing stored as final, never a skip record
+    assert job.rd("w")["pend"] == {}
+    # the next run asks the days again (the stop came before the smaller grain was saved: the 3-day read once more,
+    # then a day at a time) and stores GA4's answers
+    ga2 = FakeGA(Model(hook))
+    job2 = gs.Job(job.root, _it(), NOW, ga2, lambda: 0.0)
+    gs.fill(job2, "w", [d for d in reversed(days) if job2.needs("w", d)], True)
+    assert [(_rid(q), q.a, q.b) for q in ga2.asked] == [("w:u", FE - timedelta(days=2), FE)] + [
+        ("w:u",) + (FE - timedelta(days=i),) * 2 for i in range(3)]
+    core = _final(tmp_path, "core", "2026-10")
+    assert all(core[d]["w"]["st"] == "s" and core[d]["w"]["tried"] == ["u"] and "skip" not in core[d]["w"]
+               for d in days)
+
+
+def test_a_coarser_shape_dead_or_gated_is_not_read_beside_a_grouped_day(tmp_path):
+    # cA's cf folds 15 of 70 every day ("p", over 2 %) and f is gated at 1,000 events: its "co" is not asked (the day
+    # keeps its own whole-enough record; "co" is only beside it) — the calls are what they were before 6 Nov
+    def hook(q, rows):
+        if q.event == gs.IMP and gs.SC in q.dims and gs.CTY in q.dims:
+            rows = [dict(r, **({gs.SC: "(other)"} if r[gs.SC] == MAIN and r[gs.CTY] == "XA" else {})) for r in rows]
+        return rows, {}
+    ga = FakeGA(Model(hook))
+    job = _job(tmp_path, ga)
+    days = gs._days(FE - timedelta(days=1), FE)
+    _t_days(job, days)
+    rd = job.rd("cA")
+    rd["gate"]["f"] = {"bad": 500}
+    n = len(ga.asked)
+    gs.fill(job, "cA", list(reversed(days)), True)
+    assert [(_rid(q), (q.b - q.a).days + 1) for q in ga.asked[n:]] == [("cA:cf", 2)]
+    cc = _final(tmp_path, "cc", "2026-10")
+    assert all(cc[d]["cA"]["st"] == "p" and "co" not in cc[d]["cA"] for d in days) and rd["cop"] == {}
 
 
 def test_days_without_ads_or_events_cost_the_ad_reads_nothing(tmp_path):
@@ -673,6 +817,37 @@ def test_backfill_walks_newest_first_by_chunk_across_every_read(tmp_path):
     n = len(ga.asked)
     gs.backfill(job, FE - timedelta(days=100))              # complete: nothing more
     assert len(ga.asked) == n
+
+
+def _rewrite(path, fn):
+    """A store file → fn(its dict) → written back (a store as written before this change)."""
+    j = gs._read_gz(path)
+    fn(j)
+    gs.write_json_gz_stable(path, j)
+
+
+def test_an_old_skip_record_in_the_builds_store_is_read_again_by_the_hourly_backfill(monkeypatch, tmp_path):
+    # a final day stored as a skip before this change (nothing asked) is no answer: the build looks once for every
+    # skip record and pass 2 asks GA4 for those days, wherever its cursor and "done" stand
+    apps = [{"app_id": AID, "package": "com.example.alpha", "pid": "111"}]
+    _patch_routes(monkeypatch, apps)                        # history start 2026-10-21
+    asked = _http(monkeypatch, Model())
+    data = str(tmp_path / "data")
+    cfg = {"client_id": "c", "client_secret": "s", "refresh_tokens": json.dumps({"o": "rt"})}
+    out = gs.refresh_all(cfg, data, [dict(a) for a in apps], NOW, clock=lambda: 0.0, budget=1000)
+    assert out["apps"] == {AID: "fetched"}
+    d, root = "2026-10-24", os.path.join(data, gs.DIR)
+    p = gs.month_path(root, KEY, "core", "2026-10")
+    _rewrite(p, lambda j: j["days"][d].update(w={"st": "s", "g": "u", "skip": "dead", "tried": [], "fv": 1}))
+    _rewrite(gs.meta_path(root, KEY), lambda m: [rd.pop("redo", None) for rd in m["reads"].values()])
+    assert all(r["done"] for r in gs.load_meta(data, KEY)["reads"].values())
+    n = len(asked)
+    out = gs.refresh_all(cfg, data, [dict(a) for a in apps], NOW + timedelta(hours=1), clock=lambda: 0.0)
+    assert out["apps"] == {AID: "fetched"}
+    assert [(_rid(q), q.a.isoformat(), q.b.isoformat()) for _, q in asked[n:]] == [("w:u", d, d)]
+    rec = gs._read_gz(p)["days"][d]["w"]
+    assert rec["st"] == "w" and rec["tried"] == ["u"] and "skip" not in rec
+    assert all(rd["redo"] == [] for rd in gs.load_meta(data, KEY)["reads"].values())
 
 
 def _patch_routes(monkeypatch, apps):
@@ -1057,6 +1232,33 @@ def test_merge_staged_rules_and_progress(tmp_path):
     assert gs.merge_staged(data, staged, {"fetch": {}})["bad"] == 1
 
 
+def test_merge_staged_an_asked_record_replaces_a_skip_record_never_the_reverse(tmp_path):
+    # a skip record (from before: nothing asked, stored as final) is no answer: GA4's, whole or not, replaces it; it
+    # never replaces GA4's, is never copied, and a whole record still never gives way to one that is not
+    data, staged = str(tmp_path / "data"), str(tmp_path / "bf")
+    root = os.path.join(data, gs.DIR)
+    w = {"st": "w", "g": "c", "fv": 1, "r": [[MAIN, 1, 2]], "tried": ["c"]}
+    o = {"st": "o", "g": "c", "fv": 1, "cov": 0.4, "tried": ["c"]}
+    sk = {"st": "s", "g": "c", "skip": "gate", "tried": [], "fv": 1}
+    assert gs.merge_rec(sk, o) is o and gs.merge_rec(o, sk) is o and gs.merge_rec(w, sk) is w
+    assert gs.merge_rec(sk, w) is w and gs.merge_rec(dict(sk, rc=1), o) is o
+    assert not gs._complete(gs._status(sk), "v", []) and gs._complete(gs._status(o), "v", [])
+    store = gs.Store(root, KEY, {"v": 1, "app_id": AID, "reads": {}, "months": {}})
+    store.put({"2026-10-01": {"v": sk}, "2026-10-02": {"v": o}, "2026-10-03": {"v": w}, "2026-10-04": {"v": sk}})
+    store.save_meta()
+    bst = gs.Store(staged, KEY, {"v": 1, "app_id": AID, "reads": {}, "months": {}})
+    bst.put({"2026-10-01": {"v": dict(o, cov=0.7)},       # GA4's answer, not whole, over a skip record: copied
+             "2026-10-02": {"v": sk},                     # a skip record over GA4's answer: never
+             "2026-10-03": {"v": o},                      # not whole over whole: never
+             "2026-10-04": {"v": w},                      # whole over a skip record: copied
+             "2026-10-05": {"v": sk}})                    # a skip record where the build has none: never either
+    bst.save_meta()
+    assert gs.merge_staged(data, staged, {"fetch": {}}) == {"merged": 1, "not_whole": 1, "bad": 0}
+    days = gs._read_gz(gs.month_path(root, KEY, "core", "2026-10"))["days"]
+    assert days["2026-10-01"]["v"] == dict(o, cov=0.7) and days["2026-10-02"]["v"] == o
+    assert days["2026-10-03"]["v"] == w and days["2026-10-04"]["v"] == w and "2026-10-05" not in days
+
+
 def test_git_push_sends_the_token_in_a_header_and_adds_only_its_folder():
     calls = []
 
@@ -1169,3 +1371,174 @@ def test_the_history_job_leaves_its_last_word_on_each_app(monkeypatch, tmp_path)
     assert paused["q"]["tokensPerHour"] == 0.25 and paused["type"] is None
     done = gs._read_gz(gs.meta_path(staged, gu.file_key(AID2)))["bf"]
     assert done["state"] == "done B" and done["n"] == {"done A": 1, "done B": 1}
+
+
+def test_an_old_skip_record_is_read_again_by_the_history_job(monkeypatch, tmp_path):
+    # folders written before this change: a final day stored as a skip (nothing asked) is no answer — the history job
+    # looks once for every skip record (its folder's and the build's), asks GA4 for those days only and ends done;
+    # the merge then puts GA4's answer over the build's skip record
+    apps = [{"app_id": AID, "package": "com.example.alpha", "pid": "111"}]
+    _patch_routes(monkeypatch, apps)                        # history start 2026-10-21
+    asked = _http(monkeypatch, Model())
+    data, staged = str(tmp_path / "data"), str(tmp_path / gs.BF_DIR)
+    cfg = {"client_id": "c", "client_secret": "s", "refresh_tokens": json.dumps({"o": "rt"})}
+
+    def run():
+        return gs.backfill_all(cfg, data, staged, [dict(a) for a in apps], NOW, clock=lambda: 0.0, workers=1,
+                               tick=0.01)
+    assert run()["apps"] == {AID: "done"}
+    d1, d2 = "2026-10-25", "2026-10-23"
+    skip = {"st": "s", "g": "c", "skip": "gate", "tried": [], "fv": 1}
+    core, small = gs.month_path(staged, KEY, "core", "2026-10"), gs.month_path(staged, KEY, "small", "2026-10")
+    _rewrite(core, lambda j: j["days"][d1].update(a=skip))              # the job's own: "a" stored unasked
+    _rewrite(small, lambda j: j["days"][d2].pop("s"))                   # the build's: "s" skipped there, not read here
+    bst = gs.Store(os.path.join(data, gs.DIR), KEY, {"v": 1, "app_id": AID, "reads": {}, "months": {}})
+    bst.put({d2: {"s": dict(skip, g="fs", st="o", skip="dead")}})
+    bst.save_meta()
+    _rewrite(gs.meta_path(staged, KEY), lambda m: [rd.pop("redo", None) for rd in m["reads"].values()])
+    assert all(r["done"] for r in gs._read_gz(gs.meta_path(staged, KEY))["reads"].values())
+    n = len(asked)
+    out = run()
+    assert out["apps"] == {AID: "done"} and "error" not in out
+    assert [(_rid(q), q.a.isoformat(), q.b.isoformat()) for _, q in asked[n:]] == [("a:fu", d1, d1), ("s:fs", d2, d2)]
+    rec = gs._read_gz(core)["days"][d1]["a"]
+    assert rec["st"] == "w" and rec["g"] == "fu" and rec["tried"] == ["fu"] and "skip" not in rec
+    assert gs._read_gz(small)["days"][d2]["s"]["st"] == "w"
+    assert all(rd["redo"] == [] for rd in gs._read_gz(gs.meta_path(staged, KEY))["reads"].values())
+    gs.merge_staged(data, staged, {"fetch": {}, "staged": {}})
+    got = _final(tmp_path, "small", "2026-10")[d2]["s"]
+    assert got["st"] == "w" and "skip" not in got
+
+
+# ── the page path (6 Nov 2026) ──────────────────────────────────────────────────────────────────────────────────────
+def _by_class(rec):
+    """A record as the class reads stored it before 6 Nov: no "pp" mark."""
+    return {k: v for k, v in rec.items() if k != "pp"}
+
+
+def test_a_class_record_not_whole_is_asked_again_by_page_path_and_a_whole_one_stays(monkeypatch, tmp_path):
+    # the build's store as the class reads left it: one ads day sampled, one whole; the next run asks only the sampled
+    # day again — by page path — and keeps the whole one; the views read (still by class) is never asked again
+    apps = [{"app_id": AID, "package": "com.example.alpha", "pid": "111"}]
+    _patch_routes(monkeypatch, apps)                        # history start 2026-10-21
+    asked = _http(monkeypatch, Model())
+    data = str(tmp_path / "data")
+    cfg = {"client_id": "c", "client_secret": "s", "refresh_tokens": json.dumps({"o": "rt"})}
+    assert gs.refresh_all(cfg, data, [dict(a) for a in apps], NOW, clock=lambda: 0.0, budget=1000)["apps"] == {
+        AID: "fetched"}
+    root = os.path.join(data, gs.DIR)
+    p = gs.month_path(root, KEY, "core", "2026-10")
+    bad, good = "2026-10-24", "2026-10-25"
+
+    def back(j):
+        j["days"][bad]["a"] = {"st": "s", "g": "c", "smp": 0.2, "tried": ["fu", "f", "c"], "fv": 1}
+        j["days"][good]["a"] = _by_class(j["days"][good]["a"])
+    _rewrite(p, back)
+
+    def old_meta(m):                                        # learned by class: a dead fu, a gate; no page path mark
+        for rid, rd in m["reads"].items():
+            rd.pop("redo", None)
+            if rid in gs.PP_READS:
+                rd.pop("dim", None)
+                rd["dead"], rd["gate"] = {"fu": {"n": 3, "st": "s", "until": 999}}, {"f": {"bad": 1}}
+    _rewrite(gs.meta_path(root, KEY), old_meta)
+    n = len(asked)
+    gs.refresh_all(cfg, data, [dict(a) for a in apps], NOW + timedelta(hours=1), clock=lambda: 0.0)
+    redo = [(_rid(q), q.a.isoformat(), q.b.isoformat()) for _, q in asked[n:] if q.a.isoformat() <= "2026-10-30"]
+    assert redo == [("a:fu", bad, bad)]                     # the learned state started again: fu alive, whole
+    days = gs._read_gz(p)["days"]
+    assert days[bad]["a"]["st"] == "w" and days[bad]["a"]["g"] == "fu" and days[bad]["a"]["pp"] == 1
+    assert days[good]["a"] == _by_class(days[good]["a"]) and "pp" not in days[good]["a"]      # (kept as it was)
+    m = gs.load_meta(data, KEY)
+    for rid in gs.PP_READS:
+        assert m["reads"][rid]["dim"] == gs.PP and "fu" not in m["reads"][rid]["dead"], rid
+    assert "dim" not in m["reads"]["v"]
+
+
+def test_the_learned_state_starts_again_once_for_the_page_path_reads_only(tmp_path):
+    job = _job(tmp_path)
+    for rid in ("a", "v"):
+        rd = job.meta["reads"].setdefault(rid, {})
+        rd.update(d={"fu": 3}, dead={"f": {"n": 3, "until": 9}}, gate={"c": {"bad": 5}}, redo=["2026-10-01"])
+    rd = job.rd("a")
+    assert rd["dim"] == gs.PP and rd["dead"] == rd["gate"] == {} and "redo" not in rd
+    assert rd["d"] == {"fu": 3}                             # (the grain stays: the ladder halves and doubles from it)
+    rd["dead"]["fu"] = {"n": 1}                             # learned by page path from here on: kept
+    assert job.rd("a")["dead"] == {"fu": {"n": 1}}
+    v = job.rd("v")
+    assert "dim" not in v and v["d"] == {"fu": 3} and v["redo"] == ["2026-10-01"]
+    assert gs.PP_READS == {"a", "k", "e", "x"}
+
+
+def test_the_staged_merge_takes_a_page_path_answer_over_a_class_one_not_whole(tmp_path):
+    data, staged = str(tmp_path / "data"), str(tmp_path / "private" / gs.BF_DIR)
+    root = os.path.join(data, gs.DIR)
+    meta = {"v": gs.STORE_V, "app_id": AID, "package": "com.example.alpha", "reads": {}, "events": {}, "months": {}}
+    st_ = gs.Store(root, KEY, meta)
+    d1, d2 = "2026-10-24", "2026-10-25"
+    st_.put({d1: {"a": {"st": "s", "g": "c", "smp": 0.2, "tried": ["c"], "fv": 1}},
+             d2: {"a": {"st": "w", "g": "fu", "r": [[MAIN, "Banner", "unit_a", 60]], "tried": ["fu"], "fv": 1}}})
+    st_.save_meta()
+    sm = dict(meta, reads={"a": {"dim": gs.PP, "dead": {"fu": {"n": 3, "until": 9}}}})
+    ss = gs.Store(staged, KEY, sm)
+    ss.put({d1: {"a": {"st": "w", "g": "c", "r": [[MAIN, 70]], "tried": ["c"], "fv": 1, "pp": 1}},
+            d2: {"a": {"st": "s", "g": "c", "smp": 0.2, "tried": ["c"], "fv": 1, "pp": 1}}})
+    ss.save_meta()
+    state = gs.load_state(data)
+    state["staged"] = {"x": "y"}                            # (merged under the old rules: looked at once more)
+    out = gs.merge_staged(data, staged, state)
+    assert out["merged"] == 1 and state["merge_v"] == gs.MERGE_V and "x" not in state["staged"]
+    days = gs._read_gz(gs.month_path(root, KEY, "core", "2026-10"))["days"]
+    assert days[d1]["a"]["pp"] == 1 and days[d1]["a"]["st"] == "w"     # the page path answer over the class one
+    assert days[d2]["a"]["st"] == "w" and "pp" not in days[d2]["a"]     # a whole class answer stays
+    assert gs.load_meta(data, KEY)["reads"]["a"].get("dead") in (None, {})   # learned by page path, the build's
+                                                                            # not yet: never copied across
+
+
+def test_the_history_job_reads_only_the_apps_the_dashboard_has_selected(monkeypatch, tmp_path):
+    apps = [{"app_id": AID, "package": "com.example.alpha", "pid": "111"},
+            {"app_id": AID2, "package": "com.example.beta", "pid": "112"}]
+    _patch_routes(monkeypatch, apps)
+    data = str(tmp_path / "data")
+    assert {a["app_id"] for a in gs.bf_apps(data)} == {AID, AID2}          # no published dashboard: every app
+    site = tmp_path / "site"
+    site.mkdir()
+    with gzip.open(site / "dashboard.json.gz", "wt", encoding="utf-8") as f:
+        json.dump({"apps_catalog": [{"app_id": AID, "selected": True}, {"app_id": AID2, "selected": False}]}, f)
+    assert [a["app_id"] for a in gs.bf_apps(data)] == [AID]
+
+
+def test_a_finer_shape_that_dies_on_the_way_stops_walking_and_the_rest_go_coarser(tmp_path):
+    # 10 final days, fu and f sampled at every size, c whole: fu is asked until it dies (its 3rd one-day failure),
+    # never for the other days; f the same; c reads every day left, at its grain
+    ga = FakeGA(Model(lambda q, rows: (rows, SAMPLED if _a_shape(q) in ("fu", "f") else {})))
+    job = _job(tmp_path, ga)
+    days = gs._days(FE - timedelta(days=9), FE)
+    _t_days(job, days)
+    n = len(ga.asked)
+    gs.fill(job, "a", list(reversed(days)), True)
+    one = lambda s: sum(1 for q in ga.asked[n:] if _a_shape(q) == s and q.a == q.b)
+    assert one("fu") == 3 and one("f") == 3
+    core = _final(tmp_path, "core", "2026-10")
+    assert all(core[d]["a"]["st"] == "w" for d in days) and {core[d]["a"]["g"] for d in days} == {"c"}
+    rd = job.rd("a")
+    assert "until" in rd["dead"]["fu"] and "until" in rd["dead"]["f"] and "c" not in rd["dead"]
+
+
+def test_the_history_job_never_asks_a_day_the_builds_store_answered(monkeypatch, tmp_path):
+    # the build's store holds GA4's own final answer (sampled, by page path) for a day: the history job's needs() is
+    # False for it, whole or not — the same day is never asked twice
+    root = str(tmp_path / "data" / gs.DIR)
+    meta = {"v": gs.STORE_V, "app_id": AID, "package": "com.example.21", "reads": {}, "events": {}, "months": {}}
+    b = gs.Store(root, KEY, meta)
+    d = FE.isoformat()
+    b.put({d: {"a": {"st": "s", "g": "c", "smp": 0.2, "tried": ["c"], "fv": 1, "pp": 1},
+               "w": {"st": "s", "g": "u", "smp": 0.2, "tried": ["u"], "fv": 1}}})
+    b.save_meta()
+    job = gs.Job(str(tmp_path / "staged"), _it(), NOW, FakeGA(), lambda: 0.0,
+                 also=gs.Store(root, KEY, gs._read_gz(gs.meta_path(root, KEY)), strict=False), bf=True)
+    assert not job.needs("a", d) and not job.needs("w", d)
+    b.put({d: {"a": {"st": "s", "g": "c", "smp": 0.2, "tried": ["c"], "fv": 1}}})         # by class: asked again
+    job = gs.Job(str(tmp_path / "staged"), _it(), NOW, FakeGA(), lambda: 0.0,
+                 also=gs.Store(root, KEY, gs._read_gz(gs.meta_path(root, KEY)), strict=False), bf=True)
+    assert job.needs("a", d) and not job.needs("w", d)

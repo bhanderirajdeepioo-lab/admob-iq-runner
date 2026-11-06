@@ -23,7 +23,11 @@
 //   * a whole month in the period comes from the build's month sums (ver_m / cc_m), the edge months from the shards;
 //   * labels in simple English (the hints stay Hinglish); the status sort honours its direction; the report's Copy
 //     control keeps its place while its files load (a failed load: Try again); All apps' period sums and coverage strip
-//     kept per (build, period), no date string per day; a day whose store month file could not be read ("x").
+//     kept per (build, period), no date string per day; a day whose store month file could not be read ("x"); a day
+//     that is not whole never read as "GA4 sampled" (the how-it-works lines, a layer day never asked / not read);
+//   * the build's why ("Not whole — …") whole and escaped in the crumb / All apps / Needs attention; all formats because
+//     GA4 gave no screen × format split (allf 2: header, line, note with the measured share); a row under 1 % of the
+//     app's ads of its kind: "score —" (and a "Too few ads" row never in Needs attention).
 // Prints ONE JSON report; tests/test_scr_frontend.py asserts on it.   usage: node scr_frontend.js <index.html>
 'use strict';
 const fs = require('fs'), vm = require('vm');
@@ -142,9 +146,11 @@ function mkShard(key) {
   return { v: 1, key, m: '2026-03', dims: ['XA', 'XB'], items: [['x.y.MainActivity', 's'], ['x.y.EditorActivity', 's'], ['Other screens', 'o'], ['Not recorded', 'ns'], ['Ad screens', 'ad'], ['GA4 grouped', 'g']], days };
 }
 const S = (w, why, sc, cz) => [w, why, sc, cz];
+// Beta's why, as the build words it now (the W days it lacks, counted by their state)
+const WHY_B = 'Not whole — 0 whole days of inline ads in the last 10 (GA4 sampled 10)';
 const ALLF = { v: 1, apps: {
   [ID.a]: mkAll({ key: KEY.a, app: ['Worse', '1 screen Worse', 1, 1], status: { 0: S('Worse', 'ads/100 34% gira', 66, 'Lower fill'), 1: S('Normal', '', 99, ''), 2: S('Watch', 'thoda gira', 86, 'Fewer ad requests'), 6: S('Better', '', 118, ''), 7: S('Too early', 'kam data', null, '') } }),
-  [ID.b]: mkAll({ key: KEY.b, sampled: true, app: ['N/A', 'GA4 sampled', 0, 0], status: { 0: S('N/A', 'GA4 sampled', null, '') }, st: { a: 's'.repeat(ND), nA: 's'.repeat(ND), rA: 's'.repeat(ND), cA: 's'.repeat(ND) } }),
+  [ID.b]: mkAll({ key: KEY.b, sampled: true, app: ['N/A', WHY_B, 0, 0], status: { 0: S('N/A', WHY_B, null, '') }, st: { a: 's'.repeat(ND), nA: 's'.repeat(ND), rA: 's'.repeat(ND), cA: 's'.repeat(ND) } }),
   [ID.c]: mkAll({ key: KEY.c, cDays: true, app: ['Watch', '', 0, 1], status: { 1: S('Watch', '', 85, 'Not measurable (units not split)') },
     st: { rV: '-'.repeat(60) + 'w'.repeat(29), rA: '-'.repeat(60) + 'w'.repeat(29), cV: '-'.repeat(60) + 'w'.repeat(29), cA: '-'.repeat(60) + 'w'.repeat(29) },
     bf: { rV: ['2026-03-02', false], rA: ['2026-03-02', false], cV: ['2026-03-02', false], cA: ['2026-03-02', false] } }),
@@ -207,6 +213,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     out.all_hostile_why = h.includes('&lt;b&gt;bold&lt;/b&gt;') && !h.includes('<b>bold</b>');
     out.all_hist = [...h.matchAll(/<td><span title="[^"]*">([^<]+)<\/span><\/td><\/tr>/g)].map(m => m[1]);   // the History column
     out.all_period = /30 days \(GA4 · 27 Feb – 28 Mar\)/.test(h);
+    out.all_why_b = (/<tr class="sc-clk" data-sc-app="Beta App"[^>]*>.*?<\/span><\/span><small>([^<]*)<\/small><\/td>/.exec(h) || [])[1] || null;   // its why, under the name
     // the coverage chip: the apps not whole with why
     _.set({ COVP: 'r' }); SCREEN.paint ? 0 : 0; SCR.paint(); h = SCREEN.innerHTML;
     const covl = h.slice(h.indexOf('id="sc-covl"'));
@@ -231,6 +238,8 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       pg.rows = [...SCREEN.innerHTML.matchAll(/<tr class="sc-clk[^"]*" data-sc-open="(\d+)"/g)].map(m => +m[1]);
       pg.more = (/Show (\d+) more screens/.exec(SCREEN.innerHTML) || [])[1] || null;
       pg.basis = (/<small>[\d,]+ visits · (\d+\/\d+ [a-z]+)<\/small>/.exec(SCREEN.innerHTML) || [])[1] || null;   // a row's days
+      pg.crumb = (/<div class="sc-crumb">.*?<\/span> <small>([^<]*)<\/small> · history/.exec(SCREEN.innerHTML) || [])[1] || null;   // the app's why
+      pg.attn_why = (/Abhi koi screen judge nahi ho saki: ([^<]*) — numbers neeche hain/.exec(SCREEN.innerHTML) || [])[1] || null;
       if (k !== 'e') {
         for (const seg of ['s', 'f']) for (const i of [0, 1, 2, 3, 6]) for (const [sec] of _.SECS) {
           _.set({ SEG: seg, OPEN: i, SEC: sec });
@@ -241,7 +250,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       pg.loaded = LOADS.filter(f => f.includes(KEY[k]));
       pages[k] = pg;
     }
-    out.pages = Object.fromEntries(Object.entries(pages).map(([k, p]) => [k, { html: p.html, empty: p.empty, attn: p.attn, ok_all: p.ok_all, rows: p.rows, more: p.more, basis: p.basis, errors: p.errors, loaded: [...new Set(p.loaded)], n_sections: Object.keys(p.sections).length }]));
+    out.pages = Object.fromEntries(Object.entries(pages).map(([k, p]) => [k, { html: p.html, empty: p.empty, attn: p.attn, ok_all: p.ok_all, rows: p.rows, more: p.more, basis: p.basis, crumb: p.crumb, attn_why: p.attn_why, errors: p.errors, loaded: [...new Set(p.loaded)], n_sections: Object.keys(p.sections).length }]));
     const sec = (k, s) => pages[k].sections[s] || '';
     out.alpha = {
       ov_terms: sec('a', 'ov:0').includes('Lower fill') && sec('a', 'ov:0').includes('−12.3%') && sec('a', 'ov:0').includes('First bad day: <b>20 Mar 2026</b> (us din se rate'),
@@ -294,6 +303,9 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       unjudged: (h.match(/not judged/g) || []).length,
       folds: [...h.matchAll(/data-sc-fold="([a-z]+)"/g)].map(m => m[1]),
       how: h.includes('5:30 AM IST se agle din 5:30 AM IST tak') && h.includes('GA4 data till <b>28 Mar 2026</b>') && h.includes('Build: 30 Mar 11:30 IST'),
+      // how a day that is not whole reads: the N/A line and the score's days (never "GA4 sampled" for every such day)
+      how_na: [(/Kam data = Too early; ([^<]*) = N\/A\./.exec(h) || [])[1] || null, (/Jis din ([^<]*?), us din ka wo hissa gina nahi jata/.exec(h) || [])[1] || null],
+      how_low: h.includes('"short period"; period aur normal dono me row ke ads app ke us kism ke ads ka 1% se kam = "score —" (itne kam ads ka ratio kuch nahi batata).'),
       cov_fold: h.includes('<td class="sc-nm">Visits</td><td>30</td><td>0</td><td>0</td><td>0</td>'),
       rep_fold: h.includes('data-sc-copy="app"') && h.includes('3 lines'),
       src_fold: h.includes('Network &lt;B&gt;') && !h.includes('Network <B>'),
@@ -468,6 +480,12 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     dday.a.r.push([0, 3, 7]);
     try { out.not_in_admob = (/<span class="sc-n">0123456789abcdef<\/span>(<small[^>]*>[^<]*<\/small>)<\/td>/.exec(secAt('un')) || [])[1] || null; }
     finally { dday.a.r.pop(); }
+    // ── a layer day GA4 was never asked about (the fetch's "skip" record) and a day not read at all: left out and
+    // counted, the note never puts them on GA4 ──
+    const lA = FL[nL].raw.days, kV = lA[84].nV, kA = lA[85].nA;
+    lA[84].nV = { st: '-', g: 'c', skip: 'gate', tried: [], fv: 1 }; delete lA[85].nA;           // (scr_l ships "-", as scr_all)
+    try { out.nvr_note = (/<p class="sc-note">(\d+\/\d+ din ye layer[^<]*)<\/p>/.exec(secAt('nvr')) || [])[1] || null; }
+    finally { lA[84].nV = kV; lA[85].nA = kA; }
     _.set({ SEC: 'ov', OPEN: null });
     // ── All apps: the period sums and the coverage strip are kept per (build, period) — a sort tap, a chip tap and the
     // refresh reuse them; a new period / a new build's data counts again (same numbers); no date string per day ──
@@ -499,6 +517,40 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     out.xstate = { c: [cvx.c.x, cvx.c['?'], cvx.c.w, cvx.nd, cvx.whole], why: _.covWhy(xs, ['v'], cvx),
       day: [_.dayState(xs, ['v', 'a'], 12), _.dayState(xs, ['v'], 15), _.dayState(xs, ['v'], 0)],
       vrow: (/<td class="sc-nm">Visits<\/td>(.*?)<\/tr>/.exec(fx) || [])[1] || null };
+    // ── all formats because GA4 gave no screen × format split (allf 2): the header, the table's line, the note with the
+    // measured full-screen share on app screens (none measured: says so); allf 1 keeps its own note ──
+    const xA = _.apps().find(r => r.id === ID.a).x;
+    const noteOf = hh => [...hh.matchAll(/<li>((?:GA4 is app ke|Format kam record)[^<]*)<\/li>/g)].map(m => m[1]);
+    ctx.APP = 'Alpha App'; _.set({ OPEN: null, SEG: 's', MORE: false, SEC: 'ov', PER: '30' });
+    try {
+      xA.allf = 2; xA.allfs = 0.0023; SCR.paint(); h = SCREEN.innerHTML;
+      out.allf2 = { head: h.includes('<button type="button" data-sc-tsort="a">Ads (all formats)</button>'),
+        sub: h.includes('<p class="sc-sub">Ads (all formats) har 100 screen visits pe — kyun, Data coverage me · row pe tap = details</p>'), note: noteOf(h) };
+      xA.allfs = null; SCR.paint(); out.allf2.none = noteOf(SCREEN.innerHTML);
+      xA.allf = 1; delete xA.allfs; SCR.paint(); out.allf2.one = noteOf(SCREEN.innerHTML);
+    } finally { delete xA.allf; delete xA.allfs; }
+    SCR.paint(); out.allf2.off = [noteOf(SCREEN.innerHTML), SCREEN.innerHTML.includes('<button type="button" data-sc-tsort="a">Inline ads</button>')];
+    // ── a row under 1 % of the app's ads of its kind in the period and its normal: "score —" (titled, no colour) in the
+    // table and the drill-down; one the build left N/A "Too few ads" is never in Needs attention ──
+    const cellsOf = (hh, i) => [...((new RegExp('<tr class="sc-clk[^"]*" data-sc-open="' + i + '"[^>]*>(.*?)</tr>').exec(hh) || [])[1] || '')
+      .matchAll(/<td(?: [^>]*)?>(.*?)<\/td>/g)].map(m => m[1]);
+    _.set({ OPEN: null, SEG: 's', MORE: true, PER: '30' }); SCR.paint(); h = SCREEN.innerHTML;
+    out.low = { cells: [1, 3, 4, 5].map(i => cellsOf(h, i)[5]),
+      ps: [1, 3, 4, 5].map(i => { const p = _.perScore(xA, i, '2026-02-27', '2026-03-28'); return [p.low, p.score]; }),
+      share: [3, 4, 5, 6].map(i => Math.round(_.itemShare(xA, i, '2026-02-27', '2026-03-28') * 1e4) / 1e4) };
+    _.set({ OPEN: 5, SEC: 'ov' }); SCR.paint(); out.low.dd = (/<span class="sc-dds">(.*?)<\/span><button/.exec(SCREEN.innerHTML) || [])[1] || null;
+    _.set({ OPEN: null, MORE: false });
+    const tiny = { key: 'a0000000000a', ft: FT, td: TD, d0: '2026-03-01', items: [['x.y.BigActivity', 's', 'inline'], ['x.y.TinyActivity', 's', 'inline'], ['(not set)', 'ns', 'inline']],
+      vis: [], V: [], A: [], ta: [], st: {}, bf: {}, dq: [], app: ['Worse', '1 row Worse', 1, 0],
+      status: { 0: ['Worse', 'ads/100 50.0 → 30.0 · z −9.0', 64, 'Lower fill'], 1: ['N/A', "Too few ads — 0.5% of the app's inline ads", null, ''] } };
+    for (let k = 0; k < 30; k++) { const w = k >= 21; tiny.V.push([5000, 1000, 10]); tiny.A.push([w ? 1500 : 2500, w ? 8 : 1, 2]); tiny.vis.push(6010); tiny.ta.push([w ? 1510 : 2503, 0, 0]); }
+    ALLF.apps.tiny = tiny; ctx.DATA.scr.apps.tiny = { key: tiny.key, v: 't', vl: 't', from: tiny.d0, ft: FT }; ctx.DATA.scr.fv = 'f4';
+    try {
+      ctx.APP = 'tiny'; _.set({ PER: '7' }); SCR.paint(); await tick(); SCR.paint(); h = SCREEN.innerHTML;
+      out.tiny = { attn: [...h.slice(h.indexOf('id="sc-attn"'), h.indexOf('Today · Yesterday')).matchAll(/data-sc-open="(\d+)"/g)].map(m => +m[1]),
+        big: cellsOf(h, 0)[5], small: cellsOf(h, 1)[5], why: cellsOf(h, 1)[0] };
+    } finally { delete ALLF.apps.tiny; delete ctx.DATA.scr.apps.tiny; ctx.DATA.scr.fv = 'f5'; _.set({ PER: '30' }); ctx.APP = 'Alpha App'; }
+    SCR.paint(); await tick();
     // hub card none: the pointer alone never loads a file
     out.ready = SCR.ready();
   } catch (e) { errors.push(String(e && e.stack || e)); }

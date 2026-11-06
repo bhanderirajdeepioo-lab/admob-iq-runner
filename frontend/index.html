@@ -7483,9 +7483,25 @@ const itemA=(x,i,k)=>{ const r=(x.A||[])[k]; return r&&r[i]!=null?+r[i]:null; };
 function sumItem(x,i,lo,hi){ let v=0,a=0,n=0,vAll=0,nv=0,nd=0,nf=0;
   span(x,lo,hi,(k,d)=>{ nd++; const V=itemV(x,i,k), A=itemA(x,i,k); if(V!=null){ vAll+=V; nv++; } if(V==null||A==null) return; v+=V; a+=A; n++; if(d>x.ft) nf++; });
   return {v:n?v:null, a:n?a:null, n, nd, vAll:nv?vAll:null, nv, nf, rate:n&&v>0?a/v*100:null}; }
-// the row's period vs its normal: score = 100 × rate ÷ normal rate; muted ("short period") under 7 final days; none for All time
+// the app's ads of a row's kind per day (screens: every screen item's — the app's inline / all-format ads by screen; a
+// trigger: the triggers of its format) — kept per data object and kind (a new build's file is a new object)
+const KTOT=new WeakMap();
+function kindTot(x,i){ const items=x.items||[], it=items[i]; if(!it) return null; const fs=it[1]==='fs', key=fs?'f:'+fmtOf(it[2]):'s';
+  let m=KTOT.get(x); if(!m){ m=new Map(); KTOT.set(x,m); } if(m.has(key)) return m.get(key);
+  const js=[]; items.forEach((z,j)=>{ if(fs?z[1]==='fs'&&fmtOf(z[2])===key.slice(2):z[1]!=='fs') js.push(j); });
+  const T=(x.A||[]).map(r=>{ if(!r) return null; let t=null; for(const j of js) if(r[j]!=null) t=(t||0)+(+r[j]); return t; });
+  m.set(key,T); return T; }
+// the row's share of them over [lo, hi], on the days its own ads are counted (sumItem's days); null: none of the kind
+function itemShare(x,i,lo,hi){ const T=kindTot(x,i); if(!T) return null; let a=0,t=0;
+  spanK(x,lo,hi,k=>{ const V=itemV(x,i,k), A=itemA(x,i,k); if(V==null||A==null||T[k]==null) return; a+=A; t+=T[k]; });
+  return t>0?a/t:null; }
+// the row's period vs its normal: score = 100 × rate ÷ normal rate; muted ("short period") under 7 final days; none for All
+// time; none either ("low") when the row holds under MAT of the app's ads of its kind in the period and in the normal (a
+// ratio of near-zero rates is no finding — the build's "Too few ads")
+const MAT=0.01;
 function perScore(x,i,lo,hi,all){ const p=sumItem(x,i,lo,hi), nw=all?null:normWin(x,lo,hi), q=nw?sumItem(x,i,nw[0],nw[1]):null, fin=finals(x,lo,hi);
-  return {p,q,nw,fin,muted:fin<7,score:!all&&p.rate!=null&&q&&q.rate>0?Math.round(100*p.rate/q.rate):null}; }
+  const sh=[itemShare(x,i,lo,hi),nw?itemShare(x,i,nw[0],nw[1]):null].filter(ok), low=sh.length>0&&Math.max(...sh)<MAT;
+  return {p,q,nw,fin,muted:fin<7,low,score:!all&&!low&&p.rate!=null&&q&&q.rate>0?Math.round(100*p.rate/q.rate):null}; }
 // the app's own totals from GA4's truth (date × format, whole on every app): visits, inline / full-screen / not recorded ads
 // — kept per (the app's data object = its build, the period's dates): a sort / chip tap or the 5-minute refresh on the same
 // build never sums the days again (a new build's file is a new object)
@@ -7541,7 +7557,8 @@ const stOf=(x,i)=>{ const s=(x.status||{})[String(i)]; return Array.isArray(s)&&
 const rankOf=w=>w in RANK?RANK[w]:6;
 function chip(w){ try{ return hubStChip(WDK[w]||'lagu'); }catch(e){ return `<span class="sc-st">${E(w||'N/A')}</span>`; } }
 const judged=it=>it&&(it[1]==='s'||it[1]==='o'||it[1]==='fs');
-function scoreTxt(s,muted,all){ if(all) return '<span class="sc-mut" title="All time pe normal nahi">score —</span>'; if(s==null) return '<span class="sc-mut">score —</span>';
+function scoreTxt(s,muted,all,low){ if(all) return '<span class="sc-mut" title="All time pe normal nahi">score —</span>';
+  if(low) return '<span class="sc-mut" title="kam ads: app ke ads ka 1% se kam">score —</span>'; if(s==null) return '<span class="sc-mut">score —</span>';
   if(muted) return `<span class="sc-mut" title="7 se kam final din: score sirf ishaara">score ${s} · short period</span>`;
   return `score <b class="${s<90?'sc-dn':s>110?'sc-up':''}">${s}</b>`; }
 // ---- the reader's place ----
@@ -7638,7 +7655,7 @@ function attnHtml(x){ const items=x.items||[], w=statWin(x), rows=[];
     return `<div class="sc-at">${chip(r.s[0])}<span class="sc-atn" title="${E(itemTitle(r.it))}">${itemName(r.it)}</span><span class="sc-atr">ads/100 ${R(qn.rate)} → ${R(qw.rate)} (${PC(qn.rate,qw.rate)})</span>${r.s[3]?`<span class="sc-atc">${E(r.s[3])}</span>`:''}<button type="button" class="sc-lnk" data-sc-open="${r.i}">Details ▸</button></div>`; };
   if(bad.length) return `<div class="card sc-card" id="sc-attn"><div class="ct"><h3>Needs attention</h3><span class="sc-faint">pichhle 10 final din (${fd(w.W[0])} – ${fd(w.W[1])}) vs usse pehle ke 28</span></div>${bad.map(one).join('')}</div>`;
   const good=rows.filter(r=>r.s[0]==='Better').slice(0,5), fine=rows.some(r=>r.s[0]==='Normal'||r.s[0]==='Better'), a=Array.isArray(x.app)?x.app:[];
-  if(!fine) return `<div class="card sc-card" id="sc-attn"><div class="ct"><h3>Needs attention</h3></div><p class="sc-note">Abhi koi screen judge nahi ho saki${a[1]?': '+E(a[1]):' (data kam ya GA4 se whole nahi)'} — numbers neeche hain, status nahi.</p></div>`;
+  if(!fine) return `<div class="card sc-card" id="sc-attn"><div class="ct"><h3>Needs attention</h3></div><p class="sc-note">Abhi koi screen judge nahi ho saki${a[1]?': '+E(a[1]):' (data kam ya din whole nahi)'} — numbers neeche hain, status nahi.</p></div>`;
   return `<div class="card sc-card" id="sc-attn"><div class="ct"><h3>Needs attention</h3></div><p class="sc-ok">✅ Sab screens normal</p>${good.map(one).join('')}</div>`; }
 function miniHtml(x){ const T=x.td, Y=addD(T,-1), s7=[addD(x.ft,-6),x.ft], nw=normWin(x,s7[0],s7[1]);
   const c=[appSum(x,T,T),appSum(x,Y,Y),appSum(x,s7[0],s7[1]),appSum(x,nw[0],nw[1])];
@@ -7669,7 +7686,7 @@ function tableHtml(x,lo,hi){ const seg=SEG, all=PER==='all', rows=sortItems(tabl
     :th('st','Trigger')+th('a','Full-screen ads')+th('r','Per 100 app visits')+th('n','Normal')+th('sc','Score')+'<th>Cause</th>';
   const tr=z=>{ const it=z.it, p=z.ps.p, jd=judged(it), st=z.st, basis=p.n&&p.n<p.nv?`<small>${N(p.v)} visits · ${p.n}/${p.nd} days</small>`:'', nul=p.n?'':`<small>${E(whyNull(x,it,lo,hi))}</small>`;
     const nm=`<td class="sc-nm" title="${E(itemTitle(it))}"><span class="sc-n">${itemName(it)}</span><span class="sc-stl">${jd&&st?chip(st[0])+(st[2]!=null?` <small class="sc-ssc">${E(st[2])}</small>`:''):`<small class="sc-faint">${jd?'—':'not judged'}</small>`}</span>${jd&&st&&st[1]?`<small>${E(st[1])}</small>`:''}</td>`;
-    const tail=`<td>${R(z.n)}</td><td>${scoreTxt(z.sc,z.ps.muted,all)}</td>`;
+    const tail=`<td>${R(z.n)}</td><td>${scoreTxt(z.sc,z.ps.muted,all,z.ps.low)}</td>`;
     return `<tr class="sc-clk${OPEN===z.i?' sc-on':''}" data-sc-open="${z.i}" aria-expanded="${OPEN===z.i}" tabindex="0">${nm}`
       +(seg==='s'?`<td>${N(z.v)}</td><td>${N(z.a)}</td><td><b>${R(z.r)}</b>${basis}${nul}</td>${tail}<td>${P1(z.sh)}</td>`:`<td>${N(z.a)}</td><td><b>${R(z.r)}</b>${basis}${nul}</td>${tail}`)
       +`<td class="sc-cz">${jd&&st&&st[3]?E(st[3]):'—'}</td></tr>`; };
@@ -7678,13 +7695,13 @@ function tableHtml(x,lo,hi){ const seg=SEG, all=PER==='all', rows=sortItems(tabl
     +(seg==='s'&&(more>0||MORE)&&nf?`<button type="button" class="sc-more" data-sc-more="1">${MORE?'Show fewer screens':`Show ${more} more screens`}</button>`:''); }
 function segHtml(x,lo,hi){ const n=k=>(x.items||[]).filter(it=>k==='f'?it[1]==='fs':it[1]!=='fs').length;
   return `<div class="card sc-card" id="sc-tcard"><div class="sc-seg sc-x" role="group" aria-label="Table">${[['s','Screens'],['f','Full-screen']].map(([k,l])=>`<button type="button" data-sc-seg="${k}" aria-pressed="${SEG===k}">${l} <small>${n(k)}</small></button>`).join('')}</div>`
-    +`<p class="sc-sub">${SEG==='s'?'Inline ads (banner + native) har 100 screen visits pe · row pe tap = details':'Full-screen ads har trigger pe (unit names se) · har 100 app visits pe · row pe tap = details'}</p>`
+    +`<p class="sc-sub">${SEG==='s'?(x.allf?'Ads (all formats) har 100 screen visits pe — kyun, Data coverage me':'Inline ads (banner + native) har 100 screen visits pe')+' · row pe tap = details':'Full-screen ads har trigger pe (unit names se) · har 100 app visits pe · row pe tap = details'}</p>`
     +`<div id="sc-tb">${tableHtml(x,lo,hi)}</div></div>`; }
 // ---- the drill-down (its own card after the table card) ----
 const SECS=[['ov','Overview'],['un','Units'],['ver','Versions'],['nvr','New vs returning'],['cc','Countries'],['eng','Engagement'],['x','Own ad events'],['rep','Report']];
 function ddHtml(x,id,lo,hi){ if(OPEN==null||!(x.items||[])[OPEN]) return ''; const it=x.items[OPEN], st=stOf(x,OPEN), ps=perScore(x,OPEN,lo,hi,PER==='all');
   return `<div class="card sc-card sc-dd" id="sc-dd"><div class="sc-ddh"><div class="sc-ddt"><b title="${E(itemTitle(it))}">${itemName(it)}</b><span class="sc-ddc">${it[1]==='s'?E(it[0]):''}</span></div>`
-    +`<span class="sc-dds">${judged(it)&&st?chip(st[0])+(st[2]!=null?` <small>status score ${E(st[2])}</small>`:'')+(st[1]?` <small>${E(st[1])}</small>`:''):'<small class="sc-faint">not judged</small>'} · ${scoreTxt(ps.score,ps.muted,PER==='all')}</span>`
+    +`<span class="sc-dds">${judged(it)&&st?chip(st[0])+(st[2]!=null?` <small>status score ${E(st[2])}</small>`:'')+(st[1]?` <small>${E(st[1])}</small>`:''):'<small class="sc-faint">not judged</small>'} · ${scoreTxt(ps.score,ps.muted,PER==='all',ps.low)}</span>`
     +`<button type="button" class="sc-back" data-sc-close="1">✕ Close</button></div>`
     +`<div class="sc-seg sc-x" role="group" aria-label="Section">${SECS.map(([k,l])=>`<button type="button" data-sc-sec="${k}" aria-pressed="${SEC===k}">${l}</button>`).join('')}</div>`
     +`<div id="sc-ddb">${secHtml(x,id,OPEN,lo,hi)}</div></div>`; }
@@ -7814,7 +7831,7 @@ function nvrSec(x,id,i,lo,hi){ const L=lOf(id), f2=f2Of(id); if(!L||!f2) return 
     if(V) for(const q of V.r||[]){ if(V.g==='c'){ if(S.has(+q[1])) add(lp.it,q[0],q[2]); add(lp.app,q[0],q[2]); } else add(lp.app,q[0],q[1]); }
     if(A) for(const q of A.r||[]){ if(A.g==='cf'){ if(S.has(+q[1])&&(x.allf||inl(q[2]))) add(lp.it,q[0],null,q[3]); add(lp.app,q[0],null,inl(q[2])?q[3]:null,(fs?fmtOf(q[2])===fmtOf(it[2]):FULL.has(fmtOf(q[2])))?q[3]:null); }
       else if(A.g==='f') add(lp.app,q[0],null,inl(q[1])?q[2]:null,(fs?fmtOf(q[1])===fmtOf(it[2]):FULL.has(fmtOf(q[1])))?q[2]:null); } });
-  return layerTable(x,i,'n',lp)+(bad?`<p class="sc-note">${bad}/${nd} din ye layer GA4 se whole nahi aayi (us din ka hissa nahi gina).</p>`:''); }
+  return layerTable(x,i,'n',lp)+(bad?`<p class="sc-note">${bad}/${nd} din ye layer whole nahi aayi ya abhi padhi nahi (us din ka hissa nahi gina).</p>`:''); }
 function engSec(x,id,i,lo,hi){ const L=lOf(id), f2=f2Of(id); if(!f2) return fileGate(id,'f2'); const it=x.items[i];
   if(it[1]==='fs') return '<p class="sc-note">Full-screen trigger ka apna screen nahi — engagement screens ke rows me dekhein.</p>';
   const S=clsSet(f2,x,i); let v=0,eg=0,ck=0,rw=0,ms=0,ses=0,ur=0,un=0,ckSeen=false;
@@ -7868,7 +7885,12 @@ function covBody(x,id,lo,hi){ const f2=f2Of(id), dq=Array.isArray(x.dq)?x.dq:[],
 function notesHtml(n,x){ const o=[];
   if(n.zone==='assumed') o.push('AdMob account ka time zone nahi mila: report ka zone maana (IST).');
   if(n.admob==='none') o.push('Is app ka AdMob data (placements) nahi — cause / requests / fill / show nahi.');
-  if(n.allf||x.allf) o.push('Format kam record hota hai (5% se zyada "not set"): screens ke ads sab formats pe gine aur judge hue.');
+  // why the screens count every format: 1 format not recorded · 2 GA4 gave no screen × format split (+ its measured
+  // full-screen share on app screens where the split was whole: allfs)
+  const af=+(x.allf||n.allf)||0, afs=ok(x.allfs)?+x.allfs:ok(n.allfs)?+n.allfs:null;
+  if(af===2) o.push('GA4 is app ke screen × format split ko sampled deta hai, isliye screens ke ads saare formats pe gine aur judge hue'
+    +(afs!=null?`; jin dinon split poora tha, app screens pe full-screen ads ${(Math.round(afs*1e4)/100).toFixed(2)}% the.`:' (split poora kisi din nahi mila).'));
+  else if(af) o.push('Format kam record hota hai (5% se zyada "not set"): screens ke ads sab formats pe gine aur judge hue.');
   for(const r of Array.isArray(n.runs)?n.runs:[]) if(Array.isArray(r)) o.push(`Duplicate ad_impression ${fdy(r[0])} – ${fdy(r[1])}: ${r[2]?'AdMob se confirm (copy hata di)':'sirf pattern (copy rakhi, "Format not recorded")'}${r[3]?' · abhi chal raha':''}.`);
   return o.length?`<ul class="sc-ul">${o.map(t=>`<li>${E(t)}</li>`).join('')}</ul>`:''; }
 function repBody(id){ const L=lOf(id); if(!L) return repWait(id,'app',false);
@@ -7877,8 +7899,8 @@ function howBody(x){ const g=(typeof DATA!=='undefined'&&DATA&&DATA.generated_at
   try{ if(g){ const t=new Date(Date.parse(g)+19800000); if(isFinite(t)) ist=fd(iso(t))+' '+String(t.getUTCHours()).padStart(2,'0')+':'+String(t.getUTCMinutes()).padStart(2,'0')+' IST'; } }catch(e){}
   return `<p class="sc-note">GA4 din = <b>5:30 AM IST se agle din 5:30 AM IST tak</b> (UTC din). GA4 data till <b>${fdy(x.ft)}</b>; Today / Yesterday abhi final nahi.${ist?` Build: ${ist}.`:''}</p>`
     +'<p class="sc-note"><b>Visits</b> = screen_view (har Activity). <b>Ads / 100</b> = us screen pe ad_impression ÷ visits × 100: screens pe inline (banner + native); full-screen ads SDK ki apni Activity pe aate hain, isliye unhe <b>trigger</b> (unit ke naam se: Back press, App resume, Splash …) se ginte hain, har 100 app visits pe.</p>'
-    +'<p class="sc-note"><b>Status</b> (period se alag, fixed): pichhle 10 final din vs usse pehle ke 28 final din. Worse = score 80 se kam; Watch = 90 se kam; Better = 110 se upar — teeno me farq itna bada ho ki rozana ka utaar-chadhaav nahi ho sakta (z 3 ya zyada) aur dono 5-din ke hisson me dikhe. Kam data = Too early; GA4 sampled / logging badli / ads nahi = N/A.</p>'
-    +'<p class="sc-note"><b>Score</b> (picked period) = period ka ads / 100 ÷ normal (period se pehle ke max(28, period) final din) × 100; 7 se kam final din = "short period". Jis din GA4 ne koi hissa whole nahi diya (sampled / grouped / rows chhodi), us din ka wo hissa gina nahi jata — Data coverage me har din ki wajah hai. Cause AdMob ke requests / fill / show se (unit-wise, exact split).</p>'; }
+    +'<p class="sc-note"><b>Status</b> (period se alag, fixed): pichhle 10 final din vs usse pehle ke 28 final din. Worse = score 80 se kam; Watch = 90 se kam; Better = 110 se upar — teeno me farq itna bada ho ki rozana ka utaar-chadhaav nahi ho sakta (z 3 ya zyada) aur dono 5-din ke hisson me dikhe. Kam data = Too early; whole din kam ("Not whole" — kitne din kis wajah se, saath me likha: GA4 sampled / rows chhodi / grouped / abhi padhe nahi …) / logging badli / ads nahi / ads bahut kam ("Too few ads" — W aur N dono me app ke us kism ke ads ka 1% se kam) = N/A.</p>'
+    +'<p class="sc-note"><b>Score</b> (picked period) = period ka ads / 100 ÷ normal (period se pehle ke max(28, period) final din) × 100; 7 se kam final din = "short period"; period aur normal dono me row ke ads app ke us kism ke ads ka 1% se kam = "score —" (itne kam ads ka ratio kuch nahi batata). Jis din koi hissa whole nahi (GA4 ne sampled / grouped / rows chhodi, ya wo din abhi padha nahi), us din ka wo hissa gina nahi jata — Data coverage me har din ki wajah hai. Cause AdMob ke requests / fill / show se (unit-wise, exact split).</p>'; }
 function foldsHtml(x,id,lo,hi){ return fold('src','🗂 Ad sources','format-wise network ka hissa',srcBody(x,id,lo,hi))+fold('ver','🗂 Versions','har version · same din vs previous',verBody(id))
   +fold('cov','🗂 Data coverage','har piece kitna whole · kyun',covBody(x,id,lo,hi))+fold('rep','📋 Report for developer','copy karke bhejein',repBody(id))+fold('how','❓ How this works','method',howBody(x)); }
 function appHtml(id){ const x=ALL.apps[id], a=Array.isArray(x.app)?x.app:[];
@@ -8003,7 +8025,7 @@ function show(){ paint(); }
 function left(){ let has=false; try{ has=typeof HB!=='undefined'&&HB.st.some(z=>z.tag==='scr-dd'); }catch(e){} if(!has) return;
   Promise.resolve().then(()=>{ if(onScreen()) return; OPEN=null; try{ hbDrop('scr-dd'); }catch(e){} }); }
 return {ptr, ensure, render, paint, show, left, ready:()=>!!ALL&&!!ptr(), fold:(k,o)=>{ FOLD[k]=!!o; },
-  _:{rng, normWin, finals, sumItem, perScore, appSum, appScore, cover, coverAll, covWhy, dayState, apps, topSplit, tableRows, sortItems, sortApps, appRow, dispName, itemName, fmtOf,
+  _:{rng, normWin, finals, sumItem, itemShare, perScore, appSum, appScore, cover, coverAll, covWhy, dayState, apps, topSplit, tableRows, sortItems, sortApps, appRow, dispName, itemName, fmtOf,
     chartModel, copy, perRestore, perLoad, keep, arrive, allHtml, appHtml, secHtml, ddHtml, foldsHtml, layerPeriod, WDK, RANK, PIECES, SECS, FILES, chip,
     get:()=>({PER,PF,PTO,OPEN,SEC,SEG,MORE,COVP,SORT,TS,CH,OPENAPP}), set:o=>{ if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o){ OPEN=o.OPEN; OPENAPP=OPEN==null?null:appIdNow(); } if('SEC' in o) SEC=o.SEC;
       if('SEG' in o) SEG=o.SEG; if('MORE' in o) MORE=o.MORE; if('COVP' in o) COVP=o.COVP; if('PREAD' in o) PREAD=o.PREAD; if('TS' in o) TS=o.TS; if('SORT' in o) SORT=o.SORT; }}};
