@@ -348,12 +348,12 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     _.set({ MORE: true }); SCR.paint(); h = SCREEN.innerHTML;
     const pu0 = _.perUser(x, F2A(), 0, ...P30), au0 = _.appUser(x, F2A(), ...P30);
     out.pu = { head: (/<th aria-sort="none" title="([^"]*)"><button type="button" data-sc-tsort="pu">Ads \/ user<\/button><\/th>/.exec(h) || [])[1] || null,
-      cols: [...h.matchAll(/data-sc-tsort="([a-z]+)"/g)].map(m => m[1]), main: tds(h, 0)[6], editor: tds(h, 1)[6], other: tds(h, 2)[6], ns: tds(h, 3)[6],
-      fn: [pu0.n, pu0.nd, pu0.a, pu0.u, pu0.agg, pu0.wait], agg: _.perUser(x, F2A(), 2, ...P30), nofile: _.perUser(x, null, 0, ...P30), tile: puTile(h),
+      cols: [...h.matchAll(/data-sc-tsort="([a-z]+)"/g)].map(m => m[1]), main: tds(h, 0)[8], editor: tds(h, 1)[8], other: tds(h, 2)[8], ns: tds(h, 3)[8], ud: tds(h, 0)[6], vu: tds(h, 0)[7], other2: [tds(h, 2)[6], tds(h, 2)[7]],
+      fn: [pu0.n, pu0.nd, pu0.a, pu0.u, pu0.agg, pu0.wait], uv: [pu0.ud, pu0.vu, pu0.v], agg: _.perUser(x, F2A(), 2, ...P30), nofile: _.perUser(x, null, 0, ...P30), tile: puTile(h),
       app_fn: [au0.n, au0.nd, au0.wait] };
     _.set({ TS: { k: 'pu', dir: -1 } }); out.pu.sort = _.sortItems(_.tableRows(x, ...P30, 's', F2A())).map(z => z.i);
     _.set({ TS: { k: 'st', dir: 1 }, MORE: false });
-    for (const k of ['today', 'yday']) { _.set({ PER: k }); SCR.paint(); out.pu['tile_' + k] = puTile(SCREEN.innerHTML); out.pu['main_' + k] = tds(SCREEN.innerHTML, 0)[6]; }
+    for (const k of ['today', 'yday']) { _.set({ PER: k }); SCR.paint(); out.pu['tile_' + k] = puTile(SCREEN.innerHTML); out.pu['main_' + k] = tds(SCREEN.innerHTML, 0)[8]; }
     _.set({ PER: '30' });
     // a file that carried users for Yesterday / Today anyway: the page still counts final days only (27 Mar has none: the
     // 10th-day gap; 28 Mar the one day)
@@ -367,10 +367,10 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     const nA2 = 'scr_' + KEY.a + '.json.gz', keepA2 = _.FILES[nA2];
     try {
       delete _.FILES[nA2]; const l0 = LOADS.length; SCR.paint(); h = SCREEN.innerHTML;
-      out.pu_wait = { main: tds(h, 0)[6], other: tds(h, 2)[6], tile: puTile(h), loads: LOADS.slice(l0) };
-      await tick(); SCR.paint(); out.pu_wait.after = [tds(SCREEN.innerHTML, 0)[6][1], puTile(SCREEN.innerHTML)[1]];
+      out.pu_wait = { main: tds(h, 0)[8], other: tds(h, 2)[8], ud: tds(h, 0)[6], tile: puTile(h), loads: LOADS.slice(l0) };
+      await tick(); SCR.paint(); out.pu_wait.after = [tds(SCREEN.innerHTML, 0)[8][1], puTile(SCREEN.innerHTML)[1]];
       FAIL.add(nA2); delete _.FILES[nA2]; SCR.paint(); await tick(); SCR.paint(); h = SCREEN.innerHTML;
-      out.pu_wait.err = { main: tds(h, 0)[6], tile: (/<div class="sc-k"><div class="sc-kl">Ads \/ user<\/div><div class="sc-kv">([^<]*)<\/div><div class="sc-ks">(.*?)<\/div><\/div>/.exec(h) || []).slice(1) };
+      out.pu_wait.err = { main: tds(h, 0)[8], tile: (/<div class="sc-k"><div class="sc-kl">Ads \/ user<\/div><div class="sc-kv">([^<]*)<\/div><div class="sc-ks">(.*?)<\/div><\/div>/.exec(h) || []).slice(1) };
       FAIL.delete(nA2); SCREEN.onclick({ target: { closest: s => s === '[data-sc-retry]' ? { dataset: { scRetry: nA2 } } : null } }); await tick(); SCR.paint();
       out.pu_wait.retry = puTile(SCREEN.innerHTML)[1];
     } finally { FAIL.delete(nA2); if (!(_.FILES[nA2] && _.FILES[nA2].raw)) _.FILES[nA2] = keepA2; }
@@ -486,7 +486,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     out.arrive = { f2: w(), kept: [SL['sc-ddb'].boxes[0].scrollTop, SL['sc-ddb'].boxes[1].scrollLeft, SL['sc-f-cov'].boxes[1].scrollLeft], dd: SL['sc-ddb']._h.includes('id="sc-chart"'),
       // file 2's Ads / user drawn into the tiles and the table it brought them to
       tiles: (/<div class="sc-kl">Ads \/ user<\/div><div class="sc-kv">([^<]*)<\/div>/.exec(SL['sc-tiles']._h) || [])[1] || null,
-      tb: [SL['sc-tb']._h.includes('data-sc-tsort="pu"'), SL['sc-tb']._h.includes('⏳'), (tds(SL['sc-tb']._h, 0)[6] || [])[1] || null] };
+      tb: [SL['sc-tb']._h.includes('data-sc-tsort="pu"'), SL['sc-tb']._h.includes('⏳'), (tds(SL['sc-tb']._h, 0)[8] || [])[1] || null] };
     _.set({ SEC: 'ver' }); _.arrive(ID.a, 'c'); out.arrive.c_on_ver = w();
     _.arrive(ID.a, 'r'); out.arrive.r_on_ver = w();
     _.arrive(ID.a, 'l'); out.arrive.l_on_ver = w();
@@ -596,7 +596,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       xA.allf = 2; xA.allfs = 0.0023; SCR.paint(); h = SCREEN.innerHTML;
       out.allf2 = { head: h.includes('<button type="button" data-sc-tsort="a">Ads (all formats)</button>'),
         sub: h.includes('<p class="sc-sub">Ads (all formats) har 100 screen visits pe — kyun, Data coverage me · row pe tap = details</p>'), note: noteOf(h),
-        pu: [(/<th aria-sort="none" title="([^"]*)"><button type="button" data-sc-tsort="pu">/.exec(h) || [])[1] || null, (tds(h, 0)[6] || [])[0] || null] };
+        pu: [(/<th aria-sort="none" title="([^"]*)"><button type="button" data-sc-tsort="pu">/.exec(h) || [])[1] || null, (tds(h, 0)[8] || [])[0] || null] };
       xA.allfs = null; SCR.paint(); out.allf2.none = noteOf(SCREEN.innerHTML);
       xA.allf = 1; delete xA.allfs; SCR.paint(); out.allf2.one = noteOf(SCREEN.innerHTML);
     } finally { delete xA.allf; delete xA.allfs; }
@@ -632,7 +632,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     ALLF.apps.nu = nu; ctx.DATA.scr.apps.nu = { key: nu.key, v: 'n', vl: 'n', from: nu.d0, ft: FT }; ctx.DATA.scr.fv = 'f6';
     try {
       ctx.APP = 'nu'; _.set({ PER: '7', OPEN: null, SEG: 's', MORE: false }); SCR.paint(); await tick(); SCR.paint(); h = SCREEN.innerHTML;
-      out.pu_none = { one: tds(h, 0)[6], tile: puTile(h), fn: _.perUser(nu, _.FILES[nu2].raw, 0, '2026-03-22', '2026-03-28') };
+      out.pu_none = { one: tds(h, 0)[8], tile: puTile(h), fn: _.perUser(nu, _.FILES[nu2].raw, 0, '2026-03-22', '2026-03-28') };
     } finally { delete ALLF.apps.nu; delete ctx.DATA.scr.apps.nu; delete FILES[nu2]; ctx.DATA.scr.fv = 'f7'; _.set({ PER: '30' }); ctx.APP = 'Alpha App'; }
     SCR.paint(); await tick();
     // hub card none: the pointer alone never loads a file

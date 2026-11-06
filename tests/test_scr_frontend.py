@@ -258,12 +258,17 @@ def test_ads_per_user_column_and_tile(out):
     # tooltips say per user per day; an aggregate row "—" (never users added across screens); the sort; the app tile =
     # inline + full-screen ÷ the app's daily users ("Format not recorded" left out), its parts adding up to it
     u = out["pu"]
-    assert u["cols"] == ["st", "v", "a", "r", "n", "sc", "pu", "sh"]
+    assert u["cols"] == ["st", "v", "a", "r", "n", "sc", "ud", "vu", "pu", "sh"]
     assert u["head"].startswith("per user per day: period ke har final din ke inline ads ÷ us din ke screen users ka jod")
     assert u["head"].endswith("sirf final din (Today / Yesterday nahi) jin me ads aur users dono whole aaye")
     ads, users = sum(A_MAIN(k) for k in U_DAYS), sum(U_MAIN(k) for k in U_DAYS)
     mean = sum(A_MAIN(k) / float(U_MAIN(k)) for k in U_DAYS) / len(U_DAYS)
     assert u["fn"] == [27, 30, ads, users, False, False] and _p2(ads / float(users)) != _p2(mean)   # Σ ÷ Σ, never the mean
+    # Users / day and Visits / user on the same days: Σ users ÷ days; Σ screen views ÷ Σ users (100 users, 300 views → 3)
+    views = sum(1000 + k for k in U_DAYS)
+    assert u["uv"][0] == pytest.approx(users / 27.0) and u["uv"][1] == pytest.approx(views / float(users))
+    assert u["uv"][2] == views and u["ud"][1] == "{:,}".format(int(round(users / 27.0))) and u["vu"][1] == _p2(views / float(users))
+    assert u["other2"] == [[' title="%s"' % AGGW, "—"], [' title="%s"' % AGGW, "—"]]    # an aggregate row: "—" (never added up)
     assert u["main"] == [' title="per user per day: {:,} inline ads ÷ {:,} users (har din ke users ka jod) · 27 days"'.format(ads, users),
                          "<b>%s</b><small>27/30 days</small>" % _p2(ads / float(users))]
     eu = sum(U_EDIT(k) for k in U_DAYS)
@@ -300,7 +305,8 @@ def test_ads_per_user_column_and_tile(out):
     # no whole users day (GA4 sampled the users read): "—" and why; the app's daily users of another stream: never used
     n = out["pu_none"]
     assert n["one"] == [' title="per user per day"', "<b>—</b><small>GA4 sampled 7 din</small>"]
-    assert n["fn"] == {"r": None, "a": None, "u": None, "n": 0, "nd": 7, "agg": False, "wait": False}
+    assert n["fn"] == {"r": None, "a": None, "u": None, "v": None, "vu": None, "ud": None, "n": 0, "nd": 7, "agg": False,
+                       "wait": False}
     assert n["tile"] == [None, "—", "app ke daily users doosre GA4 stream ke hain — gine nahi"]
     # How this works says it
     p = _page()

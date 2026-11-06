@@ -7639,10 +7639,12 @@ const fOff=(x,f)=>f&&okD(f.d0)&&x.d0?dIx({d0:f.d0},x.d0):0;
 // its screen's users, on the final days (≤ ft, whatever a file carries) file 2 gives its users and the row's ads exist at
 // that day's grain (n of them; nd the period's days); agg: an aggregate row (none); wait: file 2 not here yet (never a
 // number without it)
-function perUser(x,f2,i,lo,hi){ const it=(x.items||[])[i]; if(!it||it[1]!=='s') return {r:null,a:null,u:null,n:0,nd:0,agg:true,wait:false};
-  const j=uCol(x,f2,i), off=fOff(x,f2), U=(f2&&f2.U)||[], kf=dIx(x,x.ft); let a=0,u=0,n=0,nd=0;
-  spanK(x,lo,hi,k=>{ nd++; const r=j<0||k>kf?null:U[k+off], A=itemA(x,i,k); if(!r||!(+r[j]>0)||A==null) return; a+=A; u+=+r[j]; n++; });   // (a day with no users of the screen counts neither side)
-  return {r:n&&u>0?a/u:null,a:n?a:null,u:n?u:null,n,nd,agg:false,wait:!f2}; }
+function perUser(x,f2,i,lo,hi){ const it=(x.items||[])[i]; if(!it||it[1]!=='s') return {r:null,a:null,u:null,v:null,vu:null,ud:null,n:0,nd:0,agg:true,wait:false};
+  const j=uCol(x,f2,i), off=fOff(x,f2), U=(f2&&f2.U)||[], kf=dIx(x,x.ft); let a=0,u=0,v=0,nv=0,n=0,nd=0;
+  spanK(x,lo,hi,k=>{ nd++; const r=j<0||k>kf?null:U[k+off], A=itemA(x,i,k); if(!r||!(+r[j]>0)||A==null) return; a+=A; u+=+r[j]; n++;   // (a day with no users of the screen counts neither side)
+    const V=itemV(x,i,k); if(V!=null){ v+=V; nv++; } });
+  // the same days: Users / day = Σ users ÷ days; Visits / user = Σ screen views ÷ Σ users (only when every such day has its views)
+  return {r:n&&u>0?a/u:null,a:n?a:null,u:n?u:null,v:n&&nv===n?v:null,vu:n&&nv===n&&u>0?v/u:null,ud:n?u/n:null,n,nd,agg:false,wait:!f2}; }
 // the app's: Σ GA4's LABELLED ad_impression (the truth: inline + full-screen — "Format not recorded" left out: on a
 // copy-pattern day AdMob did not confirm, it is the duplicate copy) ÷ Σ the app's daily active users, on the final days both
 // are there
@@ -7828,7 +7830,7 @@ function miniHtml(x){ const T=x.td, Y=addD(T,-1), s7=[addD(x.ft,-6),x.ft], nw=no
 function tableRows(x,lo,hi,seg,f2){ const items=x.items||[], all=PER==='all', av=appSum(x,lo,hi).vAll, idx=[];
   items.forEach((it,i)=>{ if(seg==='f'?it[1]==='fs':it[1]!=='fs') idx.push(i); });
   return idx.map(i=>{ const it=items[i], ps=perScore(x,i,lo,hi,all), st=stOf(x,i), pr=seg==='f'?null:perUser(x,f2,i,lo,hi);
-    return {i,it,ps,st,v:ps.p.vAll,a:ps.p.a,r:ps.p.rate,n:ps.q?ps.q.rate:null,sc:ps.score,sh:av>0&&ps.p.vAll!=null?ps.p.vAll/av:null,pr,pu:pr?pr.r:null}; }); }
+    return {i,it,ps,st,v:ps.p.vAll,a:ps.p.a,r:ps.p.rate,n:ps.q?ps.q.rate:null,sc:ps.score,sh:av>0&&ps.p.vAll!=null?ps.p.vAll/av:null,pr,pu:pr?pr.r:null,ud:pr?pr.ud:null,vu:pr?pr.vu:null}; }); }
 function sortItems(rows){ const k=TS.k, d=TS.dir; return rows.slice().sort((a,b)=>{
   if(k==='st') return d*(rankOf(a.st&&judged(a.it)?a.st[0]:null)-rankOf(b.st&&judged(b.it)?b.st[0]:null))||(b.v||0)-(a.v||0);
   const va=k==='name'?String(a.it[0]):a[k], vb=k==='name'?String(b.it[0]):b[k]; if(va==null&&vb==null) return (b.v||0)-(a.v||0); if(va==null) return 1; if(vb==null) return -1;
@@ -7849,6 +7851,8 @@ function tableHtml(x,id,lo,hi){ const seg=SEG, all=PER==='all', a2=apPtr(id), f2
   // recorded / GA4 gives no screen × format split), every format, "Format not recorded" too (the tooltips say so)
   const uof=x.allf?'ads (saare formats — Ads column wale)':'inline ads';
   const head=seg==='s'?th('st','Screen')+th('v','Visits')+th('a',x.allf?'Ads (all formats)':'Inline ads')+th('r','Ads / 100')+th('n','Normal')+th('sc','Score')
+      +th('ud','Users / day',`roz ke average users: period ke final din (jin me ads aur users dono whole aaye) pe us screen ke daily users ka jod ÷ un dinon ki ginti — GA4 me user ek din aur ek screen ke andar unique (2 din aaya to 2 baar ginta)`)
+      +th('vu','Visits / user',`ek user din me screen kitni baar kholta hai: unhi dinon ke screen views ÷ users ka jod`)
       +th('pu','Ads / user',`per user per day: period ke har final din ke ${x.allf?'ads (saare formats — Ads column wale: is app me screens ke ads ka format poora nahi milta, isliye "Format not recorded" bhi gine)':'inline ads'} ÷ us din ke screen users ka jod (GA4 me user sirf ek din aur ek screen ke andar unique) · sirf final din (Today / Yesterday nahi) jin me ads aur users dono whole aaye`)
       +th('sh','Share of visits')+'<th>Cause</th>'
     :th('st','Trigger')+th('a','Full-screen ads')+th('r','Per 100 app visits')+th('n','Normal')+th('sc','Score')+'<th>Cause</th>';
@@ -7859,11 +7863,12 @@ function tableHtml(x,id,lo,hi){ const seg=SEG, all=PER==='all', a2=apPtr(id), f2
     // failed: says so); a top screen whose ads have days but no users day says why; an aggregate row "—", titled
     const u=z.pr, ut=!u?'':u.agg?AGGW:u.wait?(f2e?'data load nahi hua':'aa raha hai…'):u.n?`per user per day: ${N(u.a)} ${uof} ÷ ${N(u.u)} users (har din ke users ka jod) · ${u.n} days`:'per user per day';
     const uc=!u?'':`<td title="${E(ut)}">${u.wait?(f2e?'<b>—</b><small>data load nahi hua</small>':'⏳'):`<b>${PU(u.r)}</b>${u.n&&u.n<u.nd?`<small>${u.n}/${u.nd} days</small>`:''}${!u.agg&&!u.n&&p.n?`<small>${E(puWhy(x,f2,z.i,lo,hi))}</small>`:''}`}</td>`;
+    const w2=v=>!u?'':`<td title="${E(ut)}">${u.wait?(f2e?'—':'⏳'):u.agg?'—':N(v)}</td>`, w3=v=>!u?'':`<td title="${E(ut)}">${u.wait?(f2e?'—':'⏳'):u.agg?'—':PU(v)}</td>`;
     return `<tr class="sc-clk${OPEN===z.i?' sc-on':''}" data-sc-open="${z.i}" aria-expanded="${OPEN===z.i}" tabindex="0">${nm}`
-      +(seg==='s'?`<td>${N(z.v)}</td><td>${N(z.a)}</td><td><b>${R(z.r)}</b>${basis}${nul}</td>${tail}${uc}<td>${P1(z.sh)}</td>`:`<td>${N(z.a)}</td><td><b>${R(z.r)}</b>${basis}${nul}</td>${tail}`)
+      +(seg==='s'?`<td>${N(z.v)}</td><td>${N(z.a)}</td><td><b>${R(z.r)}</b>${basis}${nul}</td>${tail}${w2(u&&u.ud!=null?Math.round(u.ud):null)}${w3(u&&u.vu)}${uc}<td>${P1(z.sh)}</td>`:`<td>${N(z.a)}</td><td><b>${R(z.r)}</b>${basis}${nul}</td>${tail}`)
       +`<td class="sc-cz">${jd&&st&&st[3]?E(st[3]):'—'}</td></tr>`; };
   const nf=rows.length;
-  return `<div class="sc-tw sc-x" id="sc-ttw"><table class="sc-t"><thead><tr>${head}</tr></thead><tbody>${shown.map(tr).join('')||`<tr><td colspan="9" class="sc-faint">${seg==='f'?'Is app ke full-screen units ka trigger data nahi':'Koi screen nahi'}</td></tr>`}</tbody></table></div>`
+  return `<div class="sc-tw sc-x" id="sc-ttw"><table class="sc-t"><thead><tr>${head}</tr></thead><tbody>${shown.map(tr).join('')||`<tr><td colspan="11" class="sc-faint">${seg==='f'?'Is app ke full-screen units ka trigger data nahi':'Koi screen nahi'}</td></tr>`}</tbody></table></div>`
     +(seg==='s'&&(more>0||MORE)&&nf?`<button type="button" class="sc-more" data-sc-more="1">${MORE?'Show fewer screens':`Show ${more} more screens`}</button>`:''); }
 function segHtml(x,id,lo,hi){ const n=k=>(x.items||[]).filter(it=>k==='f'?it[1]==='fs':it[1]!=='fs').length;
   return `<div class="card sc-card" id="sc-tcard"><div class="sc-seg sc-x" role="group" aria-label="Table">${[['s','Screens'],['f','Full-screen']].map(([k,l])=>`<button type="button" data-sc-seg="${k}" aria-pressed="${SEG===k}">${l} <small>${n(k)}</small></button>`).join('')}</div>`
@@ -8084,7 +8089,7 @@ function howBody(x){ const g=(typeof DATA!=='undefined'&&DATA&&DATA.generated_at
     +'<p class="sc-note"><b>Visits</b> = screen_view (har Activity). <b>Ads / 100</b> = us screen pe ad_impression ÷ visits × 100: screens pe inline (banner + native); full-screen ads SDK ki apni Activity pe aate hain, isliye unhe <b>trigger</b> (unit ke naam se: Back press, App resume, Splash …) se ginte hain, har 100 app visits pe.</p>'
     +'<p class="sc-note"><b>Status</b> (period se alag, fixed): pichhle 10 final din vs usse pehle ke 28 final din. Worse = score 80 se kam; Watch = 90 se kam; Better = 110 se upar — teeno me farq itna bada ho ki rozana ka utaar-chadhaav nahi ho sakta (z 3 ya zyada) aur dono 5-din ke hisson me dikhe. Kam data = Too early; whole din kam ("Not whole" — kitne din kis wajah se, saath me likha: GA4 sampled / rows chhodi / grouped / abhi padhe nahi …) / logging badli / ads nahi / ads bahut kam ("Too few ads" — W aur N dono me app ke us kism ke ads ka 1% se kam) = N/A.</p>'
     +'<p class="sc-note"><b>Score</b> (picked period) = period ka ads / 100 ÷ normal (period se pehle ke max(28, period) final din) × 100; 7 se kam final din = "short period"; period aur normal dono me row ke ads app ke us kism ke ads ka 1% se kam = "score —" (itne kam ads ka ratio kuch nahi batata). Jis din koi hissa whole nahi (GA4 ne sampled / grouped / rows chhodi, ya wo din abhi padha nahi), us din ka wo hissa gina nahi jata — Data coverage me har din ki wajah hai. Cause AdMob ke requests / fill / show se (unit-wise, exact split).</p>'
-    +'<p class="sc-note"><b>Ads / user</b> = per user per day: period ke har final din ke ads ÷ us din ke users ka jod (GA4 me user sirf ek din aur ek screen ke andar unique hai, isliye din-wise jod = user-days). Screen row pe us screen ke ads (Ads column wale: inline — jin apps ke screens saare formats pe gine jaate hain, wahan saare formats, "Format not recorded" bhi) ÷ us screen ke users — screens ke users jode nahi ja sakte, isliye All other screens / Not recorded / Ad screens / GA4 grouped pe "—"; app tile pe GA4 ke inline + full-screen ads ÷ app ke daily active users (GA4, wahi stream — Active users data se; "Format not recorded" ads gine nahi: kai apps me ye duplicate copy hote hain). Sirf final din gine jin me ads aur users dono whole aaye — Today / Yesterday kabhi nahi (users aur ads alag samay pe padhe jaate hain aur GA4 dono me abhi jod raha hai). Details → Engagement me <b>Users who saw ads</b> = us screen ke ad dekhne wale users ka jod ÷ uske users ka jod (Σ ÷ Σ, har din ke users ka jod) — un dinon pe jin me dono users reads whole aaye.</p>'; }
+    +'<p class="sc-note"><b>Ads / user</b> = per user per day: period ke har final din ke ads ÷ us din ke users ka jod (GA4 me user sirf ek din aur ek screen ke andar unique hai, isliye din-wise jod = user-days). Screen row pe us screen ke ads (Ads column wale: inline — jin apps ke screens saare formats pe gine jaate hain, wahan saare formats, "Format not recorded" bhi) ÷ us screen ke users — screens ke users jode nahi ja sakte, isliye All other screens / Not recorded / Ad screens / GA4 grouped pe "—"; app tile pe GA4 ke inline + full-screen ads ÷ app ke daily active users (GA4, wahi stream — Active users data se; "Format not recorded" ads gine nahi: kai apps me ye duplicate copy hote hain). Sirf final din gine jin me ads aur users dono whole aaye — Today / Yesterday kabhi nahi (users aur ads alag samay pe padhe jaate hain aur GA4 dono me abhi jod raha hai). Details → Engagement me <b>Users who saw ads</b> = us screen ke ad dekhne wale users ka jod ÷ uske users ka jod (Σ ÷ Σ, har din ke users ka jod) — un dinon pe jin me dono users reads whole aaye. <b>Users / day</b> = unhi final dinon pe us screen ke users ka jod ÷ un dinon ki ginti (roz ka average; 2 din aaya user 2 baar ginta). <b>Visits / user</b> = unhi dinon ke screen views ÷ users ka jod — ek user din me wo screen kitni baar kholta hai (100 users, 300 visits → 3; 200 ads → Ads / user 2).</p>'; }
 function foldsHtml(x,id,lo,hi){ return fold('src','🗂 Ad sources','format-wise network ka hissa',srcBody(x,id,lo,hi))+fold('ver','🗂 Versions','har version · same din vs previous',verBody(id))
   +fold('cov','🗂 Data coverage','har piece kitna whole · kyun',covBody(x,id,lo,hi))+fold('rep','📋 Report for developer','copy karke bhejein',repBody(id))+fold('how','❓ How this works','method',howBody(x)); }
 function appHtml(id){ const x=ALL.apps[id], a=Array.isArray(x.app)?x.app:[];
