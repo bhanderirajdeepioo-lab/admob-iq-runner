@@ -63,9 +63,11 @@ NVR, VER, CTY = gs.NVR, gs.VER, gs.CTY
 EC, PUB, PV, EXP = "eventCount", "publisherAdImpressions", "screenPageViews", "adUnitExposure"
 ENG, USR, SES = "userEngagementDuration", "activeUsers", "sessions"
 UNSET = frozenset(("(not set)", ""))
+INLINE = ("Banner", "Native advanced", "Native")          # GA4's ad format names (as the truth TA holds them)
+FULL = ("Interstitial", "App open", "Rewarded", "Rewarded interstitial")
 # kind → (date dimension?, dims, metric, filter[, days: the range ends on the probed day, 1 when left out]): "pe" the
-# fetch's pin (platform Android + the app's stream) + eventName == ad_impression · "pk" the pin + the click events (the
-# fetch's "k") · "p" the pin alone · "se" the stream + the event (no platform) · "e" the event alone (the whole property)
+# fetch's pin (platform Android + the app's stream) + eventName == ad_impression · "pi" / "pfs" / "pb" that and the
+# ad format in INLINE / in FULL / == Banner · "pk" the pin + the click events (the fetch's "k") · "p" the pin alone · "se" the stream + the event (no platform) · "e" the event alone (the whole property)
 # · "" nothing (the whole property, every event)
 KINDS = {
     "t": (True, (), EC, "pe"),              # the day's ad_impression events now (the truth the fetch ties)
@@ -122,6 +124,18 @@ KINDS = {
     "cppv": (True, (CTY, PP), PV, "p"),
     "cfu": (True, (SC, FMT, UNIT), EC, "pe"),   # the fetch's "a" at "fu" (last: the class is the costly one)
     "ncf": (True, (NVR, SC, FMT), EC, "pe"),    # the fetch's "nA" at "cf"
+    # round 3 (6 Nov: the page path is whole alone but sampled with the ad format on the biggest apps): the format by
+    # a filter instead of a dimension, and the ad unit (whose format the unit read gives) instead of the format
+    "tI": (True, (), EC, "pi"),
+    "tFS": (True, (), EC, "pfs"),
+    "tB": (True, (), EC, "pb"),
+    "tI31": (True, (), EC, "pi", 31),
+    "ppI": (True, (PP,), EC, "pi"),
+    "ppFS": (True, (PP,), EC, "pfs"),
+    "ppB": (True, (PP,), EC, "pb"),
+    "ppI31": (True, (PP,), EC, "pi", 31),
+    "ppU": (True, (PP, UNIT), EC, "pe"),
+    "ppU31": (True, (PP, UNIT), EC, "pe", 31),
 }
 SWEEP_KINDS = ("c", "u", "t_prop")
 # a split kind → the day total (a kind above) its rows must add up to: the same metric under the same filter
@@ -130,7 +144,8 @@ REF = {"c": "t", "cf": "t", "u": "t", "c_nodate": "t", "pp": "t", "ps": "t", "sn
        "c_pub_prop": "t_pub_prop", "v": "t_views", "e": "t_exp",
        "cfu": "t", "ppf": "t", "ppfu": "t", "pp31": "t31", "ppf31": "t31", "ppk": "t_k", "ppe": "t_all", "ppx": "t_exp",
        "ppv": "t_views", "ppeng": "t_eng", "nppf": "t", "npp": "t", "nppv": "t_views", "rppf": "t", "rpp": "t",
-       "rppv": "t_views", "cppf": "t", "cpp": "t", "cppv": "t_views", "ncf": "t"}
+       "rppv": "t_views", "cppf": "t", "cpp": "t", "cppv": "t_views", "ncf": "t",
+       "ppI": "tI", "ppFS": "tFS", "ppB": "tB", "ppI31": "tI31", "ppU": "t", "ppU31": "t31"}
 KEEP_KINDS = frozenset(k for k, v in KINDS.items() if v[1] and v[1][0] in (SC, PP, PS, SN))
 TAG_RE = re.compile(r"[a-z0-9]{1,12}")
 
@@ -151,14 +166,17 @@ def _http_class(e):
 
 def _flt(f, stream_id):
     ex = []
-    if f in ("pe", "pk", "p"):
+    fmt = {"pi": INLINE, "pfs": FULL, "pb": ("Banner",)}.get(f)
+    if f in ("pe", "pk", "p") or fmt:
         ex.append(ga4._exact("platform", "Android"))
-    if f in ("pe", "pk", "p", "se"):
+    if f in ("pe", "pk", "p", "se") or fmt:
         ex.append(ga4._exact("streamId", stream_id))
-    if f in ("pe", "se", "e"):
+    if f in ("pe", "se", "e") or fmt:
         ex.append(ga4._exact("eventName", IMP))
     if f == "pk":
         ex.append(ga4._in_list("eventName", gs.CLICKS))
+    if fmt:
+        ex.append(ga4._in_list(FMT, fmt))
     return {"andGroup": {"expressions": ex}} if ex else None
 
 

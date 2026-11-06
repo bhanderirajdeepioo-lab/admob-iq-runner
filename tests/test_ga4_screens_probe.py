@@ -218,3 +218,14 @@ def test_the_run_options_pick_kinds_days_and_the_private_path(monkeypatch, tmp_p
             ex = b["dimensionFilter"]["andGroup"]["expressions"]
             assert {"inListFilter": {"values": list(gs.CLICKS)}, "fieldName": "eventName"} in [x["filter"] for x in ex]
     assert out["opts"] == {"only": ["pp31", "ppf", "ppk"], "sweep": False, "back": (0, 20)}
+
+
+def test_a_format_filter_rides_the_pin_and_the_event():
+    b = sp.request("ppI", FE, "777")
+    ex = [x["filter"] for x in b["dimensionFilter"]["andGroup"]["expressions"]]
+    assert {"fieldName": "platform", "stringFilter": {"matchType": "EXACT", "value": "Android"}} in ex
+    assert {"fieldName": "eventName", "stringFilter": {"matchType": "EXACT", "value": sp.IMP}} in ex
+    assert {"fieldName": sp.FMT, "inListFilter": {"values": list(sp.INLINE)}} in ex
+    assert [d["name"] for d in b["dimensions"]] == ["date", sp.PP]
+    b = sp.request("ppU31", FE, "777")
+    assert b["dateRanges"] == [{"startDate": (FE - timedelta(days=30)).isoformat(), "endDate": FE.isoformat()}]
