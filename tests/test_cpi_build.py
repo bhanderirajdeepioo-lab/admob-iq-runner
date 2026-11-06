@@ -1231,3 +1231,217 @@ def test_levels_a_level_that_is_not_exact_is_never_shipped(tmp_path, monkeypatch
     _, f = build(tmp_path)
     assert "cpi levels skipped: LevelMismatch" in capsys.readouterr().err
     assert f["b"]["lv"] == {} and f["a"]["lv"]["CPI"]                              # Beta: its saved history only (none)
+
+
+# ── levels: review fixes — a level worth 0, one bad app, rows / a history file / actions that cannot be read ─────────
+
+def zero_rev(dash, app, window):
+    """The app's AdMob revenue is 0 on the window's days (the impressions stay): its eCPM over them is exactly 0."""
+    for p in dash["placements"]:
+        if p["app"] == NAMES[app]:
+            for r in p["daily"]:
+                if r[0] in window:
+                    r[1] = 0
+
+
+def skipped(err, what="cpi levels skipped"):
+    return [ln for ln in err.splitlines() if ln.startswith(what)]
+
+
+def lv_row(**kw):
+    """A saved history row as the build writes it (typed level, no named days)."""
+    row = {"id": "L-00000000aa", "from": "2025-11-01", "to": None, "v": 12.5, "days": None, "sums": None, "src": "auto",
+           "ep": None, "act": None, "seen": "2026-03-01T00:00:00Z", "restated": [], "gone": None, "rejected": None}
+    row.update(kw)
+    return row
+
+
+def test_levels_a_level_worth_zero_is_a_bad_action_never_a_crash(tmp_path, capsys):
+    """eCPM over days without revenue is exactly 0. Set / accept onto those days is ZeroLevel (listed bad, never
+    pinned). It used to pin 0, divide by it in the exactness check, drop EVERY app's history on every build and hide
+    Undo; now the other apps and the other action are untouched."""
+    data, site, dash = make(tmp_path)
+    win = ["2025-12-01", "2025-12-28"]
+    zero_rev(dash, "b", set(days(*win)))
+    acts = [act(1, "set", fam="ECPM", app="b", **{"from": T, "days": win}),
+            act(2, "accept", fam="ECPM", app="b", proposal={"day": T, "days": win}, **{"from": T}),
+            act(3, "set", fam="CPI", app="a", **{"from": T, "value": 30.0})]
+    capsys.readouterr()
+    (data, site, dash), f = build(tmp_path, acts, data=(data, site, dash))
+    err = capsys.readouterr().err
+    assert err.count("cpi level action skipped: ZeroLevel") == 2 and skipped(err) == []      # no crash, nothing else
+    assert health.SKIP.search("cpi level action skipped: ZeroLevel")
+    assert {x["id"]: (x["st"], x.get("why")) for x in f["b"]["la"]} == {"a-000000000001": ("bad", "ZeroLevel"),
+                                                                        "a-000000000002": ("bad", "ZeroLevel")}
+    assert [x["st"] for x in f["a"]["la"]] == ["applied"] and f["a"]["lv"]["CPI"][0]["src"] == "manual"
+    assert f["b"]["lv"]["CPI"] and not [r for r in f["b"]["lv"].get("ECPM", []) if r["src"] in ("manual", "accepted_owner")]
+    assert all(r["v"] > 0 for fams in (f["a"]["lv"], f["b"]["lv"]) for rows in fams.values() for r in rows)
+    assert dash["cpi"]["la"] == "2026-03-30T04:03:00Z" and os.path.exists(cb.levels_path(data))
+
+
+def test_levels_exact_is_a_mismatch_for_a_level_worth_zero_never_a_division(monkeypatch):
+    row = lambda v: {"v": v, "days": ["2025-12-01", "2025-12-14"]}                  # noqa: E731
+    monkeypatch.setattr(CA, "measure", lambda ent, P, fam, a, b: {"v": 0.0, "sums": {"rev": 0.0, "imp": 280000.0},
+                                                                  "days": [a, b], "n": 14})
+    for v in (0.0, -2.0, float("nan"), float("inf"), None):
+        with pytest.raises(cb.LevelMismatch):
+            cb._exact(None, "ECPM", row(v))
+    monkeypatch.setattr(CA, "measure", lambda ent, P, fam, a, b: None)               # days that cannot be measured
+    with pytest.raises(cb.LevelMismatch):
+        cb._exact(None, "ECPM", row(5.0))
+
+
+def test_levels_a_rollback_to_a_saved_level_worth_zero_is_bad(monkeypatch, capsys):
+    ent = {IDS["a"]: object()}
+    led = {"apps": {IDS["a"]: {"CPI": [lv_row(id="L-00000000c1", v=0.0),                     # typed, no days
+                                       lv_row(id="L-00000000c2", v=9.0, days=["2025-12-01", "2025-12-14"])]}}}
+    monkeypatch.setattr(CA, "measure", lambda e, P, fam, a, b: {"v": 0.0, "sums": {}, "days": [a, b], "n": 14})
+    acts = [act(1, "rollback", level="L-00000000c1", **{"from": T}), act(2, "rollback", level="L-00000000c2", **{"from": T})]
+    owner, la, rej, seen = cb.resolve_actions(acts, ent, led, T)
+    assert owner == {} and rej == {} and [x["why"] for x in sorted(la[IDS["a"]], key=lambda x: x["id"])] == ["ZeroLevel"] * 2
+    assert capsys.readouterr().err.count("cpi level action skipped: ZeroLevel") == 2
+
+
+def test_levels_one_app_that_cannot_merge_costs_only_itself(tmp_path, monkeypatch, capsys):
+    (data, site, dash), f0 = build(tmp_path)
+    led0 = json.load(open(cb.levels_path(data)))
+    real = cb._fresh
+
+    def boom(ent, key, res, eps):
+        if ent.id == IDS["b"]:
+            raise KeyError("x")                      # anything, not only a LevelMismatch
+        return real(ent, key, res, eps)
+    monkeypatch.setattr(cb, "_fresh", boom)
+    write_actions(tmp_path, [act(1, "set", **{"from": T, "value": 30.0})])
+    capsys.readouterr()
+    _, f1 = build(tmp_path, data=(data, site, dash))
+    err = capsys.readouterr().err
+    assert skipped(err) == ["cpi levels skipped: KeyError"] and health.SKIP.search(skipped(err)[0])    # ONE line
+    led1 = json.load(open(cb.levels_path(data)))
+    assert led1["apps"][IDS["b"]] == led0["apps"][IDS["b"]] and f1["b"]["lv"] == f0["b"]["lv"]         # Beta: as it was
+    assert [x for x in led1["log"] if x["app"] == IDS["b"]] == [x for x in led0["log"] if x["app"] == IDS["b"]]
+    assert f1["a"]["lv"]["CPI"][0]["src"] == "manual" and [x["st"] for x in f1["a"]["la"]] == ["applied"]   # Alpha: merged
+
+
+def test_levels_rows_that_cannot_be_read_are_dropped_and_counted_never_the_tab(tmp_path, capsys):
+    data, site, dash = make(tmp_path)
+    os.makedirs(os.path.join(data, "cpi"), exist_ok=True)
+    good = lv_row()
+    bad = [{k: v for k, v in good.items() if k != d} for d in ("id", "src", "from", "v")]
+    bad += [lv_row(**{"from": "soon"}), lv_row(v="12"), lv_row(v=True), "junk", 7]
+    json.dump({"v": 1, "rule": "L1", "proposals": [], "log": {}, "apps": {IDS["b"]: {"CPI": [good] + bad, "ECPM": "oops"},
+                                                                         IDS["a"]: ["nope"]}},
+              open(cb.levels_path(data), "w"))
+    capsys.readouterr()
+    paths = cb.run(dash, data, site, {}, NOW)
+    cb.pop_line()
+    err = capsys.readouterr().err
+    assert paths == ["/cpi*"] and set(dash["cpi"]["apps"]) == {IDS[k] for k in "abde"}       # the tab stays, every app
+    assert skipped(err) == ["cpi levels skipped: BadRow (11 dropped)"]                       # 9 rows + a fam + an app
+    assert health.SKIP.search(skipped(err)[0])
+    f = {k: load(site, dash["cpi"]["apps"][IDS[k]]["file"]) for k in "ab"}
+    assert [r["id"] for r in f["b"]["lv"]["CPI"] if r["id"] == "L-00000000aa"] == ["L-00000000aa"]   # the readable row stays
+    assert all(r["id"].startswith("L-") for fams in (f["a"]["lv"], f["b"]["lv"]) for rows in fams.values() for r in rows)
+    led = json.load(open(cb.levels_path(data)))                                              # … and is saved without the rest
+    assert all(isinstance(r, dict) and {"id", "src", "from", "v"} <= set(r) for fams in led["apps"].values()
+               for rows in fams.values() for r in rows)
+    assert isinstance(led["proposals"], dict) and isinstance(led["log"], list)
+
+
+def test_levels_a_row_nobody_foresaw_costs_that_apps_history_block_only(tmp_path, monkeypatch, capsys):
+    data, site, dash = make(tmp_path)
+    real = cb.ship_levels
+
+    def boom(led, aid):
+        if aid == IDS["b"]:
+            raise KeyError("src")
+        return real(led, aid)
+    monkeypatch.setattr(cb, "ship_levels", boom)
+    write_actions(tmp_path, [act(1, "set", app="b", **{"from": T, "value": 30.0})])
+    capsys.readouterr()
+    paths = cb.run(dash, data, site, {}, NOW)
+    cb.pop_line()
+    assert paths == ["/cpi*"] and skipped(capsys.readouterr().err) == ["cpi levels skipped: KeyError"]
+    a, b = (load(site, dash["cpi"]["apps"][IDS[k]]["file"]) for k in "ab")
+    assert a["lv"]["CPI"] and "lv" not in b and b["ep"] is not None                          # Beta: no history block …
+    assert [x["st"] for x in b["la"]] == ["applied"] and b["lp"] == []                       # … its owner actions still listed
+
+
+def test_levels_a_hand_edited_action_with_a_list_or_object_is_bad_the_rest_apply(tmp_path, capsys):
+    data, site, dash = make(tmp_path)
+    os.makedirs(os.path.join(data, "cpi"), exist_ok=True)
+    acc = lv_row(id="L-00000000bb", **{"from": "2026-01-10"}, v=21.0, days=["2025-12-14", "2026-01-10"], src="accepted",
+                 ep={"opened": "2025-11-15", "old": 20.0})
+    json.dump({"v": 1, "rule": "L1", "proposals": {}, "log": [], "apps": {IDS["a"]: {"CPI": [acc]}}},
+              open(cb.levels_path(data), "w"))
+    A = IDS["a"]
+    odd = [dict(act(3, "undo"), ref=["a-000000000001"]),                              # ref: a list
+           dict(act(4, "set", **{"from": T, "value": 9.0}), app=[A]),                 # app: a list
+           dict(act(5, "set", **{"from": T, "value": 9.0}), app={"id": A}),           # app: an object
+           act(6, "rollback", level={"id": "L-00000000bb"}, **{"from": T}),           # level: an object
+           act(7, "set", **{"from": T, "days": [["2026-03-01"], T]}),                 # days: nested
+           dict(act(8, "set", **{"from": T, "value": 9.0}), fam=["CPI"]),             # fam: a list
+           act(9, "auto", **{"from": {"d": 1}}),                                      # from: an object
+           dict(act(10, "set", **{"from": T, "value": 9.0}), act=["set"]),            # act: a list
+           dict(act(11, "set", **{"from": T, "value": 9.0}), id=["a-000000000011"])]  # id: a list
+    acts = [act(1, "set", fam="ECPM", **{"from": T, "value": 5.0}),
+            dict(act(2, "reject", level="L-00000000bb"), **{"from": ["2026-03-29"]})] + odd   # a reject needs no day
+    capsys.readouterr()
+    (data, site, dash), f = build(tmp_path, acts, data=(data, site, dash))
+    err = capsys.readouterr().err
+    assert skipped(err) == []                                                         # no TypeError: nothing dropped
+    got = sorted((str(x["id"]), x["st"], x.get("why")) for x in f["a"]["la"])
+    assert got == [("['a-000000000011']", "bad", "BadAction"), ("a-000000000001", "applied", None),
+                   ("a-000000000002", "applied", None), ("a-000000000003", "bad", "UnknownRef"),
+                   ("a-000000000006", "bad", "UnknownLevel"), ("a-000000000007", "bad", "BadDays"),
+                   ("a-000000000008", "bad", "UnknownFam"), ("a-000000000009", "bad", "BadDate"),
+                   ("a-00000000000a", "bad", "BadAction")]
+    for why in ("UnknownApp", "UnknownRef", "UnknownLevel", "BadDays", "UnknownFam", "BadDate", "BadAction"):
+        assert "cpi level action skipped: %s" % why in err
+    assert [e["why"] for e in eps_of(f["a"], "ECPM")] == ["owner"]                    # the good action reached the engine
+    r = [x for x in f["a"]["lv"]["CPI"] if x["id"] == "L-00000000bb"][0]
+    assert r["st"] == "rejected"                                                      # … and so did the reject
+
+
+def test_levels_a_history_file_that_cannot_be_read_keeps_the_owners_set_and_accept_levels(tmp_path, capsys):
+    """A damaged data/cpi/levels.json used to drop the whole levels part: the owner's levels silently stopped. Now
+    set / accept (no saved level needed) still reach the replay, rollback / reject are bad (NoLedger), the file is
+    never overwritten, no history is shipped, and the actions are still listed (so Undo stays on the page)."""
+    acts = [act(1, "set", fam="ECPM", **{"from": T, "value": 5.0}),
+            act(2, "accept", fam="ROAS_G", proposal={"day": T, "days": [C, "2026-03-28"]}, **{"from": T}),
+            act(3, "rollback", level="L-00000000aa", **{"from": T}),
+            act(4, "reject", level="L-00000000bb")]
+    data, site, dash = make(tmp_path)
+    os.makedirs(os.path.join(data, "cpi"), exist_ok=True)
+    with open(cb.levels_path(data), "w") as fh:
+        fh.write("{broken")
+    capsys.readouterr()
+    (data, site, dash), f = build(tmp_path, acts, data=(data, site, dash))
+    err = capsys.readouterr().err
+    assert skipped(err) == ["cpi levels skipped: JSONDecodeError"] and err.count("cpi level action skipped: NoLedger") == 2
+    a = f["a"]
+    assert {x["id"]: (x["st"], x.get("why")) for x in a["la"]} == {
+        "a-000000000001": ("applied", None), "a-000000000002": ("applied", None),
+        "a-000000000003": ("bad", "NoLedger"), "a-000000000004": ("bad", "NoLedger")}
+    for fam in ("ECPM", "ROAS_G"):                                                    # the owner's levels reached the replay
+        assert [(e["closed"], e["why"]) for e in eps_of(a, fam)][-1] == (T, "owner"), fam
+    assert "lv" not in a and "lp" in a and "lv" not in f["b"] and dash["cpi"]["la"] == "2026-03-30T04:04:00Z"
+    assert open(cb.levels_path(data)).read() == "{broken"                             # never overwritten
+    clean = tmp_path / "clean"                                                        # the same two actions, a healthy history
+    _, g = build(clean, acts[:2], data=make(clean))
+    assert a["ep"] == g["a"]["ep"] and a["nrm"] == g["a"]["nrm"]
+
+
+def test_levels_a_row_keeps_its_last_ten_restated_values():
+    saved = [lv_row(v=10.0)]
+    log, v = [], 10.0
+    for i in range(14):
+        v *= 1.01
+        saved = cb._merge_fam("app", "CPI", saved, [{"from": "2025-11-01", "v": v, "days": None, "sums": None, "src": "auto",
+                                                     "ep": None, "act": None}], {}, "2026-03-%02dT00:00:00Z" % (i + 1),
+                              {"L-00000000aa"}, log)
+    r = saved[0]
+    assert r["id"] == "L-00000000aa" and len(r["restated"]) == cb.RESTATED_MAX == 10
+    assert [x["at"][8:10] for x in r["restated"]] == ["%02d" % d for d in range(5, 15)]       # the newest ten
+    assert r["restated"][-1]["v_new"] == pytest.approx(v) and r["restated"][0]["v_old"] == pytest.approx(10.0 * 1.01 ** 4)
+    assert len([x for x in log if x["what"] == "restated"]) == 14                             # the log keeps all (its own cap)

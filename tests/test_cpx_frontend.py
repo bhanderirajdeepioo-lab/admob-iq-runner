@@ -515,3 +515,55 @@ def test_levels_on_the_chart_and_the_list(out):
     c = out["lv"]["cty"]                                                           # a country picked: no app level on its charts
     assert c["svgs"] == 3 and c["marks"] == 0 and c["F"] is None and "Level:" not in (c["tip"] or "")
     assert c["back"] == 4                                                          # All countries: the app's markers again
+
+
+# ── 🕘 Levels: review fixes (Save only for a level the build takes, one save at a time, the $ view, no history block) ──
+def test_levels_save_only_for_a_level_the_build_takes(out):
+    s = out["lvfix"]["save"]
+    assert s["ok"]                                                                 # data for every day, worth more than 0: on
+    assert s["nodata"] == {"disabled": True, "text": True}                         # days the file does not have: off, and says so
+    assert s["zero"] == {"disabled": True, "text": True, "shown": False}           # a level worth 0: off, and no ✓ preview of it
+    assert s["zero_posts"] == 0                                                    # … a stray tap sends nothing
+    assert out["lvfix"]["from_clamp"] == ["2025-10-01", "2025-10-01", T.isoformat()]   # From never before the file's first day
+    day = (T - timedelta(days=9)).isoformat()
+    assert out["lvfix"]["from_default"] == [day, day, T.isoformat()]               # … the default From too (a young file)
+    assert out["lvfix"]["from_default_old"] == (T - timedelta(days=27)).isoformat()   # an old file: the last 28 days, as before
+
+
+def test_levels_one_save_at_a_time(out):
+    d = out["lvfix"]["dbl"]
+    assert d == {"posts": 1, "mid": [True, True], "busy": True, "after": [False, False], "idle": False}   # a double tap commits once
+    lp = out["lvfix"]["lock_paint"]
+    assert lp["n"] >= 5 and lp["off"] == 0 and lp["on"] == lp["n"]                 # a repaint during the flight keeps them disabled
+    assert out["lvfix"]["save_dbl"] == 1                                           # the form's Save too
+
+
+def test_levels_every_owner_button_is_disabled_while_a_save_is_in_flight():
+    p = _page()
+    m = p[p.index("const CPX=(()=>{"):p.index("function renderCpx(){")]
+    tags = re.findall(r'<button type="button" class="cpx-lvb[^`]*?</button>', m)
+    assert len(tags) == 8, len(tags)                                               # Save, Cancel, Accept, Use, Reject, Undo, Set, Auto
+    assert all("lvDis()" in t or "LVBUSY" in t for t in tags), [t[:70] for t in tags if "lvDis()" not in t and "LVBUSY" not in t]
+    assert "if(LVBUSY) return false; lvLock(true);" in m and "finally{ lvLock(false); }" in m
+
+
+def test_levels_typed_cpi_in_the_dollar_view_goes_out_in_rupees(out):
+    u, k = out["lvfix"]["usd"], out["lvfix"]["usd"]["k"]
+    assert k == pytest.approx(0.0132)                                              # Σ$ ÷ Σ₹ of the 14 days ending the data day
+    assert "Typed value · $ per install" in u["text"] and "(1 $ = ₹75.76, 15 Mar – 28 Mar 2026 ka rate)" in u["text"]
+    assert "$ view: aapki $ value save par ₹ me badal di jaati hai" in u["text"] and not u["save_off"]
+    assert u["body"] == [{"act": "set", "app": A, "fam": "CPI", "from": T.isoformat(), "value": pytest.approx(0.38 / k, abs=1e-6)}]
+    assert u["body"][0]["value"] == pytest.approx(28.787879, abs=1e-6)             # not 0.38 as ₹, not the flat-rate 31.67
+    n = out["lvfix"]["usd_norate"]                                                 # no spend in those days: no rate, no guess
+    assert n["text"] and n["save_off"] and n["posts"] == 0 and n["toast"] == ["❌ $ se ₹ ka rate nahi mila — ₹ view me value daalo"]
+    assert out["lvfix"]["usd_ecpm"] == {"unit": True, "note": False}               # eCPM is $ per 1000 in both views
+    assert out["lvfix"]["inr"] == {"unit": True, "note": False, "save_off": False}   # the ₹ view: ₹ per install, as before
+
+
+def test_levels_owner_actions_and_undo_stay_without_a_history_block(out):
+    n = out["lvfix"]["nolv"]                                                       # the build shipped the actions but no history
+    assert n["note"] and n["actions"] and n["undo"] == ["a-0000000000c1", "a-0000000000c2"] and n["switches"] == 0 and not n["set"]
+    assert out["lvfix"]["nolv_ro"] == {"actions": True, "undo": 0}                 # a non-admin sees them, with no button
+    p = out["lvfix"]["nolv_pending"]                                               # no actions either: the saved ones are pending
+    assert p["pending"] == 1 and p["undo"] == ["a-0000000000d1"] and p["pend"] == 1
+    assert p["undo_post"] == [{"act": "undo", "ref": "a-0000000000d1"}]

@@ -859,6 +859,19 @@ def test_levels_an_alarm_open_120_days_without_getting_steady_is_proposed():
     assert [x["why"] for x in r["proposals"][("app", APP)] if x["fam"] == "CPI"] == ["open"]
 
 
+def test_levels_a_proposal_worth_zero_is_never_made():
+    """An alarm open 120+ days whose last 28 days are worth exactly 0 (no D0 value / no revenue at all) stays open but
+    proposes nothing: a level of 0 has no ratio to compare an alarm with (the build would refuse to ship it)."""
+    for fam, key in (("ROAS_G", "d0_inr"), ("ECPM", "rev")):
+        s = synth()
+        mul(s, key, 250, N, 0.0)
+        r, L, eps = lv_run(s)
+        ep = [x for x in eps if x["fam"] == fam][0]
+        assert ep["why"] is None and ep["suggest"][1] == "open", fam               # still open, a proposal was due
+        assert [x for x in r["proposals"][("app", APP)] if x["fam"] == fam] == [], fam
+        assert all(x["v"] > 0 for x in r["proposals"][("app", APP)])
+
+
 def owner_pin(day, value, days=None, src="manual", fam="CPI", aid="a-000000000001"):
     return {(APP, fam): [{"act": "pin", "day": day, "value": value, "src": src, "days": days, "id": aid}]}
 

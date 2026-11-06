@@ -8819,7 +8819,7 @@ const PROPW={money:'12 hafte steady',open:'120+ din se khula',held:'8 hafte stea
 const LAW={applied:'Applied',waiting:'Waiting for its data day',undone:'Undone',bad:'Not applied'};
 const ACTW={set:'Set level',rollback:'Use earlier level',reject:'Reject auto acceptance',accept:'Accept new level',auto:'Back to auto',undo:'Undo'};
 const UNITW={CPI:'₹ per install',ECPM:'$ per 1000 impressions',GAP:'ads',IPU:'ads per user',ROAS_G:'% (jaise 40)',ROAS_C0:'% (jaise 40)',ROAS_C1:'% (jaise 40)',ROAS_C7:'% (jaise 40)',SPEND:'$ per day'};
-let LVF='CPI', LVSET=null, LVQ={st:null,admin:false,save:false,acts:[]}, PEND=[];
+let LVF='CPI', LVSET=null, LVQ={st:null,admin:false,save:false,acts:[]}, PEND=[], LVBUSY=false;   // LVBUSY: a save is in flight (one at a time)
 // a level from the sums of its days (the build's level_of; CPI in ₹ as billed)
 function lvOf(f,s,n){ const g=k=>+s[k];
   const v=f==='CPI'?g('sp_inr')/g('inst'):f==='ECPM'?g('rev')/g('imp')*1000:f==='GAP'?(g('sp_usd')/g('inst'))*(g('imp')/g('rev')):f==='IPU'?g('imp')/g('dau')
@@ -8854,7 +8854,9 @@ function lvLoad(){ if(LVQ.st) return; LVQ.st='busy';
     if(OPEN&&TAB==='hi') arrive(OPEN); }); }
 const toast=m=>{ try{ if(typeof bToast==='function') bToast(m); }catch(e){} };
 const canAct=()=>LVQ.st==='ok'&&LVQ.admin&&LVQ.save;
-async function lvSend(body,sel){ toast('⏳ Saving…'); const r=await lvFetch('POST','/act',body);
+// one save at a time: while one is in flight the owner buttons are disabled and a second tap does nothing (a double tap commits once)
+function lvLock(on){ LVBUSY=on; try{ const s=EL; if(s&&s.querySelectorAll) s.querySelectorAll('button.cpx-lvb').forEach(b=>{ b.disabled=on; }); }catch(e){} }
+async function lvSend(body,sel){ if(LVBUSY) return false; lvLock(true); toast('⏳ Saving…'); let r; try{ r=await lvFetch('POST','/act',body); }finally{ lvLock(false); }
   if(r.status===200&&r.data&&r.data.ok===true&&r.data.action){ PEND.push(r.data.action); if(Array.isArray(r.data.actions)) LVQ.acts=r.data.actions; LVSET=null;
     toast('✅ Saved — agle update me lagega (1–1½ ghante)'); }
   else{ let m=''; try{ m=typeof cfgApiErrMsg==='function'?cfgApiErrMsg(r.status||0,r.data):''; }catch(e){ m=''; }
@@ -8866,23 +8868,35 @@ function lvActs(r,F){ const la=Array.isArray(F.la)?F.la:[], seen=new Set(la.map(
     const app=a.app||(ref&&(ref.app||(la.includes(ref)?r.id:null)));                  // (the build's list is this app's own)
     if(app!==r.id||mine.some(z=>z.id===a.id)) return; mine.push(Object.assign({},a,{st:'pending'})); });
   return mine.sort((x,y)=>(x.at<y.at?1:-1)).concat(la); }
-function lvSetHtml(F,f){ const t=ptr().t, s=LVSET, n=nD(s.a,s.b), okN=n>=7&&n<=120&&s.a<=s.b;
-  let pv='';
-  if(s.mode==='val'){ pv=`Typed value · ${E(UNITW[f])} · named din nahi, isliye ✓ check nahi hoga`; }
+// the typed CPI is always saved in ₹ (as billed): in the $ view the typed $ is converted at the view's rate (lvK of the data day) first
+const lvUsd=f=>f==='CPI'&&!VIN(), lvUnit=f=>lvUsd(f)?'$ per install':UNITW[f], lvDis=()=>LVBUSY?' disabled':'';
+function lvSetHtml(F,f){ const t=ptr().t, s=LVSET, n=nD(s.a,s.b), okN=n>=7&&n<=120&&s.a<=s.b, usd=lvUsd(f), kk=usd?lvK(F,t):null;
+  let pv='', can=false;
+  if(s.mode==='val'){ can=!usd||kk>0; pv=`Typed value · ${E(lvUnit(f))} · named din nahi, isliye ✓ check nahi hoga`
+      +(!usd?'':kk>0?`<br>$ view: aapki $ value save par ₹ me badal di jaati hai (1 $ = ₹${E((1/kk).toFixed(2))}, ${E(fd(addD(t,-13)))} – ${E(fdy(t))} ka rate) — level ₹ per install (as billed) me hi rakha jaata hai.`
+        :'<br><span class="cpx-wat">$ view: $ se ₹ ka rate nahi mila (in dino spend nahi) — ₹ view me value daalo.</span>'); }
   else if(!okN) pv='<span class="cpx-wat">7 se 120 din chuno</span>';
   else{ const w=fsum(F.d,F.day0,LVK[f],s.a,s.b), v=w.n===n?lvOf(f,w,n):null, row={v,sums:w,from:s.b,days:[s.a,s.b]};
-    pv=ok(v)?`Level <b>${E(lvFmt(f,lvV(F,f,row)))}</b> = ${E(lvMeas(f,row))} <span class="cpx-good">✓</span>`:'<span class="cpx-wat">In dino ka data poora nahi — doosre din chuno</span>'; }
+    can=ok(v)&&v>0;                                                          // Save only for a level the build will take (data for every day, worth more than 0)
+    pv=can?`Level <b>${E(lvFmt(f,lvV(F,f,row)))}</b> = ${E(lvMeas(f,row))} <span class="cpx-good">✓</span>`
+      :ok(v)?'<span class="cpx-wat">Is level ki value 0 hai — 0 level nahi ban sakta, doosre din chuno</span>':'<span class="cpx-wat">In dino ka data poora nahi — doosre din chuno</span>'; }
   return `<div class="cpx-lvx" id="cpx-lvx"><div class="cpx-lvxr"><label><input type="radio" name="cpx-lvm" data-cpx-lvmode="days"${s.mode!=='val'?' checked':''}> Days se</label><label><input type="radio" name="cpx-lvm" data-cpx-lvmode="val"${s.mode==='val'?' checked':''}> Type a value</label></div>`
-    +(s.mode==='val'?`<div class="cpx-lvxr"><label>Value <input type="number" step="any" min="0" data-cpx-lvval="1" value="${E(s.val||'')}" aria-label="Value"></label><span class="cpx-nv">${E(UNITW[f])}</span></div>`
+    +(s.mode==='val'?`<div class="cpx-lvxr"><label>Value <input type="number" step="any" min="0" data-cpx-lvval="1" value="${E(s.val||'')}" aria-label="Value"></label><span class="cpx-nv">${E(lvUnit(f))}</span></div>`
       :`<div class="cpx-lvxr"><label>From <input type="date" data-cpx-lva="1" value="${s.a}" min="${F.day0}" max="${t}" aria-label="From"></label><label>To <input type="date" data-cpx-lvb2="1" value="${s.b}" min="${F.day0}" max="${t}" aria-label="To"></label></div>`)
     +`<div class="cpx-lvxr"><label class="cpx-lvnl">Note <input type="text" maxlength="200" data-cpx-lvnote="1" value="${E(s.note||'')}" aria-label="Note"></label></div>`
     +`<p class="cpx-fn">${pv}</p><p class="cpx-fn">Ye level ${E(fdy(t))} (data day) se lagega — purane alarms waise hi rahenge.</p>`
-    +`<div class="cpx-lvxr"><button type="button" class="cpx-lvb cpx-lvgo" data-cpx-lvsave="1"${s.mode!=='val'&&!okN?' disabled':''}>💾 Save</button><button type="button" class="cpx-lvb" data-cpx-lvcancel="1">Cancel</button></div></div>`; }
+    +`<div class="cpx-lvxr"><button type="button" class="cpx-lvb cpx-lvgo" data-cpx-lvsave="1"${can&&!LVBUSY?'':' disabled'}>💾 Save</button><button type="button" class="cpx-lvb" data-cpx-lvcancel="1"${lvDis()}>Cancel</button></div></div>`; }
+// the owner's actions on this app (what the build did with them: F.la; the saved ones it has not read yet: the pending queue) with Undo
+function lvActionsHtml(r,F,act){ const A=lvActs(r,F), ref=id=>A.find(a=>a.id===id)||{};
+  return A.length?`<h4 class="cpx-h4">Owner actions</h4><div class="cpx-x" id="cpx-lvax"><table class="cpx-t"><thead><tr><th>Saved</th><th>Action</th><th>Family</th><th>Status</th>${act?'<th></th>':''}</tr></thead><tbody>${A.map(a=>{ const u=a.act==='undo'?ref(a.ref):a;
+      const st=a.st==='pending'?`<span class="cpx-wat">⏳ Saved ${E(istAt(a.at))} — agle update me lagega (1–1½ ghante)</span>`:`<span class="${a.st==='bad'?'cpx-wat':a.st==='applied'?'cpx-good':'cpx-nv'}">${E(LAW[a.st]||a.st||'—')}${a.why?' · '+E(a.why):''}</span>`;
+      const dn=a.act!=='undo'&&a.st!=='undone'&&!A.some(z=>z.act==='undo'&&z.ref===a.id);
+      return `<tr><td>${E(istAt(a.at))}</td><td>${E(ACTW[a.act]||a.act)}${a.act==='undo'&&u.act?' · '+E(ACTW[u.act]||u.act):''}${a.note?`<small>${E(a.note)}</small>`:''}</td><td>${E(FAMW[u.fam]||u.fam||'—')}</td><td>${st}</td>${act?`<td>${dn?`<button type="button" class="cpx-lvb" data-cpx-lvundo="${E(a.id)}"${lvDis()}>Undo</button>`:''}</td>`:''}</tr>`; }).join('')}</tbody></table></div>`:''; }
 function levelsHtml(r,F){ const LV=F.lv&&typeof F.lv==='object'?F.lv:null;
-  if(!LV) return '<h4 class="cpx-h4">Levels</h4><p class="cpx-note">Is build me level history nahi bani — agle update me aayegi.</p>';
-  lvLoad();
+  lvLoad();                                                                  // (also without a history block: the admin state decides the Undo buttons)
+  if(!LV) return '<div class="cpx-lvs" id="cpx-lvs"><h4 class="cpx-h4">Levels</h4><p class="cpx-note">Is build me level history nahi bani — agle update me aayegi.</p>'+lvActionsHtml(r,F,canAct())+'</div>';
   const LP=Array.isArray(F.lp)?F.lp:[], fams=LVMAIN.concat(LVREST).filter(f=>(Array.isArray(LV[f])&&LV[f].length)||LP.some(p=>p&&p.fam===f));
-  if(!fams.length) return '<h4 class="cpx-h4">Levels</h4><p class="cpx-note">Is app ka abhi tak koi level nahi bana (kaafi din ka data chahiye).</p>';
+  if(!fams.length) return '<div class="cpx-lvs" id="cpx-lvs"><h4 class="cpx-h4">Levels</h4><p class="cpx-note">Is app ka abhi tak koi level nahi bana (kaafi din ka data chahiye).</p>'+lvActionsHtml(r,F,canAct())+'</div>';
   const f=fams.includes(LVF)?LVF:fams[0], rows=Array.isArray(LV[f])?LV[f]:[], act=canAct();
   const btn=(k,l)=>`<button type="button" class="cpx-lvf" data-cpx-lvf="${k}" aria-pressed="${f===k}">${E(l)}</button>`;
   const sw=fams.filter(k=>LVMAIN.includes(k)).map(k=>btn(k,FAMW[k]||k)).join('')
@@ -8892,28 +8906,24 @@ function levelsHtml(r,F){ const LV=F.lv&&typeof F.lv==='object'?F.lv:null;
   const prop=lp.map((p,i)=>{ const g=p.gap&&ok(+p.gap.inr)?` · gap vs old level ≈${fM(+p.gap.inr,+p.gap.usd)} since ${E(fd(p.day))}`:'';
     const pv=lvV(F,f,{v:p.v,sums:p.sums,from:p.days&&p.days[1]});
     return `<p class="cpx-vm cpx-lvp">🆕 New level ready: <b>${E(lvFmt(f,pv))}</b> (${E(PROPW[p.why]||p.why||'')}) · ${E(lvMeas(f,{v:p.v,sums:p.sums,days:p.days}))} · old ${E(lvFmt(f,lvV(F,f,{v:p.old,from:p.opened})))}${g}`
-      +(act?` <button type="button" class="cpx-lvb cpx-lvgo" data-cpx-lvact="accept" data-cpx-lvp="${i}">✅ Accept</button>`:'')+'</p>'; }).join('');
+      +(act?` <button type="button" class="cpx-lvb cpx-lvgo" data-cpx-lvact="accept" data-cpx-lvp="${i}"${lvDis()}>✅ Accept</button>`:'')+'</p>'; }).join('');
   const body=rows.map(x=>{ const c=lvCheck(F,f,x), s=STW[x.st]||STW.earlier, how=HOWW[x.src]||x.src;
     const ex=x.src==='accepted'&&x.ep&&ok(+x.ep.old)?` <small>old ${E(lvFmt(f,lvV(F,f,{v:x.ep.old,from:x.ep.opened})))} · alarm ${E(fd(x.ep.opened))}</small>`:x.src==='alarm'&&x.ep?` <small>${E(OPW[x.ep.opener]||'')} · ${x.ep.why?E(WHYW[x.ep.why]||x.ep.why):'open'}</small>`:'';
     const rs=x.rs&&ok(+x.rs.v_old)?`<small>value corrected after Google / AdMob restated data (was ${E(lvFmt(f,lvV(F,f,{v:x.rs.v_old,sums:null,from:x.from})))})</small>`:'';
     const ck=c.k==='ok'?`<span class="cpx-lvc" title="Day-wise ke in ${c.n} din ka jod = ye level">✓</span>`:c.k==='bad'?'<span class="cpx-wat" title="Day-wise ka jod is level se nahi milta">⚠</span>':c.k==='typed'?'<span class="cpx-nv">typed</span>':'<span class="cpx-nv">—</span>';
-    const b=[]; if(act){ if(x.st!=='now'&&x.st!=='rest') b.push(`<button type="button" class="cpx-lvb" data-cpx-lvact="rollback" data-cpx-lvid="${E(x.id)}">↩ Use this level</button>`);
-      if(x.src==='accepted'&&x.st!=='rejected') b.push(`<button type="button" class="cpx-lvb" data-cpx-lvact="reject" data-cpx-lvid="${E(x.id)}">✖ Reject</button>`); }
+    const b=[]; if(act){ if(x.st!=='now'&&x.st!=='rest') b.push(`<button type="button" class="cpx-lvb" data-cpx-lvact="rollback" data-cpx-lvid="${E(x.id)}"${lvDis()}>↩ Use this level</button>`);
+      if(x.src==='accepted'&&x.st!=='rejected') b.push(`<button type="button" class="cpx-lvb" data-cpx-lvact="reject" data-cpx-lvid="${E(x.id)}"${lvDis()}>✖ Reject</button>`); }
     return `<tr data-cpx-lvrow="${E(x.id)}"${x.st==='gone'||x.st==='rejected'?' class="cpx-rest"':''}><td><b>${E(lvFmt(f,lvV(F,f,x)))}</b></td><td>${E(fdy(x.from))}</td><td>${x.to?E(fdy(x.to)):x.st==='now'||x.st==='rest'?'now':'—'}</td>`
       +`<td class="cpx-lvw">${E(lvMeas(f,x))}${rs}</td><td>${E(how)}${ex}</td><td><span class="${s[1]}">${s[0]}</span></td><td>${ck}</td>${act?`<td>${b.join(' ')}</td>`:''}</tr>`; }).join('');
-  const A=lvActs(r,F), ref=id=>A.find(a=>a.id===id)||{};
-  const al=A.length?`<h4 class="cpx-h4">Owner actions</h4><div class="cpx-x" id="cpx-lvax"><table class="cpx-t"><thead><tr><th>Saved</th><th>Action</th><th>Family</th><th>Status</th>${act?'<th></th>':''}</tr></thead><tbody>${A.map(a=>{ const u=a.act==='undo'?ref(a.ref):a;
-      const st=a.st==='pending'?`<span class="cpx-wat">⏳ Saved ${E(istAt(a.at))} — agle update me lagega (1–1½ ghante)</span>`:`<span class="${a.st==='bad'?'cpx-wat':a.st==='applied'?'cpx-good':'cpx-nv'}">${E(LAW[a.st]||a.st||'—')}${a.why?' · '+E(a.why):''}</span>`;
-      const dn=a.act!=='undo'&&a.st!=='undone'&&!A.some(z=>z.act==='undo'&&z.ref===a.id);
-      return `<tr><td>${E(istAt(a.at))}</td><td>${E(ACTW[a.act]||a.act)}${a.act==='undo'&&u.act?' · '+E(ACTW[u.act]||u.act):''}${a.note?`<small>${E(a.note)}</small>`:''}</td><td>${E(FAMW[u.fam]||u.fam||'—')}</td><td>${st}</td>${act?`<td>${dn?`<button type="button" class="cpx-lvb" data-cpx-lvundo="${E(a.id)}">Undo</button>`:''}</td>`:''}</tr>`; }).join('')}</tbody></table></div>`:'';
-  const tools=act?`<div class="cpx-lvxr">${LVSET&&LVSET.fam===f?'':`<button type="button" class="cpx-lvb" data-cpx-lvset="1">✏️ Set level</button>`}${pins?`<button type="button" class="cpx-lvb" data-cpx-lvact="auto">🔄 Back to auto</button>`:''}</div>`
+  const al=lvActionsHtml(r,F,act);
+  const tools=act?`<div class="cpx-lvxr">${LVSET&&LVSET.fam===f?'':`<button type="button" class="cpx-lvb" data-cpx-lvset="1"${lvDis()}>✏️ Set level</button>`}${pins?`<button type="button" class="cpx-lvb" data-cpx-lvact="auto"${lvDis()}>🔄 Back to auto</button>`:''}</div>`
     :LVQ.st==='busy'?'':`<p class="cpx-fn">${LVQ.st==='ro'?'Sirf admin level badal sakta hai — aapke liye history read-only hai.':'History read-only (level badalne ka server abhi nahi mila).'}</p>`;
   return `<div class="cpx-lvs" id="cpx-lvs"><h4 class="cpx-h4">Levels</h4><div class="cpx-lvfs" role="group" aria-label="Family">${sw}</div>`
     +`<p class="cpx-fn">Level = in dino ka exact average. Day-wise tab me same din jod ke dekh sakte ho (✓ = page ne khud jod ke mila liya).</p>${prop}${tools}`
     +(LVSET&&LVSET.fam===f&&act?lvSetHtml(F,f):'')
     +`<div class="cpx-x" id="cpx-lvtx"><table class="cpx-t"><thead><tr><th>Level</th><th>From</th><th>To</th><th>Measured on</th><th>How</th><th>Status</th><th>Check</th>${act?'<th></th>':''}</tr></thead><tbody>${body}</tbody></table></div>${al}</div>`; }
 // the owner's click → one action (from = the data day shown: D3; a reject applies from the start of its alarm)
-function lvAct(kind,id,pi){ const F=fOf(OPEN); if(!F||!canAct()) return; const f=LVF, t=ptr().t, rows=(F.lv&&F.lv[f])||[], x=rows.find(z=>z.id===id);
+function lvAct(kind,id,pi){ const F=fOf(OPEN); if(LVBUSY||!F||!canAct()) return; const f=LVF, t=ptr().t, rows=(F.lv&&F.lv[f])||[], x=rows.find(z=>z.id===id);
   const cf=m=>{ try{ return typeof confirm!=='function'||confirm(m); }catch(e){ return true; } };
   if(kind==='rollback'&&x){ if(!cf(`${FAMW[f]||f}: level ${lvFmt(f,lvV(F,f,x))} (${fd(x.from)} wala) ${fdy(t)} se lagaye?`)) return; lvSend({act:'rollback',app:OPEN,fam:f,from:t,level:x.id}); return; }
   if(kind==='reject'&&x){ if(!cf(`${FAMW[f]||f}: ${fd(x.from)} ka auto accept reject karein? Alarm apne shuru se khula rahega.`)) return; lvSend({act:'reject',app:OPEN,fam:f,level:x.id}); return; }
@@ -8921,11 +8931,16 @@ function lvAct(kind,id,pi){ const F=fOf(OPEN); if(!F||!canAct()) return; const f
   if(kind==='accept'){ const p=(Array.isArray(F.lp)?F.lp:[]).filter(z=>z&&z.fam===f)[pi]; if(!p||!Array.isArray(p.days)) return;
     if(!cf(`${FAMW[f]||f}: naya level ${lvFmt(f,lvV(F,f,{v:p.v,sums:p.sums,from:p.days[1]}))} ${fdy(t)} se accept karein?`)) return;
     lvSend({act:'accept',app:OPEN,fam:f,from:t,proposal:{day:p.day,days:[p.days[0],p.days[1]]}}); } }
-function lvSave(){ const F=fOf(OPEN), s=LVSET; if(!F||!s||!canAct()) return; const t=ptr().t, f=s.fam;
+function lvSave(){ const F=fOf(OPEN), s=LVSET; if(LVBUSY||!F||!s||!canAct()) return; const t=ptr().t, f=s.fam;
   const q=sel=>{ try{ const b=EL&&EL.querySelector?EL.querySelector(sel):null; return b?String(b.value||''):null; }catch(e){ return null; } };
   const qn=q('[data-cpx-lvnote]'), qv=q('[data-cpx-lvval]'), note=String(qn!=null?qn:s.note||'').trim().slice(0,200), body={act:'set',app:OPEN,fam:f,from:t};
-  if(s.mode==='val'){ let v=parseFloat(qv!=null?qv:s.val); if(/^ROAS/.test(f)) v=v/100; if(!ok(v)||v<=0){ toast('❌ Value 0 se badi number chahiye'); return; } body.value=v; }
-  else{ const n=nD(s.a,s.b); if(!(n>=7&&n<=120)) return; body.days=[s.a,s.b]; }
+  if(s.mode==='val'){ let v=parseFloat(qv!=null?qv:s.val); if(/^ROAS/.test(f)) v=v/100; if(!ok(v)||v<=0){ toast('❌ Value 0 se badi number chahiye'); return; }
+    if(lvUsd(f)){ const k=lvK(F,t); if(!(k>0)){ toast('❌ $ se ₹ ka rate nahi mila — ₹ view me value daalo'); return; }
+      v=Math.round(v/k*1e6)/1e6; if(!(v>0)){ toast('❌ Value 0 se badi number chahiye'); return; } }       // the $ view: the typed $ → ₹ (as billed) at the view's rate
+    body.value=v; }
+  else{ const n=nD(s.a,s.b); if(!(n>=7&&n<=120&&s.a<=s.b&&s.a>=F.day0&&s.b<=t)) return;
+    const w=fsum(F.d,F.day0,LVK[f],s.a,s.b), v=w.n===n?lvOf(f,w,n):null;                                     // the build takes only days it can measure, worth more than 0
+    if(!(ok(v)&&v>0)){ toast('❌ In dino ka data poora nahi / level 0 hai — doosre din chuno'); return; } body.days=[s.a,s.b]; }
   if(note) body.note=note; lvSend(body,'#cpx-lvs'); }
 // ---- 🕘 History: every app episode, newest first ----
 function histHtml(r,F){ const L=eps(F.ep).sort((a,b)=>(a.opened<b.opened?1:a.opened>b.opened?-1:0)), lv=levelsHtml(r,F);
@@ -8983,11 +8998,12 @@ function onClick(e){ const t=e.target; if(!t||!t.closest) return; let b;
   if(t.closest('[data-cpx-allretry]')){ ALLF.err=false; ALLF.v=null; ensureAll(()=>{ if(onScreen()) late(()=>paint()); }); paint(); return; }
   if(t.closest('[data-cpx-roas]')){ try{ window.show('roas'); }catch(err){} return; }   // (the page's show: this module's own is the screen's)
   if((b=t.closest('[data-cpx-lvf]'))){ const k=b.dataset.cpxLvf; keep(`[data-cpx-lvf="${sq(k)}"]`,()=>{ LVF=k; paint(); }); return; }
-  if(t.closest('[data-cpx-lvset]')){ const c=ptr().t; keep('#cpx-lvs',()=>{ LVSET={fam:LVF,mode:'days',a:addD(c,-27),b:c,val:'',note:''}; paint(); }); return; }
+  if(t.closest('[data-cpx-lvset]')){ const c=ptr().t, F0=OPEN!=null?fOf(OPEN):null, a0=addD(c,-27), a=F0&&okD(F0.day0)&&a0<F0.day0?F0.day0:a0;   // (From: never before the file's first day)
+    keep('#cpx-lvs',()=>{ LVSET={fam:LVF,mode:'days',a,b:c,val:'',note:''}; paint(); }); return; }
   if(t.closest('[data-cpx-lvcancel]')){ keep('#cpx-lvs',()=>{ LVSET=null; paint(); }); return; }
   if(t.closest('[data-cpx-lvsave]')){ lvSave(); return; }
   if((b=t.closest('[data-cpx-lvact]'))){ lvAct(b.dataset.cpxLvact,b.dataset.cpxLvid,+b.dataset.cpxLvp||0); return; }
-  if((b=t.closest('[data-cpx-lvundo]'))){ const id=b.dataset.cpxLvundo; let go=true; try{ go=typeof confirm!=='function'||confirm('Ye action undo karein? Agle update me aisa hoga jaise kabhi kiya hi nahi.'); }catch(err){} if(go&&canAct()) lvSend({act:'undo',ref:id}); return; }
+  if((b=t.closest('[data-cpx-lvundo]'))){ if(LVBUSY) return; const id=b.dataset.cpxLvundo; let go=true; try{ go=typeof confirm!=='function'||confirm('Ye action undo karein? Agle update me aisa hoga jaise kabhi kiya hi nahi.'); }catch(err){} if(go&&canAct()) lvSend({act:'undo',ref:id}); return; }
   if(t.closest('.cpx-det')) return;   // (a tap inside the details never folds them)
   if((b=t.closest('[data-cpx-app]'))){ const id=b.dataset.cpxApp; if(APP) return;   // one app: its details stay open
     keep(`[data-cpx-app="${sq(id)}"]`,()=>{ setOpen(OPEN===id?null:id); paint(); }); } }
@@ -8997,7 +9013,7 @@ function onChange(e){ const t=e.target; if(!t||!t.closest) return;
   if(LVSET&&t.closest('[data-cpx-lvval]')){ LVSET.val=String(t.value||''); return; }
   if(LVSET&&t.closest('[data-cpx-lvnote]')){ LVSET.note=String(t.value||''); return; }
   const la=t.closest('[data-cpx-lva]'), lb=t.closest('[data-cpx-lvb2]');
-  if((la||lb)&&LVSET){ const v=String(t.value||''); if(!okD(v)) return; const c=ptr().t, w=v>c?c:v;
+  if((la||lb)&&LVSET){ const v=String(t.value||''); if(!okD(v)) return; const c=ptr().t, F0=OPEN!=null?fOf(OPEN):null, d0=F0&&okD(F0.day0)?F0.day0:null, w=v>c?c:(d0&&v<d0?d0:v);
     keep(la?'[data-cpx-lva]':'[data-cpx-lvb2]',()=>{ if(la) LVSET.a=w; else LVSET.b=w; if(LVSET.a>LVSET.b){ const x=LVSET.a; LVSET.a=LVSET.b; LVSET.b=x; } paint(); }); return; }
   if(t.closest('[data-cpx-sel]')){ const k=String(t.value||''); if(!PERK.has(k)&&!MON_RE.test(k)) return; keep('[data-cpx-sel]',()=>{ PER=k; perSave(); paint(); }); return; }
   if(t.closest('[data-cpx-cty]')){ const v=String(t.value||''), F=OPEN!=null?fOf(OPEN):null;   // (a code the open file has, or '' = All)
@@ -9054,7 +9070,7 @@ function hubVerdict(name){ const p=ptr(); if(!p||!Object.keys(p.apps).some(k=>p.
 return {ptr, render, paint, show:showMe, left, alarmN, alertNote, card, hubVerdict,
   _:{rng, isDef, sums, rows, rowOf, judge, normal, hLvl, lossG, epOf, eps, now3, perRestore, perLoad, keep, cal, fI, fU, fP, series, cSeries, ctyList, ctyOf, dayRows, verdict, moneyLine, tabBody, ALLF, FILES, CHD,
     lvCheck, lvOf, lvV, lvActs, levelsHtml, tipHtml, LVQ:()=>LVQ, PEND:()=>PEND,
-    get:()=>({PER,PF,PTO,OPEN,TAB,DN,CTY,LVF,LVSET}), set:o=>{ if('LVF' in o) LVF=o.LVF; if('LVSET' in o) LVSET=o.LVSET; if('LVQ' in o) LVQ=o.LVQ; if('PEND' in o) PEND=o.PEND; if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o) OPEN=o.OPEN; if('TAB' in o) TAB=o.TAB; if('DN' in o) DN=o.DN; if('PREAD' in o) PREAD=o.PREAD; if('CTY' in o) CTY=o.CTY; }}};
+    get:()=>({PER,PF,PTO,OPEN,TAB,DN,CTY,LVF,LVSET,LVBUSY}), set:o=>{ if('LVBUSY' in o) LVBUSY=!!o.LVBUSY; if('LVF' in o) LVF=o.LVF; if('LVSET' in o) LVSET=o.LVSET; if('LVQ' in o) LVQ=o.LVQ; if('PEND' in o) PEND=o.PEND; if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o) OPEN=o.OPEN; if('TAB' in o) TAB=o.TAB; if('DN' in o) DN=o.DN; if('PREAD' in o) PREAD=o.PREAD; if('CTY' in o) CTY=o.CTY; }}};
 })();
 function renderCpx(){ return CPX.render(); }
 // ---- 📈 ROI — a section of the 💸 Install value tab (owner, 13 Oct: "every date wise uska incremental day wise revenue from

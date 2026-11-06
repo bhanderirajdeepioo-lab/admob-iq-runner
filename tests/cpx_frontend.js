@@ -362,6 +362,70 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
       const BTN = { getBoundingClientRect: () => ({ top: n++ === 0 ? 400 : 520 }) }; SCREEN.querySelector = s => s === '[data-cpx-lvf="ECPM"]' ? BTN : null;
       clickD('[data-cpx-lvf]', { cpxLvf: 'ECPM' }); out.lv.keep[w] = { dy: SCROLL.slice(), f: _.get().LVF }; SCREEN.querySelector = () => null; }
     ctx.window.innerWidth = 1280;
+    // ── review fixes (the Levels block): Save only for a level the build takes · From never before the file's first day · one save at a
+    // time · the $ view's typed CPI goes out in ₹ · the owner's actions and Undo stay when the build shipped no history ──
+    const FXM = require(path.join(__dirname, 'cpx_fixture.js')), r2 = v => Math.round(v * 100) / 100;
+    const saveTag = h => (h.match(/<button[^>]*data-cpx-lvsave="1"[^>]*>/) || [''])[0], lvb = h => [...h.matchAll(/<button[^>]*class="cpx-lvb[^"]*"[^>]*>/g)].map(m => m[0]);
+    const setDays = (fam, a, b2) => ({ LVF: fam, LVSET: { fam, mode: 'days', a, b: b2, val: '', note: '' } }), setVal = (fam, val) => ({ LVF: fam, LVSET: { fam, mode: 'val', a: addD(T, -27), b: T, val, note: '' } });
+    ANS = (u, o, b) => o && o.method === 'POST' ? { status: 200, j: { ok: true, action: ACTION(b), actions: [] } } : { status: 200, j: { actions: [], me: 'x', admin: true, server_save: true } };
+    out.lvfix = { save: {} };
+    let hx = await lvTab(setDays('CPI', '2026-03-10', T));                                         // data for every day, worth more than 0: Save on
+    out.lvfix.save.ok = !/disabled/.test(saveTag(hx));
+    hx = await lvTab(setDays('CPI', '2025-09-01', '2025-10-14'));                                  // 30 of its 44 days are before the file's first day
+    out.lvfix.save.nodata = { disabled: /disabled/.test(saveTag(hx)), text: strip(hx).includes('In dino ka data poora nahi') };
+    const i0 = FXM.nD(FA.day0, '2025-11-01') - 1, rev0 = FA.d.rev.slice(); for (let i = i0; i < i0 + 14; i++) FA.d.rev[i] = 0;   // no revenue on 1–14 Nov: eCPM exactly 0
+    hx = await lvTab(setDays('ECPM', '2025-11-01', '2025-11-14'));
+    out.lvfix.save.zero = { disabled: /disabled/.test(saveTag(hx)), text: strip(hx).includes('Is level ki value 0 hai'), shown: /Level <b>/.test(hx) };
+    const nz = POSTS.length; clickD('[data-cpx-lvsave]'); await tick(); await tick(); out.lvfix.save.zero_posts = POSTS.length - nz;   // (a stray tap sends nothing)
+    FA.d.rev = rev0;
+    hx = await lvTab(setDays('CPI', '2026-03-10', T));                                             // a date before the file's first day is moved to it
+    SCREEN._on.change[0]({ target: { value: '2025-09-01', closest: s => s === '[data-cpx-lva]' ? {} : null } });
+    out.lvfix.from_clamp = [_.get().LVSET.a, FA.day0, _.get().LVSET.b];
+    const d00 = FA.day0; FA.day0 = addD(T, -9); await lvTab(); clickD('[data-cpx-lvset]'); out.lvfix.from_default = [_.get().LVSET.a, FA.day0, _.get().LVSET.b]; FA.day0 = d00;   // a young file: the default From is its first day
+    await lvTab(); clickD('[data-cpx-lvset]'); out.lvfix.from_default_old = _.get().LVSET.a;                                                                              // an old file: the last 28 days as before
+    // one save at a time: a double tap commits once, the owner buttons are disabled while it is in flight and enabled after
+    const BT = [{ disabled: false }, { disabled: false }];
+    await lvTab(); SCREEN.querySelectorAll = s => s === 'button.cpx-lvb' ? BT : []; const n1 = POSTS.length;
+    clickD('[data-cpx-lvact]', { cpxLvact: 'auto' }); const mid = BT.map(b => b.disabled), busy = _.get().LVBUSY;
+    clickD('[data-cpx-lvact]', { cpxLvact: 'auto' }); clickD('[data-cpx-lvundo]', { cpxLvundo: 'a-0000000000c1' });    // the second tap · another button
+    await tick(); await tick();
+    out.lvfix.dbl = { posts: POSTS.length - n1, mid, busy, after: BT.map(b => b.disabled), idle: _.get().LVBUSY };
+    SCREEN.querySelectorAll = () => [];
+    await lvTab(setDays('CPI', '2026-03-10', T)); const hb0 = lvb(det2(SCREEN.innerHTML));         // a repaint during the flight keeps them disabled
+    _.set({ LVBUSY: true }); CPX.paint(); const hb1 = lvb(det2(SCREEN.innerHTML)); _.set({ LVBUSY: false });
+    out.lvfix.lock_paint = { n: hb1.length, off: hb0.filter(x => /disabled/.test(x)).length, on: hb1.filter(x => /disabled/.test(x)).length };
+    const nf = POSTS.length; clickD('[data-cpx-lvsave]'); clickD('[data-cpx-lvsave]'); await tick(); await tick();   // the form's Save: a double tap, one commit
+    out.lvfix.save_dbl = POSTS.length - nf;
+    // the $ view: a typed CPI is in $ — sent in ₹ at the view's rate (Σ$ ÷ Σ₹ of the 14 days ending the data day), and the form says so
+    // (the last 14 days' $ cost is raised 10 % in this file so that the 14-day rate differs from the page's one flat rate)
+    const su0 = FA.d.sp_usd.slice(); for (let i = FA.d.sp_usd.length - 14; i < FA.d.sp_usd.length; i++) FA.d.sp_usd[i] = r2(FA.d.sp_usd[i] * 1.1);
+    CURV = 'USD'; const kD = FXM.days(addD(T, -13), T).reduce((q, x) => q + r2(r2(50000 * FX.fxd(x)) * 1.1), 0) / (14 * 50000);
+    hx = await lvTab(setVal('CPI', ''));
+    out.lvfix.usd = { text: strip(hx), save_off: /disabled/.test(saveTag(hx)), k: kD };
+    const nu = POSTS.length; _.set(setVal('CPI', '0.38')); clickD('[data-cpx-lvsave]'); await tick(); await tick();
+    out.lvfix.usd.body = POSTS.slice(nu).map(p => p.b);
+    const si0 = FA.d.sp_inr.slice(); for (let i = FA.d.sp_inr.length - 14; i < FA.d.sp_inr.length; i++) FA.d.sp_inr[i] = 0;   // no spend in those 14 days: no rate
+    hx = await lvTab(setVal('CPI', '0.38'));
+    out.lvfix.usd_norate = { text: strip(hx).includes('rate nahi mila'), save_off: /disabled/.test(saveTag(hx)) };
+    const nn = POSTS.length; TOASTS.length = 0; clickD('[data-cpx-lvsave]'); await tick(); await tick(); out.lvfix.usd_norate.posts = POSTS.length - nn; out.lvfix.usd_norate.toast = TOASTS.slice();
+    FA.d.sp_inr = si0; FA.d.sp_usd = su0;
+    hx = await lvTab(setVal('ECPM', ''));                                                          // eCPM is $ per 1000 in both views: no conversion note
+    out.lvfix.usd_ecpm = { unit: strip(hx).includes('$ per 1000 impressions'), note: strip(hx).includes('₹ me badal') };
+    CURV = 'INR'; hx = await lvTab(setVal('CPI', ''));                                             // the ₹ view: ₹ per install, nothing converted
+    out.lvfix.inr = { unit: strip(hx).includes('₹ per install'), note: strip(hx).includes('₹ me badal'), save_off: /disabled/.test(saveTag(hx)) };
+    // the owner's actions and Undo without a history block (the build shipped none: its history file / step failed)
+    const lv0 = FA.lv, la0x = FA.la; delete FA.lv;
+    hx = await lvTab();
+    out.lvfix.nolv = { note: strip(hx).includes('Is build me level history nahi bani'), actions: strip(hx).includes('Owner actions'),
+      undo: [...hx.matchAll(/data-cpx-lvundo="([^"]+)"/g)].map(m => m[1]), switches: (hx.match(/data-cpx-lvf=/g) || []).length, set: hx.includes('data-cpx-lvset') };
+    hx = await lvTab({ LVQ: { st: 'ro', admin: false, save: false, acts: [] } });
+    out.lvfix.nolv_ro = { actions: strip(hx).includes('Owner actions'), undo: (hx.match(/data-cpx-lvundo=/g) || []).length };
+    delete FA.la;                                                                                  // … nor the actions (the whole step skipped): the saved ones show as pending
+    const q = [{ id: 'a-0000000000d1', at: '2026-03-29T10:12:00Z', act: 'set', app: ID.a, fam: 'CPI', from: T, value: 19.5 }];
+    hx = await lvTab({ LVQ: { st: 'ok', admin: true, save: true, acts: q } });
+    out.lvfix.nolv_pending = { pending: (strip(hx).match(/⏳ Saved/g) || []).length, undo: [...hx.matchAll(/data-cpx-lvundo="([^"]+)"/g)].map(m => m[1]) };
+    const nq = POSTS.length; clickD('[data-cpx-lvundo]', { cpxLvundo: 'a-0000000000d1' }); await tick(); await tick(); out.lvfix.nolv_pending.undo_post = POSTS.slice(nq).map(p => p.b);
+    const p1 = _.PEND().length; FA.lv = lv0; FA.la = la0x; out.lvfix.nolv_pending.pend = p1;
     // the chart: a marker + printed label per level change inside the days; the proposal hollow; the tooltip names the level
     await lvTab({ TAB: 'ch', PER: 'all' }); const chH = SCREEN.innerHTML;
     out.lv.chart = { marks: (chH.match(/class="cpx-lvm"/g) || []).length, labels: [...chH.matchAll(/class="cpx-lvn"[^>]*>([^<]+)</g)].map(m => m[1]), hollow: (chH.match(/class="cpx-lvo"/g) || []).length };

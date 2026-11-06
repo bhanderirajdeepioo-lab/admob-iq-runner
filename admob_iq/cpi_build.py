@@ -37,6 +37,9 @@ engine.cpi_alarm (P_PROD) to the data day t, nothing trimmed:
   automatic rule only); the history is data/cpi/levels.json (this build's ledger: ids and first-seen kept across builds,
   restated values recorded, a level no longer produced kept as gone). A failure there prints "cpi levels skipped:
   <ErrorType>" and costs the levels only; a bad action prints "cpi level action skipped: <Reason>" and costs itself.
+  One app whose history cannot be merged costs that app only; a level worth 0 is never shipped or pinned (ZeroLevel); a
+  history row that cannot be read is dropped and counted (BadRow); a history FILE that cannot be read is kept as it
+  is and ships no "lv" — the owner's set / accept / auto / undo still apply (rollback / reject: NoLedger).
 
 run(dashboard, data_dir, out_dir, s) → the _headers no-store paths (["/cpi*"], ONE splat rule) or [] (no Google Ads
 data: the files removed, no pointer). off(out_dir): the switch (CPI_TAB=false). Failure-isolated; ONE counts-only line.
@@ -89,6 +92,7 @@ LV_FILE = "levels.json"   # data/cpi/levels.json: the level history (this build 
 LV_V = 1
 LV_RULE = "L1"
 LV_LOG_MAX = 5000
+RESTATED_MAX = 10         # a level row keeps its last 10 restated values (the log has its own cap)
 ACT_FILE = "cpi_levels.json"   # config/cpi_levels.json: the owner's level actions (the Worker writes it)
 ACT_RE = re.compile(r"^a-[0-9a-f]{12}$")
 LEVEL_RE = re.compile(r"^L-[0-9a-f]{10}$")
@@ -1089,7 +1093,11 @@ def _app_file(a, D, lo, res, camps, ctys, eps_by, extra, t):
             "ep": [_ep_full(ep) for ep in eps_by.get(key, [])], "notes": notes}
     lvl = extra.get("lv")
     if lvl is not None:                                  # the levels part ran (else: the automatic file as before)
-        body["lv"] = ship_levels(lvl["ledger"], aid)
+        if lvl["ledger"] is not None:                    # (None: the history file could not be read: none shipped)
+            try:
+                body["lv"] = ship_levels(lvl["ledger"], aid)
+            except Exception as e:                       # a row nobody foresaw costs this app's history block only
+                print("cpi levels skipped: %s" % type(e).__name__, file=sys.stderr)
         body["lp"] = lvl["props"].get(aid, [])
         body["la"] = lvl["la"].get(aid, [])
     return body
@@ -1235,11 +1243,27 @@ def load_actions(data_dir):
     return [a for a in raw["actions"] if isinstance(a, dict)]
 
 
+def _new_ledger():
+    return {"v": LV_V, "rule": LV_RULE, "apps": {}, "proposals": {}, "log": []}
+
+
+def _real(x):
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and x == x and abs(x) != float("inf")
+
+
+def _row_ok(r):
+    """A saved level row this build can read: an object with the four keys later steps index (id, src, from, v)."""
+    return (isinstance(r, dict) and isinstance(r.get("id"), str) and bool(r["id"]) and isinstance(r.get("src"), str)
+            and _is_day(r.get("from")) and _real(r.get("v")))
+
+
 def load_ledger(data_dir):
     """data/cpi/levels.json → the level history (a fresh one when there is none). A damaged file raises: it is never
-    overwritten by a build that could not read it."""
+    overwritten by a build that could not read it. A row that cannot be read (not an object, or missing its id, src,
+    from or v) is dropped and counted — one "cpi levels skipped: BadRow (<n> dropped)" line — so one bad row costs
+    itself, never the tab."""
     path = levels_path(data_dir)
-    led = {"v": LV_V, "rule": LV_RULE, "apps": {}, "proposals": {}, "log": []}
+    led = _new_ledger()
     if not os.path.exists(path):
         return led
     with open(path, encoding="utf-8") as f:
@@ -1247,6 +1271,27 @@ def load_ledger(data_dir):
     if not isinstance(raw, dict) or raw.get("v") != LV_V or not isinstance(raw.get("apps"), dict):
         raise ValueError("levels")
     led.update({k: raw[k] for k in ("apps", "proposals", "log", "rule") if k in raw})
+    apps, bad = {}, 0
+    for aid, fams in led["apps"].items():
+        if not isinstance(fams, dict):
+            bad += 1
+            continue
+        keep = {}
+        for fam, lst in fams.items():
+            if not isinstance(lst, list):
+                bad += 1
+                continue
+            rows = [r for r in lst if _row_ok(r)]
+            bad += len(lst) - len(rows)
+            if rows:
+                keep[fam] = rows
+        apps[aid] = keep
+    led["apps"] = apps
+    for k, kind in (("proposals", dict), ("log", list)):
+        if not isinstance(led[k], kind):
+            led[k] = kind()
+    if bad:
+        print("cpi levels skipped: BadRow (%d dropped)" % bad, file=sys.stderr)
     return led
 
 
@@ -1298,23 +1343,31 @@ def resolve_actions(acts, ents, led, ts):
     """The owner's actions → (owner primitives for the engine {(app id, fam): [...]}, {app id: [action as listed on the
     page, with "st" applied / waiting / undone / bad and "why"]}, {level id: the reject's at}, the newest action's at).
     Undone actions are dropped; every other action is checked again here (the Worker checked it once) and one that
-    cannot apply is listed bad — the rest still apply. ents: {app id: engine entity}."""
-    rows = {}
-    for aid, fams in (led.get("apps") or {}).items():
-        for fam, lst in (fams or {}).items():
-            for r in lst or []:
-                rows[r.get("id")] = (aid, fam, r)
+    cannot apply is listed bad — the rest still apply (a hand-edited one with a list / object where a text belongs is
+    bad like any other). ents: {app id: engine entity}. led: the saved history, or None when it could not be read — a
+    rollback / reject names a saved level, so those two are bad (NoLedger); every other action needs no history."""
+    rows = None
+    if led is not None:
+        rows = {}
+        for aid, fams in (led.get("apps") or {}).items():
+            for fam, lst in (fams or {}).items():
+                for r in lst or []:
+                    if isinstance(r, dict):
+                        rows[r.get("id")] = (aid, fam, r)
     by_id = {a["id"]: a for a in acts if isinstance(a.get("id"), str) and ACT_RE.match(a["id"])}
-    undone = {a.get("ref") for a in acts if a.get("act") == "undo" and a.get("ref") in by_id
-              and by_id[a["ref"]].get("act") != "undo"}
+    undone = {a["ref"] for a in acts if a.get("act") == "undo" and isinstance(a.get("ref"), str)
+              and a["ref"] in by_id and by_id[a["ref"]].get("act") != "undo"}
     owner, la, rej = {}, {}, {}
     seen = None
     for a in sorted(acts, key=lambda x: (str(x.get("at")), str(x.get("id")))):
         if isinstance(a.get("at"), str) and (seen is None or a["at"] > seen):
             seen = a["at"]
-        why, prim = _resolve_one(a, ents, rows, by_id, undone, ts)
+        try:
+            why, prim = _resolve_one(a, ents, rows, by_id, undone, ts)
+        except Exception:                                # an action nobody foresaw costs only itself
+            why, prim = "BadAction", None
         app = a.get("app")
-        if a.get("act") == "undo" and a.get("ref") in by_id:
+        if a.get("act") == "undo" and isinstance(a.get("ref"), str) and a["ref"] in by_id:
             app = by_id[a["ref"]].get("app")
         item = {k: a[k] for k in ("id", "at", "act", "fam", "from", "days", "value", "level", "ref", "note")
                 if a.get(k) is not None}
@@ -1323,10 +1376,10 @@ def resolve_actions(acts, ents, led, ts):
         if why:
             item.update(st="bad", why=why)
             print("cpi level action skipped: %s" % why, file=sys.stderr)
-        elif a.get("id") in undone:
+        elif isinstance(a.get("id"), str) and a["id"] in undone:
             item["st"] = "undone"
         else:
-            item["st"] = "waiting" if (a.get("from") and a["from"] > ts) else "applied"
+            item["st"] = "waiting" if (_is_day(a.get("from")) and a["from"] > ts) else "applied"
             if prim is not None:
                 owner.setdefault((app, a["fam"]), []).append(prim)
                 if prim["act"] == "veto":
@@ -1339,20 +1392,24 @@ def resolve_actions(acts, ents, led, ts):
 
 
 def _resolve_one(a, ents, rows, by_id, undone, ts):
-    """One action → (the reason it cannot apply or None, the engine primitive or None)."""
+    """One action → (the reason it cannot apply or None, the engine primitive or None). rows: the saved levels by id
+    {id: (app id, fam, row)}, or None when the history could not be read (rollback / reject: NoLedger). A level worth
+    0 or less is never pinned (ZeroLevel): it has no ratio to compare an alarm with."""
     act = a.get("act")
     if not (isinstance(a.get("id"), str) and ACT_RE.match(a["id"]) and isinstance(a.get("at"), str) and act in ACTS):
         return "BadAction", None
     if act == "undo":
-        ok = a.get("ref") in by_id and by_id[a["ref"]].get("act") != "undo"
+        ref = a.get("ref")
+        ok = isinstance(ref, str) and ref in by_id and by_id[ref].get("act") != "undo"
         return (None if ok else "UnknownRef"), None
     if a["id"] in undone:
         return None, None
-    ent = ents.get(a.get("app"))
+    app = a.get("app")
+    ent = ents.get(app) if isinstance(app, str) else None
     if ent is None:
         return "UnknownApp", None
     fam = a.get("fam")
-    if fam not in CA.FAMS_BY_KIND["app"]:
+    if not isinstance(fam, str) or fam not in CA.FAMS_BY_KIND["app"]:
         return "UnknownFam", None
     if act != "reject" and not _is_day(a.get("from")):
         return "BadDate", None
@@ -1365,6 +1422,8 @@ def _resolve_one(a, ents, rows, by_id, undone, ts):
             m = _measured(ent, fam, a["days"])
             if m is None:
                 return "ThinDays", None
+            if not m["v"] > 0:
+                return "ZeroLevel", None
             return None, {"act": "pin", "day": a["from"], "value": m["v"], "src": PIN_SRC[act], "days": m["days"],
                           "id": a["id"]}
         v = a.get("value")
@@ -1373,20 +1432,28 @@ def _resolve_one(a, ents, rows, by_id, undone, ts):
         return None, {"act": "pin", "day": a["from"], "value": float(v), "src": PIN_SRC[act], "days": None,
                       "id": a["id"]}
     if act in ("rollback", "reject"):
-        hit = rows.get(a.get("level")) if isinstance(a.get("level"), str) and LEVEL_RE.match(a["level"]) else None
-        if hit is None or hit[0] != a["app"] or hit[1] != fam:
+        if rows is None:                                 # the history file could not be read: no saved level to name
+            return "NoLedger", None
+        lid = a.get("level")
+        hit = rows.get(lid) if isinstance(lid, str) and LEVEL_RE.match(lid) else None
+        if hit is None or hit[0] != app or hit[1] != fam:
             return "UnknownLevel", None
         r = hit[2]
         if act == "reject":
-            if r.get("src") != "accepted" or not (r.get("ep") or {}).get("opened"):
+            ep = r.get("ep") if isinstance(r.get("ep"), dict) else {}
+            if r.get("src") != "accepted" or not ep.get("opened"):
                 return "NotAccepted", None
-            return None, {"act": "veto", "ep_open": r["ep"]["opened"]}
+            return None, {"act": "veto", "ep_open": ep["opened"]}
         if r.get("days"):
             m = _measured(ent, fam, r["days"])
             if m is None:
                 return "ThinDays", None
+            if not m["v"] > 0:
+                return "ZeroLevel", None
             return None, {"act": "pin", "day": a["from"], "value": m["v"], "src": PIN_SRC[act], "days": m["days"],
                           "id": a["id"]}
+        if not (_real(r.get("v")) and r["v"] > 0):
+            return "ZeroLevel", None
         return None, {"act": "pin", "day": a["from"], "value": float(r["v"]), "src": PIN_SRC[act], "days": None,
                       "id": a["id"]}
     p = a.get("proposal") if isinstance(a.get("proposal"), dict) else {}
@@ -1397,17 +1464,23 @@ def _resolve_one(a, ents, rows, by_id, undone, ts):
     m = _measured(ent, fam, days)
     if m is None:
         return "ThinDays", None
+    if not m["v"] > 0:
+        return "ZeroLevel", None
     return None, {"act": "pin", "day": a["from"], "value": m["v"], "src": PIN_SRC[act], "days": m["days"], "id": a["id"]}
 
 
 def _exact(ent, fam, row):
     """The row's value from its named days → (the measured sums, n) — LevelMismatch when the replay's value, the
-    measure and the ratio of the plain sums disagree."""
+    measure and the ratio of the plain sums disagree, when the days cannot be measured, or when the level is worth 0
+    or less (there is no ratio to check it by; it is never shipped)."""
+    v = row["v"]
+    if not (_real(v) and v > 0):
+        raise LevelMismatch(fam)
     m = _measured(ent, fam, row["days"])
-    if m is None or abs(m["v"] / row["v"] - 1.0) > 1e-9:
+    if m is None or abs(m["v"] / v - 1.0) > 1e-9:
         raise LevelMismatch(fam)
     lv = CA.level_of(fam, m["sums"], m["n"], CA.P_PROD)
-    if lv is None or abs(lv / row["v"] - 1.0) > 1e-6:          # sums kept to 6 places
+    if lv is None or abs(lv / v - 1.0) > 1e-6:                 # sums kept to 6 places
         raise LevelMismatch(fam)
     return m["sums"]
 
@@ -1443,8 +1516,9 @@ def _lv_id(aid, fam, src, frm, used):
 def merge_ledger(old, res, ents, rej, now):
     """The replay's levels merged into the saved history → (the new ledger, {app id: proposals}). A row matches a saved
     one of the same family and kind when its day moved ≤ MATCH_DAYS (restated data): it keeps its id and first-seen,
-    a changed value is recorded under "restated"; a saved row no longer produced is kept as gone (or rejected: the
-    owner's reject). An app whose levels are not exact keeps its saved history untouched (one skipped line)."""
+    a changed value is recorded under "restated" (the last RESTATED_MAX kept); a saved row no longer produced is kept
+    as gone (or rejected: the owner's reject). An app whose levels are not exact, or whose merge fails for any other
+    reason, keeps its saved history untouched (one skipped line) — the other apps still merge."""
     now_iso = gu._now_iso(now)
     led = {"v": LV_V, "rule": LV_RULE, "apps": copy.deepcopy(old.get("apps") or {}),
            "proposals": copy.deepcopy(old.get("proposals") or {}), "log": list(old.get("log") or [])}
@@ -1459,6 +1533,7 @@ def merge_ledger(old, res, ents, rej, now):
         ent = ents.get(aid)
         if ent is None:
             continue
+        n_log, used0 = len(led["log"]), set(used)
         try:
             fresh = _fresh(ent, key, res, [ep for (i, _), lst in eps_by.items() if i == aid for ep in lst])
             pl = []
@@ -1466,15 +1541,17 @@ def merge_ledger(old, res, ents, rej, now):
                 row = {"v": p["v"], "days": p["days"]}
                 pl.append({"fam": p["fam"], "opened": p["opened"], "day": p["day"], "why": p["why"], "v": p["v"],
                            "days": p["days"], "sums": _exact(ent, p["fam"], row), "old": p["old"], "gap": p["gap"]})
-        except LevelMismatch as e:
+            saved = led["apps"].get(aid) or {}
+            mine = {}
+            for fam in sorted(set(fresh) | set(saved)):
+                mine[fam] = _merge_fam(aid, fam, saved.get(fam) or [], fresh.get(fam) or [], rej, now_iso, used,
+                                       led["log"])
+        except Exception as e:                           # one app costs only itself (LevelMismatch, a zero, anything)
             print("cpi levels skipped: %s" % type(e).__name__, file=sys.stderr)
+            del led["log"][n_log:]                       # … and leaves no half-merged trace behind
+            used.intersection_update(used0)
             props[aid] = led["proposals"].get(aid) or []
             continue
-        saved = led["apps"].get(aid) or {}
-        mine = {}
-        for fam in sorted(set(fresh) | set(saved)):
-            mine[fam] = _merge_fam(aid, fam, saved.get(fam) or [], fresh.get(fam) or [], rej, now_iso, used,
-                                   led["log"])
         led["apps"][aid] = mine
         led["proposals"][aid] = pl
         props[aid] = pl
@@ -1496,7 +1573,8 @@ def _merge_fam(aid, fam, saved, fresh, rej, now_iso, used, log):
             taken.add(best[1])
             r = dict(saved[best[1]])
             if r.get("v") and abs(row["v"] / r["v"] - 1.0) > 1e-9:
-                r["restated"] = list(r.get("restated") or []) + [{"at": now_iso, "v_old": r["v"], "v_new": row["v"]}]
+                r["restated"] = (list(r.get("restated") or []) + [{"at": now_iso, "v_old": r["v"], "v_new": row["v"]}]
+                                 )[-RESTATED_MAX:]
                 log.append({"at": now_iso, "app": aid, "fam": fam, "id": r["id"], "what": "restated", "v_old": r["v"],
                             "v_new": row["v"]})
             r.update({k: row.get(k) for k in ("from", "v", "days", "sums", "src", "ep", "act")})
@@ -1567,12 +1645,24 @@ def ship_levels(led, aid):
 
 def levels_run(ents, data_dir, t, now):
     """The replay with the owner's levels → (engine result, the levels part or None). Any failure of the levels part
-    prints "cpi levels skipped: <ErrorType>" and gives the automatic replay (the tab stays)."""
+    prints "cpi levels skipped: <ErrorType>" and gives the automatic replay (the tab stays). A history file that cannot
+    be read is never overwritten and ships no history, but it does not stop the owner's levels: every action that
+    needs no saved level (set, accept, auto, undo) is resolved against no history and still applies; a rollback /
+    reject names a saved level and is listed bad (NoLedger). The part then has "ledger": None (nothing to save)."""
     ts = t.isoformat()
     apps_e = {e.id: e for e in ents if e.kind == "app"}
     try:
+        acts = load_actions(data_dir)
+    except Exception as e:
+        print("cpi levels skipped: %s" % type(e).__name__, file=sys.stderr)
+        return CA.run(ents, CA.P_PROD, ts), None
+    try:
         led = load_ledger(data_dir)
-        owner, la, rej, seen = resolve_actions(load_actions(data_dir), apps_e, led, ts)
+    except Exception as e:
+        print("cpi levels skipped: %s" % type(e).__name__, file=sys.stderr)
+        led = None
+    try:
+        owner, la, rej, seen = resolve_actions(acts, apps_e, led, ts)
     except Exception as e:
         print("cpi levels skipped: %s" % type(e).__name__, file=sys.stderr)
         return CA.run(ents, CA.P_PROD, ts), None
@@ -1584,11 +1674,11 @@ def levels_run(ents, data_dir, t, now):
         print("cpi levels skipped: %s" % type(e).__name__, file=sys.stderr)
         return CA.run(ents, CA.P_PROD, ts), None
     try:
-        new, props = merge_ledger(led, res, apps_e, rej, now)
+        new, props = merge_ledger(led if led is not None else _new_ledger(), res, apps_e, rej, now)
     except Exception as e:
         print("cpi levels skipped: %s" % type(e).__name__, file=sys.stderr)
         return res, None
-    return res, {"ledger": new, "props": props, "la": la, "seen": seen}
+    return res, {"ledger": new if led is not None else None, "props": props, "la": la, "seen": seen}
 
 
 # ── alerts (sent once) ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -1864,7 +1954,8 @@ def _remove(out_dir):
 
 def compute(dashboard, data_dir, out_dir, s, now, counts=None):
     """The whole step without writing → (pointer, cpi.json.gz body, per-app bodies, apps, D, engine result, the levels
-    part: {"ledger", "props", "la", "seen"} or None when it failed) or None (no Google Ads data / no data day)."""
+    part: {"ledger" (None: the history file could not be read), "props", "la", "seen"} or None when it failed) or None
+    (no Google Ads data / no data day)."""
     roas = dashboard.get("roas") or {}
     if not roas.get("configured", bool(roas.get("by_app"))) or not roas.get("by_app"):
         return None
@@ -1922,7 +2013,7 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
         st, first = load_state(data_dir)
         al, closed = alerts(st, first, apps, D.t, now)
         save_state(data_dir, st)
-        if lv is not None:
+        if lv is not None and lv["ledger"] is not None:
             try:
                 save_ledger(data_dir, lv["ledger"])
             except Exception as e:                       # the history file costs only itself

@@ -14,6 +14,7 @@ import { ApiError } from "./auth.js";
 import { CFG_MSG, CTRL_RE, githubConfig, readConfig, putConfig, serverSaveReady } from "./config.js";
 
 export const LEVELS_FILE = "cpi_levels";
+// LIMIT: append-only with no compaction — at 256 KiB every new action is refused (413 too_large) until old ones are archived by hand
 export const LEVELS_MAX_BYTES = 256 * 1024;        // the file after the append, as written (JSON, indent 1)
 export const LEVELS_RETRIES = 3;                   // a conflicting PUT → re-read + re-append, up to 3 times
 export const LEVELS_CACHE_MS = 30 * 1000;          // GET /api/levels: per isolate
@@ -155,6 +156,7 @@ export function validateAction(body, nowIso) {
 
 /** The file's text → its actions; anything but {v: 1, actions: [objects]} is broken (nothing gets written). */
 function parseFile(text) {
+  // LIMIT: null = a GitHub 404 = "no file yet"; a wrong repo / branch or a token without access answers 404 too (not told apart)
   if (text === null) return [];
   let j;
   try {
@@ -228,6 +230,7 @@ export async function levelsAct(c) {
       }
       const next = [...actions, action];
       const text = JSON.stringify({ v: 1, actions: next }, null, 1);
+      // LIMIT: the 256 KiB cap above — no compaction, so a full file stays full (the page shows LV_MSG.too_large)
       if (new TextEncoder().encode(text).length > LEVELS_MAX_BYTES) {
         throw new ApiError(413, "payload_too_large", { msg: LV_MSG.too_large });
       }

@@ -1103,7 +1103,7 @@ def _proposals(e, ser, res, P, t1):
         sh = FAMILIES[fam]["shift"]
         a = t1 - LV.get("accept_days", 28) + 1 - sh
         v = ser.value(fam, a, t1 - sh) if ser.clean(a, t1 - sh) else None
-        if v is None:
+        if v is None or v <= 0:                      # nothing to propose: a level worth 0 has no ratio to alarm against
             continue
         day, why = x["suggest"]
         g = None

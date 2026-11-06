@@ -277,6 +277,7 @@ export async function readConfig(cfg, file) {
   const url = `${GH_API}/repos/${cfg.repo}/contents/config/${file}.json`;
   const res = await gh(cfg, url, "GET");
   if (res.status === 404) {
+    // LIMIT: GitHub 404 is read as "no file yet"; a wrong repo / branch or a token without access answers 404 too (not told apart)
     await discard(res);
     return { text: null, sha: null };
   }
