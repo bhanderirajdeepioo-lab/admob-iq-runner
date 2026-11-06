@@ -693,7 +693,7 @@ def _overlaps(ep, a, b, t):
 
 
 UP_BAD = frozenset(("CPI", "GAP"))      # families where higher is worse (the rest: lower is worse)
-PEAK = 1.25                              # a baseline more than 25 % better than the healthy level was a peak (the engine's band)
+PEAK = 1.25                              # a baseline over 25 % better than H was a peak (the engine's band)
 
 
 def _h_before(h, D0, day):
@@ -751,7 +751,8 @@ def money_lost(eps, s, R, D0, a, b, t, healthy=None, e0=None):
     (ROAS_C0) is only beside it in the details' Loss math. → {"inr", "usd", "from": the earliest c, "sc": the same sum
     from c to b, "fam"} or None. The baseline is base_of's (healthy / e0: the app's H arrays and their index 0)."""
     rate = day_rate(s, R)
-    hit = [ep for ep in eps if ep["fam"] == "ROAS_G" and ep["base"] and _overlaps(ep, a, b, t)]
+    hit = [ep for ep in eps if ep["fam"] == "ROAS_G" and ep["base"] and (ep.get("opened") or ep["c"]) <= b
+           and _overlaps(ep, a, b, t)]
     if not hit:
         return None
     per = [0.0, 0.0]
@@ -773,10 +774,10 @@ def money_lost(eps, s, R, D0, a, b, t, healthy=None, e0=None):
 
 
 def status_of(eps, s, nrm, D0, a, b, t):
-    """SPEC §1.2 as shipped: of the app's episodes overlapping [a, b] and opened by b (a LINE never counts), one still open
-    at b → alarm (ALERT) / watch (WATCH); else an ALERT one that closed by b → fixed (the problem was in the period and is
-    over); else ok — new without a normal for CPI and ROAS, paused when b = t and no spend on t−2 … t. since = the
-    earliest change start of that grade. → (status, since)."""
+    """SPEC §1.2 as shipped: of the app's episodes overlapping [a, b] and opened by b (a LINE never counts), one still
+    open at b → alarm (ALERT) / watch (WATCH); else an ALERT one that closed by b → fixed (the problem was in the period
+    and is over); else ok — new without a normal for CPI and ROAS, paused when b = t and no spend on t−2 … t.
+    since = the earliest change start of that grade. → (status, since)."""
     seen = [ep for ep in eps if ep["tier"] in ("ALERT", "WATCH") and ep["opened"] <= b and _overlaps(ep, a, b, t)]
     for tier, st in (("ALERT", "alarm"), ("WATCH", "watch")):
         hit = [ep for ep in seen if ep["tier"] == tier and not (ep["closed"] and ep["closed"] <= b)]
@@ -808,13 +809,16 @@ def window(s, D0, a, b):
 # ── the files ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
 def _ep_row(ep):
-    return [ep["fam"], ep["opener"], ep["tier"], ep["c"], ep["opened"], ep["closed"], ep["why"], _r6(ep["base"])]
+    """[fam, opener, tier, c, opened, closed, why, B, B shown] — B shown = base_of's (an app episode; else B)."""
+    return [ep["fam"], ep["opener"], ep["tier"], ep["c"], ep["opened"], ep["closed"], ep["why"], _r6(ep["base"]),
+            _r6(ep.get("base_show", ep["base"]))]
 
 
 def _ep_full(ep):
     out = {k: ep[k] for k in ("kind", "id", "app", "fam", "opener", "tier", "c", "opened", "seen", "closed", "why",
                               "base_src", "confirm")}
-    out.update(base=_r6(ep["base"]), thr_open=_r(ep["thr_open"], 4), max_worse=_r(ep["max_worse"], 4),
+    out.update(base=_r6(ep["base"]), base_show=_r6(ep.get("base_show", ep["base"])), thr_open=_r(ep["thr_open"], 4),
+               max_worse=_r(ep["max_worse"], 4),
                esc=[list(x) for x in ep["esc"]], ctx=dict(ep.get("ctx") or {}),
                money=dict(ep["money"]) if ep.get("money") else None, stake=list(ep.get("stake") or []))
     return out
@@ -845,7 +849,7 @@ def _app_file(a, D, lo, res, camps, ctys, eps_by, extra, t):
         hl = res["healthy"].get(key) or {}
         for fam in CA.OUT_FAMS:
             arr = list(e_d0.get(fam) or [])
-            for ep in eps_by.get(key, []):                # an episode whose B was a peak: its days drawn at base_of's level
+            for ep in eps_by.get(key, []):                # a B that was a peak: its days drawn at base_of's level
                 if ep["fam"] != fam or not ep["base"]:
                     continue
                 v = base_of(ep, hl, e0)
@@ -922,6 +926,12 @@ def build_files(dashboard, D, apps, camps, ctys, extra, res, now):
         eps = eps_by.get(("app", aid), [])
         e0 = _d(extra["day0"][aid])
         hl = res["healthy"].get(("app", aid)) or {}
+        for ep in eps:                                   # the baseline every place shows (row, money, files, alerts)
+            ep["base_show"] = base_of(ep, hl, e0)
+            if ep["fam"] == "ROAS_G" and ep.get("money") and ep["base_show"] != ep["base"]:
+                m = money_lost([ep], a["s"], extra["R"], D.d0, ep["c"], ep["closed"] or ts, ts, hl, e0)
+                if m:
+                    ep["money"] = dict(ep["money"], since_c_inr=m["inr"], since_c_usd=m["usd"])
         nrm = {f: normal_at(f, eps, hl, e0, a_iso, b_iso) for f in ("CPI", "ECPM", "ROAS_G")}
         st, since = status_of(eps, a["s"], nrm, D.d0, a_iso, b_iso, ts)
         to = None
@@ -1105,7 +1115,7 @@ def _alert_item(a, ep, rec, due, t, others, closed=False):
     w, nrm = v["w"], v["nrm"]
     fam, nm = ep["fam"], a["name"]
     now_v = w.get(fam) if fam in ("CPI", "ECPM", "ROAS_G") else None
-    base = ep["base"]
+    base = ep.get("base_show", ep["base"])
     rel = (now_v / base - 1.0) if (now_v is not None and base) else None
     since, what = _day_txt(ep["c"]), FAM_TXT.get(fam, fam)
     moves = ["%s %s → %s" % (FAM_TXT[f], _fmt(f, nrm.get(f)), _fmt(f, w[f])) for f in ("CPI", "ECPM")

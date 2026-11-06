@@ -8336,7 +8336,7 @@ function sums(lo,hi){ const d=DD(), p=ptr(); if(!d||!p) return {}; const mk=lo+'
 // ---- episodes: [fam, opener, tier, c, opened, base] (pointer open) · [fam, opener, tier, c, opened, closed, why, base]
 // (cpi.json.gz) · the full dict (cpi_<key>.json.gz) → one shape ----
 function epOf(x){ if(Array.isArray(x)) return x.length===6?{fam:x[0],opener:x[1],tier:x[2],c:x[3],opened:x[4],closed:null,why:null,base:x[5]}
-    :{fam:x[0],opener:x[1],tier:x[2],c:x[3],opened:x[4],closed:x[5]||null,why:x[6]||null,base:x[7]};
+    :{fam:x[0],opener:x[1],tier:x[2],c:x[3],opened:x[4],closed:x[5]||null,why:x[6]||null,base:x[7],base_show:x.length>8?x[8]:undefined};
   return x&&typeof x==='object'?Object.assign({},x,{closed:x.closed||null,why:x.why||null}):null; }
 const eps=L=>(Array.isArray(L)?L:[]).map(epOf).filter(e=>e&&typeof e.fam==='string'&&okD(e.c));
 // an episode's span [c, closed or t] overlaps [lo, hi] (one still open runs on to the period's end)
@@ -8370,7 +8370,8 @@ function hBefore(h,d0,day,sc){ if(!Array.isArray(h)||!okD(d0)||!okD(day)) return
 // the baseline an open episode is shown against (the row's normal and its money — the build's base_of): its frozen B, unless B
 // was more than 25 % better than the healthy level before the change (the 14 days before it were a peak) — then that H ('Bpk')
 const PEAK=1.25;
-function baseOf(e,A){ const B=+e.base, sc=SCALE[e.fam], H=sc&&A&&A.h?hBefore(A.h[e.fam],ALLF.raw&&ALLF.raw.day0,e.c,sc):null;
+function baseOf(e,A){ const B=+e.base; if(e.base_show!=null&&ok(+e.base_show)) return {v:+e.base_show,pk:ok(B)&&Math.abs(+e.base_show-B)>1e-6*Math.max(1,Math.abs(B))?1:0};
+  const sc=SCALE[e.fam], H=sc&&A&&A.h?hBefore(A.h[e.fam],ALLF.raw&&ALLF.raw.day0,e.c,sc):null;
   if(ok(B)&&ok(H)&&H>0&&(UP[e.fam]?B*PEAK<H:B>H*PEAK)) return {v:H,pk:1};
   return {v:B,pk:0}; }
 // normal(f, [lo, hi]): the baseline (baseOf) of the episode open at hi (D1), else the healthy level (hLvl; cpi.json.gz h)
@@ -8381,7 +8382,7 @@ function normal(f,L,A,lo,hi){ const o=openAt(f,L,hi);
 // D0 ROAS episode, cost − D0 value ÷ B (₹ as billed; $ at each day's own rate); sc* = the same from c (the "since c" line). Days
 // after t are left out (their D0 value is not final yet)
 function lossG(nm,L,lo,hi,A){ const d=DD(), p=ptr(), e0=d&&d.roas&&d.roas.by_app&&d.roas.by_app[nm]; if(!e0) return null;
-  const G=L.filter(e=>e.fam==='ROAS_G'&&+e.base>0&&over(e,lo,hi)); if(!G.length) return null;
+  const G=L.filter(e=>e.fam==='ROAS_G'&&+e.base>0&&!(e.opened>hi)&&over(e,lo,hi)); if(!G.length) return null;
   const one=e0.daily||{}, dt=e0.daily_dated||one, cv=e0.convval_day1_daily||{}, r={inr:0,usd:0,sinr:0,susd:0,cost:0,val:0,scost:0,sval:0,from:null,B:null,nd:0};
   for(const e of G){ const B=baseOf(e,A).v, end=e.closed&&e.closed<p.t?e.closed:p.t; if(!r.from||e.c<r.from){ r.from=e.c; r.B=B; }
     for(let x=e.c;x<=end&&x<=hi;x=addD(x,1)){ const v=+one[x]||0, w=(+cv[x]||0)*1e6, k=v>0?(+dt[x]||0)/v:inr(d,1e6)>0?1/inr(d,1e6):0;   // k: dated $ per one-rate $
@@ -8670,13 +8671,15 @@ function whyHtml(r,F){ const [lo,hi]=span(r); if(lo>hi) return '<p class="cpx-no
   return o.join(''); }
 // ---- 💸 Loss math: the formula with this app's numbers, for the period and since c; the AdMob install-day version beside it;
 // the Google D0 ÷ AdMob D0 ratio by month (measured) ----
-function lossHtml(r,F){ const [lo,hi]=span(r), L=eps(F.ep), G=L.filter(e=>e.fam==='ROAS_G'&&+e.base>0&&over(e,r.lo,r.hi)), o=[];
+function lossHtml(r,F){ const [lo,hi]=span(r), L=eps(F.ep), G=L.filter(e=>e.fam==='ROAS_G'&&+e.base>0&&!(e.opened>r.hi)&&over(e,r.lo,r.hi)), o=[];
   const kv=(i)=>{ const u=at(F,'sp_usd',i), n=at(F,'sp_inr',i); return u>0&&n>0?u/n:null; };
-  const part=(e,a,b)=>{ let c=0,v=0; for(let x=a;x<=b;x=addD(x,1)){ const i=fIx(F,x), si=at(F,'sp_inr',i), d0=at(F,'d0_inr',i); if(si==null||d0==null) continue; const k=VIN()?1:kv(i)||0; c+=si*k; v+=d0*k; } return {c,v,l:c-v/+e.base}; };
+  const bs=e=>baseOf(e,ALLF.raw&&ALLF.raw.apps&&ALLF.raw.apps[r.id]).v;   // (the list's baseline: B, or the healthy level when B was a peak)
+  const part=(e,a,b)=>{ const B=bs(e); let c=0,v=0; for(let x=a;x<=b;x=addD(x,1)){ const i=fIx(F,x), si=at(F,'sp_inr',i), d0=at(F,'d0_inr',i); if(si==null||d0==null) continue; const k=VIN()?1:kv(i)||0; c+=si*k; v+=d0*k; } return {c,v,l:c-v/B}; };
   const fm=v=>VIN()?fI(v):fU(v);
   if(G.length) G.forEach(e=>{ const end=e.closed&&e.closed<ptr().t?e.closed:ptr().t, a=e.c>lo?e.c:lo, b=end<hi?end:hi, P=a<=b?part(e,a,b):null, S=part(e,e.c,b<end?b:end);
-    const ln=(q,w)=>`<div class="cpx-lm"><div class="cpx-k">${w}</div><div>Loss = cost − D0 value ÷ normal D0 ROAS</div><div>= ${fm(q.c)} − ${fm(q.v)} ÷ ${fR(+e.base)}</div><div>= ${fm(q.c)} − ${fm(q.v/+e.base)} = <b class="cpx-bad">≈${fm(q.l)}</b></div></div>`;
-    o.push(`<p class="cpx-vd">D0 ROAS alarm: change ${E(fdy(e.c))} se · normal (alarm se pehle ka) <b>${fR(+e.base)}</b>${e.closed?` · closed ${E(fdy(e.closed))}`:' · abhi khula'}</p><div class="cpx-lms">${P?ln(P,'Is period me ('+perDates(a,b)+')'):''}${ln(S,'Change se ab tak ('+perDates(e.c,b<end?b:end)+')')}</div>`); });
+    const B=bs(e), pk=Math.abs(B-+e.base)>1e-6;
+    const ln=(q,w)=>`<div class="cpx-lm"><div class="cpx-k">${w}</div><div>Loss = cost − D0 value ÷ normal D0 ROAS</div><div>= ${fm(q.c)} − ${fm(q.v)} ÷ ${fR(B)}</div><div>= ${fm(q.c)} − ${fm(q.v/B)} = <b class="cpx-bad">≈${fm(q.l)}</b></div></div>`;
+    o.push(`<p class="cpx-vd">D0 ROAS alarm: change ${E(fdy(e.c))} se · normal ${pk?`= healthy level <b>${fR(B)}</b> (alarm se pehle ke 14 din ${fR(+e.base)} peak the)`:`(alarm se pehle ka) <b>${fR(B)}</b>`}${e.closed?` · closed ${E(fdy(e.closed))}`:' · abhi khula'}</p><div class="cpx-lms">${P?ln(P,'Is period me ('+perDates(a,b)+')'):''}${ln(S,'Change se ab tak ('+perDates(e.c,b<end?b:end)+')')}</div>`); });
   else o.push('<p class="cpx-note">Is period me D0 ROAS ka koi alarm nahi — nuksaan ka hisaab sirf D0 ROAS (aur AdMob install-day) pe hota hai; CPI / eCPM ka badlaav paisa gina nahi jata.</p>');
   // the AdMob install-day version (matured days only)
   const P=fsum(F.d,F.day0,['c_sp','c_r0'],lo,hi), P1=fsum(F.d,F.day0,['c_sp','c_r1'],lo,hi), P7=fsum(F.d,F.day0,['c_sp','c_r7'],lo,hi);
@@ -8695,7 +8698,7 @@ function lossHtml(r,F){ const [lo,hi]=span(r), L=eps(F.ep), G=L.filter(e=>e.fam=
 function histHtml(r,F){ const L=eps(F.ep).sort((a,b)=>(a.opened<b.opened?1:a.opened>b.opened?-1:0));
   if(!L.length) return '<p class="cpx-note">Is app pe abhi tak koi alarm nahi khula.</p>';
   const k=e=>{ const w=fsum(F.d,F.day0,['sp_inr','sp_usd'],addD(e.c,-14),addD(e.c,-1)); return VIN()?1:w.sp_inr>0?w.sp_usd/w.sp_inr:null; };
-  const base=e=>{ const b=+e.base; if(!ok(b)) return '—'; if(e.fam==='CPI'){ const q=k(e); return q?fCpi(b*q):'—'; } if(e.fam==='ECPM') return fE(b); if(/^ROAS/.test(e.fam)) return fR(b); return fX(b); };
+  const base=e=>{ const b=baseOf(e,null).v; if(!ok(b)) return '—'; if(e.fam==='CPI'){ const q=k(e); return q?fCpi(b*q):'—'; } if(e.fam==='ECPM') return fE(b); if(/^ROAS/.test(e.fam)) return fR(b); return fX(b); };
   const mon=e=>e.money&&e.fam==='ROAS_G'&&ok(+e.money.since_c_inr)?'≈'+fM(+e.money.since_c_inr,+e.money.since_c_usd):'—';
   const body=L.map(e=>`<tr><td>${E(FAMW[e.fam]||e.fam)} ${UP[e.fam]?'up':'down'}</td><td>${E(OPW[e.opener]||e.opener||'—')}</td>`
     +`<td>${e.closed?`Closed · ${E(WHYW[e.why]||e.why||'—')}`:`<b class="${e.tier==='ALERT'?'cpx-bad':e.tier==='WATCH'?'cpx-wat':''}">Open</b>`} <small class="cpx-nv">${E(TIERW[e.tier]||e.tier||'')}</small></td>`

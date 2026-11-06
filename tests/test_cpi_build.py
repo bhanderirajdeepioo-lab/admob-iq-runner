@@ -283,7 +283,7 @@ def test_the_shapes_the_page_reads(built):
     for aid, x in allb["apps"].items():
         assert sorted(x) == ["ep", "h"] and sorted(x["h"]) == ["CPI", "ECPM", "ROAS_G"]
         assert all(len(v) == n and all(z is None or isinstance(z, int) for z in v) for v in x["h"].values())
-        assert all(len(e) == 8 for e in x["ep"])
+        assert all(len(e) == 9 for e in x["ep"])                               # … the 9th: the baseline shown
     ha = allb["apps"][IDS["a"]]["h"]
     i = nd(allb["day0"], "2026-02-15") - 1
     assert ha["CPI"][i] == pytest.approx(2000, rel=0.03) and ha["ECPM"][i] == pytest.approx(60000, rel=0.03)
@@ -673,7 +673,8 @@ def test_money_lost_comes_from_the_d0_roas_alarm_only():
 
 def test_an_alarm_that_closed_inside_the_period_is_fixed_not_alarm():
     """Alarm / Watch need an episode still open at the period's end; an ALERT that closed inside the period is "fixed"
-    (shown with its span); a closed WATCH leaves the row ok; an episode opened after the period's end is not known then."""
+    (shown with its span); a closed WATCH leaves the row ok; an episode opened after the period's end is not known
+    then."""
     d0 = date(2026, 1, 1)
     s = {"sp_inr": [100.0] * 60}
     nrm = {"CPI": 10.0, "ROAS_G": 0.4}
@@ -707,3 +708,18 @@ def test_a_baseline_that_was_a_peak_gives_way_to_the_healthy_level():
     roas2 = dict(roas, c="2026-01-20", opened="2026-01-23")
     m = cb.money_lost([roas2], s, [0.01] * n, d0, "2026-01-18", "2026-01-31", "2026-01-31", h, d0)
     assert m["inr"] == pytest.approx(12 * (1000 - 380 / 0.40))
+
+
+def test_money_needs_the_alarm_opened_by_the_period_end_and_one_baseline_everywhere():
+    """A period that ends before the D0 ROAS alarm opened shows no money (its status is ok then); every place that
+    prices an episode uses the one shown baseline (_ep_row's 9th element, _ep_full's base_show)."""
+    d0 = date(2026, 1, 1)
+    n = 40
+    s = {"sp_inr": [1000.0] * n, "sp_usd": [10.0] * n, "d0_inr": [300.0] * n}
+    g = {"fam": "ROAS_G", "c": "2026-01-10", "opened": "2026-01-25", "closed": None, "base": 0.4, "tier": "ALERT"}
+    assert cb.money_lost([g], s, [0.01] * n, d0, "2026-01-05", "2026-01-20", "2026-02-09") is None    # not opened yet
+    assert cb.money_lost([g], s, [0.01] * n, d0, "2026-01-05", "2026-01-25", "2026-02-09")["inr"] > 0
+    ep = dict(g, opener="SUDDEN", why=None, seen="2026-01-27", base_src="before", confirm=None, thr_open=0.12,
+              max_worse=0.2, esc=[], ctx={}, money=None, stake=[], kind="app", id="x", app="x", base_show=0.35)
+    assert cb._ep_row(ep)[7:] == [0.4, 0.35] and cb._ep_full(ep)["base_show"] == 0.35
+    assert cb._ep_row({k: v for k, v in ep.items() if k != "base_show"})[8] == 0.4               # (no shown one: B)
