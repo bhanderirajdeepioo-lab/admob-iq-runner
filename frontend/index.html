@@ -8496,9 +8496,19 @@ function sumHtml(L){ const n={alarm:0,watch:0,fixed:0,ok:0}, w=L.some(r=>r.wait)
   L.forEach(r=>{ if(!r.wait&&n[r.st]!=null) n[r.st]++; if(r.lost&&!r.lost.na){ li+=r.lost.inr; lu+=r.lost.usd; any=true; } });
   return `<div class="cpx-sum" id="cpx-sum"><span class="cpx-bad">● ${q('alarm')} Alarm</span><span class="cpx-wat">● ${q('watch')} Watch</span>${n.fixed?`<span class="cpx-good">● ${q('fixed')} Fixed</span>`:''}<span class="cpx-good">● ${q('ok')} OK</span>`
     +`<span>· Money lost: <b class="${any?'cpx-bad':''}">${any?'≈'+fM(li,lu):'—'}</b></span></div>`; }
-function footHtml(){ const p=ptr(), u=p.unlinked;
+// the footer's "Not linked spend" for the period picked: the pointer's per-day arrays summed over [lo, hi] (the old shape —
+// one total — is shown as it is); the store ids = those with spend inside the period (their runs of days)
+function unlinkedFor(u,lo,hi){ if(!u) return null;
+  if(!Array.isArray(u.inr)){ return ok(+u.inr)&&+u.n>0?{inr:+u.inr,usd:+u.usd,n:+u.n}:null; }
+  if(!okD(u.d0)||!okD(lo)||!okD(hi)) return null;
+  const i0=Math.max(0,nD(u.d0,lo)-1), i1=Math.min(u.inr.length-1,nD(u.d0,hi)-1); let inr=0, usd=0;
+  for(let i=i0;i<=i1;i++){ const a=+u.inr[i], b=Array.isArray(u.usd)?+u.usd[i]:0; if(ok(a)) inr+=a; if(ok(b)) usd+=b; }
+  if(!(inr>0)) return null;
+  const n=Array.isArray(u.runs)?u.runs.filter(r=>Array.isArray(r)&&r.some(x=>Array.isArray(x)&&+x[0]<=i1&&+x[1]>=i0)).length:+u.n;
+  return n>0?{inr,usd,n}:null; }
+function footHtml(lo,hi){ const p=ptr(), u=unlinkedFor(p.unlinked,lo||addD(p.t,-13),hi||p.t);
   return `<p class="cpx-ft"><b>Alarm</b> = kharch ke mukable kamai normal se kaafi neeche — paisa ja raha hai · <b>Watch</b> = CPI, eCPM ya ads per user normal se bahar, par paise ka nuksaan abhi saaf nahi · <b>Fixed</b> = is period me alarm tha, ab band (theek) ho gaya · <b>OK</b> = sab normal ke andar. <b>Normal</b> = alarm khula ho to uske pehle ka level, warna period se ek din pehle ka healthy level (wo na ho to period ka pehla healthy level — cell me "normal = &lt;date&gt; level" likha aata hai). D0 ROAS "now" sirf final din (data till) tak ka hota hai. CPI = Google Ads spend ÷ Google Ads installs (ads only), ₹ me judge hota hai. Money lost (≈) = cost − D0 value ÷ normal D0 ROAS.</p>`
-    +(u&&ok(+u.inr)&&+u.n>0?`<p class="cpx-ft">Not linked spend: <b>${fM(+u.inr,+u.usd)}</b> (${+u.n} store ${+u.n===1?'id':'ids'}) — <button type="button" class="cpx-lnk" data-cpx-roas="1">Marketing ROAS me</button></p>`:''); }
+    +(u?`<p class="cpx-ft">Not linked spend: <b>${fM(u.inr,u.usd)}</b> (${u.n} store ${u.n===1?'id':'ids'}) — <button type="button" class="cpx-lnk" data-cpx-roas="1">Marketing ROAS me</button></p>`:''); }
 function listHtml(L,lo,hi,one){ const p=ptr(), nf=!allName(p)&&!isDef(lo,hi);
   let note=''; if(!isDef(lo,hi)&&!ALLF.raw) note=ALLF.err||nf?`<p class="cpx-note">⚠️ Data load nahi hua. <button type="button" class="cpx-lnk" data-cpx-allretry="1">Try again</button></p>`:'<p class="cpx-note">⏳ Loading… (normal aur status is period ke liye)</p>';
   if(!L.length) return note+`<div class="card cpx-card"><p class="cpx-note">${APP?'Is app ka is period me Google Ads spend nahi (ya ye app Google Ads se link nahi).':'Is period me kisi app ka Google Ads spend nahi.'}</p></div>`;
@@ -8793,7 +8803,7 @@ function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector
   if(OPEN!=null) ensureApp(OPEN);
   for(const k in CHD) delete CHD[k];
   const keepX={}; try{ s.querySelectorAll('.cpx-x[id]').forEach(b=>{ keepX[b.id]=b.scrollLeft; }); }catch(e){}
-  s.innerHTML=headHtml()+`<div class="cpx-ctl">${perCtl(lo,hi)}</div>`+(one?'':sumHtml(L))+listHtml(L,lo,hi,one)+(one?'':footHtml());
+  s.innerHTML=headHtml()+`<div class="cpx-ctl">${perCtl(lo,hi)}</div>`+(one?'':sumHtml(L))+listHtml(L,lo,hi,one)+(one?'':footHtml(lo,hi));
   try{ for(const k in keepX){ const b=document.getElementById(k); if(b) b.scrollLeft=keepX[k]; } }catch(e){} }
 function render(){ const s=screenDiv('cpx'); EL=s; return s; }
 function showMe(){ paint(); }

@@ -107,6 +107,15 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
       two: _.judge([{ fam: 'CPI', tier: 'WATCH', c: '2026-03-01', closed: null }, { fam: 'ROAS_G', tier: 'ALERT', c: '2026-03-12', closed: null }, { fam: 'GAP', tier: 'ALERT', c: '2026-03-05', closed: '2026-03-10' }], '2026-03-01', '2026-03-28'),
       fixed: _.judge([{ fam: 'GAP', tier: 'ALERT', c: '2026-03-05', opened: '2026-03-07', closed: '2026-03-10' }, { fam: 'ECPM', tier: 'WATCH', c: '2026-03-02', opened: '2026-03-04', closed: '2026-03-08' }], '2026-03-01', '2026-03-28'),
       late: _.judge([{ fam: 'CPI', tier: 'ALERT', c: '2026-03-20', opened: '2026-03-30', closed: null }], '2026-03-01', '2026-03-28') };
+    // the footer's "Not linked spend" follows the picked period (per-day arrays + the store ids' runs of days); the old one-total shape stays as it was
+    const U0 = FX.DATA.cpi.unlinked;
+    FX.DATA.cpi.unlinked = { d0: '2026-03-20', inr: Array(9).fill(100), usd: Array(9).fill(1), n: 2, runs: [[[0, 8]], [[5, 8]]] };
+    const foot = (per, f, t) => { _.set({ PER: per, PF: f || '', PTO: t || '' }); CPX.paint(); const m = strip(SCREEN.innerHTML).match(/Not linked spend:[^—]*—/); return m ? m[0] : null; };
+    reset(); out.foot = { d14: foot('14'), d7: foot('7'), cus: foot('cus', '2026-03-20', '2026-03-24'), cus_late: foot('cus', '2026-03-26', '2026-03-28'),
+      yday: foot('yday'), before: foot('cus', '2025-11-01', '2025-11-30'), all: foot('all') };
+    CURV = 'USD'; out.foot.d7_usd = foot('7'); CURV = 'INR';
+    FX.DATA.cpi.unlinked = { d0: 'junk', inr: [1, 2], n: 1 }; out.foot.junk = foot('14');
+    FX.DATA.cpi.unlinked = U0; reset(); out.foot.old_shape = foot('7'); await tick(); await tick();    // (the loads these paints started settle here)
     // the all file fails: the default view keeps working; another period says so + Try again
     reset(); FAIL.add('cpi.json.gz'); _.set({ PER: '30' }); CPX.paint(); await tick(); await tick(); CPX.paint();
     out.all_fail = { text: strip(SCREEN.innerHTML), retry: SCREEN.innerHTML.includes('data-cpx-allretry') };
