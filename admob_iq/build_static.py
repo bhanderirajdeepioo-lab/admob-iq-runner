@@ -329,6 +329,13 @@ def send_alerts(dashboard, s):
         icon = _ICON.get(a.get("severity"), "•")
         sev = str(a.get("severity", "")).upper()
         uni.append((a.get("id"), f'{icon} [{sev}] {a.get("message", "")}{_split_tail(a, s)} · install value (GA4 + Ads)'))
+    # CPI vs eCPM alarms: the same rule (each notice sent ONCE — mark_notified_cpi after; ≤ 1 per app per 7 days)
+    for a in (dashboard.get("cpi") or {}).get("alerts", []):
+        if not a.get("notify"):
+            continue
+        icon = _ICON.get(a.get("severity"), "•")
+        sev = str(a.get("severity", "")).upper()
+        uni.append((a.get("id"), f'{icon} [{sev}] {a.get("message", "")} · ads cost vs earning (Google Ads + AdMob)'))
     if not lines and not uni:
         return []
     dry = s["notify_dry_run"]
@@ -661,6 +668,29 @@ def _screens_step(dashboard, data_dir, out_dir, s):
         return []
 
 
+@_sc.timed("cpi_tab")
+def _cpi_step(dashboard, data_dir, out_dir, s):
+    """📉 CPI vs eCPM tab (admob_iq.cpi_build: Google Ads CPI vs AdMob eCPM and Google's D0 ROAS, one line per app, the
+    alarm engine replayed on every app, campaign and country): its lazy files from this build's ROAS block, AdMob rows
+    and Google Ads stores + the GA4 / ROI site files above, its pointer (with the alerts, sent once) and ONE counts-only
+    line → its _headers path (one splat rule). Switched off (CPI_TAB=false) or failing: its files removed, nothing else
+    changes."""
+    try:
+        from . import cpi_build as cpb
+        if not cpb.enabled(s):
+            cpb.off(out_dir)
+            return []
+        paths = cpb.run(dashboard, data_dir, out_dir, s)
+        line = cpb.pop_line()
+        if line:
+            print(line, file=sys.stderr)
+        return list(paths)
+    except Exception as e:
+        dashboard.pop("cpi", None)
+        print(f"cpi skipped: {type(e).__name__}", file=sys.stderr)
+        return []
+
+
 @_sc.timed("source_tab")
 def _source_step(dashboard, data_dir, out_dir, s):
     """💰 Revenue by source (admob_iq.source_build, a section of the Install value tab): its lazy files from the private
@@ -890,6 +920,13 @@ def _uninstall_mark_sent(dashboard, data_dir, s, results=None):
             mark_notified_value(data_dir, dashboard["value"], dry=s["notify_dry_run"], ids=ids)
         except Exception as e:
             print(f"ga4 value notify-mark skipped: {type(e).__name__}", file=sys.stderr)
+    if dashboard.get("cpi"):
+        try:
+            from .cpi_build import mark_notified_cpi
+            ids = None if results is None else uninstall_delivered(results, s)
+            mark_notified_cpi(data_dir, dashboard["cpi"], dry=s["notify_dry_run"], ids=ids)
+        except Exception as e:
+            print(f"cpi notify-mark skipped: {type(e).__name__}", file=sys.stderr)
 
 
 class _AppFilteredRepo:
@@ -1798,9 +1835,11 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
             with _sc.stage("gads_spend"):
                 fresh_spend = fetch_app_spend(s, refetch_start, today.isoformat(), mode="live")
             spend = merge_spend(cached_spend, fresh_spend, refetch_start)
-            if s.get("ga4_value") and isinstance(fresh_spend, dict) and not fresh_spend.get("error"):
-                try:                               # the Install value tab: the last day a spend fetch went through
-                    from .value_build import record_spend_fetch    # (a stale cache's later days: "not in yet", never $0)
+            # the last day a spend fetch went through, on EVERY build (Install value, CPI vs eCPM: a stale cache's
+            # later days are "not in yet", never $0)
+            if isinstance(fresh_spend, dict) and not fresh_spend.get("error"):
+                try:
+                    from .value_build import record_spend_fetch
                     s["roas_spend_ok_till"] = record_spend_fetch(data_dir, today)
                 except Exception as _se:
                     print(f"value spend date skipped: {type(_se).__name__}", file=sys.stderr)
@@ -1966,6 +2005,10 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # from the private GA4 screens store + the AdMob ad units above — OPTIONAL (SCREENS_TAB) and failure-isolated;
     # without a store it leaves no file behind
     aud_paths = aud_paths + _screens_step(dashboard, data_dir, out_dir, s)
+    # 📉 CPI vs eCPM tab (per app: Google Ads CPI, AdMob eCPM and D0 ROAS now vs normal, since when, money lost; the
+    # alarm engine on every app, campaign and country): its lazy files from this build's ROAS block + the files above —
+    # OPTIONAL (CPI_TAB) and failure-isolated; without Google Ads data it leaves no file behind
+    aud_paths = aud_paths + _cpi_step(dashboard, data_dir, out_dir, s)
 
     _sc.step("intraday")
     # 📈 eCPM "same time yesterday": this build's point of today's totals so far (data/ecpm_intraday.json) — never for

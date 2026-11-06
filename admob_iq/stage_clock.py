@@ -77,7 +77,7 @@ STAGES = (
     "roi_apps", "roi_cube", "roi_country", "adcfg", "forecast", "impact_any", "cohort_files",
     "impact_any_finish", "uninstall_asset", "active_finish", "value_finish", "roi_finish",
     "tabs", "uninstall_studio", "active_studio", "value_studio", "audience_tab", "firstopen_tab", "source_tab", "nvr_tab",
-    "scr_tab",
+    "scr_tab", "cpi_tab",
     "intraday", "dashboard_write", "baseline_write", "mediation_daily", "deductions_daily", "static_files",
     "review", "review_studio", "headers", "alerts", "deploy_guard", "teardown",
 )

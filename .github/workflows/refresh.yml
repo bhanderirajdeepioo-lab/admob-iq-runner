@@ -247,6 +247,8 @@ jobs:
           NVR_TAB:              ${{ vars.NVR_TAB || 'true' }}
           # 🖼️ Screens tab (scr_*.json.gz): SCREENS_TAB=false turns it off without a code push
           SCREENS_TAB:          ${{ vars.SCREENS_TAB || 'true' }}
+          # 📉 CPI vs eCPM tab (cpi*.json.gz, with its alarm): CPI_TAB=false turns it off without a code push
+          CPI_TAB:              ${{ vars.CPI_TAB || 'true' }}
           # Daily App Review (Review tab): REVIEW_ENABLED=true (repo variable) starts the daily card snapshots — set it
           # only after the Review API (Worker) is live; REVIEW_READY_IST = when the day's cards freeze (IST, empty: 09:00);
           # REVIEW_REBUILD_DAY=<YYYY-MM-DD> rebuilds TODAY's cards once (any other day is ignored).
