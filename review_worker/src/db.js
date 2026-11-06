@@ -13,7 +13,7 @@ import { ApiError } from "./auth.js";
 
 export const FEATS = ["kamai", "uninstall", "active", "value", "update", "ads", "deduct", "mediation", "health", "setup"];
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 // The exact DDL of the spec (§B.5). review_worker/schema.sql must stay equal to this (a test checks).
 export const SCHEMA = `CREATE TABLE IF NOT EXISTS rv_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
@@ -67,7 +67,10 @@ CREATE TABLE IF NOT EXISTS cmp_ranges_log (       -- append-only: every add / de
   id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, who TEXT NOT NULL,
   act TEXT NOT NULL CHECK (act IN ('add','delete')), cmp INTEGER NOT NULL, app TEXT NOT NULL,
   b_from TEXT NOT NULL, b_to TEXT NOT NULL, a_from TEXT NOT NULL, a_to TEXT NOT NULL, name TEXT NOT NULL);
-INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '5');`;
+CREATE TABLE IF NOT EXISTS lv_log (               -- append-only: every CPI level action through /api/levels/act
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, who TEXT NOT NULL, act TEXT NOT NULL,
+  app TEXT, fam TEXT, action_id TEXT, result TEXT NOT NULL, commit_sha TEXT);
+INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '6');`;
 
 // Schema changes: MIGRATIONS[n] = [sql, …] upgrades version n-1 → n (run in order, one batch each). A NEW database
 // gets the current SCHEMA (and schema_version = SCHEMA_VERSION) directly; only an older database runs these.
@@ -79,6 +82,8 @@ INSERT OR IGNORE INTO rv_meta (k, v) VALUES ('schema_version', '5');`;
 // 5: cmp_ranges (+ its one-live index) and cmp_ranges_log — the saved CUSTOM compares (two date ranges, Pehle vs Baad)
 //    of "compare any date", the same rules as cmp_marks. New tables only (IF NOT EXISTS): a v4 database keeps every
 //    mark, and an older client that never sends a range keeps working exactly as before.
+// 6: lv_log, the audit of the CPI level actions (POST /api/levels/act: who, at, act, app, family, the action id, result,
+//    commit sha). The actions themselves live in config/cpi_levels.json of the private repo, never in D1.
 export const CONFIG_LOG_DDL = `CREATE TABLE IF NOT EXISTS config_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT, who TEXT NOT NULL, at TEXT NOT NULL, file TEXT NOT NULL,
   bytes INTEGER NOT NULL, result TEXT NOT NULL, commit_sha TEXT)`;
@@ -99,11 +104,15 @@ export const RANGES_DDL = [`CREATE TABLE IF NOT EXISTS cmp_ranges (
   id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, who TEXT NOT NULL,
   act TEXT NOT NULL CHECK (act IN ('add','delete')), cmp INTEGER NOT NULL, app TEXT NOT NULL,
   b_from TEXT NOT NULL, b_to TEXT NOT NULL, a_from TEXT NOT NULL, a_to TEXT NOT NULL, name TEXT NOT NULL)`];
+export const LV_LOG_DDL = `CREATE TABLE IF NOT EXISTS lv_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, who TEXT NOT NULL, act TEXT NOT NULL,
+  app TEXT, fam TEXT, action_id TEXT, result TEXT NOT NULL, commit_sha TEXT)`;
 export const MIGRATIONS = {
   2: ["ALTER TABLE rv_flags ADD COLUMN dec_day TEXT", "ALTER TABLE rv_flags ADD COLUMN done_day TEXT"],
   3: [CONFIG_LOG_DDL],
   4: MARKS_DDL,
   5: RANGES_DDL,
+  6: [LV_LOG_DDL],
 };
 
 /** One statement per entry (a ';' inside a trailing comment is not a statement end). */

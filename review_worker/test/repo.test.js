@@ -94,7 +94,7 @@ test("local-dev leftovers (wrangler state = a local D1 with clicked notes / app 
 
 test("every src/*.js passes node --check; src/package.json marks ES modules", () => {
   const js = readdirSync(SRC).filter((f) => f.endsWith(".js"));
-  assert.deepEqual(js.sort(), ["auth.js", "config.js", "db.js", "index.js"]);
+  assert.deepEqual(js.sort(), ["auth.js", "config.js", "db.js", "index.js", "levels.js"]);
   for (const f of js) {
     const r = spawnSync(process.execPath, ["--check", join(SRC, f)], { encoding: "utf8" });
     assert.equal(r.status, 0, `${f}: ${r.stderr}`);
@@ -162,7 +162,7 @@ function runCase({ worker = null, remote = null, path = process.env.PATH }) {
   return { r, staged, workerFiles, contents };
 }
 
-const REAL = ["auth.js", "config.js", "db.js", "index.js", "package.json"];
+const REAL = ["auth.js", "config.js", "db.js", "index.js", "levels.js", "package.json"];
 const OLD = { "index.js": "export default {};\n" };
 
 test("sync step: review_worker missing → no worker/, push goes on (data + site staged)", { skip: !canRun }, () => {
@@ -194,7 +194,7 @@ test("sync step: a src file with a syntax error → nothing synced, remote worke
 
 test("sync step: code that parses but does not LINK (missing export / missing module) → nothing synced", { skip: !canRun }, () => {
   const pkg = '{"type":"module"}\n';
-  const real = Object.fromEntries(["auth.js", "config.js", "db.js", "index.js"].map((f) => [f, readFileSync(join(SRC, f), "utf8")]));
+  const real = Object.fromEntries(["auth.js", "config.js", "db.js", "index.js", "levels.js"].map((f) => [f, readFileSync(join(SRC, f), "utf8")]));
   const broken = [
     real["index.js"].replace("_resetAuthForTests }", "_resetAuthForTests, notThere }"),     // a named export auth.js lacks
     real["index.js"].replace('from "./db.js"', 'from "./dbx.js"'),                           // a module file that is not there
@@ -230,7 +230,7 @@ test("sync step: real src replaces a stale remote worker/ (old files removed, ch
   assert.equal(c.r.status, 0, c.r.stderr);
   assert.deepEqual(c.workerFiles, REAL);
   assert.deepEqual(c.staged, ["A\tdata/a.json", "A\tsite/b.html", "A\tworker/auth.js", "A\tworker/config.js",
-    "A\tworker/db.js", "A\tworker/package.json", "D\tworker/old.js", "M\tworker/index.js"]);
+    "A\tworker/db.js", "A\tworker/levels.js", "A\tworker/package.json", "D\tworker/old.js", "M\tworker/index.js"]);
 });
 
 test("sync step: no node on PATH → nothing synced, step still exits 0", { skip: !canRun }, () => {

@@ -28,6 +28,15 @@ past day is exactly what the alarm said on that day. One alarm (episode) per ent
     when the entity stopped spending ('stopped'), when ECPM / IPU lost its paid users ('no_paid'), or — P_PROD, the
     non-money families only — when the new level held 8 weeks ('settled': the level is accepted, no exclusion span).
 
+  LEVELS (P["levels"], P_PROD): H gives way to a resting level R per family, always the exact value of named days:
+    the first R = the middle clean fortnight of H's windows (an even count: the newer of the two middle ones); re-checked
+    on the days (day − EPOCH) % 28 == 0 while no alarm of the family is open — a new R when it moved ≥ half the DRIFT
+    minimum, the newest 4 clean fortnights are within ±10 % of it and the last change is ≥ 28 days old; money families
+    only upward (downward: a proposal after 84 steady days, money_down "propose"). A settled alarm sets R = the exact
+    value of its last 28 data days. An alarm open 120+ days is proposed too. Every episode baseline names its days
+    (bspan). The owner's pin (set / roll back / accept) overrides R from its day and closes an alarm open that day
+    ('owner', no span); "auto" ends it; a veto keeps an automatically accepted alarm open (retroactive).
+
 P_PARITY reproduces the investigation's chosen run exactly (its legacy behaviour kept on purpose); P_PROD is
 P_PARITY plus the production changes, each one switchable (see P_PROD below). The build uses P_PROD.
 """
@@ -96,6 +105,7 @@ P_PARITY = {
     "country_elig": None,        # {"days", "share", "usd"}: country entities big enough over the trailing window
     "unknown": "lenient",        # "strict": a window with an unknown (None) day has no value; an unknown spend day
                                  # neither opens nor closes anything
+    "levels": None,              # the resting level R (see LEVELS below); None = the median H recomputed every day
 }
 
 # The production set. Each change was re-backtested on the full history against the parity run (detection of the
@@ -114,6 +124,17 @@ P_PROD.update({
     "cpi_ccy": "inr", "money_cpi": True,
     "country_elig": {"days": 120, "share": 0.03, "usd": 500.0},
     "unknown": "strict",
+    "levels": {
+        "pick": "newer",            # an even count of clean fortnights: the newer of the two middle ones (never a mean)
+        "every": 28,                # re-check on the days (day − EPOCH) % 28 == 0, only while no alarm of the family is open
+        "delta": {f: v / 2.0 for f, v in _XLOW.items()},   # a new level differs from R by ≥ half the DRIFT minimum
+        "steady": (4, 0.10),        # … and the newest 4 clean fortnights are all within ±10 % of it
+        "cool": 28,                 # … and the family's last level change is ≥ 28 days old
+        "money_down": "propose",    # money families (ROAS_*) move up automatically; down only as a proposal the owner
+                                    # accepts ("auto": accepted after money_days steady days, as the others' settle)
+        "accept_days": 28,          # an accepted level = the exact value of the last 28 data days
+        "propose": {"money_days": 84, "money_band": 0.10, "open_days": 120},
+    },
 })
 
 
@@ -166,9 +187,10 @@ def _median(v):
     return v[m // 2] if m % 2 else 0.5 * (v[m // 2 - 1] + v[m // 2])
 
 
-def _healthy(V14, t, spans, n_win=11, need=4, sh=0, used=None, mid=False):
+def _healthy(V14, t, spans, n_win=11, need=4, sh=0, used=None, mid=False, pick="mean"):
     """Median of the 14-day windows ending t−14, t−21 … (n_win of them, shifted) that touch no span; the ends of the
-    windows taken (mid: only the one or two the median's value comes from) go to `used`."""
+    windows taken (mid: only the one or two the median's value comes from) go to `used`. pick "newer": an even count
+    gives the newer of the two middle windows (one named fortnight, never a mean of two)."""
     vals = []
     for j in range(n_win):
         b = t - 14 - 7 * j - sh
@@ -182,6 +204,16 @@ def _healthy(V14, t, spans, n_win=11, need=4, sh=0, used=None, mid=False):
             vals.append((v, b))
     if len(vals) < need:
         return None
+    if pick == "newer" and len(vals) % 2 == 0:
+        o = sorted(vals, key=lambda z: z[0])
+        m = len(o)
+        w = max(o[m // 2 - 1:m // 2 + 1], key=lambda z: z[1])
+        if used is not None:
+            if mid:
+                used.append(w[1])
+            else:
+                used.extend(b for _, b in vals)
+        return w[0]
     if used is not None:
         if mid:
             o = sorted(vals, key=lambda z: z[0])
@@ -609,8 +641,10 @@ def _settled(V14, t, sh, days, band):
     return all(abs(v / m - 1.0) <= band for v in vals)
 
 
-def _run_family(e, ser, fam, P, t0, t1):
-    """Replay one family on one entity over data days t0..t1 → (episodes as internal dicts, the state on t1)."""
+def _run_family(e, ser, fam, P, t0, t1, own=()):
+    """Replay one family on one entity over data days t0..t1 → (episodes as internal dicts, the state on t1, the level
+    rows: [{"t", "v", "src", "span", …}] — empty without P["levels"]). own: the owner's primitives of this family
+    (pin / auto / veto, day indexes), sorted by day."""
     sh = FAMILIES[fam]["shift"]
     V7, V14, SIG = ser.series(fam)
     thr_s, thr_d = P["thr_s"].get(fam), P["thr_d"].get(fam)
@@ -626,6 +660,14 @@ def _run_family(e, ser, fam, P, t0, t1):
     windows_bsp = P.get("drift_bsp") in ("windows", "median")
     mid = P.get("drift_bsp") == "median"
     spans, eps = [], []
+    LV = P.get("levels")
+    R, R_used, lev = None, [], []               # the resting level, the window ends it was taken from, its rows
+    pick = LV.get("pick", "mean") if LV else "mean"
+    money = fam in MONEY_FAMS
+    pr = (LV or {}).get("propose") or {}
+    m_auto = bool(LV) and money and LV.get("money_down") == "auto"
+    if m_auto and pr.get("money_days"):          # money accepted automatically after money_days steady days
+        settle = {"days": pr["money_days"], "band": pr.get("money_band", 0.10), "fams": [fam]}
     cur = None
     cS = cD = cA = 0
     esc_n = esc_d = 0
@@ -641,7 +683,29 @@ def _run_family(e, ser, fam, P, t0, t1):
                 state = "gated"
                 continue
             used = [] if windows_bsp else None
-            h = _healthy(V14, t, spans, sh=sh, used=used, mid=mid)   # None when young: then only SUDDEN can open
+            h = _healthy(V14, t, spans, sh=sh, used=used, mid=mid, pick=pick)   # None when young: SUDDEN only
+            if LV:
+                # the resting level R replaces the daily median: formed once, re-checked every 4 weeks, the owner's
+                # pin overrides it (§ LEVELS)
+                pin = _pin_at(own, t)
+                if pin is not None:
+                    if R != pin["value"]:
+                        R, R_used = pin["value"], []
+                        lev.append({"t": t, "v": R, "src": pin.get("src", "manual"), "span": pin.get("span"),
+                                    "act": pin.get("id")})
+                elif h is not None and h > 0 and (R is None or (
+                        (ser.off + t) % LV.get("every", 28) == 0
+                        and abs(math.log(h / R)) >= math.log(1.0 + LV["delta"].get(fam, 0.05))
+                        and _steady(V14, t, spans, sh, h, LV.get("steady"))
+                        and not (money and not m_auto and lworse(fam, h, R) > 0)
+                        and (not lev or t - lev[-1]["t"] >= LV.get("cool", 0)))):
+                    R, R_used = h, list(used or [])
+                    hb = R_used[-1] if R_used else None
+                    lev.append({"t": t, "v": R, "src": "first" if not lev else "auto",
+                                "span": (hb - 13, hb) if hb is not None else None})
+                h = R
+                if used is not None:
+                    used[:] = R_used
             fired, u, info = None, None, None
             if P["use"]["SUDDEN"] and thr_s is not None and t - 7 - sh >= 13:
                 x7, xp = V7[t - sh], V14[t - 7 - sh]
@@ -671,7 +735,7 @@ def _run_family(e, ser, fam, P, t0, t1):
                     fired, info = "DRIFT", lt
             uused = [] if windows_bsp else None
             if fired is None and P["use"]["ABSOLUTE"] and thr_a is not None:
-                u = _healthy(V14, t, spans, n_win=24, need=6, sh=sh, used=uused, mid=mid)
+                u = _healthy(V14, t, spans, n_win=24, need=6, sh=sh, used=uused, mid=mid, pick=pick)
                 x14 = V14[t - sh]
                 lw = lworse(fam, x14, u)
                 lt = eff_thr(fam, thr_a, za, sig, ym, scale=0.267)
@@ -715,13 +779,16 @@ def _run_family(e, ser, fam, P, t0, t1):
                 c = ser.change_start(fam, t, sh)
                 base = ser.value(fam, c - 14 - sh, c - 1 - sh) \
                     if (c is not None and ser.clean(c - 14 - sh, c - 1 - sh)) else None
+                bdays = (c - 14 - sh, c - 1 - sh) if base is not None else None
                 if base is None:
                     c, base = t - 6, V14[t - 7 - sh]
+                    bdays = (t - 20 - sh, t - 7 - sh)
                 base_src = "before"
                 prev = ser.value(fam, c - 28 - sh, c - 15 - sh) if ser.clean(c - 28 - sh, c - 15 - sh) else None
                 if h and base and prev and h > 0 and base > 0 and prev > 0 and \
                         abs(math.log(base / prev)) > math.log(1.0 + P["base_band"]):
                     base, base_src = h, "band"
+                    bdays = lev[-1]["span"] if (LV and lev) else None
                 # re-check against the chosen baseline: a move back to normal from an unusually good fortnight is no
                 # alarm
                 lw = lworse(fam, V7[t - sh], base)
@@ -741,6 +808,10 @@ def _run_family(e, ser, fam, P, t0, t1):
                     c = d - 6
                 base = ref
                 base_src = "healthy" if fired == "DRIFT" else "usual"
+                if fired == "DRIFT":
+                    bdays = lev[-1]["span"] if (LV and lev) else None
+                else:
+                    bdays = (uused[-1] - 13, uused[-1]) if (uused and len(uused) == 1) else None
                 if windows_bsp:
                     # the average daily spend over the days of the windows the level was taken from
                     ends = used if fired == "DRIFT" else uused
@@ -758,7 +829,7 @@ def _run_family(e, ser, fam, P, t0, t1):
                 cS = cD = cA = 0
                 state = "arming"
                 continue
-            cur = {"fam": fam, "opener": fired, "open": t, "c": c, "base": base, "base_src": base_src,
+            cur = {"fam": fam, "opener": fired, "open": t, "c": c, "base": base, "base_src": base_src, "bspan": bdays,
                    "lthr": lt_open, "thr_open": _rel(fam, lt_open), "rec": 0, "max_worse": 0.0, "esc": [],
                    "esc_kind": [], "confirm": conf, "ctx": ser.context(t),
                    "stake": [ser.money(fam, t - 6 - sh, t - sh, base)]}
@@ -787,6 +858,17 @@ def _run_family(e, ser, fam, P, t0, t1):
                 cur["stake"].append(ser.money(fam, t - 6 - sh, t - sh, cur["base"]))
                 cur["ref14"] = V14[t - sh] or cur["ref14"]
                 esc_n = esc_d = 0
+        if own:
+            pin = _pin_at(own, t)
+            if pin is not None and pin["day"] == t and cur["open"] < t:
+                cur["close"], cur["why"] = t, "owner"          # the owner set the level: this alarm ends, no span
+                eps.append(cur)
+                cur = None
+                R, R_used = pin["value"], []
+                lev.append({"t": t, "v": R, "src": pin.get("src", "manual"), "span": pin.get("span"),
+                            "act": pin.get("id")})
+                state = "ok"
+                continue
         lw7 = lworse(fam, V7[t - sh], cur["base"])
         if lw7 is not None:
             cur["max_worse"] = max(cur["max_worse"], _rel(fam, lw7))
@@ -806,11 +888,29 @@ def _run_family(e, ser, fam, P, t0, t1):
             if cur["rec"] >= P["m_r"]:
                 closed = "recovered"
             elif settle and t - cur["open"] >= settle["days"] and _settled(V14, t, sh, settle["days"], settle["band"]):
-                closed = "settled"
+                if LV and (_pin_at(own, t) is not None or _vetoed(own, cur)):
+                    cur.setdefault("suggest", (t, "held"))     # pinned / rejected by the owner: a proposal only
+                else:
+                    closed = "settled"
+            if LV and not closed and "suggest" not in cur:
+                if money and not m_auto and pr.get("money_days") and t - cur["open"] >= pr["money_days"] and \
+                        _settled(V14, t, sh, pr["money_days"], pr.get("money_band", 0.10)):
+                    cur["suggest"] = (t, "money")             # a money level going down: the owner accepts it
+                elif pr.get("open_days") and t - cur["open"] >= pr["open_days"]:
+                    cur["suggest"] = (t, "open")              # open 120+ days without getting steady
         if closed:
             cur["close"], cur["why"] = t, closed
             if closed != "settled":           # an accepted level counts as normal afterwards
                 spans.append((cur["c"] - sh, t - sh))
+            elif LV:
+                a_ = t - LV.get("accept_days", 28) + 1 - sh
+                acc = ser.value(fam, a_, t - sh) if ser.clean(a_, t - sh) else None
+                if acc is None:
+                    acc, a_ = V14[t - sh], t - 13 - sh
+                if acc:
+                    R, R_used = acc, [t - sh]
+                    lev.append({"t": t, "v": R, "src": "accepted", "span": (a_, t - sh), "ep": cur["open"],
+                                "old": cur["base"]})
             eps.append(cur)
             cur = None
             state = "ok"
@@ -819,7 +919,49 @@ def _run_family(e, ser, fam, P, t0, t1):
     if cur is not None:
         cur["close"], cur["why"] = None, None
         eps.append(cur)
-    return eps, state
+    return eps, state, lev
+
+
+def _pin_at(own, t):
+    """The owner's level in force on day t (the last pin before or on t, unless an "auto" came after it), else None."""
+    cur = None
+    for a in own or ():
+        if a["day"] > t:
+            break
+        if a["act"] == "pin":
+            cur = a
+        elif a["act"] == "auto":
+            cur = None
+    return cur
+
+
+def _vetoed(own, cur):
+    """The owner rejected the automatic acceptance of THIS episode (matched by its opening day, ±7 days)."""
+    return any(a["act"] == "veto" and abs(a["ep_open"] - cur["open"]) <= 7 for a in own or ())
+
+
+def _steady(V14, t, spans, sh, h, cfg):
+    """The newest n clean 14-day windows (as H reads them) all within ±band of the new level h."""
+    if not cfg:
+        return True
+    n, band = cfg
+    got = 0
+    for j in range(11):
+        b = t - 14 - 7 * j - sh
+        a = b - 13
+        if a < 0:
+            break
+        if spans and any(not (b < s0 or a > s1) for s0, s1 in spans):
+            continue
+        v = V14[b]
+        if v is None:
+            continue
+        if abs(v / h - 1.0) > band:
+            return False
+        got += 1
+        if got >= n:
+            return True
+    return got >= n
 
 
 def tier(ep):
@@ -857,17 +999,24 @@ def _country_ok(e, n, apps, cfg, t):
     return tot > 0 and mine >= cfg["share"] * tot
 
 
-def run(ents, P, t):
+def run(ents, P, t, owner=None):
     """Replay every entity from its start to data day t (ISO). Returns
-    {"episodes": [Episode dict …], "normal": {(kind, id): {fam: list[float|None]}},   # B while open, else H
-     "healthy": {(kind, id): {fam: list[float|None]}},                                 # H per day, all spans known at t
-     "state": {(kind, id): {fam: "open"|"arming"|"gated"|"warm"|"na"|"ok"}}}
+    {"episodes": [Episode dict …], "normal": {(kind, id): {fam: list[float|None]}},   # B while open, else H (R)
+     "healthy": {(kind, id): {fam: list[float|None]}},   # H per day, all spans known at t (P["levels"]: R in force)
+     "state": {(kind, id): {fam: "open"|"arming"|"gated"|"warm"|"na"|"ok"}},
+     "levels": {(kind, id): {fam: [level row …]}},       # P["levels"] only (apps), oldest first
+     "proposals": {(kind, id): [proposal …]}}            # P["levels"] only (apps): open alarms the owner may accept
     normal / healthy are produced for app entities and fams CPI, ECPM, ROAS_G, GAP, IPU, ROAS_C0, and for country
-    entities and fams CPI, ECPM (index = day index from the entity's day0, 0..t). A country line the eligibility rule
-    leaves out is not replayed (no episode, state "na") but still gets its healthy level (no span to leave out: its
-    normal = H). Inputs are never modified."""
-    episodes, normal, healthy, state = [], {}, {}, {}
+    entities and fams CPI, ECPM (index = day index from the entity's day0, 0..t). With P["levels"] a replayed entity's
+    healthy level is the resting level R its replay used that day (countries too: their alarms judge against R); a
+    country line the eligibility rule leaves out is not replayed (no episode, no level, state "na") but still gets its
+    healthy level H from the median rule (no span to leave out: its normal = H). owner (P["levels"] only):
+    {(app id, fam): [{"act": "pin", "day", "value", "src", "days": [a, b] | None, "id"} | {"act": "auto", "day"} |
+    {"act": "veto", "ep_open"}]} with ISO days — the owner's level from its day (an open alarm closes "owner"), back to
+    the automatic rule, an automatic acceptance that never happened. Inputs are never modified."""
+    episodes, normal, healthy, state, levels, props = [], {}, {}, {}, {}, {}
     apps = {e.id: e for e in ents if e.kind == "app"}
+    LV = P.get("levels")
     for e in ents:
         key = (e.kind, e.id)
         fams = FAMS_BY_KIND[e.kind]
@@ -880,6 +1029,7 @@ def run(ents, P, t):
         ser = _Ser(e, n, P)
         t1 = n - 1
         res = {}
+        lv = {}
         if elig and ser.first is not None:
             t0 = max(ser.first + 21, 28)
             for fam in fams:
@@ -888,19 +1038,96 @@ def run(ents, P, t):
                 if t0 > t1:
                     st[fam] = "warm"
                     continue
-                eps, st[fam] = _run_family(e, ser, fam, P, t0, t1)
+                own = _own(owner, e, fam) if (LV and owner and e.kind == "app") else ()
+                eps, st[fam], lv[fam] = _run_family(e, ser, fam, P, t0, t1, own)
                 res[fam] = eps
                 for x in eps:
                     episodes.append(_episode(e, ser, x, P, t1))
         if e.kind == "app":
-            normal[key], healthy[key] = _levels(ser, res, t1)
+            normal[key], healthy[key] = _levels(ser, res, t1, lv=lv if LV else None)
+            if LV:
+                levels[key] = {f: [_lv_row(e, x) for x in v] for f, v in lv.items() if v}
+                props[key] = _proposals(e, ser, res, P, t1)
         elif e.kind == "country":
-            normal[key], healthy[key] = _levels(ser, res, t1, CTY_OUT_FAMS)
-    return {"episodes": episodes, "normal": normal, "healthy": healthy, "state": state}
+            # a replayed line: the level its alarms used (R with P["levels"]); a left-out line: H (no level was used)
+            normal[key], healthy[key] = _levels(ser, res, t1, CTY_OUT_FAMS, lv if (LV and elig) else None)
+    out = {"episodes": episodes, "normal": normal, "healthy": healthy, "state": state}
+    if LV:
+        out["levels"], out["proposals"] = levels, props
+    return out
 
 
-def _levels(ser, res, t1, fams=OUT_FAMS):
-    """Per day: H (the healthy level with every span known at t) and the normal (B while an episode is open)."""
+def _ix(day0, d):
+    return (date.fromisoformat(d) - date.fromisoformat(day0)).days
+
+
+def _own(owner, e, fam):
+    """The owner's primitives of one app family → day indexes on the entity, sorted by day (a veto has no day)."""
+    out = []
+    for a in owner.get((e.id, fam)) or ():
+        x = dict(a)
+        x["day"] = _ix(e.day0, a["day"]) if a.get("day") else -10 ** 9
+        if a.get("ep_open"):
+            x["ep_open"] = _ix(e.day0, a["ep_open"])
+        if a.get("days"):
+            x["span"] = (_ix(e.day0, a["days"][0]), _ix(e.day0, a["days"][1]))
+        out.append(x)
+    out.sort(key=lambda z: z["day"])
+    return out
+
+
+def _lv_row(e, x):
+    """An internal level row → {"day" (the data day it formed), "v", "src", "days": [first, last] the exact named days
+    (None: a value typed by the owner), "ep": {"opened", "old"} (accepted), "act" (the owner action)}."""
+    d0 = e.day0
+    out = {"day": _iso(d0, x["t"]), "v": x["v"], "src": x["src"],
+           "days": [_iso(d0, x["span"][0]), _iso(d0, x["span"][1])] if x.get("span") else None}
+    if x.get("ep") is not None:
+        out["ep"] = {"opened": _iso(d0, x["ep"]), "old": x["old"]}
+    if x.get("act"):
+        out["act"] = x["act"]
+    return out
+
+
+def _proposals(e, ser, res, P, t1):
+    """Open app episodes the owner may close by accepting a new level: a money level steady money_days days ("money"),
+    open open_days+ days ("open"), an acceptance that a pin or a rejection held back ("held"). Each: fam, opened, day
+    (the first day it was proposed), v = the exact value of the last accept_days data days (days), gap = cost − value ÷
+    the old level since that day (money families and CPI: what accepting would stop counting)."""
+    LV = P["levels"]
+    out = []
+    for fam, eps in sorted(res.items()):
+        x = eps[-1] if eps else None
+        if not x or x["close"] is not None or not x.get("suggest"):
+            continue
+        sh = FAMILIES[fam]["shift"]
+        a = t1 - LV.get("accept_days", 28) + 1 - sh
+        v = ser.value(fam, a, t1 - sh) if ser.clean(a, t1 - sh) else None
+        if v is None:
+            continue
+        day, why = x["suggest"]
+        g = None
+        if fam in MONEY_FAMS or (fam == "CPI" and P.get("money_cpi") and ser.cpi_inr):
+            m = _ep_money(e, ser, fam, day - sh, t1 - sh, x["base"])
+            g = {"inr": m["since_c_inr"], "usd": m["since_c_usd"]} if m else None
+        out.append({"fam": fam, "opened": _iso(e.day0, x["open"]), "day": _iso(e.day0, day), "why": why, "v": v,
+                    "days": [_iso(e.day0, a), _iso(e.day0, t1 - sh)], "old": x["base"], "gap": g})
+    return out
+
+
+def _r_series(rows, n):
+    """The level in force per day from the level rows (each from its day on), None before the first."""
+    out = [None] * n
+    for i, x in enumerate(rows):
+        hi = rows[i + 1]["t"] if i + 1 < len(rows) else n
+        for d in range(max(0, x["t"]), min(n, hi)):
+            out[d] = x["v"]
+    return out
+
+
+def _levels(ser, res, t1, fams=OUT_FAMS, lv=None):
+    """Per day: H (the healthy level with every span known at t; lv given: the resting level R the replay used that
+    day) and the normal (B while an episode is open)."""
     nrm, hl = {}, {}
     n = t1 + 1
     for fam in fams:
@@ -908,9 +1135,17 @@ def _levels(ser, res, t1, fams=OUT_FAMS):
             nrm[fam] = [None] * n
             hl[fam] = [None] * n
             continue
+        eps = res.get(fam, [])
+        if lv is not None:
+            H = _r_series(lv.get(fam) or [], n)
+            N = list(H)
+            for x in eps:
+                for d in range(x["open"], x["close"] if x["close"] is not None else n):
+                    N[d] = x["base"]
+            hl[fam], nrm[fam] = H, N
+            continue
         sh = FAMILIES[fam]["shift"]
         _, V14, _ = ser.series(fam)
-        eps = res.get(fam, [])
         spans = [(x["c"] - sh, (x["close"] if x["close"] is not None else t1) - sh)
                  for x in eps if x["why"] != "settled"]
         bad = [False] * n                      # the 14-day window ending b touches a span
@@ -955,8 +1190,66 @@ def _episode(e, ser, x, P, t1):
           "base": x["base"], "base_src": x["base_src"], "thr_open": x["thr_open"], "max_worse": x["max_worse"],
           "esc": [[_iso(d0, d), k] for d, k in zip(x["esc"], x["esc_kind"])], "confirm": x["confirm"],
           "ctx": x["ctx"], "money": money, "stake": [round(v, 2) for v in x["stake"]]}
+    if P.get("levels"):
+        bs = x.get("bspan")
+        ep["bspan"] = [_iso(d0, bs[0]), _iso(d0, bs[1])] if bs else None
+        ep["suggest"] = [_iso(d0, x["suggest"][0]), x["suggest"][1]] if x.get("suggest") else None
     ep["tier"] = tier(ep)
     return ep
+
+
+# ── a level's exact value (the build's owner actions and its exactness check; the page recomputes the same) ─────────
+
+LEVEL_SUMS = {"CPI": ("sp_inr", "sp_usd", "inst"), "ECPM": ("rev", "imp"), "GAP": ("sp_usd", "inst", "imp", "rev"),
+              "IPU": ("imp", "dau"), "ROAS_G": ("d0_inr", "sp_inr", "sp_usd"), "ROAS_C0": ("c_r0", "c_sp"),
+              "ROAS_C1": ("c_r1", "c_sp"), "ROAS_C7": ("c_r7", "c_sp"), "SPEND": ("sp_usd",)}
+
+
+def level_of(fam, sums, nd, P):
+    """The family value from the sums of its named days (nd days) — the same ratio of sums as the replay."""
+    g = sums.get
+    try:
+        if fam == "CPI":
+            return (g("sp_inr") if P.get("cpi_ccy") == "inr" else g("sp_usd")) / g("inst")
+        if fam == "ECPM":
+            return g("rev") / g("imp") * 1000.0
+        if fam == "GAP":
+            return (g("sp_usd") / g("inst")) * (g("imp") / g("rev"))
+        if fam == "IPU":
+            return g("imp") / g("dau")
+        if fam == "ROAS_G":
+            return g("d0_inr") / g("sp_inr")
+        if fam.startswith("ROAS_C"):
+            return g(FAMILIES[fam]["num"]) / g("c_sp")
+        if fam == "SPEND":
+            return g("sp_usd") / nd
+    except (TypeError, ZeroDivisionError):
+        return None
+    return None
+
+
+def measure(ent, P, fam, a, b):
+    """The exact level of days a..b (ISO, inclusive, the family's own day index) on one entity: {"v", "sums", "days",
+    "n"} — v as the replay computes it (its gates: a thin or unknown window → None), sums = the plain sums of the named
+    days (level_of(fam, sums, n) == v)."""
+    i0, i1 = _ix(ent.day0, a), _ix(ent.day0, b)
+    if i0 < 0 or i1 < i0:
+        return None
+    ser = _Ser(ent, i1 + 1, P)
+    if fam not in FAMILIES or not ser.applicable(fam):
+        return None
+    v = ser.value(fam, i0, i1)
+    if v is None:
+        return None
+    sums = {}
+    for k in LEVEL_SUMS[fam]:
+        if k == "sp_inr" and fam == "CPI" and not ser.cpi_inr:
+            continue
+        arr = ent.s.get(k)
+        if arr is None:
+            return None
+        sums[k] = math.fsum(x for x in arr[i0:i1 + 1] if x is not None)
+    return {"v": v, "sums": sums, "days": [a, b], "n": i1 - i0 + 1}
 
 
 def notifications(episodes, tiers=("ALERT",), gap=7):

@@ -513,8 +513,13 @@ def test_prod_healthy_follows_the_new_level_after_a_settle():
     new = 94.5 * 0.2 * 1.4
     for d in range(c + 1, c + 41):                    # never None, never the old level, from the first day on
         assert H[d] is not None and H[d] == pytest.approx(new, rel=0.03), d
-    # an episode that closed 'recovered' still leaves its days out of H (the contrast)
+    # an episode that closed 'recovered': the resting level stays the one it was compared against (levels on); the
+    # daily median of the windows leaves its days out (levels off, the contrast)
     r, eps = cpi_eps(CASES["A"][0])
+    assert eps[0]["why"] == "recovered"
+    cl, R = ix(eps[0]["closed"]), r["healthy"][("app", APP)]["CPI"]
+    assert all(R[cl + j] == pytest.approx(94.5 * 0.2, rel=0.03) for j in range(1, 11))
+    r, eps = cpi_eps(CASES["A"][0], P=dict(E.P_PROD, levels=None))
     assert eps[0]["why"] == "recovered"
     assert all(r["healthy"][("app", APP)]["CPI"][ix(eps[0]["closed"]) + j] is None for j in range(1, 11))
 
@@ -679,3 +684,267 @@ def test_country_healthy_and_normal_per_day():
     alone = E.run([ent(app)], E.P_PROD, T)
     assert [x for x in r["episodes"] if x["kind"] == "app"] == alone["episodes"]
     assert r["healthy"][("app", APP)] == alone["healthy"][("app", APP)]
+
+
+def test_country_normal_is_the_level_its_alarm_used():
+    """P_PROD levels: a replayed country line judges against its resting level R, so its healthy / normal per day is that
+    R (steps only, held between re-checks) — the left-out line keeps the daily median H; without levels both are H."""
+    app = synth()
+    us, kr = synth(seed=3, sp=300.0), synth(seed=4, sp=20.0)
+    mul(us, "inst", 300, N, 1 / 1.4)
+    cty = lambda cc, s: E.Ent("country", APP + "|" + cc, APP, cc, DAY0,
+                              {k: s[k] for k in ("sp_usd", "sp_inr", "inst", "rev", "imp")})
+    ents = [ent(app), cty("US", us), cty("KR", kr)]
+    kU, kK = ("country", APP + "|US"), ("country", APP + "|KR")
+    r = E.run(ents, E.P_PROD, T)
+    P0 = copy.deepcopy(E.P_PROD)
+    P0["levels"] = None
+    r0 = E.run(ents, P0, T)
+    for fam in ("CPI", "ECPM"):
+        h = [v for v in r["healthy"][kU][fam] if v is not None]
+        steps = sum(1 for a, b in zip(h, h[1:]) if a != b)
+        assert h and steps <= len(h) // 28 + 1, fam                              # R: a few steps, not a daily median
+        assert sum(1 for a, b in zip(r0["healthy"][kU][fam], r0["healthy"][kU][fam][1:])
+                   if a is not None and b is not None and a != b) > steps, fam   # H moves far more often
+    assert "levels" not in r0 and "levels" in r and kU not in r["levels"]           # level history: apps only
+    for ep in (x for x in r["episodes"] if x["id"] == APP + "|US" and x["opener"] == "DRIFT"):
+        assert r["normal"][kU][ep["fam"]][ix(ep["opened"])] == ep["base"]
+    assert r["healthy"][kK] == r0["healthy"][kK] and r["normal"][kK] == r["healthy"][kK]   # left out: H either way
+
+
+# ── P_PROD levels: the resting level R, its history and the owner's primitives ─────────────────────────────────────
+def lv_run(s, P=E.P_PROD, owner=None, t_ix=N - 1, day0=DAY0):
+    r = E.run([ent(s, day0=day0)], P, day_of(t_ix), owner=owner)
+    return r, r["levels"][("app", APP)], [x for x in r["episodes"]]
+
+
+def lv_P(**kw):
+    P = copy.deepcopy(E.P_PROD)
+    P["levels"].update(kw)
+    return P
+
+
+def exact(e, fam, row, P=E.P_PROD):
+    """The row's value is the exact value of its named days (the replay's own ratio, and the ratio of the plain sums)."""
+    m = E.measure(e, P, fam, row["days"][0], row["days"][1])
+    return m is not None and abs(m["v"] / row["v"] - 1) < 1e-12 and \
+        abs(E.level_of(fam, m["sums"], m["n"], P) / row["v"] - 1) < 1e-9
+
+
+def test_levels_first_level_is_one_named_fortnight_exactly():
+    s = synth()
+    r, L, eps = lv_run(s)
+    assert eps == [] and r["proposals"][("app", APP)] == []
+    for fam in ("CPI", "ECPM", "GAP", "IPU", "ROAS_G", "SPEND"):
+        rows = L[fam]
+        assert rows[0]["src"] == "first", fam
+        a, b = rows[0]["days"]
+        assert ix(b) - ix(a) == 13 and exact(ent(s), fam, rows[0]), fam
+    cpi = L["CPI"][0]
+    assert cpi["v"] == pytest.approx(94.5 * 0.2, rel=0.03)                     # ₹ per install (CPI in INR)
+    H = r["healthy"][("app", APP)]["CPI"]                                     # the level in force per day
+    assert H[ix(cpi["day"])] == cpi["v"] and H[ix(cpi["day"]) - 1] is None
+    assert r["normal"][("app", APP)]["CPI"] == H                              # no alarm: normal = the level
+
+
+def test_levels_even_count_takes_the_newer_middle_fortnight_never_a_mean():
+    t = 60
+    V14 = [None] * 61
+    for b, v in ((t - 14, 1.0), (t - 21, 3.0), (t - 28, 2.0), (t - 35, 4.0)):
+        V14[b] = v
+    used = []
+    assert E._healthy(V14, t, [], used=used, mid=True, pick="newer") == 3.0 and used == [t - 21]
+    assert E._healthy(V14, t, [], mid=True) == 2.5                            # levels off: the mean of the two
+    V14[t - 42] = 5.0                                                         # odd: the median fortnight itself
+    assert E._healthy(V14, t, [], pick="newer") == 3.0
+
+
+def test_levels_recheck_only_on_the_epoch_28_day_phase_and_independent_of_day0():
+    s = synth()
+    mul(s, "inst", 200, N, 1 / 1.1)                                           # CPI +10 %: under DRIFT, over δ 7.5 %
+    _, L, eps = lv_run(s)
+    assert [x for x in eps if x["fam"] == "CPI"] == []
+    rows = L["CPI"]
+    assert [x["src"] for x in rows] == ["first", "auto"]
+    assert (date.fromisoformat(rows[1]["day"]) - date.fromisoformat(E.EPOCH)).days % 28 == 0
+    assert rows[1]["v"] == pytest.approx(94.5 * 0.2 * 1.1, rel=0.03) and exact(ent(s), "CPI", rows[1])
+    for k in (3, 10):                                                         # k idle days in front: same levels by date
+        pre = {key: ([None] * k if key == "dau" else [0.0] * k) + list(v) for key, v in s.items()}
+        d0 = (date.fromisoformat(DAY0) - timedelta(days=k)).isoformat()
+        r = E.run([ent(pre, day0=d0)], E.P_PROD, T)
+        assert r["levels"][("app", APP)]["CPI"] == rows
+
+
+def test_levels_no_new_level_under_delta_or_when_not_steady():
+    s = synth()
+    mul(s, "inst", 200, N, 1 / 1.05)                                          # +5 %: under half the DRIFT minimum
+    assert [x["src"] for x in lv_run(s)[1]["CPI"]] == ["first"]
+    s = synth()
+    for d in range(200, N):                                                   # +10 % on average, ±12 % waves
+        s["inst"][d] /= 1.1 * (1 + 0.12 * math.sin(2 * math.pi * (d - 200) / 56))
+    _, L, eps = lv_run(s)
+    assert [x["src"] for x in L["CPI"]] == ["first"]
+    s = synth()
+    mul(s, "inst", 200, N, 1 / 1.1)
+    assert [x["src"] for x in lv_run(s, lv_P(steady=None))[1]["CPI"]] == ["first", "auto"]
+
+
+def test_levels_cool_down_between_changes():
+    """The last change of the family (here the owner's pin, then back to auto) holds the next one off for 28 days."""
+    s = synth()
+    mul(s, "inst", 200, N, 1 / 1.1)
+    rows = lv_run(s)[1]["CPI"]
+    D = ix(rows[1]["day"])                                                    # the automatic change without an owner
+    own = owner_pin(day_of(D - 10), rows[0]["v"] * 0.98)
+    own[(APP, "CPI")].append({"act": "auto", "day": day_of(D - 9)})
+    after = lambda P: [x for x in lv_run(s, P, owner=own)[1]["CPI"] if x["src"] == "auto"][0]   # noqa: E731
+    assert ix(after(lv_P(cool=0))["day"]) == D
+    a28 = ix(after(E.P_PROD)["day"])
+    assert a28 - (D - 10) >= 28 and a28 == D + 28
+
+
+def test_levels_money_moves_up_automatically_never_down():
+    up, down = synth(), synth()
+    mul(up, "d0_inr", 200, N, 1.05)                                           # D0 ROAS 40 % → 42 %: over δ 3.5 %
+    mul(down, "d0_inr", 200, N, 0.95)
+    assert [x["src"] for x in lv_run(up)[1]["ROAS_G"]] == ["first", "auto"]
+    r, L, eps = lv_run(down)
+    assert [x["src"] for x in L["ROAS_G"]] == ["first"] and [x for x in eps if x["fam"] == "ROAS_G"] == []
+    assert L["ROAS_G"][0]["v"] == pytest.approx(0.40, rel=0.02)
+    # the switch: money_down "auto" lets the 4-weekly re-check move a money level down too
+    assert [x["src"] for x in lv_run(down, lv_P(money_down="auto"))[1]["ROAS_G"]] == ["first", "auto"]
+
+
+def test_levels_settle_accepts_the_exact_last_28_days():
+    s = step_held()
+    _, L, eps = lv_run(s)
+    ep = [x for x in eps if x["fam"] == "CPI"][0]
+    acc = [x for x in L["CPI"] if x["src"] == "accepted"]
+    assert ep["why"] == "settled" and len(acc) == 1
+    a, b = acc[0]["days"]
+    assert b == ep["closed"] and ix(b) - ix(a) == 27 and exact(ent(s), "CPI", acc[0])
+    assert acc[0]["ep"] == {"opened": ep["opened"], "old": ep["base"]}
+    assert acc[0]["v"] == pytest.approx(94.5 * 0.2 * 1.4, rel=0.03)
+
+
+def test_levels_money_alarm_held_84_days_is_a_proposal_not_an_acceptance():
+    s = synth()
+    mul(s, "d0_inr", 250, N, 0.8)                                             # D0 ROAS 40 % → 32 %, held
+    r, L, eps = lv_run(s)
+    ep = [x for x in eps if x["fam"] == "ROAS_G"][0]
+    assert ep["why"] is None and ep["suggest"][1] == "money" and 84 <= ix(ep["suggest"][0]) - ix(ep["opened"]) <= 90
+    p = [x for x in r["proposals"][("app", APP)] if x["fam"] == "ROAS_G"][0]
+    assert p["why"] == "money" and p["day"] == ep["suggest"][0] and p["days"] == [day_of(N - 28), T]
+    assert p["v"] == pytest.approx(0.32, rel=0.02) and p["old"] == ep["base"]
+    m = E.measure(ent(s), E.P_PROD, "ROAS_G", *p["days"])
+    assert m["v"] == p["v"]
+    assert p["gap"]["usd"] > 0 and p["gap"]["inr"] > 0                        # cost − value ÷ the old level since then
+    assert [x["src"] for x in L["ROAS_G"]] == ["first"]
+    # money_down "auto": the same alarm is accepted on that day, R = the exact last 28 days
+    r, L, eps = lv_run(s, lv_P(money_down="auto"))
+    ep = [x for x in eps if x["fam"] == "ROAS_G"][0]
+    assert ep["why"] == "settled" and 84 <= ix(ep["closed"]) - ix(ep["opened"]) <= 90
+    assert [x["src"] for x in L["ROAS_G"]][-1] == "accepted" and exact(ent(s), "ROAS_G", L["ROAS_G"][-1])
+
+
+def test_levels_an_alarm_open_120_days_without_getting_steady_is_proposed():
+    s = synth()
+    mul(s, "inst", 200, N, 1 / 2.0)
+    for d in range(200, N):
+        s["inst"][d] *= 1 + 0.25 * math.sin(2 * math.pi * (d - 200) / 112)
+    r, L, eps = lv_run(s)
+    ep = [x for x in eps if x["fam"] == "CPI"][0]
+    assert ep["why"] is None and N - 1 - ix(ep["opened"]) >= 120
+    assert ep["suggest"] == [day_of(ix(ep["opened"]) + 120), "open"]
+    assert [x["why"] for x in r["proposals"][("app", APP)] if x["fam"] == "CPI"] == ["open"]
+
+
+def owner_pin(day, value, days=None, src="manual", fam="CPI", aid="a-000000000001"):
+    return {(APP, fam): [{"act": "pin", "day": day, "value": value, "src": src, "days": days, "id": aid}]}
+
+
+def test_levels_a_pin_closes_the_open_alarm_as_owner_and_holds():
+    s = synth()
+    mul(s, "inst", 300, N, 1 / 1.4)                                           # an open CPI alarm from ~day 300
+    _, _, eps = lv_run(s)
+    ep = [x for x in eps if x["fam"] == "CPI"][0]
+    assert ep["why"] is None or ep["why"] == "settled"
+    pd = ix(ep["opened"]) + 20
+    m = E.measure(ent(s), E.P_PROD, "CPI", day_of(pd - 28), day_of(pd - 1))
+    r, L, eps = lv_run(s, owner=owner_pin(day_of(pd), m["v"], m["days"]))
+    cp = [x for x in eps if x["fam"] == "CPI"]
+    assert cp[0]["why"] == "owner" and cp[0]["closed"] == day_of(pd)
+    assert len(cp) == 1                                                       # the new level holds: nothing reopens
+    last = L["CPI"][-1]
+    assert (last["src"], last["day"], last["days"], last["act"]) == ("manual", day_of(pd), m["days"], "a-000000000001")
+    assert exact(ent(s), "CPI", last)
+    H = r["healthy"][("app", APP)]["CPI"]
+    assert all(H[d] == m["v"] for d in range(pd, N))
+
+
+def test_levels_a_pin_blocks_the_automatic_acceptance_it_becomes_a_proposal():
+    s = step_held()
+    first = lv_run(s)[1]["CPI"][0]
+    r, L, eps = lv_run(s, owner=owner_pin(day_of(200), first["v"], first["days"], src="rollback"))
+    ep = [x for x in eps if x["fam"] == "CPI"][0]
+    assert ep["why"] is None and ep["suggest"][1] == "held"
+    assert [x["why"] for x in r["proposals"][("app", APP)] if x["fam"] == "CPI"] == ["held"]
+    assert [x["src"] for x in L["CPI"]] == ["first"]          # the pin equals the level in force: no new row
+
+
+def test_levels_a_veto_keeps_the_automatically_accepted_alarm_open():
+    s = step_held()
+    ep = [x for x in lv_run(s)[2] if x["fam"] == "CPI"][0]
+    assert ep["why"] == "settled"
+    _, L, eps = lv_run(s, owner={(APP, "CPI"): [{"act": "veto", "ep_open": day_of(ix(ep["opened"]) + 3)}]})
+    v = [x for x in eps if x["fam"] == "CPI"][0]
+    assert v["opened"] == ep["opened"] and v["why"] is None and v["money"]["what"] == "extra_paid"
+    assert "accepted" not in [x["src"] for x in L["CPI"]]
+
+
+def test_levels_auto_ends_a_pin():
+    s = synth()
+    mul(s, "inst", 200, N, 1 / 1.1)
+    base = lv_run(s)[1]["CPI"]
+    own = owner_pin(day_of(100), base[0]["v"] * 0.98)
+    _, L, _ = lv_run(s, owner=own)
+    assert [x["src"] for x in L["CPI"]] == ["first", "manual"]                # pinned: no automatic move
+    own[(APP, "CPI")].append({"act": "auto", "day": day_of(150)})
+    _, L, _ = lv_run(s, owner=own)
+    assert [x["src"] for x in L["CPI"]] == ["first", "manual", "auto"]
+    assert ix(L["CPI"][-1]["day"]) > 150 and L["CPI"][-1]["days"] is not None
+
+
+def test_levels_every_episode_baseline_names_its_days():
+    n = 0
+    for name, (s, fams, kind) in CASES.items():
+        if kind != "app":
+            continue
+        for ep in E.run([ent(s)], E.P_PROD, T)["episodes"]:
+            bs = ep["bspan"]
+            assert bs is not None, (name, ep["fam"], ep["base_src"])
+            m = E.measure(ent(s), E.P_PROD, ep["fam"], bs[0], bs[1])
+            assert m is not None and abs(m["v"] / ep["base"] - 1) < 1e-12, (name, ep["fam"])
+            n += 1
+    assert n >= 10
+
+
+def test_levels_off_is_the_old_engine():
+    s = case_A()
+    off = E.run([ent(s)], dict(E.P_PROD, levels=None), T)
+    assert "levels" not in off and "proposals" not in off
+    assert all("bspan" not in ep and "suggest" not in ep for ep in off["episodes"])
+    assert E.P_PARITY["levels"] is None
+    on = E.run([ent(s)], E.P_PROD, T, owner={(APP, "CPI"): []})
+    assert on == E.run([ent(s)], E.P_PROD, T)                                 # an empty owner list changes nothing
+
+
+def test_level_of_is_the_ratio_of_the_plain_sums_for_every_family():
+    s = synth(cohort=True)
+    e = ent(s)
+    for fam in E.FAMS_BY_KIND["app"]:
+        m = E.measure(e, E.P_PROD, fam, day_of(200), day_of(227))
+        assert m is not None and m["n"] == 28, fam
+        assert E.level_of(fam, m["sums"], m["n"], E.P_PROD) == pytest.approx(m["v"], rel=1e-9), fam
+    assert E.measure(e, E.P_PROD, "CPI", day_of(10), day_of(5)) is None
+    assert E.level_of("CPI", {"sp_inr": 1.0, "inst": 0.0}, 1, E.P_PROD) is None

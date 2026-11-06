@@ -5,12 +5,14 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { FakeD1 } from "./fake_d1.js";
 import {
-  SCHEMA, SCHEMA_VERSION, MIGRATIONS, CONFIG_LOG_DDL, MARKS_DDL, RANGES_DDL, ensureSchema, splitSql, addDays, _resetSchemaForTests,
+  SCHEMA, SCHEMA_VERSION, MIGRATIONS, CONFIG_LOG_DDL, MARKS_DDL, RANGES_DDL, LV_LOG_DDL, ensureSchema, splitSql, addDays,
+  _resetSchemaForTests,
 } from "../src/db.js";
 
 const TABLES = ["rv_actions", "rv_flags", "rv_meta", "rv_notes", "rv_snoozes", "rv_state"];
 const hasConfigLog = (db) => db.q("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'config_log'")[0].n === 1;
 const hasMarks = (db) => db.q("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('cmp_marks', 'cmp_marks_one_live', 'cmp_marks_log')")[0].n === 3;
+const hasLvLog = (db) => db.q("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'lv_log'")[0].n === 1;
 const hasRanges = (db) => db.q("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('cmp_ranges', 'cmp_ranges_one_live', 'cmp_ranges_log')")[0].n === 3;
 const INDEXES = ["rv_actions_day", "rv_flags_day", "rv_flags_one_open", "rv_flags_status", "rv_notes_day", "rv_snoozes_one_live"];
 
@@ -22,18 +24,19 @@ test("schema.sql equals the DDL in db.js (SCHEMA)", () => {
   assert.equal(file.trim(), SCHEMA.trim());
 });
 
-test("splitSql: 20 statements; a ';' inside a trailing comment does not split", () => {
+test("splitSql: 21 statements; a ';' inside a trailing comment does not split", () => {
   const parts = splitSql(SCHEMA);
-  assert.equal(parts.length, 20);
+  assert.equal(parts.length, 21);
   assert.ok(parts.some((p) => p.includes("append-only; never UPDATE/DELETE")));
   for (const p of parts) assert.match(p, /^(CREATE|INSERT)/);
 });
 
-test("ensureSchema creates every table + index, schema_version = 5, and is idempotent", async () => {
+test("ensureSchema creates every table + index, schema_version = 6, and is idempotent", async () => {
   _resetSchemaForTests();
   const db = new FakeD1();
-  assert.equal(await ensureSchema(db), 5);
-  assert.equal(SCHEMA_VERSION, 5);
+  assert.equal(await ensureSchema(db), 6);
+  assert.equal(SCHEMA_VERSION, 6);
+  assert.ok(hasLvLog(db));
   assert.deepEqual(objects(db, "table"), TABLES);
   assert.ok(hasConfigLog(db));
   assert.ok(hasMarks(db));
@@ -44,9 +47,9 @@ test("ensureSchema creates every table + index, schema_version = 5, and is idemp
   assert.equal(db.batches, batches, "second call in the same isolate does nothing");
   _resetSchemaForTests();                          // a new isolate on the same database
   db.sqlite.exec("INSERT INTO rv_state (day, app, st, who, at) VALUES ('2026-10-01','a1a1a1a1a1a1','ok','x@example.test','t')");
-  assert.equal(await ensureSchema(db), 5);
+  assert.equal(await ensureSchema(db), 6);
   assert.deepEqual(objects(db, "table"), TABLES);
-  assert.deepEqual(db.q("SELECT k, v FROM rv_meta"), [{ k: "schema_version", v: "5" }]);
+  assert.deepEqual(db.q("SELECT k, v FROM rv_meta"), [{ k: "schema_version", v: "6" }]);
   assert.equal(db.q("SELECT COUNT(*) AS n FROM rv_state")[0].n, 1, "existing data kept");
 });
 
@@ -55,26 +58,26 @@ test("ensureSchema: a failure is not cached (next call retries); separate databa
   const db = new FakeD1();
   db.failNext = new Error("temporary");
   await assert.rejects(ensureSchema(db), /temporary/);
-  assert.equal(await ensureSchema(db), 5);
+  assert.equal(await ensureSchema(db), 6);
   const other = new FakeD1();
-  assert.equal(await ensureSchema(other), 5);
+  assert.equal(await ensureSchema(other), 6);
   assert.deepEqual(objects(other, "table"), TABLES);
 });
 
 test("MIGRATIONS run in order in one batch each and bump schema_version", async () => {
   _resetSchemaForTests();
   const db = new FakeD1();
-  MIGRATIONS[6] = ["ALTER TABLE rv_notes ADD COLUMN edited_at TEXT"];
-  MIGRATIONS[7] = ["CREATE INDEX IF NOT EXISTS rv_notes_who ON rv_notes(who)"];
+  MIGRATIONS[7] = ["ALTER TABLE rv_notes ADD COLUMN edited_at TEXT"];
+  MIGRATIONS[8] = ["CREATE INDEX IF NOT EXISTS rv_notes_who ON rv_notes(who)"];
   try {
-    assert.equal(await ensureSchema(db), 7);
-    assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "7" }]);
+    assert.equal(await ensureSchema(db), 8);
+    assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "8" }]);
     assert.ok(db.q("PRAGMA table_info(rv_notes)").some((c) => c.name === "edited_at"));
     _resetSchemaForTests();
-    assert.equal(await ensureSchema(db), 7, "already migrated → nothing re-run");
+    assert.equal(await ensureSchema(db), 8, "already migrated → nothing re-run");
   } finally {
-    delete MIGRATIONS[6];
     delete MIGRATIONS[7];
+    delete MIGRATIONS[8];
     _resetSchemaForTests();
   }
 });
@@ -87,25 +90,25 @@ const V1_FLAGS = `CREATE TABLE IF NOT EXISTS rv_flags (
   decision TEXT CHECK (decision IN ('theek','kaam','band')), dec_note TEXT, dec_by TEXT, dec_at TEXT,
   done_note TEXT, done_by TEXT, done_at TEXT, wd_by TEXT, wd_at TEXT)`;
 
-test("a schema_version 1 database is migrated to 5 (rv_flags gets dec_day / done_day, config_log, the marks + compare tables; data kept); a new one starts at 5", async () => {
+test("a schema_version 1 database is migrated to 6 (rv_flags gets dec_day / done_day, config_log, the marks + compare tables, lv_log; data kept); a new one starts at 6", async () => {
   _resetSchemaForTests();
   const db = new FakeD1();
   db.sqlite.exec("CREATE TABLE rv_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL); INSERT INTO rv_meta VALUES ('schema_version', '1');");
   db.sqlite.exec(V1_FLAGS);
   db.sqlite.exec("INSERT INTO rv_flags (day, app, raised_by, raised_at) VALUES ('2026-10-01', 'a1a1a1a1a1a1', 'x@example.test', 't')");
-  assert.equal(await ensureSchema(db), 5);
+  assert.equal(await ensureSchema(db), 6);
   const cols = db.q("PRAGMA table_info(rv_flags)").map((c) => c.name);
   assert.ok(cols.includes("dec_day") && cols.includes("done_day"));
   assert.ok(hasConfigLog(db));
   assert.ok(hasMarks(db));
   assert.ok(hasRanges(db));
-  assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "5" }]);
+  assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "6" }]);
   assert.equal(db.q("SELECT COUNT(*) AS n FROM rv_flags")[0].n, 1, "existing flag kept");
   _resetSchemaForTests();
-  assert.equal(await ensureSchema(db), 5, "migrated once; a new isolate does not re-run it");
+  assert.equal(await ensureSchema(db), 6, "migrated once; a new isolate does not re-run it");
   _resetSchemaForTests();
   const fresh = new FakeD1();
-  assert.equal(await ensureSchema(fresh), 5);
+  assert.equal(await ensureSchema(fresh), 6);
   assert.ok(fresh.q("PRAGMA table_info(rv_flags)").some((c) => c.name === "dec_day"));
   assert.ok(hasConfigLog(fresh));
   assert.ok(hasMarks(fresh));
@@ -113,21 +116,22 @@ test("a schema_version 1 database is migrated to 5 (rv_flags gets dec_day / done
   _resetSchemaForTests();
 });
 
-test("a schema_version 2 database is migrated to 5: config_log, the marks and the compare tables added, review data untouched", async () => {
+test("a schema_version 2 database is migrated to 6: config_log, the marks and the compare tables, lv_log added, review data untouched", async () => {
   _resetSchemaForTests();
   const db = new FakeD1();
-  const v2 = splitSql(SCHEMA).filter((s) => !s.includes("config_log") && !s.includes("cmp_marks") && !s.includes("cmp_ranges") && !s.startsWith("INSERT"));
+  const v2 = splitSql(SCHEMA).filter((s) => !s.includes("config_log") && !s.includes("cmp_marks") && !s.includes("cmp_ranges") && !s.includes("lv_log") && !s.startsWith("INSERT"));
   for (const s of v2) db.sqlite.exec(s);
   db.sqlite.exec("INSERT INTO rv_meta VALUES ('schema_version', '2')");
   db.sqlite.exec("INSERT INTO rv_state (day, app, st, who, at) VALUES ('2026-10-01','a1a1a1a1a1a1','ok','x@example.test','t')");
   assert.equal(hasConfigLog(db), false);
   const batches = db.batches;
-  assert.equal(await ensureSchema(db), 5);
-  assert.equal(db.batches, batches + 4, "the schema batch + one batch per migration (3, 4, 5)");
+  assert.equal(await ensureSchema(db), 6);
+  assert.equal(db.batches, batches + 5, "the schema batch + one batch per migration (3, 4, 5, 6)");
+  assert.ok(hasLvLog(db));
   assert.ok(hasConfigLog(db));
   assert.ok(hasMarks(db));
   assert.ok(hasRanges(db));
-  assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "5" }]);
+  assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "6" }]);
   assert.equal(db.q("SELECT COUNT(*) AS n FROM rv_state")[0].n, 1, "existing review state kept");
   const cols = db.q("PRAGMA table_info(config_log)").map((c) => c.name);
   assert.deepEqual(cols, ["id", "who", "at", "file", "bytes", "result", "commit_sha"]);
@@ -244,4 +248,22 @@ test("addDays: calendar arithmetic across month / year ends", () => {
   assert.equal(addDays("2026-10-02", 7), "2026-10-09");
   assert.equal(addDays("2026-12-28", 14), "2027-01-11");
   assert.equal(addDays("2028-02-22", 7), "2028-02-29");
+});
+
+test("a schema_version 5 database is migrated to 6: lv_log added (the level-action audit), everything else untouched", async () => {
+  _resetSchemaForTests();
+  const db = new FakeD1();
+  const v5 = splitSql(SCHEMA).filter((s) => !s.includes("lv_log") && !s.startsWith("INSERT"));
+  for (const s of v5) db.sqlite.exec(s);
+  db.sqlite.exec("INSERT INTO rv_meta VALUES ('schema_version', '5')");
+  db.sqlite.exec("INSERT INTO config_log (who, at, file, bytes, result) VALUES ('x@example.test', 't', 'app_names', 2, 'ok')");
+  assert.equal(hasLvLog(db), false);
+  assert.equal(await ensureSchema(db), 6);
+  assert.ok(hasLvLog(db));
+  assert.deepEqual(db.q("PRAGMA table_info(lv_log)").map((c) => c.name),
+    ["id", "at", "who", "act", "app", "fam", "action_id", "result", "commit_sha"]);
+  assert.equal(db.q("SELECT COUNT(*) AS n FROM config_log")[0].n, 1, "existing audit rows kept");
+  assert.deepEqual(MIGRATIONS[6], [LV_LOG_DDL]);
+  assert.ok(SCHEMA.includes(LV_LOG_DDL.replace("CREATE TABLE IF NOT EXISTS lv_log (", "").split("\n")[1].trim()));
+  _resetSchemaForTests();
 });

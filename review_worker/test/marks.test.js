@@ -202,10 +202,10 @@ test("at most MARKS_MAX live marks: one more → 409 with the Hinglish reason, n
   assert.equal(t.db.q("SELECT COUNT(*) AS n FROM cmp_marks_log")[0].n, 0);
 });
 
-test("a schema_version 3 database is migrated to 5: the marks and compares work, review and config data untouched", async () => {
+test("a schema_version 3 database is migrated to 6: the marks and compares work, review and config data untouched", async () => {
   _resetSchemaForTests();
   const db = new FakeD1();
-  const v3 = splitSql(SCHEMA).filter((s) => !s.includes("cmp_marks") && !s.includes("cmp_ranges") && !s.startsWith("INSERT"));
+  const v3 = splitSql(SCHEMA).filter((s) => !s.includes("cmp_marks") && !s.includes("cmp_ranges") && !s.includes("lv_log") && !s.startsWith("INSERT"));
   for (const s of v3) db.sqlite.exec(s);
   db.sqlite.exec("INSERT INTO rv_meta VALUES ('schema_version', '3')");
   db.sqlite.exec("INSERT INTO rv_state (day, app, st, who, at) VALUES ('2026-10-01','a1a1a1a1a1a1','ok','x@example.test','t')");
@@ -215,9 +215,9 @@ test("a schema_version 3 database is migrated to 5: the marks and compares work,
   const before = ["rv_state", "rv_notes", "rv_actions", "config_log"].map((n) => db.q(`SELECT * FROM ${n}`));
   assert.equal(db.q("SELECT COUNT(*) AS n FROM sqlite_master WHERE name LIKE 'cmp_marks%'")[0].n, 0);
   const batches = db.batches;
-  assert.equal(await ensureSchema(db), 5);
-  assert.equal(db.batches, batches + 3, "the schema batch + one batch per migration (4, 5)");
-  assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "5" }]);
+  assert.equal(await ensureSchema(db), 6);
+  assert.equal(db.batches, batches + 4, "the schema batch + one batch per migration (4, 5, 6)");
+  assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "6" }]);
   assert.equal(db.q("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('cmp_marks','cmp_marks_one_live','cmp_marks_log')")[0].n, 3);
   assert.equal(db.q("SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('cmp_ranges','cmp_ranges_one_live','cmp_ranges_log')")[0].n, 3);
   assert.deepEqual(["rv_state", "rv_notes", "rv_actions", "config_log"].map((n) => db.q(`SELECT * FROM ${n}`)), before, "data kept");
@@ -354,10 +354,10 @@ test("compares: at most CMPS_MAX live ones → 409; two people saving the same c
   assert.deepEqual(r.json, { error: "conflict", msg: MARK_MSG.too_many_cmp, why: "too_many" });
 });
 
-test("a schema_version 4 database (the live one) → 5: every saved date kept and still listed / deletable, compares added", async () => {
+test("a schema_version 4 database → 6: every saved date kept and still listed / deletable, compares added", async () => {
   _resetSchemaForTests();
   const db = new FakeD1();
-  const v4 = splitSql(SCHEMA).filter((s) => !s.includes("cmp_ranges") && !s.startsWith("INSERT"));
+  const v4 = splitSql(SCHEMA).filter((s) => !s.includes("cmp_ranges") && !s.includes("lv_log") && !s.startsWith("INSERT"));
   for (const s of v4) db.sqlite.exec(s);
   db.sqlite.exec("INSERT INTO rv_meta VALUES ('schema_version', '4')");
   const d = addD(TODAY(), -9);
@@ -365,9 +365,9 @@ test("a schema_version 4 database (the live one) → 5: every saved date kept an
   db.sqlite.exec(`INSERT INTO cmp_marks_log (at, who, act, mark, app, date, name) VALUES ('t', '${TEAMMATE}', 'add', 1, '${APP}', '${d}', 'Purani')`);
   const batches = db.batches;
   assert.equal(await ensureSchema(db), SCHEMA_VERSION);
-  assert.equal(SCHEMA_VERSION, 5);
-  assert.equal(db.batches, batches + 2, "the schema batch + migration 5");
-  assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "5" }]);
+  assert.equal(SCHEMA_VERSION, 6);
+  assert.equal(db.batches, batches + 3, "the schema batch + migrations 5, 6");
+  assert.deepEqual(db.q("SELECT v FROM rv_meta WHERE k = 'schema_version'"), [{ v: "6" }]);
   _resetSchemaForTests();
   const t = await setup();
   t.env.REVIEW_DB = db;

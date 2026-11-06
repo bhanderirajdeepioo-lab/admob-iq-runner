@@ -30,10 +30,19 @@ engine.cpi_alarm (P_PROD) to the data day t, nothing trimmed:
   Money lost = Σ (cost − D0 value ÷ the frozen normal B) over the days of a ROAS alarm (measured inputs, the formula
   labelled ≈ on the page); a CPI / eCPM / GAP "since" sum is never a loss.
 
+  Levels (engine LEVELS): every app file gets "lv" {fam: level rows newest first, each the exact value of named days
+  with their sums (the page recomputes it from "d" and shows ✓), how it formed, when; the alarms' frozen baselines too},
+  "lp" (open alarms the owner may accept) and "la" (the owner's actions and what the build did with them). The owner's
+  actions come from config/cpi_levels.json (written only by the Worker's /api/levels/act, append-only; absent = the
+  automatic rule only); the history is data/cpi/levels.json (this build's ledger: ids and first-seen kept across builds,
+  restated values recorded, a level no longer produced kept as gone). A failure there prints "cpi levels skipped:
+  <ErrorType>" and costs the levels only; a bad action prints "cpi level action skipped: <Reason>" and costs itself.
+
 run(dashboard, data_dir, out_dir, s) → the _headers no-store paths (["/cpi*"], ONE splat rule) or [] (no Google Ads
 data: the files removed, no pointer). off(out_dir): the switch (CPI_TAB=false). Failure-isolated; ONE counts-only line.
 mark_notified_cpi: send_alerts' ledger (each notice ONCE).
 """
+import copy
 import gzip
 import hashlib
 import json
@@ -76,6 +85,17 @@ ROWS = ("sp_inr", "sp_usd", "inst", "d0_inr", "rev", "imp", "dau", "fs_rev", "fs
 ENG = ("sp_usd", "sp_inr", "inst", "d0_inr", "rev", "imp", "dau", "c_n", "c_sp", "c_r0", "c_r1", "c_r7")
 INT_ROWS = ("imp", "dau", "fs_imp", "fs_u", "rt_imp", "rt_u", "c_n")
 ST_ORDER = {"alarm": 0, "watch": 1, "fixed": 2, "ok": 3, "new": 4, "paused": 5}
+LV_FILE = "levels.json"   # data/cpi/levels.json: the level history (this build writes it)
+LV_V = 1
+LV_RULE = "L1"
+LV_LOG_MAX = 5000
+ACT_FILE = "cpi_levels.json"   # config/cpi_levels.json: the owner's level actions (the Worker writes it)
+ACT_RE = re.compile(r"^a-[0-9a-f]{12}$")
+LEVEL_RE = re.compile(r"^L-[0-9a-f]{10}$")
+DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+ACTS = ("set", "rollback", "reject", "accept", "auto", "undo")
+PIN_SRC = {"set": "manual", "rollback": "rollback", "accept": "accepted_owner"}
+SET_DAYS = (7, 120)       # a level set from days: 7 … 120 named days
 FAM_TXT = {"CPI": "CPI", "ECPM": "eCPM", "GAP": "ads to pay back one install", "IPU": "ads per user",
            "ROAS_G": "D0 ROAS", "ROAS_C0": "install-day ROAS (AdMob)", "ROAS_C1": "D1 ROAS (AdMob)",
            "ROAS_C7": "D7 ROAS (AdMob)", "SPEND": "spend"}
@@ -958,6 +978,9 @@ def _ep_full(ep):
                max_worse=_r(ep["max_worse"], 4),
                esc=[list(x) for x in ep["esc"]], ctx=dict(ep.get("ctx") or {}),
                money=dict(ep["money"]) if ep.get("money") else None, stake=list(ep.get("stake") or []))
+    if "bspan" in ep:
+        out["bspan"] = list(ep["bspan"]) if ep["bspan"] else None
+        out["suggest"] = list(ep["suggest"]) if ep.get("suggest") else None
     return out
 
 
@@ -1031,7 +1054,8 @@ def _app_file(a, D, lo, res, camps, ctys, eps_by, extra, t):
                      "imp": _cut(c["imp"], f, True)},
                "ep": [_ep_row(ep) for ep in eps_by.get(("country", aid + "|" + cc), [])]}
         # the Chart tab's country view: its normal per day (CPI ₹ / eCPM $: the engine's — its own open episode's B
-        # (base_of's: a B that was a peak gives way to H, as the app's), else its healthy level; D0 ROAS (AdMob-matched):
+        # (base_of's: a B that was a peak gives way to H, as the app's), else its healthy level — for a replayed line the
+        # resting level its alarms used (P_PROD levels), for a left-out line the median H; D0 ROAS (AdMob-matched):
         # the same healthy rule on its r0 ÷ $ cost) + its r0
         ek = ("country", aid + "|" + cc)
         en, e0 = (res.get("normal") or {}).get(ek) or {}, extra.get("cday0", {}).get(aid + "|" + cc)
@@ -1060,9 +1084,15 @@ def _app_file(a, D, lo, res, camps, ctys, eps_by, extra, t):
              "src": SRC_NOTE, "ga4_sampled_note": "not in this build's GA4 site files",
              "cty_rule": "share>=%g all history or last 120 days, top %d" % (CTY_SHARE, CTY_MAX),
              "cty_r0": n.get("cty_r0")}
-    return {"v": V, "app_id": aid, "name": a["name"], "key": a["key"], "t": t.isoformat(),
+    body = {"v": V, "app_id": aid, "name": a["name"], "key": a["key"], "t": t.isoformat(),
             "day0": _iso(D.d0, lo), "d": d, "nrm": nrm, "camps": cl, "ctys": ct, "src": [],
             "ep": [_ep_full(ep) for ep in eps_by.get(key, [])], "notes": notes}
+    lvl = extra.get("lv")
+    if lvl is not None:                                  # the levels part ran (else: the automatic file as before)
+        body["lv"] = ship_levels(lvl["ledger"], aid)
+        body["lp"] = lvl["props"].get(aid, [])
+        body["la"] = lvl["la"].get(aid, [])
+    return body
 
 
 def build_files(dashboard, D, apps, camps, ctys, extra, res, now):
@@ -1121,6 +1151,8 @@ def build_files(dashboard, D, apps, camps, ctys, extra, res, now):
                                   for ep in eps if ep["closed"] is None],
                          "nrm": {f: _r6(v) for f, v in nrm.items()},
                          "lost": ({k: lost[k] for k in ("inr", "usd", "from", "sc")} if lost else None)}
+        if extra.get("lv") is not None:
+            ptr_apps[aid]["lp"] = len(extra["lv"]["props"].get(aid) or [])
         off = (D.d0 + timedelta(days=g0) - e0).days
         h = {}
         for fam in ("CPI", "ECPM", "ROAS_G"):
@@ -1133,6 +1165,8 @@ def build_files(dashboard, D, apps, camps, ctys, extra, res, now):
     unl = _unlinked(D, extra)
     ptr = {"v": V, "t": ts, "at": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
            "day0": _iso(D.d0, g0), "file": FILE, "apps": ptr_apps, "counts": counts, "unlinked": unl}
+    if extra.get("lv") is not None:
+        ptr["la"] = extra["lv"]["seen"]                  # the newest owner action this build has read (page: pending)
     return ptr, allb, files, big
 
 
@@ -1172,6 +1206,389 @@ def _unlinked(D, extra):
         runs.append([[a - f, b - f] for a, b in r])
     return {"d0": _iso(D.d0, f), "inr": [_r(x) for x in inr[f:]], "usd": [_r(x) for x in usd[f:]], "n": len(ids),
             "runs": runs}
+
+
+# ── levels: the owner's actions, the history ledger (engine LEVELS) ───────────────────────────────────────────────────
+
+class LevelMismatch(Exception):
+    """A level is not the exact value of its named days (never shipped)."""
+
+
+def levels_path(data_dir):
+    return os.path.join(data_dir, STATE_DIR, LV_FILE)
+
+
+def actions_path(data_dir):
+    return os.path.join(os.path.dirname(os.path.abspath(data_dir)), "config", ACT_FILE)
+
+
+def load_actions(data_dir):
+    """config/cpi_levels.json → the owner's actions ([] when there is no file: the automatic rule only). A broken file
+    raises (the caller prints the skipped line; nothing of it applies)."""
+    path = actions_path(data_dir)
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        raw = json.load(f)
+    if not isinstance(raw, dict) or raw.get("v") != 1 or not isinstance(raw.get("actions"), list):
+        raise ValueError("cpi_levels")
+    return [a for a in raw["actions"] if isinstance(a, dict)]
+
+
+def load_ledger(data_dir):
+    """data/cpi/levels.json → the level history (a fresh one when there is none). A damaged file raises: it is never
+    overwritten by a build that could not read it."""
+    path = levels_path(data_dir)
+    led = {"v": LV_V, "rule": LV_RULE, "apps": {}, "proposals": {}, "log": []}
+    if not os.path.exists(path):
+        return led
+    with open(path, encoding="utf-8") as f:
+        raw = json.load(f)
+    if not isinstance(raw, dict) or raw.get("v") != LV_V or not isinstance(raw.get("apps"), dict):
+        raise ValueError("levels")
+    led.update({k: raw[k] for k in ("apps", "proposals", "log", "rule") if k in raw})
+    return led
+
+
+def save_ledger(data_dir, led):
+    """Sorted JSON, written only when it changed. → True when written."""
+    path = levels_path(data_dir)
+    text = json.dumps(led, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    try:
+        with open(path, encoding="utf-8") as f:
+            if f.read() == text:
+                return False
+    except OSError:
+        pass
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".tmp", "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(path + ".tmp", path)
+    return True
+
+
+def _is_day(x):
+    if not isinstance(x, str) or not DAY_RE.match(x):
+        return False
+    try:
+        date.fromisoformat(x)
+        return True
+    except ValueError:
+        return False
+
+
+def _days_ok(days, ent, ts):
+    """[first, last] real days, SET_DAYS long, inside the entity's series and not after the data day."""
+    if not (isinstance(days, list) and len(days) == 2 and all(_is_day(x) for x in days)):
+        return False
+    a, b = days
+    n = (_d(b) - _d(a)).days + 1
+    return SET_DAYS[0] <= n <= SET_DAYS[1] and a >= ent.day0 and b <= ts
+
+
+def _measured(ent, fam, days):
+    m = CA.measure(ent, CA.P_PROD, fam, days[0], days[1])
+    if m is None:
+        return None
+    m["sums"] = {k: _r6(v) for k, v in m["sums"].items()}
+    return m
+
+
+def resolve_actions(acts, ents, led, ts):
+    """The owner's actions → (owner primitives for the engine {(app id, fam): [...]}, {app id: [action as listed on the
+    page, with "st" applied / waiting / undone / bad and "why"]}, {level id: the reject's at}, the newest action's at).
+    Undone actions are dropped; every other action is checked again here (the Worker checked it once) and one that
+    cannot apply is listed bad — the rest still apply. ents: {app id: engine entity}."""
+    rows = {}
+    for aid, fams in (led.get("apps") or {}).items():
+        for fam, lst in (fams or {}).items():
+            for r in lst or []:
+                rows[r.get("id")] = (aid, fam, r)
+    by_id = {a["id"]: a for a in acts if isinstance(a.get("id"), str) and ACT_RE.match(a["id"])}
+    undone = {a.get("ref") for a in acts if a.get("act") == "undo" and a.get("ref") in by_id
+              and by_id[a["ref"]].get("act") != "undo"}
+    owner, la, rej = {}, {}, {}
+    seen = None
+    for a in sorted(acts, key=lambda x: (str(x.get("at")), str(x.get("id")))):
+        if isinstance(a.get("at"), str) and (seen is None or a["at"] > seen):
+            seen = a["at"]
+        why, prim = _resolve_one(a, ents, rows, by_id, undone, ts)
+        app = a.get("app")
+        if a.get("act") == "undo" and a.get("ref") in by_id:
+            app = by_id[a["ref"]].get("app")
+        item = {k: a[k] for k in ("id", "at", "act", "fam", "from", "days", "value", "level", "ref", "note")
+                if a.get(k) is not None}
+        if isinstance(a.get("proposal"), dict):
+            item["proposal"] = {k: a["proposal"].get(k) for k in ("day", "days")}
+        if why:
+            item.update(st="bad", why=why)
+            print("cpi level action skipped: %s" % why, file=sys.stderr)
+        elif a.get("id") in undone:
+            item["st"] = "undone"
+        else:
+            item["st"] = "waiting" if (a.get("from") and a["from"] > ts) else "applied"
+            if prim is not None:
+                owner.setdefault((app, a["fam"]), []).append(prim)
+                if prim["act"] == "veto":
+                    rej[a["level"]] = a["at"]
+        if isinstance(app, str):
+            la.setdefault(app, []).append(item)
+    for v in la.values():
+        v.sort(key=lambda x: (str(x.get("at")), str(x.get("id"))), reverse=True)
+    return owner, la, rej, seen
+
+
+def _resolve_one(a, ents, rows, by_id, undone, ts):
+    """One action → (the reason it cannot apply or None, the engine primitive or None)."""
+    act = a.get("act")
+    if not (isinstance(a.get("id"), str) and ACT_RE.match(a["id"]) and isinstance(a.get("at"), str) and act in ACTS):
+        return "BadAction", None
+    if act == "undo":
+        ok = a.get("ref") in by_id and by_id[a["ref"]].get("act") != "undo"
+        return (None if ok else "UnknownRef"), None
+    if a["id"] in undone:
+        return None, None
+    ent = ents.get(a.get("app"))
+    if ent is None:
+        return "UnknownApp", None
+    fam = a.get("fam")
+    if fam not in CA.FAMS_BY_KIND["app"]:
+        return "UnknownFam", None
+    if act != "reject" and not _is_day(a.get("from")):
+        return "BadDate", None
+    if act == "auto":
+        return None, {"act": "auto", "day": a["from"]}
+    if act == "set":
+        if a.get("days") is not None:
+            if a.get("value") is not None or not _days_ok(a["days"], ent, ts):
+                return "BadDays", None
+            m = _measured(ent, fam, a["days"])
+            if m is None:
+                return "ThinDays", None
+            return None, {"act": "pin", "day": a["from"], "value": m["v"], "src": PIN_SRC[act], "days": m["days"],
+                          "id": a["id"]}
+        v = a.get("value")
+        if not isinstance(v, (int, float)) or isinstance(v, bool) or not (0 < v < 1e9) or v != v:
+            return "BadValue", None
+        return None, {"act": "pin", "day": a["from"], "value": float(v), "src": PIN_SRC[act], "days": None,
+                      "id": a["id"]}
+    if act in ("rollback", "reject"):
+        hit = rows.get(a.get("level")) if isinstance(a.get("level"), str) and LEVEL_RE.match(a["level"]) else None
+        if hit is None or hit[0] != a["app"] or hit[1] != fam:
+            return "UnknownLevel", None
+        r = hit[2]
+        if act == "reject":
+            if r.get("src") != "accepted" or not (r.get("ep") or {}).get("opened"):
+                return "NotAccepted", None
+            return None, {"act": "veto", "ep_open": r["ep"]["opened"]}
+        if r.get("days"):
+            m = _measured(ent, fam, r["days"])
+            if m is None:
+                return "ThinDays", None
+            return None, {"act": "pin", "day": a["from"], "value": m["v"], "src": PIN_SRC[act], "days": m["days"],
+                          "id": a["id"]}
+        return None, {"act": "pin", "day": a["from"], "value": float(r["v"]), "src": PIN_SRC[act], "days": None,
+                      "id": a["id"]}
+    p = a.get("proposal") if isinstance(a.get("proposal"), dict) else {}
+    days = p.get("days")
+    if not (isinstance(days, list) and len(days) == 2 and all(_is_day(x) for x in days) and days[0] <= days[1]
+            and days[1] <= ts and days[0] >= ent.day0):
+        return "BadDays", None
+    m = _measured(ent, fam, days)
+    if m is None:
+        return "ThinDays", None
+    return None, {"act": "pin", "day": a["from"], "value": m["v"], "src": PIN_SRC[act], "days": m["days"], "id": a["id"]}
+
+
+def _exact(ent, fam, row):
+    """The row's value from its named days → (the measured sums, n) — LevelMismatch when the replay's value, the
+    measure and the ratio of the plain sums disagree."""
+    m = _measured(ent, fam, row["days"])
+    if m is None or abs(m["v"] / row["v"] - 1.0) > 1e-9:
+        raise LevelMismatch(fam)
+    lv = CA.level_of(fam, m["sums"], m["n"], CA.P_PROD)
+    if lv is None or abs(lv / row["v"] - 1.0) > 1e-6:          # sums kept to 6 places
+        raise LevelMismatch(fam)
+    return m["sums"]
+
+
+def _fresh(ent, key, res, eps):
+    """This replay's level rows of one app: {fam: [row]} — the resting levels and every episode's frozen baseline."""
+    out = {}
+    for fam, lst in ((res.get("levels") or {}).get(key) or {}).items():
+        for x in lst:
+            row = {"from": x["day"], "v": x["v"], "days": x["days"], "src": x["src"], "ep": x.get("ep"),
+                   "act": x.get("act")}
+            row["sums"] = _exact(ent, fam, row) if x["days"] else None
+            out.setdefault(fam, []).append(row)
+    for ep in eps:
+        if not ep.get("base"):
+            continue
+        row = {"from": ep["opened"], "to": ep["closed"], "v": ep["base"], "days": ep.get("bspan"), "src": "alarm",
+               "ep": {"opened": ep["opened"], "c": ep["c"], "why": ep["why"], "opener": ep["opener"]}, "act": None}
+        row["sums"] = _exact(ent, ep["fam"], row) if row["days"] else None
+        out.setdefault(ep["fam"], []).append(row)
+    return out
+
+
+def _lv_id(aid, fam, src, frm, used):
+    k = 0
+    while True:
+        x = "L-" + hashlib.sha1(("%s|%s|%s|%s|%d" % (aid, fam, src, frm, k)).encode("utf-8")).hexdigest()[:10]
+        if x not in used:
+            return x
+        k += 1
+
+
+def merge_ledger(old, res, ents, rej, now):
+    """The replay's levels merged into the saved history → (the new ledger, {app id: proposals}). A row matches a saved
+    one of the same family and kind when its day moved ≤ MATCH_DAYS (restated data): it keeps its id and first-seen,
+    a changed value is recorded under "restated"; a saved row no longer produced is kept as gone (or rejected: the
+    owner's reject). An app whose levels are not exact keeps its saved history untouched (one skipped line)."""
+    now_iso = gu._now_iso(now)
+    led = {"v": LV_V, "rule": LV_RULE, "apps": copy.deepcopy(old.get("apps") or {}),
+           "proposals": copy.deepcopy(old.get("proposals") or {}), "log": list(old.get("log") or [])}
+    used = {r.get("id") for fams in led["apps"].values() for lst in fams.values() for r in lst}
+    eps_by = {}
+    for ep in res["episodes"]:
+        if ep["kind"] == "app":
+            eps_by.setdefault((ep["id"], ep["fam"]), []).append(ep)
+    props = {}
+    for key in sorted(res.get("levels") or {}):
+        aid = key[1]
+        ent = ents.get(aid)
+        if ent is None:
+            continue
+        try:
+            fresh = _fresh(ent, key, res, [ep for (i, _), lst in eps_by.items() if i == aid for ep in lst])
+            pl = []
+            for p in (res.get("proposals") or {}).get(key) or []:
+                row = {"v": p["v"], "days": p["days"]}
+                pl.append({"fam": p["fam"], "opened": p["opened"], "day": p["day"], "why": p["why"], "v": p["v"],
+                           "days": p["days"], "sums": _exact(ent, p["fam"], row), "old": p["old"], "gap": p["gap"]})
+        except LevelMismatch as e:
+            print("cpi levels skipped: %s" % type(e).__name__, file=sys.stderr)
+            props[aid] = led["proposals"].get(aid) or []
+            continue
+        saved = led["apps"].get(aid) or {}
+        mine = {}
+        for fam in sorted(set(fresh) | set(saved)):
+            mine[fam] = _merge_fam(aid, fam, saved.get(fam) or [], fresh.get(fam) or [], rej, now_iso, used,
+                                   led["log"])
+        led["apps"][aid] = mine
+        led["proposals"][aid] = pl
+        props[aid] = pl
+    led["log"] = led["log"][-LV_LOG_MAX:]
+    return led, props
+
+
+def _merge_fam(aid, fam, saved, fresh, rej, now_iso, used, log):
+    out, taken = [], set()
+    for row in sorted(fresh, key=lambda r: (r["from"], r["src"])):
+        best = None
+        for j, r in enumerate(saved):
+            if j in taken or r.get("src") != row["src"]:
+                continue
+            gap = abs((_d(r["from"]) - _d(row["from"])).days)
+            if gap <= MATCH_DAYS and (best is None or gap < best[0]):
+                best = (gap, j)
+        if best is not None:
+            taken.add(best[1])
+            r = dict(saved[best[1]])
+            if r.get("v") and abs(row["v"] / r["v"] - 1.0) > 1e-9:
+                r["restated"] = list(r.get("restated") or []) + [{"at": now_iso, "v_old": r["v"], "v_new": row["v"]}]
+                log.append({"at": now_iso, "app": aid, "fam": fam, "id": r["id"], "what": "restated", "v_old": r["v"],
+                            "v_new": row["v"]})
+            r.update({k: row.get(k) for k in ("from", "v", "days", "sums", "src", "ep", "act")})
+            r["gone"] = None
+        else:
+            r = dict(row, id=_lv_id(aid, fam, row["src"], row["from"], used), seen=now_iso, restated=[], gone=None)
+            used.add(r["id"])
+            log.append({"at": now_iso, "app": aid, "fam": fam, "id": r["id"], "what": "new", "v_old": None,
+                        "v_new": row["v"]})
+        if row["src"] == "alarm":
+            r["to"] = row.get("to")
+        out.append(r)
+    for j, r in enumerate(saved):
+        if j in taken:
+            continue
+        r = dict(r)
+        if not r.get("gone") and r.get("id") not in rej:
+            r["gone"] = now_iso
+            log.append({"at": now_iso, "app": aid, "fam": fam, "id": r["id"], "what": "gone", "v_old": r.get("v"),
+                        "v_new": None})
+        out.append(r)
+    for r in out:
+        was = r.get("rejected")
+        r["rejected"] = rej.get(r.get("id"))
+        if r["rejected"] and not was:
+            log.append({"at": now_iso, "app": aid, "fam": fam, "id": r["id"], "what": "rejected", "v_old": r.get("v"),
+                        "v_new": None})
+    live = sorted((r for r in out if r["src"] != "alarm" and not r.get("gone") and not r.get("rejected")),
+                  key=lambda r: r["from"])
+    for i, r in enumerate(live):                         # a resting level holds until the next one forms
+        r["to"] = (_d(live[i + 1]["from"]) - timedelta(days=1)).isoformat() if i + 1 < len(live) else None
+    out.sort(key=lambda r: (r["from"], r["src"], r["id"]))
+    for i, r in enumerate(out):
+        r["n"] = i + 1
+    return out
+
+
+def ship_levels(led, aid):
+    """The app's level history as the page reads it: {fam: [row, newest first]} with a status word per row — now (the
+    level in force: the open alarm's baseline, else the resting level), rest (the resting level while an alarm is
+    open), earlier, rejected, gone."""
+    out = {}
+    for fam, lst in sorted(((led.get("apps") or {}).get(aid) or {}).items()):
+        open_alarm = any(r["src"] == "alarm" and r.get("to") is None and not r.get("gone") for r in lst)
+        live = [r for r in lst if r["src"] != "alarm" and not r.get("gone") and not r.get("rejected")]
+        last = max(live, key=lambda r: r["from"]) if live else None
+        rows = []
+        for r in lst:
+            if r.get("rejected"):
+                st = "rejected"
+            elif r.get("gone"):
+                st = "gone"
+            elif r["src"] == "alarm":
+                st = "now" if r.get("to") is None else "earlier"
+            elif r is last:
+                st = "rest" if open_alarm else "now"
+            else:
+                st = "earlier"
+            rs = r.get("restated") or []
+            rows.append({"id": r["id"], "from": r["from"], "to": r.get("to"), "v": r["v"], "days": r.get("days"),
+                         "sums": r.get("sums"), "src": r["src"], "ep": r.get("ep"), "act": r.get("act"), "st": st,
+                         "seen": r.get("seen"), "rs": rs[-1] if rs else None, "gone": r.get("gone"),
+                         "rejected": r.get("rejected")})
+        rows.sort(key=lambda r: (r["from"], r["src"] != "alarm", r["id"]), reverse=True)
+        out[fam] = rows
+    return out
+
+
+def levels_run(ents, data_dir, t, now):
+    """The replay with the owner's levels → (engine result, the levels part or None). Any failure of the levels part
+    prints "cpi levels skipped: <ErrorType>" and gives the automatic replay (the tab stays)."""
+    ts = t.isoformat()
+    apps_e = {e.id: e for e in ents if e.kind == "app"}
+    try:
+        led = load_ledger(data_dir)
+        owner, la, rej, seen = resolve_actions(load_actions(data_dir), apps_e, led, ts)
+    except Exception as e:
+        print("cpi levels skipped: %s" % type(e).__name__, file=sys.stderr)
+        return CA.run(ents, CA.P_PROD, ts), None
+    try:
+        res = CA.run(ents, CA.P_PROD, ts, owner=owner or None)
+    except Exception as e:
+        if not owner:
+            raise
+        print("cpi levels skipped: %s" % type(e).__name__, file=sys.stderr)
+        return CA.run(ents, CA.P_PROD, ts), None
+    try:
+        new, props = merge_ledger(led, res, apps_e, rej, now)
+    except Exception as e:
+        print("cpi levels skipped: %s" % type(e).__name__, file=sys.stderr)
+        return res, None
+    return res, {"ledger": new, "props": props, "la": la, "seen": seen}
 
 
 # ── alerts (sent once) ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -1446,8 +1863,8 @@ def _remove(out_dir):
 
 
 def compute(dashboard, data_dir, out_dir, s, now, counts=None):
-    """The whole step without writing → (pointer, cpi.json.gz body, per-app bodies, apps, D, engine result) or None
-    (no Google Ads data / no data day)."""
+    """The whole step without writing → (pointer, cpi.json.gz body, per-app bodies, apps, D, engine result, the levels
+    part: {"ledger", "props", "la", "seen"} or None when it failed) or None (no Google Ads data / no data day)."""
     roas = dashboard.get("roas") or {}
     if not roas.get("configured", bool(roas.get("by_app"))) or not roas.get("by_app"):
         return None
@@ -1465,14 +1882,14 @@ def compute(dashboard, data_dir, out_dir, s, now, counts=None):
     ents = entities(apps, camps, ctys, D)
     extra["day0"] = {e.id: e.day0 for e in ents if e.kind == "app"}
     extra["cday0"] = {e.id: e.day0 for e in ents if e.kind == "country"}
-    res = CA.run(ents, CA.P_PROD, t.isoformat())
+    res, extra["lv"] = levels_run(ents, data_dir, t, now)
     ptr, allb, files, big = build_files(dashboard, D, apps, camps, ctys, extra, res, now)
     if counts is not None:
         counts["big"] = big
     gt = [a["notes"].get("ga4_till") for a in apps if a.get("view") and a["notes"].get("ga4_till")]
     till["ga4"] = min(gt) if gt else None
     ptr["till"] = till
-    return ptr, allb, files, apps, D, res
+    return ptr, allb, files, apps, D, res, extra["lv"]
 
 
 def run(dashboard, data_dir, out_dir, s=None, now=None):
@@ -1491,7 +1908,7 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             _remove(out_dir)
             LINE = ("cpi skipped: %s" % counts["why"]) if counts.get("why") else "cpi: apps 0"
             return []
-        ptr, allb, files, apps, D, res = got
+        ptr, allb, files, apps, D, res, lv = got
         raw = _raw(allb)
         if not _fits(raw):
             _remove(out_dir)
@@ -1505,6 +1922,11 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
         st, first = load_state(data_dir)
         al, closed = alerts(st, first, apps, D.t, now)
         save_state(data_dir, st)
+        if lv is not None:
+            try:
+                save_ledger(data_dir, lv["ledger"])
+            except Exception as e:                       # the history file costs only itself
+                print("cpi levels skipped: %s" % type(e).__name__, file=sys.stderr)
         ptr["fv"] = hashlib.sha1(raw).hexdigest()[:12]
         ptr["alerts"], ptr["closed"] = al, closed
         dashboard["cpi"] = ptr

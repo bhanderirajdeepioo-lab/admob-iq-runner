@@ -7,6 +7,9 @@
 //                     author or an admin) in D1 (cmp_marks, audited in cmp_marks_log — see db.js) — and the saved
 //                     CUSTOM compares (two ranges; a POST with before_* / after_*, a delete with kind "compare") in
 //                     cmp_ranges / cmp_ranges_log, listed beside the marks as `compares`
+//   /api/levels     → 📉 CPI vs eCPM level actions (Access JWT, admins only; GET the actions, POST /api/levels/act
+//                     appends ONE action to config/cpi_levels.json with the GITHUB_TOKEN secret — see levels.js),
+//                     audited in D1 (lv_log)
 //   other /api/*    → 404 JSON
 //   everything else → the static dashboard (env.ASSETS), exactly as without this Worker
 //
@@ -21,6 +24,7 @@ import {
   isCompareBody, validateCompare, listCompares, addCompare, deleteCompare,
 } from "./db.js";
 import { CFG_MSG, CONFIG_MAX_BYTES, serverSaveReady, githubConfig, validateSave, commitConfig, auditSave } from "./config.js";
+import { levelsList, levelsAct, auditLevel, _resetLevelsForTests } from "./levels.js";
 
 export { ApiError };
 
@@ -30,6 +34,8 @@ const CONFIG_PREFIX = "/api/config/";
 const CONFIG_ROUTES = { status: "GET", save: "POST" };
 const MARKS_PATH = "/api/marks";
 const MARKS_ROUTES = { "": ["GET", "POST"], "/delete": ["POST"] };   // /api/marks · /api/marks/delete
+const LEVELS_PATH = "/api/levels";
+const LEVELS_ROUTES = { "": "GET", "/act": "POST" };                    // /api/levels · /api/levels/act
 const MAX_BODY = 8192;
 const CONFIG_MAX_BODY = CONFIG_MAX_BYTES + 8192;   // {file, content}: the file (≤ 256 KiB as written) + the envelope
 const NOTE_MAX = 600;
@@ -89,6 +95,7 @@ let docCache = new Map();     // day → Map key→label (LRU, DOC_LRU entries)
 export function _resetForTests() {
   _resetAuthForTests();
   _resetSchemaForTests();
+  _resetLevelsForTests();
   indexCache = null;
   docCache = new Map();
 }
@@ -537,12 +544,39 @@ async function marksApi(request, env, url) {
   return sub === "/delete" ? hMarksDelete(c) : hMarksAdd(c);
 }
 
+// ── 📉 CPI level actions (/api/levels; the rules live in levels.js) ─────────────────────────────
+
+async function levelsApi(request, env, url) {
+  const sub = url.pathname.slice(LEVELS_PATH.length);
+  if (!Object.prototype.hasOwnProperty.call(LEVELS_ROUTES, sub)) throw new ApiError(404, "not_found");
+  const method = LEVELS_ROUTES[sub];
+  if (request.method !== method) throw new ApiError(405, "method_not_allowed", { allow: method });
+
+  const { email } = await verifyAccess(request, env);
+  const admin = isAdmin(email, env);
+  const body = method === "POST" ? await readJsonBody(request, url, MAX_BODY, { msg: "Request bahut badi hai" }) : null;
+  const now = new Date().toISOString();
+  if (method === "GET") return json(200, await levelsList({ env, email, admin, now }));
+  if (!admin) return json(403, { error: "admin_only", msg: "Sirf admin level badal sakta hai" });
+  const db = env.REVIEW_DB;
+  if (!db || typeof db.prepare !== "function" || typeof db.batch !== "function") throw new ApiError(500, "misconfigured");
+  try {
+    await ensureSchema(db);
+  } catch (e) {
+    console.error("levels-api: schema", errType(e));
+    throw new ApiError(503, "db_unavailable");
+  }
+  const audit = (row) => auditLevel(db, row, (e) => console.error("levels-api: audit", errType(e)));
+  return json(200, await levelsAct({ env, email, admin, body, now, audit }));
+}
+
 async function route(request, env) {
   const url = new URL(request.url);
   const p = url.pathname;
   if (p.startsWith(PREFIX)) return api(request, env, url);
   if (p.startsWith(CONFIG_PREFIX)) return configApi(request, env, url);
   if (p === MARKS_PATH || p.startsWith(MARKS_PATH + "/")) return marksApi(request, env, url);
+  if (p === LEVELS_PATH || p.startsWith(LEVELS_PATH + "/")) return levelsApi(request, env, url);
   if (p === "/api" || p.startsWith("/api/")) throw new ApiError(404, "not_found");
   if (env && env.ASSETS && typeof env.ASSETS.fetch === "function") return env.ASSETS.fetch(request);
   throw new ApiError(404, "not_found");
