@@ -1,0 +1,79 @@
+# One-off: the GA4 DEVICES ALL-TIME probe ("step 0" of the 📱 Devices All time design) — do the reads the history fetch would
+# use still answer WHOLE for OLD install days (past the ~427-day horizon GA4 drops from some reads)? Per app, on a few old
+# install days (about F − 200, F − 450 and the app's oldest): the S split, country-only, revenue by activity day, two truth
+# shapes, a whole month in one call, and (oldest day) the paid and back-next-day reads. See
+# admob_iq/fetch/ga4_devhist_probe.py. Read-only against GA4 and against the PRIVATE repo's data; the only write is
+# ga4/devices_alltime_probe.json in the PRIVATE repo. This repo's Actions log is PUBLIC: a counts-only heartbeat and counts-only
+# result lines; stderr is hidden, and the inputs are read by the probe from the event file only — never put into a step's
+# env or script.
+name: ga4-devhist-probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      apps:
+        description: "only these apps: comma list of file keys (empty = all)"
+        required: false
+        default: ""
+      ages:
+        description: "install days near F minus these many days: comma list (empty = 200,450; the app's oldest day is always read)"
+        required: false
+        default: ""
+      tag:
+        description: "a-z0-9 tag: the result goes to ga4/devices_alltime_probe_<tag>.json (empty = ga4/devices_alltime_probe.json)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read                 # this repo is never written to
+
+concurrency:
+  group: ga4-devhist-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    # PINNED as refresh.yml: a new runner image is a deliberate change (1 Nov 2026: the zone names Google sends went
+    # missing on ubuntu-latest)
+    runs-on: ubuntu-24.04
+    # the probe starts no GA4 call 20 min after IT starts, then writes what it has; before it: setup (~3) + the clone
+    # (capped at 8 min below); after: the last in-flight calls + the private write. 40 leaves room for all of it.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -q -r requirements.txt
+      - name: Read the PRIVATE data (a read-only clone, for the app routes)
+        env:
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+        run: |
+          test -n "$DATA_REPO"       || { echo "::error::DATA_REPO secret missing"; exit 1; }
+          test -n "$DATA_REPO_TOKEN" || { echo "::error::DATA_REPO_TOKEN secret missing"; exit 1; }
+          # the token goes in a header for this one command only: never into a URL, a file or .git/config; a clone
+          # slower than 8 min is given up (the probe then reads the routes through the API)
+          auth=$(printf 'x-access-token:%s' "$DATA_REPO_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          if timeout 480 git -c http.extraheader="AUTHORIZATION: basic $auth" clone -q --depth=1 \
+               "https://github.com/$DATA_REPO.git" _private > /dev/null 2>&1; then
+            echo "private data: cloned"
+          else
+            rm -rf _private
+            echo "::warning::private data not cloned: routes are read through the API"
+          fi
+      - name: Run
+        env:
+          GA4_REFRESH_TOKENS: ${{ secrets.GA4_REFRESH_TOKENS }}
+          GA4_REFRESH_TOKEN: ${{ secrets.GA4_REFRESH_TOKEN }}
+          GA4_CLIENT_ID: ${{ secrets.GA4_CLIENT_ID }}
+          GA4_CLIENT_SECRET: ${{ secrets.GA4_CLIENT_SECRET }}
+          DATA_REPO: ${{ secrets.DATA_REPO }}
+          DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+          DEVHIST_DATA_DIR: _private
+          PYTHONUNBUFFERED: "1"
+        run: python -m admob_iq.fetch.ga4_devhist_probe 2>/tmp/devhist.err || { echo "::error::devhist probe failed (details kept off the public log)"; exit 1; }
