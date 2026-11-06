@@ -2914,6 +2914,97 @@ body[data-screen="scr"] #smp-pick{display:inline-flex}
   .sc-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;overflow-x:visible}
   .sc-tiles.sc-five{grid-template-columns:repeat(2,minmax(0,1fr))}.sc-five .sc-kst{grid-column:1/-1}
   .sc-k{min-width:0;max-width:none}}
+/* ---- 📉 CPI vs eCPM (CPX): one list, details under the tapped row ---- */
+body[data-screen="cpx"] #rangectl,body[data-screen="cpx"] #rangecustom,body[data-screen="cpx"] #rangemon{display:none!important}   /* the screen has its own period */
+body[data-screen="cpx"] #smp-pick{display:inline-flex}
+.screen[data-screen="cpx"]{max-width:1360px;overflow-anchor:none;container:cpx/inline-size}   /* the module keeps the reader's place itself (a late file, a tap); the list lays itself out by the screen's own width (the sidebar eats 220 px of a wide window) */
+h2.cpx-h{font-size:20px;margin:0 0 3px;font-weight:800}.cpx-d{margin:0;color:var(--muted);font-size:13px}
+.cpx-dt{margin:2px 0 12px;color:var(--faint);font-size:12px}
+.cpx-ctl{margin-bottom:10px}
+.cpx-per{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.cpx-pk{display:inline-flex;align-items:center;gap:6px;background:var(--raise);border:1px solid var(--line2);border-radius:9px;padding:0 4px 0 10px;font-weight:700}
+.cpx-pk select{background:transparent;color:var(--ink);border:none;font:inherit;font-weight:700;padding:6px 4px;cursor:pointer;max-width:160px}
+.cpx-pk select option{background:var(--panel);color:var(--ink)}
+.cpx-mon{display:inline-flex;align-items:center;gap:2px}
+.cpx-mb{background:var(--raise);border:1px solid var(--line2);border-radius:9px;color:var(--ink2);font:inherit;font-size:12.5px;font-weight:700;padding:6px 10px;cursor:pointer}
+.cpx-mb[aria-pressed="true"]{border-color:var(--cyan);color:var(--cyan)}.cpx-mb:disabled{opacity:.4;cursor:default}
+.cpx-pd{color:var(--ink2);font-weight:700;font-size:13px}
+.cpx-cus{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;color:var(--muted);font-size:12px}
+.cpx-cus input{background:var(--panel);color:var(--ink);border:1px solid var(--line2);border-radius:8px;padding:4px 6px;font:inherit}
+.cpx-sum{display:flex;gap:6px 14px;flex-wrap:wrap;color:var(--ink2);font-weight:700;margin:0 0 10px}
+.cpx-bad{color:var(--bad)}.cpx-wat{color:var(--watch)}.cpx-good{color:var(--good)}.cpx-fnt{color:var(--muted)}
+.cpx-note{color:var(--muted);font-size:12.5px;margin:0 0 10px}.cpx-note b{color:var(--ink2)}
+.cpx-wait{min-height:120px}
+.cpx-card{margin-bottom:14px}
+.cpx-tbl{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+/* the list row: the 2-line card by default (a phone, a tablet, a window narrower than 900 px of screen) — app + money lost on top,
+   the three numbers in boxes below; the one-line table only where all of it fits (@container below) */
+.cpx-row{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"app loss" "m m";align-items:center;gap:8px 10px;padding:11px 12px;border-top:1px solid var(--line);cursor:pointer}
+.cpx-row:hover{background:var(--panel2)}.cpx-row:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px}
+.cpx-row.cpx-hd{display:none;border-top:none;background:var(--panel2);color:var(--faint);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding-block:8px;cursor:default}
+.cpx-row.cpx-on{background:var(--raise)}
+.cpx-c{min-width:0}.cpx-c.cpx-cst,.cpx-c.cpx-m,.cpx-c.cpx-since,.cpx-c.cpx-ar{display:none}
+.cpx-app{grid-area:app}.cpx-c.cpx-loss{grid-area:loss;align-items:flex-end;text-align:right}
+.cpx-sw{display:inline-block;font-size:11.5px;font-weight:800;border-radius:6px;padding:3px 8px;white-space:nowrap}
+.cpx-sw.cpx-bad{background:var(--bad-b)}.cpx-sw.cpx-wat{background:var(--watch-b)}.cpx-sw.cpx-good{background:var(--good-b)}.cpx-sw.cpx-fnt{background:var(--panel2)}
+.cpx-app{display:flex;align-items:center;gap:9px}.cpx-nmw{display:flex;flex-direction:column;min-width:0}
+.cpx-nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cpx-spd{font-size:12px;color:var(--faint);font-weight:600}
+.cpx-v{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}.cpx-s{font-size:12px;color:var(--muted);white-space:nowrap}
+.cpx-nv{color:var(--faint);font-weight:600}.cpx-dl{font-weight:800}.cpx-flat{color:var(--ink2)}
+.cpx-since{font-weight:700;font-size:13px}
+.cpx-loss{display:flex;flex-direction:column;gap:2px}.cpx-lv{font-weight:800;white-space:nowrap}.cpx-lsc{font-size:11.5px;color:var(--faint);font-weight:600}
+.cpx-ar{color:var(--faint);font-weight:800}
+.cpx-det{padding:4px 18px 16px;background:var(--raise);border-top:1px dashed var(--line2)}
+.cpx-vd{margin:10px 0 0;color:var(--ink2)}.cpx-vd b{color:var(--ink)}.cpx-vm{margin:8px 0 0;color:var(--ink)}
+.cpx-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 10px}
+.cpx-tab{font:inherit;font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:var(--ink2);cursor:pointer}
+.cpx-tab[aria-selected="true"]{background:var(--cyan);color:#06202a;border-color:var(--cyan)}
+.cpx-chs{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}   /* 3 across where each gets ≥ 300 px, else 2, else 1 */
+.cpx-chw{position:relative;min-width:0}
+.cpx-svg{display:block;width:100%;height:auto;background:var(--panel2);border:1px solid var(--line);border-radius:10px;touch-action:pan-y}
+.cpx-svg .cpx-ax{fill:var(--faint);font-size:11px}.cpx-svg .cpx-gl{stroke:var(--line)}
+.cpx-svg .cpx-nl{fill:none;stroke:var(--ink2);stroke-width:1.2;stroke-dasharray:4 4;opacity:.75}
+.cpx-svg .cpx-nt{fill:var(--ink2);font-size:12px;font-weight:700;paint-order:stroke;stroke:var(--panel2);stroke-width:4px}
+.cpx-svg .cpx-ln{fill:none;stroke-width:2.2;stroke-linejoin:round}.cpx-svg .cpx-l1{stroke:var(--bad)}.cpx-svg .cpx-l2{stroke:var(--cyan)}.cpx-svg .cpx-l3{stroke:var(--watch)}
+.cpx-svg circle.cpx-l1{fill:var(--bad)}.cpx-svg circle.cpx-l2{fill:var(--cyan)}.cpx-svg circle.cpx-l3{fill:var(--watch)}
+.cpx-svg .cpx-pt{fill:var(--ink);font-size:13px;font-weight:800;paint-order:stroke;stroke:var(--panel2);stroke-width:4px}
+.cpx-svg .cpx-tt{fill:var(--muted);font-size:12px;font-weight:700}
+.cpx-svg .cpx-sb{fill:var(--bad-b);opacity:.6}.cpx-svg .cpx-sw2{fill:var(--watch-b);opacity:.6}
+.cpx-svg .cpx-rule{stroke:var(--muted);stroke-dasharray:3 3}
+.cpx-chn{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;min-height:120px}
+.cpx-tip{position:absolute;top:4px;z-index:6;min-width:150px;max-width:240px;background:#0b1220;border:1px solid #38507a;border-radius:9px;padding:6px 9px;font-size:12px;color:var(--ink2);box-shadow:0 8px 24px rgba(0,0,0,.5);line-height:1.45;pointer-events:none}.cpx-tip b{color:#fff}
+.cpx-fn{color:var(--faint);font-size:12px;margin:8px 0 0}.cpx-fn b{color:var(--ink2)}
+.cpx-h4{margin:14px 0 6px;font-size:13px;color:var(--ink)}
+.cpx-x{overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch}
+.cpx-t{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+.cpx-t th{text-align:left;color:var(--faint);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:6px 8px;border-bottom:1px solid var(--line2);white-space:nowrap}
+.cpx-t td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top;white-space:nowrap}
+.cpx-t td small{display:block;color:var(--muted);font-size:11px}
+.cpx-t tr.cpx-nf td{color:var(--muted)}.cpx-t tr.cpx-rest td{color:var(--muted);font-style:italic}
+.cpx-cn{max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.cpx-al{display:block;font-size:11.5px;font-weight:700}
+.cpx-dot2{font-size:13px}
+.cpx-more{margin-top:8px;background:var(--panel);border:1px solid var(--line2);border-radius:9px;color:var(--ink2);font:inherit;font-weight:700;padding:6px 12px;cursor:pointer}
+.cpx-lms{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));margin-top:8px}
+.cpx-lm{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12.5px;font-variant-numeric:tabular-nums}
+.cpx-lm .cpx-k{color:var(--faint);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+.cpx-ft{color:var(--faint);font-size:12px;margin:12px 0 0;max-width:1100px}.cpx-ft b{color:var(--ink2)}
+.cpx-lnk{background:none;border:none;padding:0;font:inherit;color:var(--cyan);font-weight:700;cursor:pointer;text-decoration:underline}
+.cpx-mrow{grid-area:m;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.cpx-mrow>div{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:5px 8px;min-width:0}
+.cpx-mrow .cpx-k{font-size:10px;color:var(--faint);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.cpx-mrow .cpx-s,.cpx-mrow .cpx-v,.cpx-c.cpx-m .cpx-s{white-space:normal}
+@container cpx (min-width:900px){
+  .cpx-row,.cpx-row.cpx-hd{grid-template-columns:66px minmax(0,1.9fr) repeat(3,minmax(0,1fr)) 84px 124px 12px;grid-template-areas:none;gap:10px;padding:10px 14px}
+  .cpx-row.cpx-hd{display:grid}
+  .cpx-c.cpx-cst,.cpx-c.cpx-m,.cpx-c.cpx-since,.cpx-c.cpx-ar{display:block}
+  .cpx-app,.cpx-c.cpx-loss{grid-area:auto}.cpx-c.cpx-loss{align-items:stretch;text-align:left}
+  .cpx-mob,.cpx-mrow{display:none!important}
+}
+@media (max-width:760px){
+  .cpx-det{padding:4px 12px 14px}
+  .cpx-tab{font-size:12px;padding:5px 9px}
+}
 /* ---------- 👥 Audience (the approved Audience demo, ported: every rule scoped to #au-root / #au-tip) ---------- */
 body[data-screen="audience"] #rangectl,body[data-screen="audience"] #rangecustom{display:none!important}   /* every section says its own dates */
 body[data-screen="audience"] #smp-pick{display:inline-flex}
@@ -4276,6 +4367,7 @@ body.us-lock[data-screen="uninstall"]{overflow:hidden}
       <li><button data-screen="baseline"><span class="i">📐</span> Baseline</button></li>
       <li><button data-screen="mediation"><span class="i">🔗</span> Mediation</button></li>
       <li><button data-screen="roas"><span class="i">💰</span> Marketing ROAS</button></li>
+      <li id="nav-cpx-li" hidden><button data-screen="cpx"><span class="i">📉</span> CPI vs eCPM <span class="badge" id="nav-cpx" hidden></span></button></li>
       <li><button data-screen="value"><span class="i">💸</span> Install value</button></li>
       <li><button data-screen="active"><span class="i">👥</span> Active users</button></li>
       <li><button data-screen="uninstall"><span class="i">🚪</span> Uninstall</button></li>
@@ -4579,6 +4671,7 @@ const TITLES={overview:["Portfolio Overview","Live · engine-computed"],placemen
   countries:["Country Strategy","Per-geo · per-app"],baseline:["Baseline & Market","Standard ranges · eCPM trend"],mediation:["Mediation","Network competition"],
   reco:["Recommendations","Ranked · with uplift"],health:["Account Health & Compliance","IVT · consent · app-ads.txt"],
   roas:["Marketing ROAS","Google Ads spend vs revenue"],
+  cpx:["CPI vs eCPM","Google Ads CPI vs AdMob eCPM · D0 ROAS · har app ek line"],
   value:["Install value","Earning per install, ads money back & countries (GA4 + AdMob + Google Ads)"],
   active:["Active users","Old users, comebacks, time & ad revenue (GA4)"],
   uninstall:["Uninstall","Installs vs uninstalls (GA4)"],
@@ -4904,6 +4997,8 @@ function render(){
   { const li=document.getElementById('nav-fo-li'); if(li) li.hidden=!FO.ptr(); }
   root.append(renderScreens()); // 🖼️ Screens: the same (filled by show('scr'); its files load on the first open)
   { const li=document.getElementById('nav-scr-li'); if(li) li.hidden=!SCR.ptr(); }
+  try{ root.append(renderCpx()); }catch(e){}   // 📉 CPI vs eCPM: the same (filled by show('cpx')); a throw there never empties #screens
+  try{ const li=document.getElementById('nav-cpx-li'), bd=document.getElementById('nav-cpx'), n=CPX.alarmN(); if(li) li.hidden=!CPX.ptr(); if(bd){ bd.hidden=!n; bd.textContent=n?String(n):''; } }catch(e){}
   if(HUB.on) root.append(renderHubRv());   // ✨ hub: an app's ✅ Review history tab
   root.append(renderReview());   // ONE persistent node: drafts / open panels survive the 5-min refresh and the ₹/$ toggle
   rvRestoreFocus();
@@ -5086,6 +5181,7 @@ function show(id){
   if(id==='audience') AU.show(); else AU.left();   // 👪 Audience: the same (its lazy file loads on the first open)
   if(id==='firstopen') FO.show();                  // 🆕 First open: the same
   if(id==='scr') SCR.show(); else SCR.left();      // 🖼️ Screens: the same; leaving it takes its drill-down's Back step off
+  if(id==='cpx') CPX.show(); else CPX.left();      // 📉 CPI vs eCPM: the same
   const _rvKeep=rvKeepScroll(id);           // Review re-shown by the 5-min refresh / ₹⇄$: stay where the reader was
   rvOnShow(id);                             // body[data-screen] (hides App / Period on Review) + the #review hash
   if(!_rvKeep&&!REFRESH_SILENT&&!SP.keep) window.scrollTo({top:0});   // a silent background refresh / a same-view rebuild (rerender) never jumps the page
@@ -5143,11 +5239,11 @@ const HUB_LS='iq_layout';
 const HUB_T={overview:['Overview','📊','overview','overview'],revenue:['Revenue & Ad units','💵','placements','appdetail'],
   ecpm:['eCPM','📈','ecpm','ecpm'],active:['Active users','👥','active','active'],uninstall:['Uninstall','🚪','uninstall','uninstall'],
   value:['Install value','💸','value','value'],audience:['Audience','👪','audience','audience'],firstopen:['First open','🆕','firstopen','firstopen'],scr:['Screens','🖼️','scr','scr'],mediation:['Mediation','🔗','mediation','mediation'],
-  roas:['Marketing ROAS','💰','roas','roas'],baseline:['Baseline','📐','baseline','baseline'],deductions:['Deductions','📉','deductions','deductions'],
+  roas:['Marketing ROAS','💰','roas','roas'],cpx:['CPI vs eCPM','📉','cpx','cpx'],baseline:['Baseline','📐','baseline','baseline'],deductions:['Deductions','📉','deductions','deductions'],
   health:['Account Health','🛡️','health','health'],movers:['Movers','↕️','movers','movers'],alerts:['Alerts','🔔','','alerts'],
   review:['Review history','✅','','hubrv']};
-const HUB_ALL=['overview','revenue','ecpm','active','uninstall','value','audience','firstopen','scr','mediation','roas','baseline','deductions','health','movers'];
-const HUB_APP=['overview','revenue','ecpm','active','uninstall','value','audience','firstopen','scr','baseline','alerts','review','mediation','roas','deductions','health','movers'];
+const HUB_ALL=['overview','revenue','ecpm','active','uninstall','value','audience','firstopen','scr','mediation','roas','cpx','baseline','deductions','health','movers'];
+const HUB_APP=['overview','revenue','ecpm','active','uninstall','value','audience','firstopen','scr','baseline','alerts','review','mediation','roas','cpx','deductions','health','movers'];
 const HUB_PAGE={review:1,reco:1,settings:1};                                    // left-nav pages outside Home (Alerts: below)
 const HUB_DRILL={datewise:'overview',countries:'overview',reportcard:'revenue'};   // drill pages: inside the tab they came from
 function hubLsGet(){ try{ return localStorage.getItem(HUB_LS); }catch(e){ return null; } }
@@ -5210,8 +5306,9 @@ function hubNameOf(key){ if(!key||key==='all') return '';
   return n==null?null:n; }
 // ---- routes ----
 function hubParse(h){ const m=/^#home(?:\/([a-z0-9]{1,16})(?:\/([a-z]+))?)?\/?$/.exec(String(h||'')); return m?{key:m[1]||'all',tab:m[2]||''}:null; }
-function hubTabs(app){ let au=false, fo=false, sc=false; try{ au=!!AU.ptr(); }catch(e){} try{ fo=!!FO.ptr(); }catch(e){} try{ sc=!!SCR.ptr(); }catch(e){}   // 🖼️ Screens only when this build wrote its pointer
-  return (app?HUB_APP:HUB_ALL).filter(t=>(t!=='audience'||au)&&(t!=='firstopen'||fo)&&(t!=='scr'||sc)); }
+function hubTabs(app){ let au=false, fo=false, sc=false, cx=false; try{ au=!!AU.ptr(); }catch(e){} try{ fo=!!FO.ptr(); }catch(e){} try{ sc=!!SCR.ptr(); }catch(e){}   // 🖼️ Screens only when this build wrote its pointer
+  try{ cx=!!CPX.ptr(); }catch(e){}   // 📉 CPI vs eCPM: the same
+  return (app?HUB_APP:HUB_ALL).filter(t=>(t!=='audience'||au)&&(t!=='firstopen'||fo)&&(t!=='scr'||sc)&&(t!=='cpx'||cx)); }
 function hubHost(t,app){ const x=HUB_T[t]; return x?(app?x[3]:x[2]):''; }
 function hubHashOf(r){ return '#home/'+hubKeyOf(r.a)+'/'+r.t; }
 function hubHash(){ return hubHashOf({a:APP,t:HUB.tab}); }
@@ -5372,7 +5469,7 @@ const HUB_RVST={red:'bigda',amber:'dhyan',green:'behtar',normal:'normal',wait:'j
 const HUB_FC=[['revenue','revenue','Revenue & Ad units','💵','rv:kamai'],['ecpm','ecpm','eCPM','📈','ecpm'],['active','active','Active users','👥','rv:active'],
   ['uninstall','uninstall','Uninstall','🚪','rv:uninstall'],['update','uninstall','Update impact','📦','rv:update'],['value','value','Install value','💸','rv:value'],
   ['audience','audience','Audience','👪','aud'],['firstopen','firstopen','First open','🆕','fo'],['baseline','baseline','Baseline','📐','base'],['alerts','alerts','Alerts','🔔','alerts'],
-  ['review','review','Review history','✅','review'],['mediation','mediation','Mediation','🔗','rv:mediation'],['roas','roas','Marketing ROAS','💰','rv:ads'],
+  ['review','review','Review history','✅','review'],['mediation','mediation','Mediation','🔗','rv:mediation'],['roas','roas','Marketing ROAS','💰','rv:ads'],['cpx','cpx','CPI vs eCPM','📉','cpx'],
   ['deductions','deductions','Deductions','📉','rv:deduct'],['health','health','Account Health','🛡️','rv:health'],['movers','movers','Movers','↕️','movers']];
 function hubStChip(st){ const k=WD.sti[st]?st:'lagu'; return `<span class="hub-st st-${k}">${WD.sti[k]}</span>`; }
 // today's Review card (the Studio file of the open day) for the app: {day, a} · null while loading / none
@@ -5382,8 +5479,9 @@ function hubRvApp(f,name){ if(!f||!Array.isArray(f.apps)) return null; const k=h
 function hubFcNote(){ const o=hubRvOpen();
   return o&&o.f&&o.f.day?`Status = aaj ka ✅ Review card (${fmtD(o.f.day)}) · eCPM, Audience, Baseline, Alerts = dashboard ka apna data`
     :(HUB.rv.loading||!HUB.rv.idx?'⏳ Review card load ho raha hai…':'Review card abhi nahi — eCPM, Audience, Baseline, Alerts dashboard ke apne data se'); }
-function hubCardsHtml(name){ const o=hubRvOpen(), ra=o&&o.f?hubRvApp(o.f,name):null, fx=o&&o.f&&o.f.meta?o.f.meta.fx:null; let au=false, fo=false; try{ au=!!AU.ptr(); }catch(e){} try{ fo=!!FO.ptr(); }catch(e){}
-  return HUB_FC.filter(c=>(c[0]!=='audience'||au)&&(c[0]!=='firstopen'||fo)).map(c=>{ const x=hubCard(c,name,ra,o,fx);
+function hubCardsHtml(name){ const o=hubRvOpen(), ra=o&&o.f?hubRvApp(o.f,name):null, fx=o&&o.f&&o.f.meta?o.f.meta.fx:null; let au=false, fo=false, cx=false; try{ au=!!AU.ptr(); }catch(e){} try{ fo=!!FO.ptr(); }catch(e){}
+  try{ cx=!!CPX.ptr(); }catch(e){}   // 📉 only when this build wrote its pointer
+  return HUB_FC.filter(c=>(c[0]!=='audience'||au)&&(c[0]!=='firstopen'||fo)&&(c[0]!=='cpx'||cx)).map(c=>{ const x=hubCard(c,name,ra,o,fx);
     if(c[0]==='value') try{ roiCardLine(x,name); }catch(e){}   // 📈 + the ROI line (from the dashboard's own pointer)
     return `<div class="card hub-fc" data-st="${x.st}" data-fc="${c[0]}"><div class="hfc-h"><span class="hfc-i" aria-hidden="true">${c[3]}</span><span class="hfc-n">${c[2]}</span></div>`
       +`${hubStChip(x.st)}<div class="hfc-l">${x.line}</div><button type="button" class="hfc-o" onclick="hubTab('${c[1]}')" aria-label="Open ${hAttr(c[2])}">Open →</button></div>`; }).join(''); }
@@ -5410,7 +5508,8 @@ function hubCard(c,name,ra,o,fx){ const src=c[4];
     c/=1e6; p/=1e6; if(!c&&!p) return {st:'lagu',line:'No AdMob revenue'};
     const ch=p>0?(c-p)/p:null, sg=v=>(v<0?'−':'+')+money(Math.abs(v));
     return {st:'info',line:`<b>${sg(c-p)}</b> last 7 days vs 7 before${ch!=null?` (${ch>=0?'+':'−'}${Math.abs(Math.round(ch*100))}%)`:''}${top&&top.d?` · top: ${hAttr(top.n)} ${sg(top.d)}`:''}`}; }
-  if(src==='fo'){ try{ return FO.card(name); }catch(e){ return {st:'lagu',line:'First open ka data nahi'}; } }   // 🆕 from the dashboard's own pointer (no file load)
+  if(src==='fo'){ try{ return FO.card(name); }catch(e){ return {st:'lagu',line:'First open ka data nahi'}; } }
+  if(src==='cpx'){ try{ return CPX.card(name)||{st:'lagu',line:'—'}; }catch(e){ return {st:'lagu',line:'CPI vs eCPM ka data nahi'}; } }   // 📉 from the pointer (no file load)   // 🆕 from the dashboard's own pointer (no file load)
   if(src==='aud'){ let a=null, r=null, CNf=null;
     try{ if(AU.ready()){ AU._.prep(); const k=AU._.keyOfName(name); a=AU._.BYK()[k]||null; CNf=AU._.CN; if(a&&!a.kam) r=AU._.stripReach(a); }
       else AU.ensure(()=>{ hubCardsPaint(); try{ if(hubScr()==='audience') AU.paint(); }catch(e){} }); }catch(e){}   // (AU's own paint waits on the same load)
@@ -8121,6 +8220,572 @@ return {ptr, ensure, render, paint, show, left, ready:()=>!!ALL&&!!ptr(), fold:(
       if('SEG' in o) SEG=o.SEG; if('MORE' in o) MORE=o.MORE; if('COVP' in o) COVP=o.COVP; if('PREAD' in o) PREAD=o.PREAD; if('TS' in o) TS=o.TS; if('SORT' in o) SORT=o.SORT; }}};
 })();
 function renderScreens(){ return SCR.render(); }
+// ---- 📉 CPI vs eCPM (owner, 6 Nov 2026: "short and direct view … sirf one view me direct pata chal jana chaiye, lekin details
+// dekhna he to kuchh miss nahi hona chahiye"): ONE list, one row per app that bought users in the period — Google Ads CPI,
+// AdMob eCPM and Google D0 ROAS now vs normal, since when, the money lost; a tap opens the app's details under its row (one
+// open at a time). The alarm (episodes, frozen baselines, the healthy level per day) is the build's (admob_iq/cpi_build.py:
+// DATA.cpi + cpi.json.gz + cpi_<key>.json.gz); the "now" numbers of any period are summed here from the same DATA the
+// Marketing ROAS tab uses (roas.by_app, placements), so the two tabs never disagree ----
+const CPX=(()=>{
+let EL=null, WIRED=false, KEEPING=false;
+// the period (its own picker: Last 14 days first, ending at the alarm's data day t) + Custom from / to; PREAD: the saved one
+// read (lazily, on the first paint — never at script load)
+let PER='14', PF='', PTO='', PREAD=false;
+// OPEN: the app (id) whose details are open under its row (null = none); TAB: its details tab; DN: Day-wise rows shown
+let OPEN=null, TAB='ch', DN=30;
+const ALLF={raw:null,v:null,busy:false,err:false}, FILES={};   // cpi.json.gz · cpi_<key>.json.gz → {raw, v, busy, err}
+const CHD={};   // chart id → its points (the tooltip reads them)
+const PERS=[['today','Today'],['yday','Yesterday'],['7','Last 7 days'],['14','Last 14 days'],['tm','This month'],['lm','Last month'],['30','Last 30 days'],['60','Last 60 days'],['90','Last 90 days'],['all','All time'],['cus','Custom']];
+const PERK=new Set(PERS.map(p=>p[0])), NDAYS={'7':7,'14':14,'30':30,'60':60,'90':90}, PER_LS='cpx_per_v1';
+// the status words (the build's st) → label, class, sort rank
+const ST={alarm:['Alarm','cpx-bad',0],watch:['Watch','cpx-wat',1],ok:['OK','cpx-good',2],new:['New','cpx-fnt',3],paused:['Paused','cpx-fnt',4]};
+const STK={alarm:'bigda',watch:'dhyan',ok:'normal',new:'jaldi',paused:'lagu'};   // → the hub's status chips (WD keys)
+const TABS=[['ch','📈 Chart'],['dw','📅 Day-wise'],['cc','🌍 Countries'],['cp','🎯 Campaigns'],['ek','❓ eCPM kyun'],['lm','💸 Loss math'],['hi','🕘 History']];
+const FAMW={CPI:'CPI',ECPM:'eCPM',ROAS_G:'D0 ROAS',GAP:'Ads to pay back an install',IPU:'Ads per user',ROAS_C0:'Install-day ROAS D0 (AdMob)',
+  ROAS_C1:'Install-day ROAS D1 (AdMob)',ROAS_C7:'Install-day ROAS D7 (AdMob)',SPEND:'Spend'};
+const UP={CPI:1,GAP:1};                    // up is bad; every other family: down is bad
+const OPW={SUDDEN:'Sudden step',DRIFT:'Slow drift',ABSOLUTE:'Below the usual'};
+const WHYW={recovered:'recovered',stopped:'spend stopped',no_paid:'no paid users',settled:'new level accepted'};
+const TIERW={ALERT:'Alarm',WATCH:'Watch',LINE:'Line'};
+const MINW={CPI:0.25,ECPM:0.15,ROAS_G:0.10};      // a move this big is coloured (the families' smallest alarm step)
+const SCALE={CPI:100,ECPM:10000,ROAS_G:10000};    // cpi.json.gz h: scaled ints
+const BIDW={TARGET_ROAS:'tROAS',TARGET_CPA:'tCPA',MAXIMIZE_CONVERSIONS:'Max conversions',MAXIMIZE_CONVERSION_VALUE:'Max conversion value'};
+const E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ok=v=>v!=null&&isFinite(v);
+const DAY=864e5, t0=s=>Date.parse(s+'T00:00:00Z'), iso=t=>new Date(t).toISOString().slice(0,10), addD=(s,k)=>iso(t0(s)+k*DAY);
+const nD=(a,b)=>Math.round((t0(b)-t0(a))/DAY)+1, okD=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&isFinite(t0(s));
+const fd=s=>{ try{ return fmtD(s); }catch(e){ return String(s||''); } }, fdy=s=>s?fd(s)+' '+String(s).slice(0,4):'—';
+const quiet=f=>{ try{ if(typeof SP!=='undefined'&&SP&&SP.quietly) SP.quietly(f); else f(); }catch(e){} };
+const phone=()=>{ try{ return (+window.innerWidth||1280)<=760; }catch(e){ return false; } };
+const dev=()=>{ try{ return typeof window!=='undefined'&&!!window.__DEV_VIEW__; }catch(e){ return false; } };   // the developer copy: no money anywhere
+const DD=()=>(typeof DATA!=='undefined'&&DATA)||null;
+const vis=nm=>{ try{ return appVisibleByName(nm); }catch(e){ return true; } };   // the apps hidden in Settings stay hidden here too
+const VIN=()=>{ try{ return curView()==='INR'; }catch(e){ return false; } };   // the ₹ view (else $)
+const icon=(id,nm,sz)=>{ try{ return appIconId(id,nm,sz||24,'cpx-ic'); }catch(e){ return ''; } };
+// ---- numbers as printed ----
+function fI(v){ if(!ok(v)) return '—'; const a=Math.abs(v), s=v<0?'−₹':'₹';
+  return a>=1e7?s+(a/1e7).toFixed(2)+' Cr':a>=1e5?s+(a/1e5).toFixed(1)+' L':a>=1e3?s+(a/1e3).toFixed(1)+'k':s+Math.round(a); }
+function fU(v){ if(!ok(v)) return '—'; const a=Math.abs(v), s=v<0?'−$':'$';
+  return a>=1e6?s+(a/1e6).toFixed(2)+'M':a>=1e4?s+(a/1e3).toFixed(1)+'K':a>=100?s+Math.round(a).toLocaleString('en-US'):s+a.toFixed(2); }
+const fM=(inr,usd)=>VIN()?fI(inr):fU(usd);                                       // spend / money: ₹ as billed · $ at each day's rate
+const fCpi=v=>!ok(v)?'—':VIN()?'₹'+v.toFixed(v<10?2:1):'$'+v.toFixed(v<0.1?3:2);  // (v in the view's currency)
+const fE=v=>ok(v)?'$'+v.toFixed(2):'—';
+const fR=v=>ok(v)?(v*100).toFixed(1)+'%':'—';
+const fN=v=>ok(v)?Math.round(v).toLocaleString('en-US'):'—';
+const fP=r=>!ok(r)?'—':(r>0.0005?'+':r<-0.0005?'−':'±')+Math.round(Math.abs(r)*100)+'%';
+const fX=v=>ok(v)?(v>=10?v.toFixed(1):v.toFixed(2)):'—';
+// ---- the files ----
+function ptr(){ if(dev()) return null; const d=DD(), p=d&&d.cpi;
+  return p&&p.v===1&&okD(p.t)&&p.apps&&typeof p.apps==='object'&&!Array.isArray(p.apps)?p:null; }
+function apPtr(id){ const p=ptr(), a=p&&p.apps[id]; return a&&typeof a.key==='string'&&/^[0-9a-f]{12}$/.test(a.key)&&a.file==='cpi_'+a.key+'.json.gz'?a:null; }
+const allName=p=>p&&typeof p.file==='string'&&/^cpi\.json\.gz$/.test(p.file)?p.file:null;
+// the all-apps file (other periods: the healthy level per day + every episode): a newer version loads quietly while the older
+// one stays on screen (never "Loading…" over data)
+function ensureAll(cb){ const p=ptr(), n=allName(p); if(!n||ALLF.busy||(ALLF.raw&&ALLF.v===p.fv)||(ALLF.err&&ALLF.v===p.fv)) return; ALLF.busy=true;
+  fetchGzJson(n+'?v='+encodeURIComponent(p.fv||'')).then(j=>{ if(!j||j.v!==1||!okD(j.day0)||!j.apps||typeof j.apps!=='object'||Array.isArray(j.apps)) throw new Error('format');
+      ALLF.raw=j; ALLF.err=false; })
+    .catch(()=>{ ALLF.err=!ALLF.raw; }).then(()=>{ ALLF.v=p.fv; ALLF.busy=false; cb&&cb(); }); }
+function loadF(name,v,chk,cb){ const st=FILES[name]||(FILES[name]={}); if(st.busy||(st.raw&&st.v===v)||(st.err&&st.v===v)) return; st.busy=true;
+  fetchGzJson(name+'?v='+encodeURIComponent(v||'')).then(j=>{ if(!chk(j)) throw new Error('format'); st.raw=j; st.err=false; })
+    .catch(()=>{ st.err=!st.raw; }).then(()=>{ st.v=v; st.busy=false; cb&&cb(); }); }
+function fOf(id){ const a=apPtr(id), st=a&&FILES[a.file]; return st&&st.raw&&st.raw.key===a.key?st.raw:null; }
+function ensureApp(id){ const a=apPtr(id); if(!a) return;
+  loadF(a.file,a.v,j=>!!j&&j.v===1&&j.key===a.key&&okD(j.day0)&&!!j.d&&typeof j.d==='object'&&Array.isArray(j.ep),()=>arrive(id)); }
+function onScreen(){ const on=document.querySelector('.screen.on'); return !!(on&&on.dataset&&on.dataset.screen==='cpx'); }
+// ---- the calendar: IST days; t = the alarm's data day (Google D0 final), td = today (after t: allowed, not final) ----
+function cal(){ const p=ptr(); if(!p) return null; const d=DD(), t=p.t, td=okD(d&&d.today_date)&&d.today_date>t?d.today_date:addD(t,2);
+  return {t,td,d0:okD(p.day0)&&p.day0<=t?p.day0:addD(t,-730)}; }
+// a period → [lo, hi]: Today / Yesterday = td / td − 1 (not final); 7 / 14 / 30 / 60 / 90 days = the last N days ENDING AT t;
+// This month = its 1st … td; Last month = the month before; a month key = that month (the current one … td); All time =
+// day0 … td; Custom = the picked from / to inside [day0, td] (swapped when reversed)
+function rng(per,pf,pto){ per=per==null?PER:per; pf=pf==null?PF:pf; pto=pto==null?PTO:pto; const c=cal(); if(!c) return ['',''];
+  const {t,td,d0}=c, n=NDAYS[per], m0=td.slice(0,8)+'01';
+  if(per==='today') return [td,td]; if(per==='yday'){ const y=addD(td,-1); return [y,y]; }
+  if(n) return [addD(t,-(n-1)),t];
+  const ms=monSpan(per,td); if(ms) return ms[1]<d0||ms[0]>td?[addD(t,-13),t]:[ms[0]<d0?d0:ms[0],ms[1]];   // (a month outside the data: the default)
+  if(per==='tm') return [m0,td]; if(per==='lm'){ const l=addD(m0,-1); return [l.slice(0,8)+'01',l]; }
+  if(per==='all') return [d0,td];
+  if(per==='cus'){ const cl=v=>v<d0?d0:v>td?td:v; let f=cl(okD(pf)?pf:addD(t,-13)), to=cl(okD(pto)?pto:t); if(f>to) [f,to]=[to,f]; return [f,to]; }
+  return [addD(t,-13),t]; }
+// the default view (Last 14 days ending t): the pointer's own status / normal / money — the screen paints without any file
+const isDef=(lo,hi)=>{ const p=ptr(); return !!p&&hi===p.t&&lo===addD(p.t,-13); };
+function perName(k){ if(monOf(k)) return monName(monOf(k)); const p=PERS.find(z=>z[0]===k); return p?p[1]:k; }
+const perDates=(lo,hi)=>lo===hi?fdy(lo):fd(lo)+' – '+fd(hi)+' '+hi.slice(0,4);
+// ---- the period's "now" numbers per app NAME, from DATA: spend in the view's currency (₹ as billed, $ at each day's own rate:
+// roasDaily), spend in ₹, Google Ads installs (ads only), Google D0 value ÷ the same-rate spend (= ₹ ÷ ₹), AdMob earnings ÷
+// impressions (every ad source, net) — kept per (DATA, period, currency): a tap / the 5-minute refresh on the same build never
+// sums the days again ----
+const SUMM=new WeakMap();
+// ₹ of a one-rate USD micros amount (the rate the build converted the billed ₹ with: roas.fx.INR = USD per ₹)
+function inr(d,v){ const f=d&&d.roas&&d.roas.fx&&+d.roas.fx.INR; let b='USD'; try{ b=baseCur(); }catch(e){}
+  return b==='INR'?v/1e6:f>0?v/1e6/f:v/1e6*((d&&+d.usd_inr)||83); }
+function sums(lo,hi){ const d=DD(), p=ptr(); if(!d||!p) return {}; const mk=lo+'|'+hi+'|'+(VIN()?'INR':'USD');
+  let m=SUMM.get(d); if(!m){ m=new Map(); SUMM.set(d,m); } if(m.has(mk)) return m.get(mk);
+  const R=(d.roas&&d.roas.by_app)||{}, out={}, s3=addD(p.t,-2);
+  Object.keys(p.apps).forEach(id=>{ const a=p.apps[id], nm=a&&a.name; if(typeof nm!=='string'||out[nm]) return;
+    const o=out[nm]={sp:0,spi:0,sp1:0,n:0,v1:0,rev:0,imp:0,last3:0,days:0,till:hi>p.t?p.t:null,nf:lo>p.t}, e=R[nm]; if(!e) return;   // D4: D0 ROAS counts the days ≤ t only (till: the period runs past t; nf: it has no final day)
+    let dv={}; try{ dv=roasDaily(e); }catch(err){ dv=e.daily||{}; } const one=e.daily||{}, ins=e.installs_daily||{}, cv=e.convval_day1_daily||{};
+    for(const x in one){ const v=+one[x]||0; if(x>=s3&&x<=p.t) o.last3+=v; if(x<lo||x>hi) continue;
+      if(x<=p.t){ o.sp1+=v; o.v1+=(+cv[x]||0)*1e6; }
+      o.spi+=inr(d,v); o.sp+=(+dv[x]||0)/1e6; o.n+=+ins[x]||0; if(v>0) o.days++; } });   // (convval_day1_daily: plain USD; daily: micros)
+  (d.placements||[]).forEach(q=>{ const o=q&&out[q.app]; if(!o) return; (q.daily||[]).forEach(r=>{ const x=r[0]; if(x<lo||x>hi) return; o.rev+=(+r[1]||0)/1e6; o.imp+=+r[2]||0; }); });
+  for(const nm in out){ const o=out[nm]; if(VIN()) o.sp=o.spi;
+    o.cpi=o.n>0&&o.spi>0?o.spi/o.n:null; o.cpiV=o.n>0&&o.sp>0?o.sp/o.n:null; o.k=o.spi>0?o.sp/o.spi:null;   // k: the view's units per ₹ (1 in ₹)
+    o.ecpm=o.imp>0?o.rev/o.imp*1000:null; o.roas=o.sp1>0?o.v1/o.sp1:null; }
+  m.set(mk,out); return out; }
+// ---- episodes: [fam, opener, tier, c, opened, base] (pointer open) · [fam, opener, tier, c, opened, closed, why, base]
+// (cpi.json.gz) · the full dict (cpi_<key>.json.gz) → one shape ----
+function epOf(x){ if(Array.isArray(x)) return x.length===6?{fam:x[0],opener:x[1],tier:x[2],c:x[3],opened:x[4],closed:null,why:null,base:x[5]}
+    :{fam:x[0],opener:x[1],tier:x[2],c:x[3],opened:x[4],closed:x[5]||null,why:x[6]||null,base:x[7]};
+  return x&&typeof x==='object'?Object.assign({},x,{closed:x.closed||null,why:x.why||null}):null; }
+const eps=L=>(Array.isArray(L)?L:[]).map(epOf).filter(e=>e&&typeof e.fam==='string'&&okD(e.c));
+// an episode's span [c, closed or t] overlaps [lo, hi] (one still open runs on to the period's end)
+function over(e,lo,hi){ const t=ptr().t, end=e.closed||(hi>t?hi:t); return e.c<=hi&&end>=lo; }
+// status of [lo, hi]: the worst tier among the overlapping episodes (ALERT → Alarm, WATCH → Watch; a LINE never sets it); since =
+// the earliest change start of that tier; e = that episode (its close date says whether the problem is still open)
+function judge(L,lo,hi){ let w=null, since=null, fam=null, ep=null;
+  for(const e of L){ const r=e.tier==='ALERT'?0:e.tier==='WATCH'?1:null; if(r==null||!over(e,lo,hi)) continue;
+    if(w==null||r<w||(r===w&&e.c<since)){ w=r; since=e.c; fam=e.fam; ep=e; } }
+  return {w,since,fam,e:ep}; }
+// the healthy level (H) for [lo, hi] from a per-day array h (values / sc; index 0 = d0; null = unknown) — D3: H on the day before
+// the period (a period after the last shipped day: the last shipped one); when that is unknown (the period starts before H
+// exists) the first known H inside [lo, hi] (H at hi is covered by that scan); src says which: 'H0' · 'Hin' (on = that day)
+function hLvl(h,d0,lo,hi,sc){ if(!Array.isArray(h)||!okD(d0)) return null;
+  const kn=i=>i>=0&&i<h.length&&h[i]!=null&&ok(+h[i]), pk=(i,src,on)=>({v:+h[i]/sc,b:0,src,on:on||null});
+  let i=nD(d0,addD(lo,-1))-1; if(i>h.length-1) i=h.length-1; if(kn(i)) return pk(i,'H0');
+  const j1=Math.min(h.length-1,nD(d0,hi)-1);
+  for(let j=Math.max(0,nD(d0,lo)-1);j<=j1;j++) if(kn(j)) return pk(j,'Hin',addD(d0,j));
+  return null; }
+// the episode of family f that is open at hi (D1: opened by then and not closed by then — EVERY close reason counts as open until
+// its close, a settled one too); the latest opened wins
+function openAt(f,L,hi){ let o=null;
+  for(const e of L){ if(e.fam!==f||e.opened>hi||(e.closed&&e.closed<=hi)) continue; if(!o||e.opened>o.opened) o=e; }
+  return o; }
+// normal(f, [lo, hi]): the frozen baseline B of the episode open at hi (D1), else the healthy level (hLvl; cpi.json.gz h)
+function normal(f,L,A,lo,hi){ const o=openAt(f,L,hi);
+  if(o&&ok(+o.base)) return {v:+o.base,b:1,c:o.c,src:'B'};
+  return hLvl(A&&A.h&&A.h[f],ALLF.raw&&ALLF.raw.day0,lo,hi,SCALE[f]); }
+// money lost on [lo, hi] (≈: measured cost and D0 value, the frozen baseline B): per day of [lo, hi] ∩ [c, closed or t] of every
+// D0 ROAS episode, cost − D0 value ÷ B (₹ as billed; $ at each day's own rate); sc* = the same from c (the "since c" line). Days
+// after t are left out (their D0 value is not final yet)
+function lossG(nm,L,lo,hi){ const d=DD(), p=ptr(), e0=d&&d.roas&&d.roas.by_app&&d.roas.by_app[nm]; if(!e0) return null;
+  const G=L.filter(e=>e.fam==='ROAS_G'&&+e.base>0&&over(e,lo,hi)); if(!G.length) return null;
+  const one=e0.daily||{}, dt=e0.daily_dated||one, cv=e0.convval_day1_daily||{}, r={inr:0,usd:0,sinr:0,susd:0,cost:0,val:0,scost:0,sval:0,from:null,B:null,nd:0};
+  for(const e of G){ const B=+e.base, end=e.closed&&e.closed<p.t?e.closed:p.t; if(!r.from||e.c<r.from){ r.from=e.c; r.B=B; }
+    for(let x=e.c;x<=end&&x<=hi;x=addD(x,1)){ const v=+one[x]||0, w=(+cv[x]||0)*1e6, k=v>0?(+dt[x]||0)/v:inr(d,1e6)>0?1/inr(d,1e6):0;   // k: dated $ per one-rate $
+      const ci=inr(d,v), vi=inr(d,w), cu=v/1e6*k, vu=w/1e6*k, li=ci-vi/B, lu=cu-vu/B;
+      r.sinr+=li; r.susd+=lu; r.scost+=VIN()?ci:cu; r.sval+=VIN()?vi:vu; if(x>=lo){ r.inr+=li; r.usd+=lu; r.cost+=VIN()?ci:cu; r.val+=VIN()?vi:vu; r.nd++; } } }
+  r.pre=r.from<lo; r.na=!r.nd; return r; }   // na: no final day of the period inside the alarm (Today / Yesterday): "—" + the since line
+// (D2: the AdMob install-day ROAS_C0 version of the loss is shown only in the Loss math tab, beside the Google D0 one — never in the list)
+// ---- one app's row for [lo, hi] ----
+function rowOf(id,a,s,lo,hi){ const p=ptr(), def=isDef(lo,hi), A=ALLF.raw&&ALLF.raw.apps&&ALLF.raw.apps[id]||null, F=fOf(id);
+  const L=A?eps(A.ep):F?eps(F.ep):eps(a.open);
+  const r={id,a,name:a.name,s,lo,hi,def,L,wait:false,st:null,since:null,fam:null,ep:null,sinceOpen:false,sinceTo:null,nrm:{},lost:null};
+  let j=null;
+  if(def){ r.st=ST[a.st]?a.st:'ok'; r.since=okD(a.since)?a.since:null; const n=a.nrm||{}; j=judge(L,lo,hi); r.fam=j.fam;
+    ['CPI','ECPM','ROAS_G'].forEach(f=>{ const o=L.find(e=>e.fam===f&&!e.closed); r.nrm[f]=ok(n[f])?{v:+n[f],b:o?1:0,c:o?o.c:null,src:o?'B':'H0'}:null; }); }
+  else if(A){ j=judge(L,lo,hi); r.fam=j.fam; r.since=j.since;
+    ['CPI','ECPM','ROAS_G'].forEach(f=>{ r.nrm[f]=normal(f,L,A,lo,hi); });
+    // D3: New = no healthy level and no open episode (truly new) — never because the period starts before H exists
+    r.st=j.w===0?'alarm':j.w===1?'watch':hi===p.t&&!(s.last3>0)?'paused':!r.nrm.CPI&&!r.nrm.ROAS_G?'new':'ok'; }
+  else { r.wait=ALLF.err||!allName(p)?'err':true; r.st=ST[a.st]?a.st:'ok'; }   // (sorted by the default status while cpi.json.gz loads)
+  // is the problem the row says "since" still open at the period's end? (D1) — one found among the episodes by its change start;
+  // the default view's pointer carries the open ones only, so one it does not find has closed
+  if(r.since){ const ep=j&&j.e&&j.e.c===r.since?j.e:null; r.ep=ep;
+    r.sinceOpen=ep?!(ep.closed&&ep.closed<=hi):!def; r.sinceTo=ep&&ep.closed&&ep.closed<=hi?ep.closed:null; }
+  // money (D2: ONLY the D0 ROAS episodes — never the AdMob install-day line, never a CPI / eCPM "extra paid"): computed from DATA
+  // on the episodes; the default view falls back on the build's own number and takes its "since c" line from the pointer's lost.sc
+  if(!r.wait){ const pl=def&&a.lost&&a.lost.fam!=='ROAS_C0'&&ok(+a.lost.inr)?a.lost:null, g=lossG(r.name,L,lo,hi);
+    if(g) r.lost=g; else if(pl) r.lost={inr:+pl.inr,usd:+pl.usd,from:okD(pl.from)?pl.from:null,pre:okD(pl.from)&&pl.from<lo,ptr:1};
+    if(pl&&r.lost){ if(!r.lost.ptr){ r.lost.inr=+pl.inr; r.lost.usd=+pl.usd; }   // (the build's period number wins)
+      const sc=pl.sc; if(sc&&ok(+sc.inr)&&ok(+sc.usd)){ r.lost.sinr=+sc.inr; r.lost.susd=+sc.usd; } } }
+  return r; }
+const lostV=r=>r.lost&&!r.lost.na?(VIN()?r.lost.inr:r.lost.usd):null, lostS=r=>r.lost&&r.lost.pre&&ok(VIN()?r.lost.sinr:r.lost.susd)?(VIN()?r.lost.sinr:r.lost.susd):null;
+const rankOf=r=>(ST[r.st]||ST.ok)[2];
+function rows(lo,hi){ const p=ptr(); if(!p) return []; const S=sums(lo,hi), out=[];
+  for(const id of Object.keys(p.apps)){ const a=p.apps[id]; if(!a||typeof a.name!=='string'||!vis(a.name)) continue;
+    if(APP&&a.name!==APP) continue; const s=S[a.name]||{}; if(!APP&&!(s.spi>0)) continue;
+    out.push(rowOf(id,a,s,lo,hi)); }
+  return out.sort((x,y)=>rankOf(x)-rankOf(y)||(lostV(y)||0)-(lostV(x)||0)||(y.s.spi||0)-(x.s.spi||0)||x.name.localeCompare(y.name)); }
+// ---- the list ----
+// a metric cell: the now value, its move vs normal (judged in ₹ for CPI: FX-free; the $ normal = ₹ normal × the period's own
+// rate, so the printed % is the same in both views)
+function now3(r){ const s=r.s, n=r.nrm, nc=n.CPI?n.CPI.v*(VIN()?1:(s.k||0)):null;
+  return {CPI:{v:s.cpiV,n:nc,d:n.CPI&&s.cpi!=null?s.cpi/n.CPI.v-1:null},ECPM:{v:s.ecpm,n:n.ECPM?n.ECPM.v:null,d:n.ECPM&&s.ecpm!=null?s.ecpm/n.ECPM.v-1:null},
+    ROAS_G:{v:s.roas,n:n.ROAS_G?n.ROAS_G.v:null,d:n.ROAS_G&&s.roas!=null?s.roas/n.ROAS_G.v-1:null}}; }
+const fmtF=(f,v)=>f==='CPI'?fCpi(v):f==='ECPM'?fE(v):fR(v);
+function dCls(f,d){ if(!ok(d)||Math.abs(d)<(MINW[f]||0.1)) return 'cpx-flat'; return (d>0)===!!UP[f]?'cpx-bad':'cpx-good'; }
+function cell(r,f,m){ const x=m[f], n=r.nrm[f], nt=[]; let sub;
+  if(r.wait) sub=`<span class="cpx-nv">${r.wait==='err'?'normal —':'⏳ normal…'}</span>`;
+  else if(f==='ROAS_G'&&r.s.nf) sub='<span class="cpx-nv">not final yet</span>';   // D4: the period has no day ≤ t
+  else if(x.n==null) sub='<span class="cpx-nv">no normal yet</span>';
+  else sub=`<span class="cpx-dl ${dCls(f,x.d)}">${fP(x.d)}</span> <span class="cpx-nv">vs ${fmtF(f,x.n)}</span>`;
+  if(!r.wait){ if(f==='ROAS_G'&&r.s.till&&!r.s.nf) nt.push('till '+fd(r.s.till));   // D4: Google D0 is final only up to t
+    if(n&&n.src==='Hin'&&n.on) nt.push('normal = '+fd(n.on)+' level'); }               // D3: which healthy level the normal is
+  return `<div class="cpx-v">${fmtF(f,x.v)}</div><div class="cpx-s">${sub}</div>`+nt.map(z=>`<div class="cpx-s cpx-nv">${E(z)}</div>`).join(''); }
+const stw=r=>r.wait?[r.wait==='err'?'—':'⏳','cpx-fnt']:(ST[r.st]||ST.ok);
+// the "since" of a row: the date + "N din se" only while that problem is still open at the period's end (D1), else its span
+function sinceOf(r){ if(!r.since) return {a:'—',b:''};
+  if(r.sinceOpen){ const e=r.hi<ptr().t?r.hi:ptr().t, age=nD(r.since,e>r.since?e:r.since);
+    return {a:`${fd(r.since)}<br><span class="cpx-nv">${age} din se</span>`,b:` · since ${fd(r.since)} (${age} din)`}; }
+  const sp=fd(r.since)+' – '+(r.sinceTo?fd(r.sinceTo):'closed'); return {a:E(sp),b:' · '+E(sp)}; }
+function rowHtml(r,on,one){ const c=stw(r), m=now3(r), lv=lostV(r), ls=lostS(r), sw=sinceOf(r);
+  const sn=sw.b?`<span class="cpx-mob">${sw.b}</span>`:'';
+  const nm=one?'':`<span class="cpx-nm">${E(r.name)}</span>`;   // one app: its name is in the top bar already (once per page)
+  const sc=ls!=null?`<span class="cpx-lsc">since ${fd(r.lost.from)}: ≈${fM(r.lost.sinr,r.lost.susd)}</span>`:'';
+  const loss=(lv!=null?`<span class="cpx-lv cpx-bad">≈${fM(r.lost.inr,r.lost.usd)}</span>`:`<span class="cpx-lv">—</span>`)+sc;
+  return `<div class="cpx-row${on?' cpx-on':''}" data-cpx-app="${E(r.id)}" role="button" tabindex="0" aria-expanded="${!!on}">`
+    +`<div class="cpx-c cpx-cst"><span class="cpx-sw ${c[1]}">${c[0]}</span></div>`
+    +`<div class="cpx-c cpx-app">${one?'':icon(r.id,r.name,26)}<span class="cpx-nmw">${nm}<span class="cpx-spd">spend ${fM(r.s.spi,r.s.sp)}${sn}</span></span></div>`
+    +['CPI','ECPM','ROAS_G'].map(f=>`<div class="cpx-c cpx-m">${cell(r,f,m)}</div>`).join('')
+    +`<div class="cpx-c cpx-since">${sw.a}</div>`
+    +`<div class="cpx-c cpx-loss"><span class="cpx-sw ${c[1]} cpx-mob">${c[0]}</span>${loss}</div>`
+    +`<div class="cpx-c cpx-ar" aria-hidden="true">${on?'▾':'›'}</div>`
+    +`<div class="cpx-mrow">${[['CPI','CPI'],['ECPM','eCPM'],['ROAS_G','D0 ROAS']].map(([f,l])=>`<div><div class="cpx-k">${l}</div>${cell(r,f,m)}</div>`).join('')}</div></div>`; }
+// ---- the period picker: one select (Last 14 days first) + the month mover ‹ Mon YYYY › + the period's dates ----
+function perRestore(raw,d0,T){ let o=raw; try{ if(typeof raw==='string') o=JSON.parse(raw); }catch(e){ return null; }
+  if(!o||typeof o!=='object') return null; const k=String(o.k==null?'':o.k);
+  if(MON_RE.test(k)){ const m=monOf(k); if(!d0||m<String(d0).slice(0,7)||(T&&m>String(T).slice(0,7))) return null; return {k,f:'',t:''}; }
+  if(!PERK.has(k)) return null; if(k!=='cus') return {k,f:'',t:''};
+  let f=o.f, t=o.t; if(!okD(f)||!okD(t)) return null; if(f>t) [f,t]=[t,f];
+  const cl=v=>d0&&v<d0?d0:T&&v>T?T:v; return {k,f:cl(f),t:cl(t)}; }
+function perLoad(d0,T){ if(PREAD) return; PREAD=true; let raw=null; try{ raw=localStorage.getItem(PER_LS); }catch(e){ return; } if(raw==null) return;
+  const r=perRestore(raw,d0,T); if(r){ PER=r.k; PF=r.f; PTO=r.t; } }
+function perSave(){ try{ localStorage.setItem(PER_LS,JSON.stringify({k:PER,f:PF,t:PTO})); }catch(e){} }
+function perCtl(lo,hi){ const c=cal(), nf=hi>c.t;
+  const b=(k,l,on,dis,ar)=>`<button type="button" class="cpx-mb" data-cpx-per="${E(k)}" aria-pressed="${!!on}"${dis?' disabled':''}${ar?` aria-label="${E(ar)}"`:''}>${E(l)}</button>`;
+  const opts=PERS.map(([k,l])=>`<option value="${k}"${PER===k?' selected':''}>${E(l)}</option>`).join('')+(monOf(PER)?`<option value="${E(PER)}" selected>${E(perName(PER))}</option>`:'');
+  return `<div class="cpx-per" id="cpx-per"><label class="cpx-pk"><span aria-hidden="true">🗓</span><select data-cpx-sel="1" aria-label="Period">${opts}</select></label>`
+    +`<span class="cpx-mon" role="group" aria-label="Month">${monMover(PER,c.td,c.d0,b)}</span><span class="cpx-pd">${perDates(lo,hi)}${nf?' · <span class="cpx-wat">⏳ not final</span>':''}</span></div>`
+    +(PER==='cus'?`<div class="cpx-cus"><label>From <input type="date" data-cpx-pf="1" aria-label="From" value="${lo}" min="${c.d0}" max="${c.td}"></label><span>–</span><label>To <input type="date" data-cpx-pto="1" aria-label="To" value="${hi}" min="${c.d0}" max="${c.td}"></label></div>`:''); }
+function istAt(s){ try{ const t=new Date(Date.parse(s)+19800000); if(!isFinite(t)) return ''; return fd(iso(t))+', '+String(t.getUTCHours()).padStart(2,'0')+':'+String(t.getUTCMinutes()).padStart(2,'0')+' IST'; }catch(e){ return ''; } }
+function headHtml(){ const p=ptr();
+  return `<h2 class="cpx-h">CPI vs eCPM</h2><p class="cpx-d">Google Ads ka CPI vs AdMob eCPM aur D0 ROAS — har app ek line.</p>`
+    +`<p class="cpx-dt">Data till ${fdy(p.t)} (final)${p.at&&istAt(p.at)?` · Last check ${istAt(p.at)}`:''}</p>`; }
+function sumHtml(L){ const n={alarm:0,watch:0,ok:0}, w=L.some(r=>r.wait), q=k=>w?'…':n[k]; let li=0, lu=0, any=false;
+  L.forEach(r=>{ if(!r.wait&&n[r.st]!=null) n[r.st]++; if(r.lost&&!r.lost.na){ li+=r.lost.inr; lu+=r.lost.usd; any=true; } });
+  return `<div class="cpx-sum" id="cpx-sum"><span class="cpx-bad">● ${q('alarm')} Alarm</span><span class="cpx-wat">● ${q('watch')} Watch</span><span class="cpx-good">● ${q('ok')} OK</span>`
+    +`<span>· Money lost: <b class="${any?'cpx-bad':''}">${any?'≈'+fM(li,lu):'—'}</b></span></div>`; }
+function footHtml(){ const p=ptr(), u=p.unlinked;
+  return `<p class="cpx-ft"><b>Alarm</b> = kharch ke mukable kamai normal se kaafi neeche — paisa ja raha hai · <b>Watch</b> = CPI, eCPM ya ads per user normal se bahar, par paise ka nuksaan abhi saaf nahi · <b>OK</b> = sab normal ke andar. <b>Normal</b> = alarm khula ho to uske pehle ka level, warna period se ek din pehle ka healthy level (wo na ho to period ka pehla healthy level — cell me "normal = &lt;date&gt; level" likha aata hai). D0 ROAS "now" sirf final din (data till) tak ka hota hai. CPI = Google Ads spend ÷ Google Ads installs (ads only), ₹ me judge hota hai. Money lost (≈) = cost − D0 value ÷ normal D0 ROAS.</p>`
+    +(u&&ok(+u.inr)&&+u.n>0?`<p class="cpx-ft">Not linked spend: <b>${fM(+u.inr,+u.usd)}</b> (${+u.n} store ${+u.n===1?'id':'ids'}) — <button type="button" class="cpx-lnk" data-cpx-roas="1">Marketing ROAS me</button></p>`:''); }
+function listHtml(L,lo,hi,one){ const p=ptr(), nf=!allName(p)&&!isDef(lo,hi);
+  let note=''; if(!isDef(lo,hi)&&!ALLF.raw) note=ALLF.err||nf?`<p class="cpx-note">⚠️ Data load nahi hua. <button type="button" class="cpx-lnk" data-cpx-allretry="1">Try again</button></p>`:'<p class="cpx-note">⏳ Loading… (normal aur status is period ke liye)</p>';
+  if(!L.length) return note+`<div class="card cpx-card"><p class="cpx-note">${APP?'Is app ka is period me Google Ads spend nahi (ya ye app Google Ads se link nahi).':'Is period me kisi app ka Google Ads spend nahi.'}</p></div>`;
+  const hd='<div class="cpx-row cpx-hd" aria-hidden="true"><div>Status</div><div>'+(one?'':'App')+'</div><div>CPI</div><div>eCPM</div><div>D0 ROAS</div><div>Since</div><div>Money lost</div><div></div></div>';
+  return note+`<div class="cpx-tbl" id="cpx-tbl">${hd}${L.map(r=>{ const on=OPEN===r.id; return rowHtml(r,on,one)+(on?detHtml(r):''); }).join('')}</div>`; }
+// ---- the details under the tapped row ----
+// the one-line verdict (from the numbers) and the money line
+function verdict(r){ const m=now3(r), nw=f=>m[f].n==null?`<b>${fmtF(f,m[f].v)}</b> (no normal yet)`:`${fmtF(f,m[f].n)} → <b>${fmtF(f,m[f].v)}</b>`;
+  if(r.wait) return r.wait==='err'?'⚠️ Is period ka normal / status load nahi hua (upar Try again).':'⏳ Loading…';
+  const all3=`CPI ${nw('CPI')}, eCPM ${nw('ECPM')}, D0 ROAS ${nw('ROAS_G')}.`;
+  if(r.st==='alarm'||r.st==='watch'){ const f=r.fam, w=FAMW[f]||f||'—', dir=UP[f]?'upar':'neeche';
+    const o=m[f]?['CPI','ECPM','ROAS_G'].filter(z=>z!==f).map(z=>`${z==='ROAS_G'?'D0 ROAS':z==='ECPM'?'eCPM':'CPI'} ${nw(z)}`).join(', '):'';
+    if(!r.sinceOpen){ const sp=fd(r.since)+' – '+(r.sinceTo?fd(r.sinceTo):'closed');   // the problem is over by the period's end: its span, not "N se"
+      return `${E(w)} <b>${E(sp)}</b> normal se ${dir} rahi (ab band).`+(m[f]?` Is period me <b>${fmtF(f,m[f].v)}</b> (normal ${m[f].n==null?'—':fmtF(f,m[f].n)}). ${o}.`:` ${all3}`); }
+    if(m[f]){ return `${w} <b>${fd(r.since)} se</b> normal se ${dir}: <b>${fmtF(f,m[f].v)}</b> (normal ${m[f].n==null?'—':fmtF(f,m[f].n)}). ${o}.`; }
+    return `${E(w)} <b>${fd(r.since)} se</b> normal se ${dir}. ${all3}`; }
+  if(r.st==='paused') return `Pichhle 3 din (${fd(addD(ptr().t,-2))} – ${fd(ptr().t)}) Google Ads spend nahi. ${all3}`;
+  if(r.st==='new') return `Normal nahi bana — period ke end tak is app ka koi healthy level nahi tha (naya app ya spend abhi shuru hua). CPI <b>${fmtF('CPI',m.CPI.v)}</b>, eCPM <b>${fmtF('ECPM',m.ECPM.v)}</b>, D0 ROAS <b>${fmtF('ROAS_G',m.ROAS_G.v)}</b>.`;
+  return `Sab normal ke andar: ${all3}`; }
+function moneyLine(r){ const g=r.lost; if(!g) return '';
+  if(g.ptr) return `💸 <b>≈${fM(g.inr,g.usd)}</b> zyada kharch hua is period me${g.from?` — problem ${fd(g.from)} se`:''}.`;
+  const fm=v=>VIN()?fI(v):fU(v);
+  return `💸 <b>≈${fM(g.sinr,g.susd)}</b> zyada kharch hua — ${fd(g.from)} se ab tak ${fm(g.scost)} spend pe utni hi D0 value normal ROAS (${fR(g.B)}) pe sirf ${fm(g.sval/g.B)} me milti.`; }
+function detHtml(r){ const n=TABS.map(([k,l])=>`<button type="button" class="cpx-tab" role="tab" data-cpx-tab="${k}" aria-selected="${TAB===k}">${l}</button>`).join('');
+  const ml=moneyLine(r);
+  return `<div class="cpx-det" id="cpx-det" data-cpx-det="${E(r.id)}"><p class="cpx-vd">${verdict(r)}</p>${ml?`<p class="cpx-vm">${ml}</p>`:''}`
+    +`<div class="cpx-tabs" role="tablist" aria-label="Details">${n}</div><div class="cpx-tb" id="cpx-tb">${tabBody(r)}</div></div>`; }
+function tabBody(r){ const a=apPtr(r.id);
+  if(!a) return '<p class="cpx-note cpx-wait">Is build me is app ki detail file nahi bani.</p>';
+  const st=FILES[a.file], F=fOf(r.id);
+  if(!F) return st&&st.err?`<p class="cpx-note cpx-wait">⚠️ Data load nahi hua. <button type="button" class="cpx-lnk" data-cpx-retry="${E(a.file)}">Try again</button></p>`:'<p class="cpx-note cpx-wait">⏳ Loading…</p>';
+  try{ return ({ch:chartsHtml,dw:dayHtml,cc:ctyHtml,cp:campHtml,ek:whyHtml,lm:lossHtml,hi:histHtml}[TAB]||chartsHtml)(r,F); }
+  catch(e){ return '<p class="cpx-note cpx-wait">⚠️ Is tab ka data padha nahi ja saka.</p>'; } }
+// ---- the details file: per-day arrays from its own day0 (null = unknown) ----
+const fIx=(F,x)=>nD(F.day0,x)-1;
+const at=(F,k,i)=>{ const a=F.d&&F.d[k]; if(!Array.isArray(a)||i<0||i>=a.length) return null; const v=a[i]; return v==null||!ok(+v)?null:+v; };
+const fLen=F=>{ let n=0; for(const k in F.d) if(Array.isArray(F.d[k])) n=Math.max(n,F.d[k].length); return n; };
+const fEnd=F=>addD(F.day0,fLen(F)-1);
+// Σ of a series over [lo, hi] on the days ALL keys are known (n = such days)
+function fsum(o,day0,keys,lo,hi){ const r={n:0}; keys.forEach(k=>{ r[k]=0; });
+  const i0=Math.max(0,nD(day0,lo)-1), len=Math.max(0,...keys.map(k=>Array.isArray(o[k])?o[k].length:0)), i1=Math.min(len-1,nD(day0,hi)-1);
+  for(let i=i0;i<=i1;i++){ let all=true; for(const k of keys){ const v=Array.isArray(o[k])?o[k][i]:null; if(v==null||!ok(+v)){ all=false; break; } } if(!all) continue;
+    r.n++; for(const k of keys) r[k]+=+o[k][i]; }
+  return r; }
+// ---- 📈 Chart: CPI · eCPM · D0 ROAS as 14-day sums over the period (at least 120 days), the normal dashed, the problem spans
+// shaded, first / peak / now / normal printed, a tooltip per day ----
+function chartsHtml(r,F){ const t=ptr().t, end=r.hi<t?r.hi:t, e2=end<fEnd(F)?end:fEnd(F), a0=addD(e2,-119), lo=r.lo<a0?r.lo:a0;
+  const s0=addD(F.day0,13), from=lo<s0?s0:lo; if(from>e2) return '<p class="cpx-note">Is period me chart ke liye din kam hain.</p>';
+  const L=eps(F.ep);
+  const cpi=series(F,from,e2,'CPI'), ec=series(F,from,e2,'ECPM'), ro=series(F,from,e2,'ROAS_G');
+  return `<div class="cpx-chs">${chart('cpx-c1',VIN()?'CPI ₹ (cost ÷ installs)':'CPI $ (cost ÷ installs)',cpi,'CPI',L,'cpx-l1')}${chart('cpx-c2','eCPM $ (AdMob)',ec,'ECPM',L,'cpx-l2')}${chart('cpx-c3','D0 ROAS (Google D0 ÷ cost)',ro,'ROAS_G',L,'cpx-l3')}</div>`
+    +'<p class="cpx-fn">Har point: pichhle 14 din ka jod (aakhri point = upar wali line) · dashed = normal · laal patti = alarm ke din, peeli = watch.</p>'; }
+// one family's 14-day points: v (CPI in the view's currency; the $ normal at the window's own rate), n (normal), raw sums
+function series(F,from,to,f){ const i0=fIx(F,from), i1=fIx(F,to), d=F.d, out=[];
+  for(let i=i0;i<=i1;i++){ const x=addD(F.day0,i); let v=null, n=null;
+    const w=fsum(d,F.day0,f==='ECPM'?['rev','imp']:f==='CPI'?['sp_inr','sp_usd','inst']:['sp_inr','d0_inr'],addD(x,-13),x);
+    const nr=F.nrm&&Array.isArray(F.nrm[f])?F.nrm[f][i]:null;
+    if(w.n===14){ if(f==='CPI'&&w.inst>0&&w.sp_inr>0){ const k=VIN()?1:w.sp_usd/w.sp_inr; v=(VIN()?w.sp_inr:w.sp_usd)/w.inst; n=ok(nr)?nr*k:null; }
+      if(f==='ECPM'&&w.imp>0){ v=w.rev/w.imp*1000; n=ok(nr)?+nr:null; } if(f==='ROAS_G'&&w.sp_inr>0){ v=w.d0_inr/w.sp_inr; n=ok(nr)?+nr:null; } }
+    else if(ok(nr)&&f!=='CPI') n=+nr;
+    out.push({x,v,n}); }
+  return out; }
+function chart(id,title,P,f,L,cls){ const pts=P.map((p,i)=>[i,p.v]).filter(q=>q[1]!=null), N=P.length;
+  if(pts.length<2) return `<div class="cpx-chw"><div class="cpx-note cpx-chn"><b>${E(title)}</b><br>Is period me kaafi din nahi (14 din ka jod nahi bana).</div></div>`;
+  const W=360, H=176, Lm=10, Rm=12, Tp=32, Bm=22, ns=P.map(p=>p.n).filter(ok), vals=pts.map(q=>q[1]).concat(ns);
+  let lo=Math.min(...vals), hi=Math.max(...vals); const pad=(hi-lo)*0.12||hi*0.1||1; lo=Math.max(0,lo-pad); hi=hi+pad;
+  const X=i=>Lm+(W-Lm-Rm)*(N>1?i/(N-1):0.5), Y=v=>Tp+(H-Tp-Bm)*(1-(v-lo)/(hi-lo));
+  const o=[`<svg class="cpx-svg" data-cpx-ch="${id}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${E(title)}">`];
+  // the problem spans of this family (Alarm red, Watch amber)
+  L.filter(e=>e.fam===f&&(e.tier==='ALERT'||e.tier==='WATCH')).forEach(e=>{ const a=e.c<P[0].x?0:P.findIndex(p=>p.x>=e.c), end=e.closed||P[N-1].x;
+    if(a<0||e.c>P[N-1].x||end<P[0].x) return; let b=P.findIndex(p=>p.x>end); b=b<0?N-1:Math.max(a,b-1);
+    o.push(`<rect x="${X(a).toFixed(1)}" y="${Tp-6}" width="${Math.max(2,X(b)-X(a)).toFixed(1)}" height="${H-Tp-Bm+6}" class="${e.tier==='ALERT'?'cpx-sb':'cpx-sw2'}"/>`); });
+  P.forEach((p,i)=>{ if(p.x.endsWith('-01')) o.push(`<line x1="${X(i).toFixed(1)}" x2="${X(i).toFixed(1)}" y1="${Tp-6}" y2="${H-Bm}" class="cpx-gl"/><text x="${(X(i)+3).toFixed(1)}" y="${H-6}" class="cpx-ax">${E(fd(p.x).split(' ')[1]||'')}</text>`); });
+  // the normal (dashed, a gap where unknown)
+  let nd='', up=false; P.forEach((p,i)=>{ if(p.n==null){ up=false; return; } nd+=(up?'L':'M')+X(i).toFixed(1)+' '+Y(p.n).toFixed(1)+' '; up=true; });
+  if(nd) o.push(`<path d="${nd}" class="cpx-nl"/>`);
+  let ld='', u2=false; P.forEach((p,i)=>{ if(p.v==null){ u2=false; return; } ld+=(u2?'L':'M')+X(i).toFixed(1)+' '+Y(p.v).toFixed(1)+' '; u2=true; });
+  o.push(`<path d="${ld}" class="cpx-ln ${cls}"/>`);
+  // printed: first, peak (the worst point), now, normal (its latest) — labels kept apart
+  const first=pts[0], last=pts[pts.length-1], peak=pts.reduce((m,q)=>(UP[f]?q[1]>m[1]:q[1]<m[1])?q:m,pts[0]);
+  const lab=[[first,'cpx-pt'],[last,'cpx-pt']]; if(Math.min(Math.abs(peak[0]-first[0]),Math.abs(peak[0]-last[0]))>N*0.14) lab.splice(1,0,[peak,'cpx-pt']);
+  const boxes=[];
+  const put=(x,y,txt,anchor)=>{ const w=txt.length*7.4+6, x0=anchor==='start'?x:anchor==='end'?x-w:x-w/2; let yy=y;
+    for(let k=0;k<6;k++){ const hit=boxes.find(b=>x0<b[0]+b[2]&&x0+w>b[0]&&yy-11<b[1]+2&&yy+2>b[1]-11); if(!hit) break; yy=yy<Tp+20?hit[1]+14:hit[1]-14; }
+    yy=Math.max(12,Math.min(H-Bm-2,yy)); boxes.push([x0,yy,w]); return yy; };
+  lab.forEach(([[i,v],c])=>{ o.push(`<circle cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="3.4" class="cpx-dot ${cls}"/>`); });
+  lab.forEach(([[i,v],c])=>{ const anchor=i<N*0.2?'start':i>N*0.8?'end':'middle', txt=fmtF(f,v), y=put(X(i),Y(v)+(Y(v)>Tp+14?-8:15),txt,anchor);
+    o.push(`<text x="${X(i).toFixed(1)}" y="${y.toFixed(1)}" class="${c}" text-anchor="${anchor}">${E(txt)}</text>`); });
+  const nl=[...P].reverse().find(p=>p.n!=null);
+  if(nl){ const txt='normal '+fmtF(f,nl.n), xm=Lm+(W-Lm-Rm)*0.42, y=put(xm,Y(nl.n)-5,txt,'middle'); o.push(`<text x="${xm.toFixed(1)}" y="${y.toFixed(1)}" class="cpx-nt" text-anchor="middle">${E(txt)}</text>`); }
+  o.push(`<line class="cpx-rule" x1="0" x2="0" y1="${Tp-6}" y2="${H-Bm}" visibility="hidden"/><text x="6" y="16" class="cpx-tt">${E(title)}</text></svg>`);
+  CHD[id]={P,f,W,Lm,Rm,N};
+  return `<div class="cpx-chw">${o.join('')}<div class="cpx-tip" hidden></div></div>`; }
+function tipHtml(c,i){ const p=c.P[i]; if(!p) return '';
+  return `<b>${E(fdy(p.x))}</b><br>14 din: <b>${E(fmtF(c.f,p.v))}</b>${p.n!=null?` · normal ${E(fmtF(c.f,p.n))}`:''}${p.v!=null&&p.n?` (${fP(p.v/p.n-1)})`:''}`; }
+// ---- 📅 Day-wise: newest first (Today / Yesterday on top from DATA, marked ⏳), 30 rows + Show 30 more ----
+function dayRows(r,F){ const d=DD(), t=ptr().t, c=cal(), L=eps(F.ep), e=d&&d.roas&&d.roas.by_app&&d.roas.by_app[r.name], out=[];
+  // the days after t (not final): from DATA, as the list's own sums
+  if(e) for(let x=c.td;x>t;x=addD(x,-1)){ const s=sums(x,x)[r.name]||{}; out.push({x,nf:true,sp:s.sp,spi:s.spi,n:s.n,cpi:s.cpiV,ec:s.ecpm,apu:null,ro:s.roas,c0:null}); }
+  let first=0; const sp=F.d.sp_inr||[]; while(first<sp.length&&!(+sp[first]>0)) first++;
+  const last=Math.min(fLen(F)-1,fIx(F,t));
+  for(let i=last;i>=first;i--){ const x=addD(F.day0,i), si=at(F,'sp_inr',i), su=at(F,'sp_usd',i), n=at(F,'inst',i), rv=at(F,'rev',i), im=at(F,'imp',i), dau=at(F,'dau',i), d0=at(F,'d0_inr',i), cs=at(F,'c_sp',i), c0=at(F,'c_r0',i);
+    const spv=VIN()?si:su;
+    out.push({x,nf:false,sp:spv,spi:si,n,cpi:n>0&&spv!=null?spv/n:null,ec:im>0&&rv!=null?rv/im*1000:null,apu:dau>0&&im!=null?im/dau:null,ro:si>0&&d0!=null?d0/si:null,c0:cs>0&&c0!=null?c0/cs:null,
+      fams:L.filter(z=>(z.tier==='ALERT'||z.tier==='WATCH')&&z.c<=x&&(!z.closed||z.closed>=x))}); }
+  return out; }
+function dayHtml(r,F){ const R=dayRows(r,F), show=R.slice(0,DN);
+  const dot=z=>!z.fams||!z.fams.length?'':`<span class="cpx-dot2 ${z.fams.some(e=>e.tier==='ALERT')?'cpx-bad':'cpx-wat'}" title="${E(z.fams.map(e=>FAMW[e.fam]||e.fam).join(', '))}">●</span>`;
+  const body=show.map(z=>`<tr${z.nf?' class="cpx-nf"':''}><td>${E(fdy(z.x))}${z.nf?' <span class="cpx-wat" title="not final">⏳</span>':''}</td><td>${z.spi!=null?fM(z.spi,z.sp):'—'}</td><td>${fN(z.n)}</td><td>${fCpi(z.cpi)}</td><td>${fE(z.ec)}</td><td>${fX(z.apu)}</td><td>${z.nf?'<span title="D0 abhi final nahi">⏳</span>':fR(z.ro)}</td><td>${z.nf?'⏳':z.c0==null?'<span class="cpx-nv" title="abhi matured nahi">—</span>':fR(z.c0)}</td><td>${dot(z)}</td></tr>`).join('');
+  return `<div class="cpx-x" id="cpx-dwx"><table class="cpx-t"><thead><tr><th>Date</th><th>Spend</th><th>Google Ads installs</th><th>CPI</th><th>eCPM</th><th title="AdMob impressions (har source) ÷ GA4 daily active users">Ads / user</th><th>D0 ROAS</th><th title="AdMob-matched install-day revenue ÷ spend (≈)">Install-day ROAS (AdMob)</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`
+    +(R.length>DN?`<button type="button" class="cpx-more" data-cpx-more="1">Show 30 more</button>`:'')
+    +'<p class="cpx-fn">Installs = Google Ads installs (ads only) · Ads / user = AdMob impressions (har ad source) ÷ GA4 daily active users (GA4 din = GMT) · Install-day ROAS (AdMob, ≈ AdMob-matched) sirf matured din pe · ⏳ = abhi final nahi.</p>'; }
+// ---- 🌍 Countries: the period's spend share, CPI (cost ÷ Google Ads downloads) and eCPM (AdMob country, gross) vs normal ----
+// normal for a country / campaign: its own open alarm's baseline, else the 28 days before the period (the engine ships the
+// healthy level for apps only)
+const span=(r)=>{ const t=ptr().t; return [r.lo,r.hi<t?r.hi:t]; };
+function entNorm(L,f,lo,hi,o,day0,keys,fn){ const e=L.find(z=>z.fam===f&&z.opened<=hi&&(!z.closed||z.closed>hi));   // (D1: a settled one counts until its close)
+  if(e&&ok(+e.base)) return {v:+e.base,b:1}; const w=fsum(o,day0,keys,addD(lo,-28),addD(lo,-1)); const v=fn(w); return ok(v)?{v,b:0}:null; }
+function alarmLine(L,lo,hi){ const o=L.filter(e=>over(e,lo,hi)); if(!o.length) return '';
+  return o.map(e=>`<span class="cpx-al ${e.tier==='ALERT'?'cpx-bad':e.tier==='WATCH'?'cpx-wat':''}">⚠️ ${E(FAMW[e.fam]||e.fam)} ${UP[e.fam]?'up':'down'} · since ${E(fd(e.c))}${e.closed?` · closed ${E(fd(e.closed))}`:''}</span>`).join(''); }
+const vsH=(v,n,f)=>n?`<small><span class="cpx-dl ${dCls(f,v/n.v-1)}">${fP(v/n.v-1)}</span> vs ${fmtF(f,n.v)}</small>`:'<small class="cpx-nv">no normal</small>';
+function ctyHtml(r,F){ const [lo,hi]=span(r); if(lo>hi) return '<p class="cpx-note">Is period ke din abhi final nahi — countries t tak.</p>';
+  const tot=fsum(F.d,F.day0,['sp_inr','sp_usd','inst'],lo,hi), C=(Array.isArray(F.ctys)?F.ctys:[]).filter(c=>c&&c.d&&okD(c.from)), nt=F.notes||{};
+  const rowsC=C.map(c=>{ const w=fsum(c.d,c.from,['sp_inr','sp_usd','dl'],lo,hi), m=fsum(c.d,c.from,['rev','imp'],lo,hi), L=eps(c.ep), k=VIN()?1:(w.sp_inr>0?w.sp_usd/w.sp_inr:0);
+      const cp=w.dl>0?(VIN()?w.sp_inr:w.sp_usd)/w.dl:null, cpI=w.dl>0?w.sp_inr/w.dl:null, ec=m.imp>0?m.rev/m.imp*1000:null;
+      const nc=entNorm(L,'CPI',lo,hi,c.d,c.from,['sp_inr','dl'],q=>q.dl>0?q.sp_inr/q.dl:null), ne=entNorm(L,'ECPM',lo,hi,c.d,c.from,['rev','imp'],q=>q.imp>0?q.rev/q.imp*1000:null);
+      return {c,w,m,cp,cpI,ec,nc,ne,k,L}; }).filter(z=>z.w.sp_inr>0).sort((a,b)=>b.w.sp_inr-a.w.sp_inr);
+  const cn=cc=>{ try{ return valFlag(cc)+' '+E(valCtyName(cc)); }catch(e){ return E(cc); } };
+  const body=rowsC.map(z=>`<tr><td>${cn(z.c.cc)}</td><td>${tot.sp_inr>0?Math.round(z.w.sp_inr/tot.sp_inr*100)+'%':'—'}<small>${fM(z.w.sp_inr,z.w.sp_usd)}</small></td>`
+      +`<td><b>${fCpi(z.cp)}</b>${z.cpI!=null&&z.nc?`<small><span class="cpx-dl ${dCls('CPI',z.cpI/z.nc.v-1)}">${fP(z.cpI/z.nc.v-1)}</span> vs ${fCpi(z.nc.v*z.k)}</small>`:'<small class="cpx-nv">no normal</small>'}</td>`
+      +`<td><b>${fE(z.ec)}</b>${z.ec!=null?vsH(z.ec,z.ne,'ECPM'):'<small class="cpx-nv">AdMob data nahi</small>'}</td><td>${alarmLine(z.L,lo,hi)}</td></tr>`).join('');
+  const rs={sp_inr:tot.sp_inr-rowsC.reduce((s,z)=>s+z.w.sp_inr,0),sp_usd:tot.sp_usd-rowsC.reduce((s,z)=>s+z.w.sp_usd,0)};
+  const rest=rs.sp_inr>0.5?`<tr class="cpx-rest"><td>Rest</td><td>${tot.sp_inr>0?Math.round(rs.sp_inr/tot.sp_inr*100)+'%':'—'}<small>${fM(rs.sp_inr,rs.sp_usd)}</small></td><td>—</td><td>—</td><td></td></tr>`:'';   // (only its spend and share: no CPI — it would mix two install counts)
+  return (rowsC.length?`<div class="cpx-x"><table class="cpx-t"><thead><tr><th>Country</th><th>Spend share</th><th title="cost ÷ Google Ads downloads">CPI</th><th title="AdMob country report (gross)">eCPM</th><th>Alarm</th></tr></thead><tbody>${body}${rest}</tbody></table></div>`:'<p class="cpx-note">Is period me country-wise spend nahi.</p>')
+    +`<p class="cpx-fn">${E(perDates(lo,hi))} · Normal = country ka khula alarm ho to uska baseline, warna period se pehle ke 28 din.${okD(nt.admob_cty_from)&&lo<nt.admob_cty_from?` AdMob country data ${E(fdy(nt.admob_cty_from))} se hai — usse pehle ka eCPM nahi.`:''}</p>`; }
+// ---- 🎯 Campaigns: status, bidding (the tROAS target on the period's last day, "not known" before the archive), spend, installs,
+// CPI and D0 ROAS vs normal, its own alarm line ----
+function campHtml(r,F){ const [lo,hi]=span(r); if(lo>hi) return '<p class="cpx-note">Is period ke din abhi final nahi — campaigns t tak.</p>';
+  const nt=F.notes||{}, C=(Array.isArray(F.camps)?F.camps:[]).filter(c=>c&&c.d&&okD(c.from));
+  const R=C.map(c=>{ const w=fsum(c.d,c.from,['sp_inr','sp_usd','inst'],lo,hi), g=fsum(c.d,c.from,['sp_inr','d0_inr'],lo,hi), L=eps(c.ep), k=VIN()?1:(w.sp_inr>0?w.sp_usd/w.sp_inr:0);
+    const nc=entNorm(L,'CPI',lo,hi,c.d,c.from,['sp_inr','inst'],q=>q.inst>0?q.sp_inr/q.inst:null), nr=entNorm(L,'ROAS_G',lo,hi,c.d,c.from,['sp_inr','d0_inr'],q=>q.sp_inr>0?q.d0_inr/q.sp_inr:null);
+    const tr=(Array.isArray(c.troas)?c.troas:[]).filter(z=>Array.isArray(z)&&okD(z[0])&&z[0]<=hi).pop();
+    return {c,w,g,L,k,nc,nr,tr}; });
+  const on=R.filter(z=>z.w.sp_inr>0).sort((a,b)=>b.w.sp_inr-a.w.sp_inr), off=R.length-on.length;
+  const bid=z=>{ const b=BIDW[z.c.bid]||E(z.c.bid||''); if(z.tr) return `${b||'tROAS'} · target <b>${fR(+z.tr[1])}</b>`; return `${b?b+' · ':''}target <span class="cpx-nv">${okD(nt.troas_from)&&hi<nt.troas_from?'not known (archive '+E(fd(nt.troas_from))+' se)':'not known'}</span>`; };
+  const body=on.map(z=>{ const cpI=z.w.inst>0?z.w.sp_inr/z.w.inst:null, cp=z.w.inst>0?(VIN()?z.w.sp_inr:z.w.sp_usd)/z.w.inst:null, ro=z.g.sp_inr>0?z.g.d0_inr/z.g.sp_inr:null;
+    return `<tr><td class="cpx-cn">${E(z.c.name||z.c.id)}</td><td>${E(String(z.c.status||'—').toLowerCase())}</td><td>${bid(z)}</td><td>${fM(z.w.sp_inr,z.w.sp_usd)}</td><td>${fN(z.w.inst)}</td>`
+      +`<td><b>${fCpi(cp)}</b>${cpI!=null&&z.nc?`<small><span class="cpx-dl ${dCls('CPI',cpI/z.nc.v-1)}">${fP(cpI/z.nc.v-1)}</span> vs ${fCpi(z.nc.v*z.k)}</small>`:'<small class="cpx-nv">no normal</small>'}</td>`
+      +`<td><b>${fR(ro)}</b>${ro!=null?vsH(ro,z.nr,'ROAS_G'):''}</td><td>${alarmLine(z.L,lo,hi)}</td></tr>`; }).join('');
+  return (on.length?`<div class="cpx-x"><table class="cpx-t"><thead><tr><th>Campaign</th><th>Status</th><th>Bidding</th><th>Spend</th><th>Installs</th><th>CPI</th><th>D0 ROAS</th><th>Alarm</th></tr></thead><tbody>${body}</tbody></table></div>`:'<p class="cpx-note">Is period me kisi campaign ka spend nahi.</p>')
+    +`<p class="cpx-fn">${E(perDates(lo,hi))}${off?` · ${off} campaign${off===1?'':'s'} ka is period me spend nahi`:''} · Normal = campaign ka khula alarm ho to uska baseline, warna period se pehle ke 28 din · status aaj ka (Google Ads).</p>`; }
+// ---- ❓ eCPM kyun: the period vs the normal span — user mix (first session vs returning), country mix vs price (country eCPM
+// held at the normal span's weights), ad sources, ads per user — each measured, with one Hinglish line ----
+function whyHtml(r,F){ const [lo,hi]=span(r); if(lo>hi) return '<p class="cpx-note">Is period ke din abhi final nahi.</p>';
+  const L=eps(F.ep), oe=L.filter(e=>e.fam==='ECPM'&&e.why!=='settled'&&e.c<=hi&&(!e.closed||e.closed>=lo)).sort((a,b)=>a.c<b.c?1:-1)[0];
+  const N=oe?[addD(oe.c,-14),addD(oe.c,-1)]:[addD(lo,-28),addD(lo,-1)], nw=oe?`alarm se pehle ke 14 din (${perDates(N[0],N[1])})`:`period se pehle ke 28 din (${perDates(N[0],N[1])})`;
+  const em=(o,lo2,hi2,rk,ik)=>{ const w=fsum(o,F.day0,[rk,ik],lo2,hi2); return {r:w[rk],i:w[ik],e:w[ik]>0?w[rk]/w[ik]*1000:null,n:w.n}; };
+  const P=em(F.d,lo,hi,'rev','imp'), Q=em(F.d,N[0],N[1],'rev','imp'), o=[];
+  o.push(`<p class="cpx-vd">eCPM <b>${fE(Q.e)} → ${fE(P.e)}</b> (${P.e!=null&&Q.e?fP(P.e/Q.e-1):'—'}) · period ${E(perDates(lo,hi))} vs ${E(nw)}.</p>`);
+  // user mix
+  const fs=em(F.d,lo,hi,'fs_rev','fs_imp'), rt=em(F.d,lo,hi,'rt_rev','rt_imp'), fs0=em(F.d,N[0],N[1],'fs_rev','fs_imp'), rt0=em(F.d,N[0],N[1],'rt_rev','rt_imp');
+  if(fs.i+rt.i>0&&fs0.i+rt0.i>0&&fs.e!=null&&rt.e!=null&&fs0.e!=null&&rt0.e!=null){ const sh=fs.i/(fs.i+rt.i), sh0=fs0.i/(fs0.i+rt0.i), base=sh0*fs0.e+(1-sh0)*rt0.e, mix=sh*fs0.e+(1-sh)*rt0.e, all=sh*fs.e+(1-sh)*rt.e;
+    o.push(`<h4 class="cpx-h4">User mix (GA4: first session vs returning)</h4><div class="cpx-x"><table class="cpx-t"><thead><tr><th></th><th>Share of ads</th><th>eCPM</th></tr></thead><tbody>`
+      +`<tr><td>First session</td><td>${fR(sh0)} → <b>${fR(sh)}</b></td><td>${fE(fs0.e)} → <b>${fE(fs.e)}</b></td></tr><tr><td>Returning</td><td>${fR(1-sh0)} → <b>${fR(1-sh)}</b></td><td>${fE(rt0.e)} → <b>${fE(rt.e)}</b></td></tr></tbody></table></div>`
+      +`<p class="cpx-fn">Sirf mix badalne se (purane eCPM pe): <b>${fP(mix/base-1)}</b> · har group ka eCPM badalne se: <b>${fP(all/mix-1)}</b> — ${Math.abs(mix/base-1)>Math.abs(all/mix-1)?'zyada asar naye vs purane users ke mix ka hai':'zyada asar har group ke apne eCPM ka hai'} (GA4 ke numbers, AdMob se thoda alag).</p>`); }
+  else o.push('<p class="cpx-fn">User mix: first session / returning ka GA4 data is period ya normal span me nahi.</p>');
+  // country mix vs price (Laspeyres)
+  const C=(Array.isArray(F.ctys)?F.ctys:[]).filter(c=>c&&c.d&&okD(c.from)).map(c=>{ const a=fsum(c.d,c.from,['rev','imp'],lo,hi), b=fsum(c.d,c.from,['rev','imp'],N[0],N[1]);
+    return {cc:c.cc,a,b,ea:a.imp>0?a.rev/a.imp*1000:null,eb:b.imp>0?b.rev/b.imp*1000:null}; }).filter(z=>z.ea!=null&&z.eb!=null);
+  const ia=C.reduce((s,z)=>s+z.a.imp,0), ib=C.reduce((s,z)=>s+z.b.imp,0);
+  if(C.length&&ia>0&&ib>0){ const e0=C.reduce((s,z)=>s+z.b.imp/ib*z.eb,0), fixw=C.reduce((s,z)=>s+z.b.imp/ib*z.ea,0), fixp=C.reduce((s,z)=>s+z.a.imp/ia*z.eb,0);
+    o.push(`<h4 class="cpx-h4">Country mix vs price (AdMob country, gross)</h4><p class="cpx-fn">Same country mix pe (normal span ke weights) price ka badlaav: <b>${fP(fixw/e0-1)}</b> · sirf country mix ka badlaav (purane price pe): <b>${fP(fixp/e0-1)}</b> — ${Math.abs(fixw/e0-1)>=Math.abs(fixp/e0-1)?'countries ke andar price gira / badha hai':'traffic sasti / mehngi countries ki taraf gaya hai'}.</p>`
+      +`<div class="cpx-x"><table class="cpx-t"><thead><tr><th>Country</th><th>Share of ads</th><th>eCPM</th></tr></thead><tbody>${C.sort((x,y)=>y.a.imp-x.a.imp).slice(0,8).map(z=>`<tr><td>${E(z.cc)}</td><td>${fR(z.b.imp/ib)} → <b>${fR(z.a.imp/ia)}</b></td><td>${fE(z.eb)} → <b>${fE(z.ea)}</b></td></tr>`).join('')}</tbody></table></div>`); }
+  else o.push('<p class="cpx-fn">Country mix: AdMob country data is period ya normal span me nahi.</p>');
+  // ad sources
+  const S=(Array.isArray(F.src)?F.src:[]).filter(s=>s&&s.d&&okD(s.from)).map(s=>{ const a=fsum(s.d,s.from,['rev','imp'],lo,hi), b=fsum(s.d,s.from,['rev','imp'],N[0],N[1]); return {name:s.name,a,b}; });
+  const ra=S.reduce((s,z)=>s+z.a.rev,0), rb=S.reduce((s,z)=>s+z.b.rev,0);
+  if(S.length&&ra>0&&rb>0) o.push(`<h4 class="cpx-h4">Ad sources</h4><div class="cpx-x"><table class="cpx-t"><thead><tr><th>Source</th><th>Share of revenue</th><th>eCPM</th></tr></thead><tbody>${S.sort((x,y)=>y.a.rev-x.a.rev).map(z=>`<tr><td>${E(z.name)}</td><td>${fR(z.b.rev/rb)} → <b>${fR(z.a.rev/ra)}</b></td><td>${fE(z.b.imp>0?z.b.rev/z.b.imp*1000:null)} → <b>${fE(z.a.imp>0?z.a.rev/z.a.imp*1000:null)}</b></td></tr>`).join('')}</tbody></table></div>`);
+  else o.push('<p class="cpx-fn">Ad sources: is build me ad source ka split nahi aaya.</p>');
+  // ads per user
+  const u=fsum(F.d,F.day0,['imp','dau'],lo,hi), u0=fsum(F.d,F.day0,['imp','dau'],N[0],N[1]), a1=u.dau>0?u.imp/u.dau:null, a0=u0.dau>0?u0.imp/u0.dau:null;
+  const nu=fsum(F.d,F.day0,['fs_imp','fs_u'],lo,hi), nu0=fsum(F.d,F.day0,['fs_imp','fs_u'],N[0],N[1]), b1=nu.fs_u>0?nu.fs_imp/nu.fs_u:null, b0=nu0.fs_u>0?nu0.fs_imp/nu0.fs_u:null;
+  o.push(`<h4 class="cpx-h4">Ads per user</h4><p class="cpx-fn">Ads / user (AdMob impressions har source ÷ GA4 daily active users): <b>${fX(a0)} → ${fX(a1)}</b>${a1!=null&&a0?` (${fP(a1/a0-1)})`:''} · first session me ads per new user (GA4): <b>${fX(b0)} → ${fX(b1)}</b>${b1!=null&&b0?` (${fP(b1/b0-1)})`:''}${a1!=null&&a0&&Math.abs(a1/a0-1)>=0.1?' — users ko ads kam / zyada dikh rahe hain, ye bhi kamai badalta hai':''}.</p>`);
+  return o.join(''); }
+// ---- 💸 Loss math: the formula with this app's numbers, for the period and since c; the AdMob install-day version beside it;
+// the Google D0 ÷ AdMob D0 ratio by month (measured) ----
+function lossHtml(r,F){ const [lo,hi]=span(r), L=eps(F.ep), G=L.filter(e=>e.fam==='ROAS_G'&&+e.base>0&&over(e,r.lo,r.hi)), o=[];
+  const kv=(i)=>{ const u=at(F,'sp_usd',i), n=at(F,'sp_inr',i); return u>0&&n>0?u/n:null; };
+  const part=(e,a,b)=>{ let c=0,v=0; for(let x=a;x<=b;x=addD(x,1)){ const i=fIx(F,x), si=at(F,'sp_inr',i), d0=at(F,'d0_inr',i); if(si==null||d0==null) continue; const k=VIN()?1:kv(i)||0; c+=si*k; v+=d0*k; } return {c,v,l:c-v/+e.base}; };
+  const fm=v=>VIN()?fI(v):fU(v);
+  if(G.length) G.forEach(e=>{ const end=e.closed&&e.closed<ptr().t?e.closed:ptr().t, a=e.c>lo?e.c:lo, b=end<hi?end:hi, P=a<=b?part(e,a,b):null, S=part(e,e.c,b<end?b:end);
+    const ln=(q,w)=>`<div class="cpx-lm"><div class="cpx-k">${w}</div><div>Loss = cost − D0 value ÷ normal D0 ROAS</div><div>= ${fm(q.c)} − ${fm(q.v)} ÷ ${fR(+e.base)}</div><div>= ${fm(q.c)} − ${fm(q.v/+e.base)} = <b class="cpx-bad">≈${fm(q.l)}</b></div></div>`;
+    o.push(`<p class="cpx-vd">D0 ROAS alarm: change ${E(fdy(e.c))} se · normal (alarm se pehle ka) <b>${fR(+e.base)}</b>${e.closed?` · closed ${E(fdy(e.closed))}`:' · abhi khula'}</p><div class="cpx-lms">${P?ln(P,'Is period me ('+perDates(a,b)+')'):''}${ln(S,'Change se ab tak ('+perDates(e.c,b<end?b:end)+')')}</div>`); });
+  else o.push('<p class="cpx-note">Is period me D0 ROAS ka koi alarm nahi — nuksaan ka hisaab sirf D0 ROAS (aur AdMob install-day) pe hota hai; CPI / eCPM ka badlaav paisa gina nahi jata.</p>');
+  // the AdMob install-day version (matured days only)
+  const P=fsum(F.d,F.day0,['c_sp','c_r0'],lo,hi), P1=fsum(F.d,F.day0,['c_sp','c_r1'],lo,hi), P7=fsum(F.d,F.day0,['c_sp','c_r7'],lo,hi);
+  const c0e=openAt('ROAS_C0',L,hi), h0=hLvl(F.nrm&&F.nrm.ROAS_C0,F.day0,lo,hi,1), B0=c0e&&+c0e.base>0?+c0e.base:h0&&h0.v>0?h0.v:null;   // the same normal rule as the list (D1 / D3)
+  o.push(`<h4 class="cpx-h4">AdMob install-day ROAS (≈ AdMob-matched, sirf matured din)</h4><div class="cpx-x"><table class="cpx-t"><thead><tr><th></th><th>Days</th><th>Spend ($)</th><th>Revenue ($)</th><th>ROAS</th></tr></thead><tbody>`
+    +[['D0',P,'c_r0'],['D1',P1,'c_r1'],['D7',P7,'c_r7']].map(([l,q,k])=>`<tr><td>${l}</td><td>${q.n}</td><td>${fU(q.c_sp)}</td><td>${fU(q[k])}</td><td><b>${fR(q.c_sp>0?q[k]/q.c_sp:null)}</b></td></tr>`).join('')+'</tbody></table></div>'
+    +(B0&&P.c_sp>0?`<p class="cpx-fn">AdMob D0 pe: loss = ${fU(P.c_sp)} − ${fU(P.c_r0)} ÷ ${fR(B0)} = <b>≈${fU(P.c_sp-P.c_r0/B0)}</b> (normal ${c0e&&+c0e.base>0?'alarm se pehle ka':h0&&h0.src==='Hin'?'period ka pehla healthy level, '+E(fd(h0.on)):'period se ek din pehle ka healthy level'}; AdMob-matched revenue $ me hi aata hai). Ye sirf yahan dikhta hai — list / summary / sort me sirf Google D0 ka nuksaan gina jata hai.</p>`:''));
+  // Google D0 ÷ AdMob D0 by month (the days both are known)
+  const M={}; const n=fLen(F); for(let i=0;i<n;i++){ const si=at(F,'sp_inr',i), su=at(F,'sp_usd',i), d0=at(F,'d0_inr',i), r0=at(F,'c_r0',i); if(si==null||su==null||d0==null||r0==null||!(si>0)) continue;
+    const m=addD(F.day0,i).slice(0,7), g=M[m]||(M[m]={g:0,a:0,n:0}); g.g+=d0*su/si; g.a+=r0; g.n++; }
+  const ms=Object.keys(M).sort().reverse().slice(0,12);
+  o.push(`<h4 class="cpx-h4">Google D0 ÷ AdMob D0 (month-wise, measured)</h4>`+(ms.length?`<div class="cpx-x"><table class="cpx-t"><thead><tr><th>Month</th><th>Ratio</th><th>Days</th><th>Google D0 ($)</th><th>AdMob D0 ($)</th></tr></thead><tbody>${ms.map(m=>`<tr><td>${E(monName(m))}</td><td><b>${M[m].a>0?(M[m].g/M[m].a).toFixed(2)+'×':'—'}</b></td><td>${M[m].n}</td><td>${fU(M[m].g)}</td><td>${fU(M[m].a)}</td></tr>`).join('')}</tbody></table></div>`
+    +'<p class="cpx-fn">1.00× = Google ka D0 aur AdMob ka install-day D0 barabar. Ratio badla to Google ki tROAS bidding galat value pe chal rahi hai.</p>':'<p class="cpx-fn">Dono ka data ek saath kisi din nahi.</p>'));
+  return o.join(''); }
+// ---- 🕘 History: every app episode, newest first ----
+function histHtml(r,F){ const L=eps(F.ep).sort((a,b)=>(a.opened<b.opened?1:a.opened>b.opened?-1:0));
+  if(!L.length) return '<p class="cpx-note">Is app pe abhi tak koi alarm nahi khula.</p>';
+  const k=e=>{ const w=fsum(F.d,F.day0,['sp_inr','sp_usd'],addD(e.c,-14),addD(e.c,-1)); return VIN()?1:w.sp_inr>0?w.sp_usd/w.sp_inr:null; };
+  const base=e=>{ const b=+e.base; if(!ok(b)) return '—'; if(e.fam==='CPI'){ const q=k(e); return q?fCpi(b*q):'—'; } if(e.fam==='ECPM') return fE(b); if(/^ROAS/.test(e.fam)) return fR(b); return fX(b); };
+  const mon=e=>e.money&&e.fam==='ROAS_G'&&ok(+e.money.since_c_inr)?'≈'+fM(+e.money.since_c_inr,+e.money.since_c_usd):'—';
+  const body=L.map(e=>`<tr><td>${E(FAMW[e.fam]||e.fam)} ${UP[e.fam]?'up':'down'}</td><td>${E(OPW[e.opener]||e.opener||'—')}</td>`
+    +`<td>${e.closed?`Closed · ${E(WHYW[e.why]||e.why||'—')}`:`<b class="${e.tier==='ALERT'?'cpx-bad':e.tier==='WATCH'?'cpx-wat':''}">Open</b>`} <small class="cpx-nv">${E(TIERW[e.tier]||e.tier||'')}</small></td>`
+    +`<td>${E(fdy(e.c))}</td><td>${E(fdy(okD(e.seen)?e.seen:e.opened))}</td><td>${e.closed?E(fdy(e.closed)):'—'}</td><td>${base(e)}</td><td>${ok(+e.max_worse)?fP(UP[e.fam]?+e.max_worse:-e.max_worse):'—'}</td><td>${mon(e)}</td></tr>`).join('');
+  return `<div class="cpx-x"><table class="cpx-t"><thead><tr><th>Family</th><th>Opener</th><th>Status</th><th>Change start</th><th title="data day + 2 (IST)">Opened (seen)</th><th>Closed</th><th>Baseline</th><th>Worst</th><th>Money</th></tr></thead><tbody>${body}</tbody></table></div>`
+    +'<p class="cpx-fn">Money sirf D0 ROAS alarms pe (≈ cost − value ÷ baseline, change se band hone tak); AdMob install-day ka hisaab Loss math tab me. Campaign / country alarms unke apne tabs me.</p>'; }
+// ---- the reader's place (the SCR pattern): a tap that repaints puts the tapped control back where it was, the page holds its
+// height THROUGH the repaint and gives the blank back afterwards (the 2 Nov rule) ----
+function keep(sel,fn){ const s=EL; let b0=null; try{ b0=s&&s.querySelector?s.querySelector(sel):null; }catch(e){}
+  const y0=b0&&b0.getBoundingClientRect?b0.getBoundingClientRect().top:null;
+  hold(s); KEEPING=true; try{ fn(); }finally{ KEEPING=false; }
+  const s2=EL; let b=null; try{ b=y0==null||!s2||!s2.querySelector?null:s2.querySelector(sel); }catch(e){}
+  if(b){ const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) quiet(()=>window.scrollBy(0,dy)); }
+  unholdLater(s2); }
+function hold(r){ if(r&&r.style) r.style.minHeight=Math.max(+r.offsetHeight||0,parseFloat(r.style.minHeight)||0)+'px'; }
+function unhold(r,scroll){ const se=typeof document!=='undefined'&&(document.scrollingElement||document.documentElement), ks=r&&r.children;
+  if(!r||!r.style||!r.style.minHeight||!ks||!se||typeof window==='undefined'||!r.getBoundingClientRect) return 0;
+  const q=r.getBoundingClientRect(), vh=+window.innerHeight||0; let end=0;
+  for(let i=0;i<ks.length;i++){ const k=ks[i]; if(k.hidden) continue; let cs=null; try{ cs=getComputedStyle(k); }catch(e){}
+    if(cs&&(cs.position==='absolute'||cs.position==='fixed'||cs.display==='none')) continue;
+    end=Math.max(end,k.getBoundingClientRect().bottom-q.top+((cs&&parseFloat(cs.marginBottom))||0)); }
+  const y=+window.scrollY||0, room=y>0?Math.max(0,(se.scrollHeight||0)-y-vh):Infinity;
+  const x=scroll?Math.min(room,q.top+q.height-Math.max(vh,q.top+end)):room, h=Math.max(end,q.height-Math.max(0,x));
+  r.style.minHeight=h>end+1?h+'px':''; return r.style.minHeight?1:0; }
+let UNW=false;
+function unholdLater(r){ if(!unhold(r)||UNW||typeof window==='undefined'||!window.addEventListener) return; UNW=true;
+  const on=()=>{ const x=EL; if(x&&x.style&&x.style.minHeight&&unhold(x,true)) return; UNW=false; window.removeEventListener('scroll',on); };
+  window.addEventListener('scroll',on,{passive:true}); }
+// a late file fills its slot: the block being read stays where it is (nothing scrolls at the very top of the page)
+function late(fn){ const s=EL; let an=null, y0=0;
+  try{ if((+window.scrollY||0)>0&&s&&s.querySelectorAll){ const tb=document.querySelector('.topbar'), H=+window.innerHeight||0, top=Math.max(0,tb?tb.getBoundingClientRect().bottom:0);
+    for(const c of Array.from(s.querySelectorAll('.cpx-row,.cpx-det,.cpx-sum,.cpx-per'))){ const r=c.getBoundingClientRect(); if(r.height>0&&r.bottom>Math.max(top,H*0.3)){ an=c; y0=r.top; break; } } } }catch(e){}
+  fn();
+  try{ if(an&&an.isConnected!==false){ const d=an.getBoundingClientRect().top-y0; if(Math.abs(d)>1) quiet(()=>window.scrollBy(0,d)); } }catch(e){} }
+// a late file: only its slot is drawn again (the details' tab body; cpi.json.gz: the list)
+function arrive(id){ if(!onScreen()||OPEN!==id) return; const b=document.getElementById('cpx-tb'); if(!b) return;
+  const c=cal(), [lo,hi]=rng(), r=rows(lo,hi).find(z=>z.id===id); if(!c||!r) return;
+  late(()=>{ b.innerHTML=tabBody(r); }); }
+// ---- events ----
+function setOpen(id){ const was=OPEN; OPEN=id; if(id!=null&&id!==was){ TAB='ch'; DN=30; }
+  if(id!=null&&was==null&&phone()&&typeof hbPush==='function') try{ hbPush('cpx-dd',()=>{ OPEN=null; if(onScreen()) paint(); }); }catch(e){}
+  if(id==null&&typeof hbDrop==='function') try{ hbDrop('cpx-dd'); }catch(e){} }
+const sq=v=>String(v).replace(/\\/g,'\\\\').replace(/"/g,'\\"');
+function onClick(e){ const t=e.target; if(!t||!t.closest) return; let b;
+  if((b=t.closest('[data-cpx-per]'))){ const k=b.dataset.cpxPer; keep(`[data-cpx-per="${sq(k)}"]`,()=>{ PER=k; perSave(); paint(); }); return; }
+  if((b=t.closest('[data-cpx-tab]'))){ const k=b.dataset.cpxTab; keep(`[data-cpx-tab="${sq(k)}"]`,()=>{ TAB=k; DN=30; paint(); }); return; }
+  if((b=t.closest('[data-cpx-more]'))){ keep('[data-cpx-more]',()=>{ DN+=30; paint(); }); return; }
+  if((b=t.closest('[data-cpx-retry]'))){ const n=b.dataset.cpxRetry, st=FILES[n]; if(st){ st.err=false; st.v=null; } if(OPEN) ensureApp(OPEN); paint(); return; }
+  if(t.closest('[data-cpx-allretry]')){ ALLF.err=false; ALLF.v=null; ensureAll(()=>{ if(onScreen()) late(()=>paint()); }); paint(); return; }
+  if(t.closest('[data-cpx-roas]')){ try{ window.show('roas'); }catch(err){} return; }   // (the page's show: this module's own is the screen's)
+  if(t.closest('.cpx-det')) return;   // (a tap inside the details never folds them)
+  if((b=t.closest('[data-cpx-app]'))){ const id=b.dataset.cpxApp; if(APP) return;   // one app: its details stay open
+    keep(`[data-cpx-app="${sq(id)}"]`,()=>{ setOpen(OPEN===id?null:id); paint(); }); } }
+function onChange(e){ const t=e.target; if(!t||!t.closest) return;
+  if(t.closest('[data-cpx-sel]')){ const k=String(t.value||''); if(!PERK.has(k)&&!MON_RE.test(k)) return; keep('[data-cpx-sel]',()=>{ PER=k; perSave(); paint(); }); return; }
+  const f=t.closest('[data-cpx-pf]'), to=t.closest('[data-cpx-pto]'); if(!f&&!to) return; const v=String(t.value||''); if(!okD(v)) return;
+  keep(f?'[data-cpx-pf]':'[data-cpx-pto]',()=>{ const [lo,hi]=rng(); PF=f?v:lo; PTO=to?v:hi; PER='cus'; perSave(); paint(); }); }
+function onMove(e){ const t=e.target, s=EL; if(!s||!s.querySelectorAll) return; const svg=t&&t.closest?t.closest('svg[data-cpx-ch]'):null;
+  s.querySelectorAll('.cpx-tip').forEach(x=>{ if(!svg||x.parentNode!==svg.parentNode){ x.hidden=true; const rl=x.parentNode&&x.parentNode.querySelector('.cpx-rule'); if(rl) rl.setAttribute('visibility','hidden'); } });
+  if(!svg) return; const c=CHD[svg.getAttribute('data-cpx-ch')], tip=svg.parentNode.querySelector('.cpx-tip'), rule=svg.querySelector('.cpx-rule'); if(!c||!tip) return;
+  const r=svg.getBoundingClientRect(); if(!r.width) return; const x=(e.clientX-r.left)*c.W/r.width, i=Math.max(0,Math.min(c.N-1,Math.round((x-c.Lm)/((c.W-c.Lm-c.Rm)||1)*(c.N-1))));
+  const X=c.Lm+(c.W-c.Lm-c.Rm)*(c.N>1?i/(c.N-1):0.5); if(rule){ rule.setAttribute('x1',X); rule.setAttribute('x2',X); rule.setAttribute('visibility','visible'); }
+  tip.innerHTML=tipHtml(c,i); tip.hidden=false; const px=X*r.width/c.W; tip.style.left=Math.max(0,Math.min(r.width-tip.offsetWidth,px-tip.offsetWidth/2))+'px'; }
+function wire(){ const s=EL; if(!s||!s.dataset||s.dataset.cpxWired) return; s.dataset.cpxWired='1';
+  if(s.addEventListener){ s.addEventListener('click',onClick); s.addEventListener('change',onChange); s.addEventListener('pointermove',onMove); s.addEventListener('click',onMove);
+    s.addEventListener('pointerleave',()=>onMove({target:null}));
+    s.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ')&&e.target&&e.target.matches&&e.target.matches('.cpx-row[data-cpx-app]')){ e.preventDefault&&e.preventDefault(); onClick(e); } }); }
+  WIRED=true; }
+// ---- the screen ----
+function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector('.screen[data-screen=cpx]'); if(!s||!DD()) return;
+  EL=s; wire(); if(!KEEPING) s.style.minHeight='';
+  const p=ptr(); if(!p){ s.innerHTML=dev()?'':'<div class="card cpx-card"><p class="cpx-note">🔌 CPI vs eCPM ka data is build me nahi bana — agle robot run me aayega.</p></div>'; return; }
+  const c=cal(); perLoad(c.d0,c.td); const [lo,hi]=rng();
+  if(!isDef(lo,hi)&&allName(p)&&(!ALLF.raw||ALLF.v!==p.fv)) ensureAll(()=>{ if(onScreen()) late(()=>paint()); });
+  let L=rows(lo,hi); const one=!!APP;
+  if(one){ L=L.slice(0,1); if(L[0]){ if(OPEN!==L[0].id){ OPEN=L[0].id; TAB=TAB||'ch'; } } }
+  else if(OPEN!=null&&!L.some(r=>r.id===OPEN)) setOpen(null);
+  if(OPEN!=null) ensureApp(OPEN);
+  for(const k in CHD) delete CHD[k];
+  const keepX={}; try{ s.querySelectorAll('.cpx-x[id]').forEach(b=>{ keepX[b.id]=b.scrollLeft; }); }catch(e){}
+  s.innerHTML=headHtml()+`<div class="cpx-ctl">${perCtl(lo,hi)}</div>`+(one?'':sumHtml(L))+listHtml(L,lo,hi,one)+(one?'':footHtml());
+  try{ for(const k in keepX){ const b=document.getElementById(k); if(b) b.scrollLeft=keepX[k]; } }catch(e){} }
+function render(){ const s=screenDiv('cpx'); EL=s; return s; }
+function showMe(){ paint(); }
+// left by the menu / a link: the details' Back step goes (render() shows 'overview' under HUB.hold on every refresh — still on
+// this tab a microtask later: kept)
+function left(){ let has=false; try{ has=typeof HB!=='undefined'&&HB.st.some(z=>z.tag==='cpx-dd'); }catch(e){} if(!has) return;
+  Promise.resolve().then(()=>{ if(onScreen()) return; OPEN=null; try{ hbDrop('cpx-dd'); }catch(e){} }); }
+// ---- outside the screen: the nav badge, the Alerts note, the hub card (all from the pointer only — no file) ----
+// the open Alarms (an app with an OPEN ALERT-tier episode in the pointer — not a closed one the default window still touches):
+// the nav badge counts every visible app; the Alerts note the header's app when one is picked
+function alarmIds(scoped){ const p=ptr(); if(!p) return []; return Object.keys(p.apps).filter(id=>{ const a=p.apps[id]; return a&&Array.isArray(a.open)&&a.open.some(x=>Array.isArray(x)&&x[2]==='ALERT')&&typeof a.name==='string'&&vis(a.name)&&(!scoped||!APP||a.name===APP); }); }
+function alarmN(){ return alarmIds(false).length; }
+function alertNote(){ const n=alarmIds(true).length; if(!n) return '';
+  return `<div class="note cpx-an" style="margin-bottom:12px">📉 CPI vs eCPM: <b>${n} alarm</b> — <span class="lnk" onclick="show('cpx')">open ›</span></div>`; }
+function card(name){ const p=ptr(); if(!p) return null; const id=Object.keys(p.apps).find(k=>p.apps[k]&&p.apps[k].name===name); if(!id) return {st:'lagu',line:'Is app ka Google Ads spend nahi'};
+  const a=p.apps[id], [lo,hi]=[addD(p.t,-13),p.t], s=sums(lo,hi)[name]||{}, r=rowOf(id,a,s,lo,hi), m=now3(r);
+  const pc=f=>m[f].d!=null?` (${fP(m[f].d)})`:'';
+  const head=r.st==='alarm'||r.st==='watch'?`<b>${ST[r.st][0]}</b>${r.since?' since '+fd(r.since):''} · `:'';
+  return {st:STK[r.st]||'lagu',line:`${head}CPI ${fmtF('CPI',m.CPI.v)}${pc('CPI')} · eCPM ${fE(m.ECPM.v)}${pc('ECPM')} · D0 ROAS ${fR(m.ROAS_G.v)}${pc('ROAS_G')}${r.lost&&!r.lost.na?` · ≈${fM(r.lost.inr,r.lost.usd)} lost`:''}`}; }
+return {ptr, render, paint, show:showMe, left, alarmN, alertNote, card,
+  _:{rng, isDef, sums, rows, rowOf, judge, normal, hLvl, lossG, epOf, eps, now3, perRestore, perLoad, keep, cal, fI, fU, fP, series, dayRows, verdict, moneyLine, tabBody, ALLF, FILES, CHD,
+    get:()=>({PER,PF,PTO,OPEN,TAB,DN}), set:o=>{ if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o) OPEN=o.OPEN; if('TAB' in o) TAB=o.TAB; if('DN' in o) DN=o.DN; if('PREAD' in o) PREAD=o.PREAD; }}};
+})();
+function renderCpx(){ return CPX.render(); }
 // ---- 📈 ROI — a section of the 💸 Install value tab (owner, 13 Oct: "every date wise uska incremental day wise revenue from
 // first day of the app … delta, breakeven, % wise", "dono karo, AdMob matched, sirf google ads", countries "konsa rakhna
 // he konsa nikalna he, konsi me jaldi roi milta he", and "bahot saare tab na ban jaye": no tab of its own). Three views:
@@ -10951,7 +11616,8 @@ function renderAlerts(){
   const rules=[['Koi metric = 0 (band)','Critical','p-r'],['Revenue drop > 40%','Warn','p-y'],['Requests drop > 50%','Warn','p-y'],['Match rate falls 20+','Warn','p-y'],['CTR spike > 3× (IVT)','Critical','p-r'],['Show rate falls 15+','Watch','p-b']];
   const g4n=[DATA.uninstall,DATA.active,DATA.value].some(x=>x&&Array.isArray(x.alerts)&&x.alerts.length);   // only when those tabs have news
   const ga4=g4n?`<div class="note smp-ga4" style="margin-bottom:12px">Users, uninstall aur install value ki khabar ab unke apne tabs me hai: ${DATA.uninstall?'<span class="lnk" onclick="show(\'uninstall\')">Uninstall ›</span> ':''}${DATA.active?'<span class="lnk" onclick="show(\'active\')">Active users ›</span> ':''}${DATA.value?'<span class="lnk" onclick="show(\'value\')">Install value ›</span> ':''}· har din ka ek card: <span class="lnk" onclick="show(\'review\')">✅ Review ›</span></div>`:'';
-  s.innerHTML=`<h2 class="sc">Alerts</h2><p class="scd">Ad unit problems · Only big (money) ad units · AdMob data till ${smpD(DATA.latest_complete)}<br><span class="faint">Sabse zyada <b>$ nuksan</b> wale sabse upar. Chhoti ad units ka noise hata diya.${thr?` · ${thr}`:''}</span></p>${ga4}
+  let cpn=''; try{ cpn=CPX.alertNote(); }catch(e){}   // 📉 CPI vs eCPM: one link note while an app has an open Alarm (the rows live on its own tab)
+  s.innerHTML=`<h2 class="sc">Alerts</h2><p class="scd">Ad unit problems · Only big (money) ad units · AdMob data till ${smpD(DATA.latest_complete)}<br><span class="faint">Sabse zyada <b>$ nuksan</b> wale sabse upar. Chhoti ad units ka noise hata diya.${thr?` · ${thr}`:''}</span></p>${ga4}${cpn}
     <div class="row c4" style="margin-bottom:14px">${kpi('🔴 Critical',cc.critical||0,'zero / IVT','down')}${kpi('🟠 Warning',cc.warning||0,'sharp drop','flat')}${kpi('🟡 Watch',cc.watch||0,'keep an eye','muted')}${kpi('Total issues',(cc.critical||0)+(cc.warning||0),APP?appIcon(APP,14,'ail')+APP:'critical + warning','muted')}</div>
     ${rangeAlertCard()}
     <div class="chips"><span class="chip on" onclick="filterAlerts('all')">All</span><span class="chip" onclick="filterAlerts('critical')">🔴 Critical</span><span class="chip" onclick="filterAlerts('warning')">🟠 Warning</span><span class="chip" style="margin-left:8px" onclick="filterAlerts('revenue')">Revenue</span><span class="chip" onclick="filterAlerts('requests')">Requests</span><span class="chip" onclick="filterAlerts('match_rate')">Match rate</span><span class="chip" onclick="filterAlerts('ctr')">CTR</span></div>
