@@ -41,6 +41,10 @@
 //     a users day without a time read out of the day set; per-user numbers under 1 with three places (the build's _q);
 //     the aggregates' "x% of ads"; the share of the app's screen views in the details; Needs attention's W days from
 //     scr_all alone; GA4's users mix hidden when GA4 ≠ AdMob.
+//   * the column order (owner: users, then screen views, then the ads): every table (Screens, Full-screen, All apps, the
+//     App total) on each period and file state as {row → {header → cell}} with its headers and each row's cell count, the
+//     rows' own numbers, a tap on every sort header (on "sorty": five screens every column ranks differently); a row's
+//     cells are read by the header they sit under everywhere, never by position.
 // Prints ONE JSON report; tests/test_scr_frontend.py asserts on it.   usage: node scr_frontend.js <index.html>
 'use strict';
 const fs = require('fs'), vm = require('vm');
@@ -315,6 +319,8 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       rep_none: sec('a', 'rep:1').includes('Is row ka report nahi'),
       // the row's share of the app's screen views in the Ads / 100 tile: a screen, an aggregate row — never a trigger
       ov_share: ['ov:0', 'ov:2', 'ov:6'].map(s => (/<br>([\d.]+%) of the app's screen views/.exec(sec('a', s)) || [])[1] || null),
+      // the Overview tiles' order: a screen, an aggregate row, a trigger
+      ov_tiles: ['ov:0', 'ov:2', 'ov:6'].map(s => [...sec('a', s).matchAll(/<div class="sc-kl">([^<]+)<\/div>/g)].map(m => m[1])),
     };
     // labels in simple English (owner rule); the faint hints / why lines stay Hinglish
     out.labels = {
@@ -370,6 +376,15 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       .matchAll(/<td((?: [^>]*)?)>(.*?)<\/td>/g)].map(m => [m[1], m[2]]);
     const F2A = () => _.FILES['scr_' + KEY.a + '.json.gz'].raw, P30 = ['2026-02-27', '2026-03-28'];
     const heads = hh => [...(/<thead><tr>(.*?)<\/tr><\/thead>/.exec(hh.slice(hh.indexOf('id="sc-ttw"'))) || [, ''])[1].matchAll(/<th[^>]*>(?:<button[^>]*>)?([^<]*)/g)].map(m => m[1]);
+    // a row's cells by the header they sit under, {header → cell} — never by position (the owner's column order, users →
+    // views → time → ads → Imp / user / day, is checked on its own): the Screens / Full-screen table (#sc-ttw), All apps
+    const txt = s => String(s).replace(/<small[^>]*>.*?<\/small>/g, '').replace(/<[^>]+>/g, '').trim();
+    const hdOf = (hh, id) => { const s = hh.indexOf('id="' + id + '"'), t = s < 0 ? '' : hh.slice(s, hh.indexOf('</table>', s));
+      return [...((/<thead><tr>(.*?)<\/tr><\/thead>/.exec(t) || [, ''])[1]).matchAll(/<th([^>]*)>(.*?)<\/th>/g)].map(m => txt(m[2])); };
+    const by = (H, cs) => Object.fromEntries(cs.map((c, j) => [H[j] == null ? '#' + j : H[j], c]));
+    const cm = (hh, i) => by(hdOf(hh, 'sc-ttw'), tds(hh, i).map(c => c[1]));
+    const am = (hh, n) => by(hdOf(hh, 'sc-atw'), [...((new RegExp('<tr class="sc-clk" data-sc-app="' + n + '"[^>]*>(.*?)</tr>').exec(hh) || [])[1] || '')
+      .matchAll(/<td(?: [^>]*)?>(.*?)<\/td>/g)].map(m => m[1]));
     { ctx.APP = 'Alpha App'; _.set({ OPEN: null, SEG: 's', MORE: true, PER: '30', TS: { k: 'st', dir: 1 } }); SCR.paint(); await tick(); SCR.paint(); h = SCREEN.innerHTML;
       const f2 = F2A(), k0 = 57, k1 = 86;                                    // 27 Feb … 28 Mar on Alpha's calendar
       // by hand: Main's ads ÷ its users on the days file 2 gives them (every day has its time read)
@@ -380,7 +395,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       const f2t = JSON.parse(JSON.stringify(f2)); delete f2t.days[70].v; f2t.days[71].v = f2t.days[71].v.map(q => [q[0], q[1], 0]);
       const st_ = _.sumScr(x, f2t, 0, ...P30);
       let a7 = 0, u7 = 0, v7 = 0, g7 = 0, n7 = 0; for (let k = k0; k <= k1; k++) { const r = f2.U[k]; if (!r || !(r[0] > 0) || k === 70 || k === 71) continue; a7 += x.A[k][0]; u7 += r[0]; v7 += x.V[k][0]; g7 += f2.days[k].v[0][2]; n7++; }
-      out.v2 = { heads: heads(h), main: tds(h, 0).map(c => c[1]), other: tds(h, 2).map(c => c[1]), hand: [a / u, n, v / u, g / v, a / (g / 60), u / n], fn: [s0.r, s0.n, s0.vu, s0.tv, s0.am, s0.ud, s0.nd],
+      out.v2 = { heads: heads(h), main: cm(h, 0), other: cm(h, 2), hand: [a / u, n, v / u, g / v, a / (g / 60), u / n], fn: [s0.r, s0.n, s0.vu, s0.tv, s0.am, s0.ud, s0.nd],
         notime: { fn: [st_.n, st_.r, st_.tv, st_.u], hand: [n7, a7 / u7, g7 / v7, u7], users: [f2t.U[70] && f2t.U[70][0], f2t.U[71] && f2t.U[71][0]] },
         chain: [_.chainOf(s0) / s0.r - 1, _.chainOf(s1) / s1.r - 1, _.chainOf(tm) / tm.r - 1, s0.tu * s0.am / 60 / s0.r - 1], tm_n: [tm.n, tm.nd],
         reach: [s0.reach, (() => { let du = 0, d = 0; for (let k = k0; k <= k1; k++) { const r = f2.U[k]; if (r && r[0] > 0 && AU[k] > 0) { du += r[0]; d += AU[k]; } } return du / d; })()],
@@ -393,10 +408,10 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       // the Full-screen table: 5 columns, per app user
       _.set({ SEG: 'f' }); SCR.paint(); h = SCREEN.innerHTML; const t6 = _.sumTrig(x, 6, ...P30);
       let ta6 = 0, ua6 = 0; for (let k = k0; k <= k1; k++) { ta6 += x.A[k][6]; ua6 += AU[k]; }
-      out.v2.fs = { heads: heads(h), cell: tds(h, 6).map(c => c[1]), fn: [t6.r, t6.n], hand: ta6 / ua6, th: (/<th aria-sort="none" title="([^"]*)"><button type="button" data-sc-tsort="r">/.exec(h) || [])[1] || null };
+      out.v2.fs = { heads: heads(h), cell: cm(h, 6), fn: [t6.r, t6.n], hand: ta6 / ua6, th: (/<th aria-sort="none" title="([^"]*)"><button type="button" data-sc-tsort="r">/.exec(h) || [])[1] || null };
       _.set({ SEG: 's' });
       // Today / Yesterday: no users — the main cell "—" + "ads N ⏳", the chain columns "—"
-      for (const [kk, kd] of [['today', 88], ['yday', 87]]) { _.set({ PER: kk }); SCR.paint(); out.v2[kk] = { cells: tds(SCREEN.innerHTML, 0).map(c => c[1]), ads: x.A[kd][0] }; }
+      for (const [kk, kd] of [['today', 88], ['yday', 87]]) { _.set({ PER: kk }); SCR.paint(); out.v2[kk] = { cells: cm(SCREEN.innerHTML, 0), ads: x.A[kd][0] }; }
       _.set({ PER: '30' }); SCR.paint(); h = SCREEN.innerHTML;
       // the App total: 3 rows · the period, Normal, 7 days, Yesterday, Today (no daily users yet: "—" + the ads so far ⏳)
       const tot = h.slice(h.indexOf('id="sc-total"'), h.indexOf('id="sc-attn"')), P = _.appU(x, ...P30);
@@ -425,9 +440,8 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       out.v2.attn.admob = (/<div class="sc-at sc-ata">(.*?)<\/div>/.exec(_.attnHtml(xb, null)) || [])[1] || null;
       // All apps: drawn from scr_all alone (its "au": no file 2 asked for), the App row's word, "(AdMob)", a data N/A's score muted
       ctx.APP = ''; const l0 = LOADS.length; _.set({ PER: '30', SORT: { k: 'rank', dir: 1 } }); SCR.paint(); h = SCREEN.innerHTML;
-      const arow = (/<tr class="sc-clk" data-sc-app="Alpha App"[^>]*>(.*?)<\/tr>/.exec(h) || [])[1] || '';
       out.v2.all = { heads: [...(/<table class="sc-t"><thead><tr>(.*?)<\/tr>/.exec(h.slice(h.indexOf('id="sc-atw"'))) || [, ''])[1].matchAll(/<button type="button" data-sc-sort="([a-z]+)">([^<]+)/g)].map(m => [m[1], m[2]]),
-        alpha: [...arow.matchAll(/<td(?: [^>]*)?>(.*?)<\/td>/g)].map(m => m[1]).slice(1), loads: LOADS.slice(l0), fn: _.PQ(P.r),
+        alpha: am(h, 'Alpha App'), loads: LOADS.slice(l0), fn: _.PQ(P.r),
         mute: (() => { const r = _.appRow({ id: ID.a, name: 'Alpha App', x: Object.assign({}, x, { app: AP('N/A', 'Logging changed — duplicate ad_impression logging started 2026-03-10', 0, 0) }) }); return [!!r.mute, r.sc, r.ru != null]; })(),
         keep: (() => { const r = _.appRow({ id: ID.a, name: 'Alpha App', x: Object.assign({}, x, { app: AP('N/A', WHY_B, 0, 0) }) }); return [!!r.mute, r.sc != null]; })(),
       };
@@ -435,10 +449,10 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
         try { SCR.paint(); out.v2.all.admob = /data-sc-app="Alpha App"[^>]*><td class="sc-nm">.*?<span class="sc-stl"><span class="hub-st st-bigda">bigda<\/span> <small class="sc-adm">\(AdMob\)<\/small>/.test(SCREEN.innerHTML);
           // an AdMob-judged App row (B3): its GA4 period score is muted like a data N/A's (S3) — All apps, the App total, the
           // crumb's "vs" and the details' Ads / 100 scores; the GA4 Imp / user number stays
-          const ar = (/<tr class="sc-clk" data-sc-app="Alpha App"[^>]*>(.*?)<\/tr>/.exec(SCREEN.innerHTML) || [])[1] || '', ac = [...ar.matchAll(/<td(?: [^>]*)?>(.*?)<\/td>/g)].map(m => m[1]);
+          const ac = am(SCREEN.innerHTML, 'Alpha App');
           ctx.APP = 'Alpha App'; SCR.paint(); const hp = SCREEN.innerHTML, tp = hp.slice(hp.indexOf('id="sc-total"'), hp.indexOf('id="sc-attn"'));
           const c0 = (/<tr><td>Imp \/ user \/ day<\/td><td[^>]*>(.*?)<\/td>/.exec(tp) || [])[1] || '';
-          out.v2.all.admob_mute = { all: [ac[1], ac[3], _.appRow({ id: ID.a, name: 'Alpha App', x: xp }).sc], total: c0,
+          out.v2.all.admob_mute = { all: [ac['Imp / user / day'], ac.Score, _.appRow({ id: ID.a, name: 'Alpha App', x: xp }).sc], total: c0,
             crumb: (/<div class="sc-crumb">(.*?)<\/div>/.exec(hp) || [])[1] || '', tile: (/<div class="sc-kl">Ads \/ 100 views<\/div><div class="sc-kv">[^<]*<\/div><div class="sc-ks">(.*?)<\/div><\/div>/.exec(tp) || [])[1] || '',
             // GA4's new vs returning split comes from the GA4 logging that changed: not in the details (nor Needs attention)
             nvr: [tp.includes('New vs returning'), hp.slice(hp.indexOf('id="sc-attn"'), hp.indexOf('id="sc-tcard"')).includes('new-user mix'),
@@ -475,10 +489,10 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     const nA2 = 'scr_' + KEY.a + '.json.gz', keepA2 = _.FILES[nA2], keepF = FILES[nA2];
     try {
       delete _.FILES[nA2]; FAIL.add(nA2); _.set({ MORE: true }); SCR.paint(); h = SCREEN.innerHTML;
-      out.v2_wait = { main: tds(h, 0)[1], ud: tds(h, 0)[4], other: tds(h, 2)[1], total: /<tr><td>Imp \/ user \/ day<\/td><td[^>]*><b>[\d.]+<\/b>/.test(h) };
-      await tick(); SCR.paint(); h = SCREEN.innerHTML; out.v2_wait.err = tds(h, 0)[1];
+      out.v2_wait = { main: cm(h, 0)['Imp / user / day'], ud: cm(h, 0)['Users / day'], other: cm(h, 2)['Imp / user / day'], total: /<tr><td>Imp \/ user \/ day<\/td><td[^>]*><b>[\d.]+<\/b>/.test(h) };
+      await tick(); SCR.paint(); h = SCREEN.innerHTML; out.v2_wait.err = cm(h, 0)['Imp / user / day'];
       FAIL.delete(nA2); delete _.FILES[nA2]; FILES[nA2] = Object.assign({}, keepF, { v: 1 }); SCR.paint(); await tick(); SCR.paint();
-      out.v2_wait.v1 = tds(SCREEN.innerHTML, 0)[1];
+      out.v2_wait.v1 = cm(SCREEN.innerHTML, 0)['Imp / user / day'];
     } finally { FAIL.delete(nA2); FILES[nA2] = keepF; _.FILES[nA2] = keepA2; _.set({ MORE: false }); }
     SCR.paint(); await tick();
     out.top = [..._.topSplit(_.tableRows(x, '2026-02-27', '2026-03-28', 's'))].sort((p, q) => p - q);
@@ -609,7 +623,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     _.arrive(ID.a, '2');
     out.arrive = { f2: w(), kept: [SL['sc-ddb'].boxes[0].scrollTop, SL['sc-ddb'].boxes[1].scrollLeft, SL['sc-f-cov'].boxes[1].scrollLeft], dd: SL['sc-ddb']._h.includes('id="sc-chart"'),
       // file 2's screen users drawn into the table it brought them to (the App total never: scr_all only)
-      tb: [SL['sc-tb']._h.includes('data-sc-tsort="r"'), SL['sc-tb']._h.includes('⏳'), (tds(SL['sc-tb']._h, 0)[1] || [])[1] || null] };
+      tb: [SL['sc-tb']._h.includes('data-sc-tsort="r"'), SL['sc-tb']._h.includes('⏳'), cm(SL['sc-tb']._h, 0)['Imp / user / day'] || null] };
     _.set({ SEC: 'ver' }); _.arrive(ID.a, 'c'); out.arrive.c_on_ver = w();
     _.arrive(ID.a, 'r'); out.arrive.r_on_ver = w();
     _.arrive(ID.a, 'l'); out.arrive.l_on_ver = w();
@@ -735,10 +749,8 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     SCR.paint(); out.allf2.off = [noteOf(SCREEN.innerHTML), /title="is screen ke inline ads ÷/.test(SCREEN.innerHTML)];
     // ── a row under 1 % of the app's ads of its kind in the period and its normal: "score —" (titled, no colour) in the
     // table and the drill-down; one the build left N/A "Too few ads" is never in Needs attention ──
-    const cellsOf = (hh, i) => [...((new RegExp('<tr class="sc-clk[^"]*" data-sc-open="' + i + '"[^>]*>(.*?)</tr>').exec(hh) || [])[1] || '')
-      .matchAll(/<td(?: [^>]*)?>(.*?)<\/td>/g)].map(m => m[1]);
     _.set({ OPEN: null, SEG: 's', MORE: true, PER: '30' }); SCR.paint(); h = SCREEN.innerHTML;
-    out.low = { cells: [1, 3, 4, 5].map(i => cellsOf(h, i)[3]),
+    out.low = { cells: [1, 3, 4, 5].map(i => cm(h, i).Score),
       ps: [1, 3, 4, 5].map(i => { const p = _.perScoreU(xA, F2A(), i, '2026-02-27', '2026-03-28'); return [p.low, p.score]; }),
       share: [3, 4, 5, 6].map(i => Math.round(_.itemShare(xA, i, '2026-02-27', '2026-03-28') * 1e4) / 1e4) };
     _.set({ OPEN: 5, SEC: 'ov' }); SCR.paint(); out.low.dd = (/<span class="sc-dds">(.*?)<\/span><button/.exec(SCREEN.innerHTML) || [])[1] || null;
@@ -751,7 +763,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     try {
       ctx.APP = 'tiny'; _.set({ PER: '7' }); SCR.paint(); await tick(); SCR.paint(); h = SCREEN.innerHTML;
       out.tiny = { attn: [...h.slice(h.indexOf('id="sc-attn"'), h.indexOf('id="sc-tcard"')).matchAll(/data-sc-open="(\d+)"/g)].map(m => +m[1]),
-        big: cellsOf(h, 0)[3], small: cellsOf(h, 1)[3], why: cellsOf(h, 1)[0] };
+        big: cm(h, 0).Score, small: cm(h, 1).Score, why: cm(h, 1).Screen };
     } finally { delete ALLF.apps.tiny; delete ctx.DATA.scr.apps.tiny; ctx.DATA.scr.fv = 'f5'; _.set({ PER: '30' }); ctx.APP = 'Alpha App'; }
     SCR.paint(); await tick();
     // ── no whole screen users day (GA4 sampled the users read: no "U") and the daily users of another stream (no "au",
@@ -764,7 +776,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     ALLF.apps.nu = nu; ctx.DATA.scr.apps.nu = { key: nu.key, v: 'n', vl: 'n', from: nu.d0, ft: FT }; ctx.DATA.scr.fv = 'f6';
     try {
       ctx.APP = 'nu'; _.set({ PER: '7', OPEN: null, SEG: 's', MORE: false }); SCR.paint(); await tick(); SCR.paint(); h = SCREEN.innerHTML;
-      out.v2_none = { one: tds(h, 0)[1], total: (/<tr><td>Imp \/ user \/ day<\/td><td( title="[^"]*")?>(.*?)<\/td>/.exec(h) || []).slice(1), fn: _.sumScr(nu, _.FILES[nu2].raw, 0, '2026-03-22', '2026-03-28').r };
+      out.v2_none = { one: cm(h, 0)['Imp / user / day'], total: (/<tr><td>Imp \/ user \/ day<\/td><td( title="[^"]*")?>(.*?)<\/td>/.exec(h) || []).slice(1), fn: _.sumScr(nu, _.FILES[nu2].raw, 0, '2026-03-22', '2026-03-28').r };
     } finally { delete ALLF.apps.nu; delete ctx.DATA.scr.apps.nu; delete FILES[nu2]; ctx.DATA.scr.fv = 'f7'; _.set({ PER: '30' }); ctx.APP = 'Alpha App'; }
     SCR.paint(); await tick();
     // ── more than one ad per screen view (Ads / 100 above 100) with a known time per view: the banner-refresh line under the
@@ -789,6 +801,75 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     } finally { delete ALLF.apps.bn; delete ctx.DATA.scr.apps.bn; delete FILES[bn2]; ctx.DATA.scr.fv = 'f9'; _.set({ PER: '30', SEG: 's', MORE: false }); ctx.APP = 'Alpha App'; }
     SCR.paint(); await tick();
     out.bn_alpha = SCREEN.innerHTML.includes('sc-bn');                                       // Alpha: ~10 ads / 100 — never
+    // ── the column order (owner: "pehle user hota he fir screen view hota he fir ads impression hota he"): users, then screen
+    // views, then the ads. Every table as {row → {header → [cell attrs, cell]}} on each period and file state — read by the
+    // header a cell sits under, so the same whatever the order — with its headers [label, sort key, title, aria-sort] and
+    // each row's cell count (colspan); the rows' own numbers (each header's key bound to the cells under it); a tap on every
+    // sort header, twice: the rows' order, the page's own sort for it, the column under the header tapped ("sorty": five
+    // screens that every column ranks differently) ──
+    { const read = (hh, id) => { const s = hh.indexOf('id="' + id + '"'), t = s < 0 ? '' : hh.slice(s, hh.indexOf('</table>', s));
+        const H = [...((/<thead><tr>(.*?)<\/tr><\/thead>/.exec(t) || [, ''])[1]).matchAll(/<th([^>]*)>(.*?)<\/th>/g)].map(m => [txt(m[2]),
+          (/data-sc-t?sort="([a-z]+)"/.exec(m[2]) || [])[1] || null, (/ title="([^"]*)"/.exec(m[1]) || [])[1] || null, (/aria-sort="([a-z]+)"/.exec(m[1]) || [])[1] || null]);
+        const rows = [], map = {};
+        for (const m of ((/<tbody>(.*?)<\/tbody>/.exec(t) || [, ''])[1]).matchAll(/<tr([^>]*)>(.*?)<\/tr>/g)) {
+          const cs = [...m[2].matchAll(/<td((?: [^>]*)?)>(.*?)<\/td>/g)].map(c => [c[1], c[2]]);
+          const k = (/data-sc-(?:open|app)="([^"]+)"/.exec(m[1]) || [])[1] || (id === 'sc-total' && cs.length ? txt(cs[0][1]) : 'empty');
+          rows.push([k, cs.length, +((/colspan="(\d+)"/.exec(cs.length ? cs[0][0] : '') || [])[1] || 0)]); map[k] = by(H.map(q => q[0]), cs); }
+        return { heads: H, rows, map }; };
+      // (an app's first paint folds "Show more" again: every row is shown here)
+      const show = o => { _.set(Object.assign({ OPEN: null, SEG: 's', MORE: true, PER: '30', TS: { k: 'st', dir: 1 }, SORT: { k: 'rank', dir: 1 } }, o)); SCR.paint();
+        if (!_.get().MORE) { _.set({ MORE: true }); SCR.paint(); } return SCREEN.innerHTML; };
+      const T = {}, n2 = 'scr_' + KEY.a + '.json.gz', k2 = _.FILES[n2], kf = FILES[n2], xa = ALLF.apps[ID.a], { PF: pf0, PTO: pt0 } = _.get();
+      const xOf = id => _.apps().find(r => r.id === id).x, f2Of = xx => _.FILES['scr_' + xx.key + '.json.gz'].raw;
+      ctx.APP = 'Alpha App';
+      for (const per of ['30', '7', 'today', 'yday', 'lm', 'all', 'mon:2026-02', 'cus']) { const hh = show({ PER: per, PF: '2026-03-10', PTO: '2026-03-20' });
+        T['s a ' + per] = read(hh, 'sc-ttw'); T['tot a ' + per] = read(hh, 'sc-total'); T['f a ' + per] = read(show({ PER: per, SEG: 'f' }), 'sc-ttw'); }
+      _.set({ PF: pf0, PTO: pt0 });
+      for (const [k, nm] of [['b', 'Beta App'], ['c', 'Gamma App'], ['d', 'Delta App'], ['h', 'Hostile App']]) {
+        ctx.APP = nm; show({}); await tick(8); const hh = show({}); T['s ' + k + ' 30'] = read(hh, 'sc-ttw'); T['tot ' + k + ' 30'] = read(hh, 'sc-total'); T['f ' + k + ' 30'] = read(show({ SEG: 'f' }), 'sc-ttw'); }
+      // file 2 on its way (⏳) / failed ("data load nahi hua"); no screens / no triggers: the one colspan row
+      ctx.APP = 'Alpha App';
+      try { delete _.FILES[n2]; FAIL.add(n2); T['s a wait'] = read(show({}), 'sc-ttw'); await tick(); T['s a err'] = read(show({}), 'sc-ttw'); }
+      finally { FAIL.delete(n2); FILES[n2] = kf; _.FILES[n2] = k2; }
+      show({}); _.set({ SEG: 'f' }); T['f none'] = read(_.tableHtml(Object.assign({}, xa, { items: xa.items.filter(it => it[1] !== 'fs') }), ID.a, ...P30), 'sc-ttw');
+      _.set({ SEG: 's' }); T['s none'] = read(_.tableHtml(Object.assign({}, xa, { items: xa.items.filter(it => it[1] === 'fs') }), ID.a, ...P30), 'sc-ttw');
+      // All apps: the periods, an AdMob-judged App row (its score muted)
+      ctx.APP = ''; for (const per of ['30', '7', 'today', 'all']) T['all ' + per] = read(show({ PER: per }), 'sc-atw');
+      { const xp = xOf(ID.a), ka = xp.app; xp.app = AP('Worse', 'AdMob imp/user 4.0 → 2.1', 0, 0, [52, '', null, null, { st: 'admob' }]);
+        try { T['all admob'] = read(show({}), 'sc-atw'); ctx.APP = 'Alpha App'; T['tot a admob'] = read(show({}), 'sc-total'); } finally { xp.app = ka; ctx.APP = ''; } }
+      // "sorty": five top screens, each column ranking them differently — users / day SU, views / user SV ÷ SU, time / view
+      // SG ÷ SV, time / user SG ÷ SU, ads / min, imp / user (the period's ads SA ÷ SU), normal (the 30 days before: SN ÷ SU),
+      // score — + All other screens, Not recorded; the screens' users every final day, the app's 3,000 daily users
+      const SU = [1000, 800, 600, 400, 200], SV = [2000, 4000, 1500, 2400, 300], SG = [60000, 40000, 72000, 12000, 10500], SA = [300, 400, 480, 100, 300], SN = [500, 320, 457, 91, 316];
+      const zk = 'a0000000000d', zn = 'scr_' + zk + '.json.gz', zs = SU.map((_u, j) => 'x.y.S' + j + 'Activity');
+      const zx = { key: zk, ft: FT, td: TD, d0: D0, items: zs.map(c => [c, 's', 'inline']).concat([['', 'o', 'inline'], ['(not set)', 'ns', 'inline']]), vis: [], V: [], A: [], ta: [], st: {}, bf: {},
+        dq: [], status: {}, app: AP('Normal', '', 0, 0), ftu: FT, dk: '0'.repeat(ND), au: [] };
+      const zf = { v: 2, key: zk, d0: D0, ft: FT, td: TD, screens: zs.map(c => [c, 's']).concat([['x.y.RestActivity', 's'], ['(not set)', 'ns']]), units: [], trig: [], days: [], adm: {}, rows: {}, notes: {},
+        Us: [0, 1, 2, 3, 4], U: [], au: [] };
+      for (let k = 0; k < ND; k++) { const ad = k >= 57 ? SA : SN; zx.V.push(SV.concat([100, 10])); zx.A.push(ad.concat([5, 1])); zx.vis.push(SV.reduce((s, v) => s + v, 110));
+        zx.ta.push([ad.reduce((s, v) => s + v, 6), 0, 0]); zx.au.push(k > 86 ? null : 3000); zf.au.push(k > 86 ? null : 3000);
+        zf.days.push({ v: SV.map((v, j) => [j, v, SG[j]]).concat([[5, 100, 1000], [6, 10, 100]]) }); zf.U.push(k > 86 ? null : SU.slice()); }
+      for (const r of READS) zx.st[r] = 'w'.repeat(ND);
+      ALLF.apps.sorty = zx; FILES[zn] = zf; ctx.DATA.scr.apps.sorty = { key: zk, v: 'z', vl: 'z', from: D0, ft: FT }; ctx.DATA.scr.fv = 'f10';
+      try {
+        ctx.APP = 'sorty'; show({}); await tick(8); show({}); await tick(8); const hz = show({}); T['s z 30'] = read(hz, 'sc-ttw'); T['tot z 30'] = read(hz, 'sc-total');
+        ctx.APP = ''; T['all z'] = read(show({}), 'sc-atw');
+        // the rows' own numbers (30 days): the Screens rows (Alpha, sorty) per sort key, All apps' per sort key
+        const mS = id => { const xx = xOf(id); return Object.fromEntries(_.tableRows(xx, ...P30, 's', f2Of(xx)).map(z => [String(z.i), { agg: z.agg, ud: z.ud, vu: z.vu, tv: z.tv, tu: z.tu, am: z.am, r: z.r, n: z.n, sc: z.sc }])); };
+        const M = { a: mS(ID.a), z: mS('sorty'), all: Object.fromEntries(_.apps().map(_.appRow).map(z => [z.r.name, { dau: z.dau, r: z.ru, n: z.n, sc: z.sc, wn: z.wn, an: z.an }])) };
+        // a tap on every sort header, twice (its direction turns)
+        const S = {}, tap = (a, k) => SCREEN.onclick({ target: { closest: s => s === '[data-sc-' + a + ']' ? { dataset: a === 'tsort' ? { scTsort: k } : { scSort: k } } : null } });
+        const rec = (t, l, k, want) => ({ head: l, aria: (t.heads.find(q => q[1] === k) || [])[3], rows: t.rows.map(r => r[0]), col: t.rows.map(r => (t.map[r[0]][l] || [])[1]), want });
+        ctx.APP = 'sorty';
+        for (const [l, k] of T['s z 30'].heads.filter(q => q[1])) { show({}); for (const n of [1, 2]) { tap('tsort', k);
+          S['s ' + k + ' ' + n] = rec(read(SCREEN.innerHTML, 'sc-ttw'), l, k, _.sortItems(_.tableRows(xOf('sorty'), ...P30, 's', f2Of(xOf('sorty')))).map(z => String(z.i))); } }
+        ctx.APP = '';
+        for (const [l, k] of T['all z'].heads.filter(q => q[1])) { show({}); for (const n of [1, 2]) { tap('sort', k);
+          S['all ' + k + ' ' + n] = rec(read(SCREEN.innerHTML, 'sc-atw'), l, k, _.sortApps(_.apps().map(_.appRow)).map(z => z.r.name)); } }
+        out.order = { T, M, S };
+      } finally { delete ALLF.apps.sorty; delete ctx.DATA.scr.apps.sorty; delete FILES[zn]; ctx.DATA.scr.fv = 'f11'; ctx.APP = 'Alpha App';
+        _.set({ OPEN: null, SEG: 's', MORE: false, PER: '30', TS: { k: 'st', dir: 1 }, SORT: { k: 'rank', dir: 1 } }); }
+      SCR.paint(); await tick(); }
     // hub card none: the pointer alone never loads a file
     out.ready = SCR.ready();
   } catch (e) { errors.push(String(e && e.stack || e)); }

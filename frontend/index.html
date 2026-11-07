@@ -7901,8 +7901,8 @@ function appRow(r){ const a=Array.isArray(r.x.app)?r.x.app:[], all=PER==='all';
   if(!r.x.d0||!okD(r.x.ft)) return z;
   const [lo,hi]=rng(r.x), p=appU(r.x,lo,hi), nw=all?null:normWinU(r.x,lo,hi), q=nw?appU(r.x,nw[0],nw[1]):null;
   return Object.assign(z,{lo,hi,p,q,ru:p.r,n:q?q.r:null,dau:p.ud,muted:p.n<7,sc:!all&&!z.mute&&p.r!=null&&q&&q.r>0?Math.round(100*p.r/q.r):null}); }
-// sort: rank (the App row's word, then Worse rows, then Watch rows, then daily users) · name · imp / user · normal · score ·
-// daily users · Worse · Watch
+// sort: rank (the App row's word, then Worse rows, then Watch rows, then daily users) · name · daily users · imp / user ·
+// normal · score · Worse · Watch
 const AK={r:'ru',n:'n',sc:'sc',dau:'dau',wn:'wn',an:'an'};
 function sortApps(rows){ const k=SORT.k, d=SORT.dir, val=z=>k==='rank'?null:k==='name'?z.r.name:z[AK[k]||k];
   return rows.slice().sort((a,b)=>{ if(k==='rank') return d*(rankOf(a.st)-rankOf(b.st)||b.wn-a.wn||b.an-a.an)||(b.dau||0)-(a.dau||0)||a.r.name.localeCompare(b.r.name);
@@ -7919,10 +7919,12 @@ function covHtml(L){ const C=coverAll(L), op=C.find(c=>c.code===COVP);
 function impCell(z){ const p=z.p||{}, x=z.r.x;
   if(p.r!=null) return `<b>${PQ(p.r)}</b><small>${PQ(p.ir)} · ${PQ(p.fr)}${p.n<p.nd?` · ${p.n}/${p.nd} days`:''}</small>${waitAds(adsAfter(x,z.lo,z.hi))}`;
   if(!z.lo) return '—'; return z.lo>ftuOf(x)?'<b>—</b>'+waitAds(adsAfter(x,z.lo,z.hi)):`<b>—</b><small>${E(auWhy(x,z.lo))}</small>`; }
-function allTable(rows){ const cols=[['rank','App · status'],['r','Imp / user / day'],['n','Normal'],['sc','Score'],['dau','Daily users'],['wn','Worse'],['an','Watch']];
+// the columns in the owner's order ("pehle user hota he fir screen view hota he fir ads impression hota he"): Daily users,
+// then the Imp / user / day the row is judged on, its Normal and Score
+function allTable(rows){ const cols=[['rank','App · status'],['dau','Daily users'],['r','Imp / user / day'],['n','Normal'],['sc','Score'],['wn','Worse'],['an','Watch']];
   const head=cols.map(([k,l])=>`<th aria-sort="${SORT.k===k?(SORT.dir>0?'ascending':'descending'):'none'}"${k==='r'?` title="${E('GA4 ke saare ad impressions ÷ app ke daily users (GA4 Active users, wahi stream) · chhota: inline · full-screen')}"`:''}><button type="button" data-sc-sort="${k}">${l}</button></th>`).join('')+'<th>History</th>';
   const body=rows.map(z=>`<tr class="sc-clk" data-sc-app="${E(z.r.name)}" tabindex="0"><td class="sc-nm"><span class="sc-an">${appIconId(z.r.id,z.r.name,22)}<span>${E(z.r.name)}</span></span><span class="sc-stl">${appChip(z.a)}</span>${z.why?`<small>${E(z.why)}</small>`:''}</td>`
-    +`<td>${impCell(z)}</td><td>${PQ(z.n)}</td><td>${z.mute?muteTxt(z.mute):scoreTxt(z.sc,z.muted,z.all)}</td><td>${N(z.dau)}</td><td>${z.wn||'—'}</td><td>${z.an||'—'}</td><td>${histCell(z.r.x)}</td></tr>`).join('')
+    +`<td>${N(z.dau)}</td><td>${impCell(z)}</td><td>${PQ(z.n)}</td><td>${z.mute?muteTxt(z.mute):scoreTxt(z.sc,z.muted,z.all)}</td><td>${z.wn||'—'}</td><td>${z.an||'—'}</td><td>${histCell(z.r.x)}</td></tr>`).join('')
     ||'<tr><td colspan="8" class="sc-faint">Koi app nahi</td></tr>';
   return `<div class="sc-tw sc-x" id="sc-atw"><table class="sc-t"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`; }
 function allHtml(){ const L=apps(); if(!L.length) return '<div class="card sc-card"><p class="sc-note">Abhi kisi app ka Screens data nahi aaya — history bhar rahi hai.</p></div>';
@@ -7934,9 +7936,10 @@ function allHtml(){ const L=apps(); if(!L.length) return '<div class="card sc-ca
     +`<p class="sc-note">GA4 data till ${fdy(ref.ft)} (aakhri 2 din GA4 me abhi badalte hain). <b>Imp / user / day</b> = GA4 ke saare ad impressions ÷ app ke daily users · <b>Score</b> = is period ÷ normal × 100 · status = pichhle 10 final din vs 28 pehle.</p>`; }
 // ---- one app ----
 function tile(l,v,sub,cls,tt){ return `<div class="sc-k${cls?' '+cls:''}"${tt?` title="${E(tt)}"`:''}><div class="sc-kl">${l}</div><div class="sc-kv">${v}</div><div class="sc-ks">${sub}</div></div>`; }
-// the App total (3 rows, from scr_all alone — no ⏳, no late redraw): Imp / user / day (+ the period's score), Daily users,
-// Views / user · the period · Normal · 7 days · Yesterday · Today (no daily users yet: "—" + the ads so far ⏳). Cells keep
-// their width: the label column is fixed, the values scroll sideways on a phone
+// the App total (3 rows, from scr_all alone — no ⏳, no late redraw): Daily users, Views / user / day, Imp / user / day (+ the
+// period's score) — users, then views, then the ads (the owner's order, as the tables) · the period · Normal · 7 days ·
+// Yesterday · Today (no daily users yet: "—" + the ads so far ⏳). Cells keep their width: the label column is fixed, the
+// values scroll sideways on a phone
 function totalHtml(x,id,lo,hi){ const all=PER==='all', fu=ftuOf(x), T=x.td, Y=addD(T,-1), s7=[addD(fu,-6),fu], nw=all?null:normWinU(x,lo,hi);
   const C=[[E(perName(PER)),lo,hi]].concat(nw?[['Normal',nw[0],nw[1]]]:[]).concat([['7 days',s7[0],s7[1]],['Yesterday',Y,Y],['Today',T,T]]);
   const Q=C.map(c=>appU(x,c[1],c[2])), P=Q[0], qn=nw?Q[1]:null, mt=all?'':scMute(Array.isArray(x.app)?x.app:[]), sc=!all&&!mt&&P.r!=null&&qn&&qn.r>0?Math.round(100*P.r/qn.r):null;
@@ -7947,8 +7950,8 @@ function totalHtml(x,id,lo,hi){ const all=PER==='all', fu=ftuOf(x), T=x.td, Y=ad
   const row=(l,f)=>`<tr><td>${l}</td>${Q.map((q,j)=>`<td>${q.n?f(q):'—'}</td>`).join('')}</tr>`;
   return `<div class="card sc-card" id="sc-total"><div class="ct"><h3>App total</h3><span class="sc-faint">GA4 data till ${fdy(x.ft)}${fu<x.ft?` · users till ${fdy(fu)}`:''}</span></div>`
     +`<div class="sc-tw sc-x"><table class="sc-t sc-mini sc-tot"><thead><tr><th></th>${C.map(c=>`<th>${c[0]} <small>${rg(c[1],c[2])}</small></th>`).join('')}</tr></thead><tbody>`
-    +`<tr><td>Imp / user / day</td>${Q.map((q,j)=>cell(q,C[j],j)).join('')}</tr>`
-    +row('Daily users',q=>N(q.ud))+row('Views / user / day',q=>PU(q.vu))+'</tbody></table></div>'
+    +row('Daily users',q=>N(q.ud))+row('Views / user / day',q=>PU(q.vu))
+    +`<tr><td>Imp / user / day</td>${Q.map((q,j)=>cell(q,C[j],j)).join('')}</tr></tbody></table></div>`
     +`<p class="sc-note">${E(NFW)}.${fu<x.ft?` Users till ${fdy(fu)}.`:''}</p>`
     +fold('app','App total · details','formats · GA4 vs AdMob · new vs returning · versions',appDet(x,id,lo,hi))+'</div>'; }
 // the App row's details (the old tiles live here): per-format imp / user, GA4 vs AdMob per daily user, the users mix, Ads /
@@ -7985,8 +7988,9 @@ function attnHtml(x,id){ const items=x.items||[], w=statWin(x), a=Array.isArray(
   if(!fine) return `<div class="card sc-card" id="sc-attn"><div class="ct"><h3>Needs attention</h3></div><p class="sc-note">Abhi koi screen judge nahi ho saki${a[1]?': '+E(a[1]):' (data kam ya din whole nahi)'} — numbers neeche hain, status nahi.</p></div>`;
   return `<div class="card sc-card" id="sc-attn">${hd}<p class="sc-ok">✅ Sab normal</p>${L.join('')}</div>`; }
 // the Screens / Full-screen tables: status chip + its score under the name (sticky column), then the period's numbers.
-// Screens: Imp / user / day · Normal · Score · Users / day · Views / user / day · Time / view · Time / user / day · Ads / min ·
-// Cause (one day set: the chain holds); Full-screen: Imp / app user / day · Normal · Score · Cause. Ads / 100, screen views,
+// Screens, in the owner's order ("pehle user hota he fir screen view hota he fir ads impression hota he": the chain read left
+// to right): Users / day · Views / user / day · Time / view · Time / user / day · Ads / min · Imp / user / day · Normal · Score
+// · Cause (one day set: the chain holds); Full-screen: Imp / app user / day · Normal · Score · Cause. Ads / 100, screen views,
 // ads and the share live in the row details
 const BNW='screen khuli rahe to banner har ~30–90 sec me dobara load hota hai: har refresh ek naya impression';
 // a top screen with more than one ad per screen view (Ads / 100 above 100): the seconds a view lasts (engagement ÷ views)
@@ -8028,13 +8032,14 @@ function tableHtml(x,id,lo,hi){ const seg=SEG, all=PER==='all', a2=apPtr(id), f2
   const rows=sortItems(tableRows(x,lo,hi,seg,f2)), top=seg==='s'?topSplit(rows):null, shown=top&&!MORE?rows.filter(z=>top.has(z.i)):rows, more=rows.length-shown.length;
   const th=(k,l,tt)=>`<th aria-sort="${TS.k===k?(TS.dir>0?'ascending':'descending'):'none'}"${tt?` title="${E(tt)}"`:''}><button type="button" data-sc-tsort="${k}">${l}</button></th>`;
   const uof=x.allf?'ads (saare formats — is app me screens ke ads ka format poora nahi milta)':'inline ads';
-  const head=seg==='s'?th('st','Screen')+th('r','Imp / user / day',`is screen ke ${uof} ÷ is screen ke users (roz unique; din ka jod) = Views / user / day × Time / view × Ads / min ÷ 60 · sirf final din (users ~2 din baad)`)
-      +th('n','Normal','period se pehle ke max(28, period) final din')+th('sc','Score')
+  const head=seg==='s'?th('st','Screen')
       +th('ud','Users / day','roz ke average users: us screen ke daily users ka jod ÷ din — GA4 me user ek din aur ek screen ke andar unique')
       +th('vu','Views / user / day','ek user din me screen kitni baar kholta hai: screen views ÷ users ka jod')
       +th('tv','Time / view','ek baar screen khulne pe kitni der: engagement time ÷ screen views')
       +th('tu','Time / user / day','ek user roz is screen pe kitni der: engagement time ÷ users ka jod')
-      +th('am','Ads / min',`screen pe bitaye har minute me ads: ${uof} ÷ (engagement seconds ÷ 60)`)+'<th>Cause</th>'
+      +th('am','Ads / min',`screen pe bitaye har minute me ads: ${uof} ÷ (engagement seconds ÷ 60)`)
+      +th('r','Imp / user / day',`is screen ke ${uof} ÷ is screen ke users (roz unique; din ka jod) = Views / user / day × Time / view × Ads / min ÷ 60 · sirf final din (users ~2 din baad)`)
+      +th('n','Normal','period se pehle ke max(28, period) final din')+th('sc','Score')+'<th>Cause</th>'
     :th('st','Trigger')+th('r','Imp / app user / day','trigger ke ads ÷ app ke daily users (trigger ki koi screen nahi) · sirf final din')+th('n','Normal')+th('sc','Score')+'<th>Cause</th>';
   const wt=f2e?'<b>—</b><small>data load nahi hua</small>':'⏳', w1=`<td title="${E(f2e?'data load nahi hua':'aa raha hai…')}">${f2e?'—':'⏳'}</td>`;
   const tr=z=>{ const it=z.it, p=z.ps.p, jd=judged(it), st=z.st, after=adsAfter(x,lo,hi,z.i), wait=!z.agg&&seg==='s'&&!f2;
@@ -8051,8 +8056,8 @@ function tableHtml(x,id,lo,hi){ const seg=SEG, all=PER==='all', a2=apPtr(id), f2
     if(seg!=='s') return `<tr class="sc-clk${OPEN===z.i?' sc-on':''}" data-sc-open="${z.i}" aria-expanded="${OPEN===z.i}" tabindex="0">${nm}${main}${nrm}${cz}</tr>`;
     const c=(v,fm)=>wait?w1:`<td>${z.agg&&v==null?'—':fm(v)}</td>`;
     const ag=v=>z.agg?`<td title="${E(AGGW)}">—</td>`:v;
-    return `<tr class="sc-clk${OPEN===z.i?' sc-on':''}" data-sc-open="${z.i}" aria-expanded="${OPEN===z.i}" tabindex="0">${nm}${main}${nrm}`
-      +ag(c(z.ud!=null?Math.round(z.ud):null,N))+ag(c(z.vu,PU))+c(z.tv,fmtT)+ag(c(z.tu,fmtT))+c(z.am,PU)+cz+'</tr>'; };
+    return `<tr class="sc-clk${OPEN===z.i?' sc-on':''}" data-sc-open="${z.i}" aria-expanded="${OPEN===z.i}" tabindex="0">${nm}`
+      +ag(c(z.ud!=null?Math.round(z.ud):null,N))+ag(c(z.vu,PU))+c(z.tv,fmtT)+ag(c(z.tu,fmtT))+c(z.am,PU)+main+nrm+cz+'</tr>'; };
   const nf=rows.length;
   return `<div class="sc-tw sc-x" id="sc-ttw"><table class="sc-t${seg==='s'?' sc-t10':''}"><thead><tr>${head}</tr></thead><tbody>${shown.map(tr).join('')||`<tr><td colspan="${seg==='f'?5:10}" class="sc-faint">${seg==='f'?'Is app ke full-screen units ka trigger data nahi':'Koi screen nahi'}</td></tr>`}</tbody></table></div>`
     +(seg==='s'&&nf?'<p class="sc-note"><b>Imp / user / day</b> = Views / user / day × Time / view × Ads / min ÷ 60 (same din). Time = GA4 engagement time: app khuli aur ye screen saamne thi. Ads / 100, screen views aur ads row ki details me.</p>':'')
@@ -8121,6 +8126,7 @@ function ovSec(x,id,i,lo,hi){ const it=x.items[i], fs=it[1]==='fs', ag=it[1] in 
   const t100=tile(fs?'Per 100 app views':'Ads / 100 views',R(sc.p.rate),`${scoreTxt(sc.score,sc.muted,all,sc.low)} · normal ${R(sc.q&&sc.q.rate)}<br>${N(sc.p.vAll)} ${fs?'app ':''}views · ${N(sc.p.a)} ads`
     +(sh!=null?`<br>${P1(sh)} of the app's screen views`:'')
     +(bs!=null?`<br><span title="${E(BNW)}">1 view me 1 se zyada ad — banner refresh · avg ${bs} sec</span>`:''));
+  // (the users tile first, then the views and ads one: the owner's order, as the table)
   const tu=ag?'':fs?tile('App daily users',N(ps.p.ud),'per day · trigger ki koi screen nahi — app ke users')
     :tile('Screen users / day',f2?N(ps.p.ud):'⏳',f2?`Reach ${P1(ps.p.reach)} · normal ${P1(ps.q&&ps.q.reach)}`:'aa raha hai…');
   let body='';
@@ -8138,7 +8144,7 @@ function ovSec(x,id,i,lo,hi){ const it=x.items[i], fs=it[1]==='fs', ag=it[1] in 
     body=`<h4 class="sc-h4">Every month <small class="sc-faint">${un} = roz ka average</small></h4><div class="sc-tw sc-x"><table class="sc-t"><thead>${hd.replace('%','Month')}</thead><tbody>${mrow}</tbody></table></div>`
       +`<h4 class="sc-h4">Every day <small class="sc-faint">sabse naya upar</small></h4><div class="sc-tw sc-x sc-tall" id="sc-dtw"><table class="sc-t"><thead>${hd.replace('%','Day')}</thead><tbody>${drow}</tbody></table></div>`; }
   const lab=ag?'<span class="sc-la">Ads / 100 views</span><span class="sc-lb">Screen views (bars)</span>':`<span class="sc-la">${fs?'Imp / app user / day':'Imp / user / day'}</span><span class="sc-lb">${fs?'App daily users':'Screen users'} (bars)</span>`;
-  return `<div class="sc-tiles sc-x">${t100}${tu}</div><div class="sc-chart" id="sc-chart"></div><div class="sc-lg">${lab}<span class="sc-lc">Normal</span>${CH&&CH.by!=='d'?`<span class="sc-faint">${CH.by==='w'?'har hafte':'har mahine'} ka = Σ ads ÷ Σ ${ag?'views':'users'}</span>`:''}</div>`
+  return `<div class="sc-tiles sc-x">${tu}${t100}</div><div class="sc-chart" id="sc-chart"></div><div class="sc-lg">${lab}<span class="sc-lc">Normal</span>${CH&&CH.by!=='d'?`<span class="sc-faint">${CH.by==='w'?'har hafte':'har mahine'} ka = Σ ads ÷ Σ ${ag?'views':'users'}</span>`:''}</div>`
     +(f2?partsHtml(row)+termsHtml(row):(apPtr(id)?'<p class="sc-note">⏳ Cause ki details aa rahi hain…</p>':''))+body; }
 // AdMob per unit (file 2's "adm": [req, matched, imp] per GA4 day, blended from the two IST days by the build) over [lo, hi]
 function admSum(f2,x,ui,lo,hi){ const A=(f2.adm||{})[ui]; if(!Array.isArray(A)) return null; let rq=0,ma=0,im=0,n=0;

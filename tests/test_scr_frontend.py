@@ -29,7 +29,9 @@ chain Views / user / day × Time / view × Ads / min ÷ 60 holds exactly), the a
 screen ads, Today / Yesterday "—" + the ads so far ⏳, the Full-screen table per app user (5 columns), the App total block
 from scr_all alone (its parts adding up, copy days left out), All apps from scr_all's "au" (a data N/A's score muted, "Worse
 (AdMob)"), Needs attention one line per cause with ≈ Σ impact, the details (Ads / 100, reach, the parts, the chart per
-user), v 2 files only (a v 1 file refused visibly).
+user), v 2 files only (a v 1 file refused visibly). The column order (owner: users, then screen views, then the ads): every
+table's headers on every period and file state, each cell read by the header it sits under (bound to the row's own number
+for that key), every sort header sorting its own column, the App total's rows, the users tile first in the details.
 Skipped where node is not installed. No real data."""
 import json
 import math
@@ -446,7 +448,7 @@ def test_late_file_redraws_only_its_slots_and_keeps_scroll(out):
     # file 2 brings the screens' users: the table and the drill-down — never the App total (scr_all alone)
     assert r["f2"] == {"sc-ddb": 1, "sc-f-src": 0, "sc-f-ver": 0, "sc-f-cov": 1, "sc-f-rep": 0, "sc-total": 0, "sc-tb": 1} and r["dd"]
     assert r["kept"] == [300, 50, 25]                                               # the day box's place, sideways tables
-    assert r["tb"] == [True, False, out["v2"]["main"][1]]                            # its numbers, no ⏳ left
+    assert r["tb"] == [True, False, out["v2"]["main"]["Imp / user / day"]]           # its numbers, no ⏳ left
     assert r["c_on_ver"] == r["f2"]                                                 # a country shard while on Versions: nothing
     assert r["r_on_ver"]["sc-ddb"] == 2 and r["r_on_ver"]["sc-f-src"] == 0 and r["r_on_ver"]["sc-tb"] == 1
     assert r["l_on_ver"] == {"sc-ddb": 3, "sc-f-src": 1, "sc-f-ver": 1, "sc-f-cov": 1, "sc-f-rep": 1, "sc-total": 0, "sc-tb": 1}
@@ -548,11 +550,12 @@ def test_endsnap_class_toggle(out):
 # ── v 2: Imp / user / day (owner, 6–7 Nov 2026: "total user ke samne kitna impression mila vo imp hota he") ─────────
 
 def test_v2_screens_table_ten_columns_on_one_day_set(out):
-    # main row = Screen | Imp / user / day | Normal | Score | Users / day | Views / user / day | Time / view | Time / user / day
-    # | Ads / min | Cause — Ads / 100, screen views, ads and the share in the row details
+    # main row = Screen | Users / day | Views / user / day | Time / view | Time / user / day | Ads / min | Imp / user / day |
+    # Normal | Score | Cause (the owner's order: users, then views, then the ads) — Ads / 100, screen views, ads and the
+    # share in the row details
     v = out["v2"]
-    assert v["heads"] == ["Screen", "Imp / user / day", "Normal", "Score", "Users / day", "Views / user / day", "Time / view",
-                          "Time / user / day", "Ads / min", "Cause"]
+    assert v["heads"] == ["Screen", "Users / day", "Views / user / day", "Time / view", "Time / user / day", "Ads / min",
+                          "Imp / user / day", "Normal", "Score", "Cause"]
     # by hand: Σ Main's ads ÷ Σ its own users on the 27 days file 2 gives them (every 10th day missing) — never the mean of
     # the daily ratios (users vary by day)
     ads, users = sum(A_MAIN(k) for k in U_DAYS), sum(U_MAIN(k) for k in U_DAYS)
@@ -563,8 +566,10 @@ def test_v2_screens_table_ten_columns_on_one_day_set(out):
     # other per-user columns keep two
     nk = [k for k in KN30 if k % 10 != 5]
     normal = sum(A_MAIN(k) for k in nk) / float(sum(U_MAIN(k) for k in nk))
-    assert v["main"][1:] == ["<b>%s</b><small>27/30 days</small>" % _p3(ads / float(users)), _p3(normal),
-                             'score <b class="">95</b>', "793", "1.35", "28s", "38s", "0.23", "Lower fill"]
+    assert {h: c for h, c in v["main"].items() if h != "Screen"} == {
+        "Users / day": "793", "Views / user / day": "1.35", "Time / view": "28s", "Time / user / day": "38s", "Ads / min": "0.23",
+        "Imp / user / day": "<b>%s</b><small>27/30 days</small>" % _p3(ads / float(users)), "Normal": _p3(normal),
+        "Score": 'score <b class="">95</b>', "Cause": "Lower fill"}
     assert _p3(ads / float(users)) != _p2(ads / float(users)) + "0"                      # (the third place shows)
     # the chain on ONE day set, exactly: Views / user / day × Time / view × Ads / min ÷ 60 = Imp / user / day (also =
     # Time / user / day × Ads / min ÷ 60), on a period that reaches Today too (its per-user days end at ftU)
@@ -584,8 +589,10 @@ def test_v2_aggregates_pinned_and_their_share(out):
     # wrapped "of the screen ads" into 4 lines; the full words in its title); Time / view and Ads / min where views and
     # time exist
     p = _p1(v["share"])
-    assert v["other"][1] == '<b>—</b><small class="sc-nw" title="%s of the screen ads">%s of ads</small>' % (p, p)
-    assert v["other"][2:6] == ["—"] * 4 and v["other"][7] == "—" and v["other"][6] == "13s" and v["other"][8] == "0.45"
+    o = v["other"]
+    assert o["Imp / user / day"] == '<b>—</b><small class="sc-nw" title="%s of the screen ads">%s of ads</small>' % (p, p)
+    assert [o[h] for h in ("Users / day", "Views / user / day", "Time / user / day", "Normal", "Score")] == ["—"] * 5
+    assert o["Time / view"] == "13s" and o["Ads / min"] == "0.45"
     assert v["agg"] == [True, None]
     # pinned at the bottom in their fixed order under every sort
     for k, order in v["pinned"].items():
@@ -597,21 +604,22 @@ def test_v2_today_and_yesterday_show_the_ads_only(out):
     # chain columns "—"
     for k in ("today", "yday"):
         c = out["v2"][k]["cells"]
-        assert c[1] == "<b>—</b><small>ads %d ⏳</small>" % out["v2"][k]["ads"], k
-        assert c[4:9] == ["—"] * 5 and c[3] == '<span class="sc-mut">score —</span>'
+        assert c["Imp / user / day"] == "<b>—</b><small>ads %d ⏳</small>" % out["v2"][k]["ads"], k
+        assert [c[h] for h in ("Users / day", "Views / user / day", "Time / view", "Time / user / day", "Ads / min")] == ["—"] * 5
+        assert c["Score"] == '<span class="sc-mut">score —</span>'
 
 
 def test_v2_full_screen_table_per_app_user(out):
     f = out["v2"]["fs"]
     assert f["heads"] == ["Trigger", "Imp / app user / day", "Normal", "Score", "Cause"]
     assert f["fn"][0] == pytest.approx(f["hand"]) and f["fn"][1] == 30               # Σ trigger ads ÷ Σ the app's daily users
-    assert f["cell"][1] == "<b>0.073</b>" and f["th"].startswith("trigger ke ads ÷ app ke daily users")
-    assert f["cell"][2] == _p3(40 * 30 / float(sum(AU(k) for k in KN30)))           # its Normal: the build's three places
+    assert f["cell"]["Imp / app user / day"] == "<b>0.073</b>" and f["th"].startswith("trigger ke ads ÷ app ke daily users")
+    assert f["cell"]["Normal"] == _p3(40 * 30 / float(sum(AU(k) for k in KN30)))    # its Normal: the build's three places
 
 
 def test_v2_app_total_block(out):
     t = out["v2"]["total"]
-    assert t["rows"] == ["Imp / user / day", "Daily users", "Views / user / day"]
+    assert t["rows"] == ["Daily users", "Views / user / day", "Imp / user / day"]             # users, views, then the ads
     assert t["heads"] == ["30 days", "Normal", "7 days", "Yesterday", "Today"] and t["no_tiles"]
     # GA4's inline + full-screen + not recorded ÷ the app's daily users; a copy day AdMob did not confirm ("dk" 2): its
     # not recorded left out and said so; the hover's parts add up to the printed total
@@ -653,11 +661,12 @@ def test_v2_needs_attention_one_line_per_cause(out):
 
 def test_v2_all_apps_from_scr_all_alone(out):
     a = out["v2"]["all"]
-    assert a["heads"] == [["rank", "App · status"], ["r", "Imp / user / day"], ["n", "Normal"], ["sc", "Score"],
-                          ["dau", "Daily users"], ["wn", "Worse"], ["an", "Watch"]]
+    assert a["heads"] == [["rank", "App · status"], ["dau", "Daily users"], ["r", "Imp / user / day"], ["n", "Normal"],
+                          ["sc", "Score"], ["wn", "Worse"], ["an", "Watch"]]
     r, ir, fr, _nr = _app_u(K30)                                                    # under 1: three places (the build's _q)
-    assert a["alpha"][0] == "<b>%s</b><small>%s · %s</small>" % (_p3(r), _p3(ir), _p3(fr)) and a["fn"] == _p3(r)
-    assert a["alpha"][1] == _p3(_app_u(KN30)[0]) and a["alpha"][3] == "550"
+    al = a["alpha"]
+    assert al["Imp / user / day"] == "<b>%s</b><small>%s · %s</small>" % (_p3(r), _p3(ir), _p3(fr)) and a["fn"] == _p3(r)
+    assert al["Normal"] == _p3(_app_u(KN30)[0]) and al["Daily users"] == "550"
     assert a["loads"] == []                                                          # no file 2 asked for (scr_all's "au")
     assert a["admob"]                                                                # "Worse (AdMob)"
     assert a["mute"] == [True, None, True] and a["keep"] == [False, True]            # a data N/A mutes the period score only
@@ -680,8 +689,12 @@ def test_v2_admob_judged_app_row_mutes_the_ga4_score(out):
 
 def test_v2_drill_down_parts_reach_and_chart(out):
     d = out["v2"]["dd"]
-    assert d["tiles"][0][:2] == ["Ads / 100 views", "10.9"] and "32,145 views · 3,511 ads" in d["tiles"][0][2]
-    assert d["tiles"][1][:2] == ["Screen users / day", "793"] and d["tiles"][1][2].startswith("Reach ")
+    # (the users tile first, then the views and ads one — the owner's order, as the table; a trigger the same, an aggregate
+    # row only Ads / 100)
+    assert d["tiles"][0][:2] == ["Screen users / day", "793"] and d["tiles"][0][2].startswith("Reach ")
+    assert d["tiles"][1][:2] == ["Ads / 100 views", "10.9"] and "32,145 views · 3,511 ads" in d["tiles"][1][2]
+    assert out["alpha"]["ov_tiles"] == [["Screen users / day", "Ads / 100 views"], ["Ads / 100 views"],
+                                        ["App daily users", "Per 100 app views"]]
     assert d["parts"] == [["Views per user", "−3.2%"], ["Time per view", "+1.1%"], ["Ads per minute", "−31.9%"]] and d["why"]
     assert " · reach <b>" in d["head"] and d["adlogic"]
     assert d["months"] == [["Month", ["Screen users / day", "Ads", "Imp / user", "Reach"]], ["Day", ["Screen users / day", "Ads", "Imp / user", "Reach"]]]
@@ -694,11 +707,11 @@ def test_v2_drill_down_parts_reach_and_chart(out):
 
 def test_v2_waits_for_file_2_and_refuses_v1(out):
     w = out["v2_wait"]
-    assert w["main"][1] == "⏳" and w["ud"][1] == "⏳" and w["total"]                 # the App total never waits
-    assert w["other"][1].endswith("% of ads</small>")                                # an aggregate row needs no file
-    assert w["err"][1] == "<b>—</b><small>data load nahi hua</small>" == w["v1"][1]   # failed / a v 1 file: refused, said so
+    assert w["main"] == "⏳" and w["ud"] == "⏳" and w["total"]                       # the App total never waits
+    assert w["other"].endswith("% of ads</small>")                                   # an aggregate row needs no file
+    assert w["err"] == "<b>—</b><small>data load nahi hua</small>" == w["v1"]         # failed / a v 1 file: refused, said so
     n = out["v2_none"]
-    assert n["one"][1] == "<b>—</b><small>GA4 sampled 7 din</small>" and n["fn"] is None
+    assert n["one"] == "<b>—</b><small>GA4 sampled 7 din</small>" and n["fn"] is None
     assert n["total"] == [' title="app ke daily users doosre GA4 stream ke hain — gine nahi"', "<b>—</b>"]
 
 
@@ -730,3 +743,115 @@ def test_v2_details_show_the_rows_share_of_the_apps_screen_views(out):
     assert out["alpha"]["ov_share"] == [_p1(sum(1000 + k for k in K30) / float(sum(1870 + k for k in K30))),
                                         _p1(300 * 30 / float(sum(1870 + k for k in K30))), None]
 
+
+# ── the column order (owner: "pehle user hota he fir screen view hota he fir ads impression hota he") ─────────────────────
+
+SCREENS = [["Screen", "st"], ["Users / day", "ud"], ["Views / user / day", "vu"], ["Time / view", "tv"], ["Time / user / day", "tu"],
+           ["Ads / min", "am"], ["Imp / user / day", "r"], ["Normal", "n"], ["Score", "sc"], ["Cause", None]]
+FULL = [["Trigger", "st"], ["Imp / app user / day", "r"], ["Normal", "n"], ["Score", "sc"], ["Cause", None]]
+ALLAPPS = [["App · status", "rank"], ["Daily users", "dau"], ["Imp / user / day", "r"], ["Normal", "n"], ["Score", "sc"],
+           ["Worse", "wn"], ["Watch", "an"], ["History", None]]
+
+
+def _num(cell):
+    """A printed cell as its number: "1,000", "0.412", "1.35", "28s", "2m 00s", "1h 05m", "score 95" ("—", ⏳: None)."""
+    t = re.sub(r"<[^>]+>", "", re.sub(r"<small[^>]*>.*?</small>", "", cell or ""))
+    t = t.replace("score", "").replace(",", "").split(" · ")[0].strip()
+    if not t or t[0] in "—⏳":
+        return None
+    if t == "<1s":
+        return 0.0
+    m = re.fullmatch(r"(\d+)h (\d+)m", t)
+    if m:
+        return int(m.group(1)) * 3600 + int(m.group(2)) * 60
+    m = re.fullmatch(r"(?:(\d+)m )?(\d+)s", t)
+    if m:
+        return int(m.group(1) or 0) * 60 + int(m.group(2))
+    return float(t)
+
+
+def _same(cell, v):
+    """The printed cell is the row's own number v, to the places it is printed at."""
+    p = _num(cell)
+    if p is None or v is None:
+        return p is None and v is None
+    t = re.sub(r"<[^>]+>", "", re.sub(r"<small[^>]*>.*?</small>", "", cell)).split(" · ")[0]
+    d = re.search(r"\.(\d+)", t)
+    return abs(p - v) <= (30 if "h " in t else 0.5 if t.endswith("s") else 0.5 * 10 ** -len(d.group(1) if d else "")) + 1e-9
+
+
+def test_the_columns_run_users_views_time_ads_then_imp(out):
+    # users, then screen views, then the ads: the chain Views / user / day × Time / view × Ads / min ÷ 60 = Imp / user / day
+    # read left to right, Normal and Score right after the number they judge, Cause last (the end-snap's column); All apps:
+    # Daily users before Imp / user / day; the App total: Daily users → Views / user / day → Imp / user / day — on every
+    # period (a picked month and Custom too), file state (⏳ · failed), app and row kind
+    T = out["order"]["T"]
+    assert len(T) == 49 and {k.split()[0] for k in T} == {"s", "f", "all", "tot"}
+    for k, t in T.items():
+        kind, labels = k.split()[0], [h[0] for h in t["heads"]]
+        if kind == "tot":
+            assert [r[0] for r in t["rows"]] == ["Daily users", "Views / user / day", "Imp / user / day"], k
+            assert labels[0] == "" and labels[-2:] == ["Yesterday", "Today"], k
+        else:
+            assert [h[:2] for h in t["heads"]] == {"s": SCREENS, "f": FULL, "all": ALLAPPS}[kind], k
+        for key, n, span in t["rows"]:                                       # one cell per header, or the one colspan row
+            assert n == len(labels) or (n == 1 and span == len(labels)), (k, key)
+    assert T["s none"]["rows"] == [["empty", 1, 10]] and T["f none"]["rows"] == [["empty", 1, 5]]
+    # every row kind: the screens, All other screens, Not recorded, Ad screens, GA4 grouped — with file 2 or waiting for it
+    assert [r[0] for r in T["s a 30"]["rows"]] == ["0", "1", "2", "3", "4", "5"] == [r[0] for r in T["s a wait"]["rows"]]
+    assert T["s a wait"]["map"]["0"]["Users / day"] == [' title="aa raha hai…"', "⏳"]
+    assert T["s a err"]["map"]["0"]["Users / day"] == [' title="data load nahi hua"', "—"]
+    # the header tooltips stay word for word (Imp / user / day keeps its chain)
+    assert {h[1]: h[2] for h in T["s a 30"]["heads"]} == {
+        "st": None, "ud": "roz ke average users: us screen ke daily users ka jod ÷ din — GA4 me user ek din aur ek screen ke andar unique",
+        "vu": "ek user din me screen kitni baar kholta hai: screen views ÷ users ka jod",
+        "tv": "ek baar screen khulne pe kitni der: engagement time ÷ screen views",
+        "tu": "ek user roz is screen pe kitni der: engagement time ÷ users ka jod",
+        "am": "screen pe bitaye har minute me ads: inline ads ÷ (engagement seconds ÷ 60)",
+        "r": "is screen ke inline ads ÷ is screen ke users (roz unique; din ka jod) = Views / user / day × Time / view × Ads / min ÷ 60"
+             " · sirf final din (users ~2 din baad)",
+        "n": "period se pehle ke max(28, period) final din", "sc": None, None: None}
+    assert {h[1]: h[2] for h in T["all 30"]["heads"]} == {
+        "rank": None, "dau": None, "r": "GA4 ke saare ad impressions ÷ app ke daily users (GA4 Active users, wahi stream) · chhota: inline"
+                                        " · full-screen", "n": None, "sc": None, "wn": None, "an": None, None: None}
+
+
+def test_each_cell_sits_under_its_own_header(out):
+    # every header's sort key is bound to the cells under it: each one the row's own number for that key, as printed —
+    # Alpha (its screens and the four aggregate rows), "sorty" (five screens every column ranks differently) and All apps —
+    # so a column moved with its header, never without it
+    T, M, n = out["order"]["T"], out["order"]["M"], 0
+    for tk, rows in (("s a 30", M["a"]), ("s z 30", M["z"]), ("all z", M["all"])):
+        t = T[tk]
+        for i, row in rows.items():
+            for lab, key, _tt, _ar in t["heads"]:
+                if key in row and key != "agg":
+                    v = row[key] if key not in ("wn", "an") else (row[key] or None)      # (no Worse / Watch rows: "—")
+                    assert _same(t["map"][i][lab][1], v), (tk, i, lab, t["map"][i][lab][1], v)
+                    n += 1
+    assert n == 6 * 8 + 7 * 8 + 7 * 6
+
+
+def test_every_sort_header_sorts_its_own_column(out):
+    # a tap on every sort header, twice (high first, then low): the page's own sort for its key — the same as before the new
+    # order — and the column under the header tapped in that order, the unknown ("—") after it; the aggregates stay pinned at
+    # the bottom. "sorty" by hand: users / day 1000 · 800 · 600 · 400 · 200, views / user 2 · 5 · 2.5 · 6 · 1.5, time / view
+    # 30 · 10 · 48 · 5 · 35 s, time / user 60 · 50 · 120 · 30 · 52.5 s, ads / min 0.3 · 0.6 · 0.4 · 0.5 · 1.71, imp / user
+    # 0.3 · 0.5 · 0.8 · 0.25 · 1.5, normal 0.5 · 0.4 · 0.762 · 0.228 · 1.58, score 60 · 125 · 105 · 110 · 95
+    S = out["order"]["S"]
+    hi = {"ud": [0, 1, 2, 3, 4], "vu": [3, 1, 2, 0, 4], "tv": [2, 4, 0, 1, 3], "tu": [2, 0, 4, 1, 3], "am": [4, 1, 3, 2, 0],
+          "r": [4, 2, 1, 0, 3], "n": [4, 2, 0, 1, 3], "sc": [1, 3, 2, 4, 0]}
+    for k, o in hi.items():
+        assert S["s %s 1" % k]["rows"] == [str(i) for i in o] + ["5", "6"], k
+        assert S["s %s 2" % k]["rows"] == [str(i) for i in o[::-1]] + ["5", "6"], k
+    assert len(S) == 2 * (9 + 7)                                                     # 9 Screens headers, 7 All apps ones
+    assert S["all dau 1"]["rows"][:2] == ["sorty", "Alpha App"] and S["all r 1"]["rows"][:2] == ["Alpha App", "sorty"]
+    for key, s in S.items():
+        tab, k, n = key.split()
+        assert s["rows"] == s["want"] and s["aria"] == ("descending" if n == "1" else "ascending"), key
+        if k in ("st", "rank"):
+            continue
+        cs = [c for r, c in zip(s["rows"], s["col"]) if not (tab == "s" and r in ("5", "6"))]   # (the pinned aggregates)
+        v = [_num(c) if k not in ("wn", "an") else (_num(c) or 0) for c in cs]                     # (no Worse / Watch: "—")
+        known = [q for q in v if q is not None]
+        assert v[:len(known)] == known and known == sorted(known, reverse=n == "1"), key
