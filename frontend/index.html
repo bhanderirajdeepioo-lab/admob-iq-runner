@@ -2834,6 +2834,8 @@ body[data-screen="scr"] #smp-pick{display:inline-flex}
 .sc-kv{font-size:20px;font-weight:800;color:#fff;margin:3px 0 2px;font-variant-numeric:tabular-nums;line-height:1.25}
 .sc-ks{font-size:11.5px;color:var(--faint)}.sc-ks b{color:#fff}.sc-kst .sc-kv{font-size:16px}
 .sc-mut{color:var(--faint);font-weight:500}.sc-dn{color:var(--bad)!important}.sc-up{color:var(--good)!important}
+/* a Fill / Show rate / Ads / view under its format's p25 (all apps' units): the bad colour, bold */
+.sc-t td.sc-lo,.sc-t td.sc-lo b{color:var(--bad);font-weight:800}.sc-t td small.sc-own{color:var(--muted);margin-top:3px}
 /* the coverage strip (All apps) + the apps not whole */
 .sc-cov{display:flex;gap:8px;flex-wrap:wrap;padding:2px}
 .sc-cv{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:4px 12px;border-radius:999px;border:1px solid var(--line2);background:var(--raise);color:var(--ink2);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
@@ -2858,7 +2860,7 @@ body[data-screen="scr"] #smp-pick{display:inline-flex}
 .sc-t td.sc-nm{color:#fff;font-weight:600;overflow-wrap:anywhere}.sc-n{display:block}.sc-stl{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:3px}
 .sc-t td.sc-nm small{font-weight:500}.sc-t td.sc-nf{color:var(--muted)}.sc-t td.sc-cz{text-align:left;white-space:normal;min-width:120px;color:var(--ink2)}
 .sc-t td.sc-why{text-align:left;white-space:normal;min-width:180px;color:var(--muted)}.sc-id{font-family:ui-monospace,Menlo,monospace;font-size:10.5px!important;overflow-wrap:anywhere}
-/* the Screens table (#sc-ttw: 10 columns): a header wraps onto two / three lines instead of running wide (and out under the
+/* the Screens table (#sc-ttw: 11 columns): a header wraps onto two / three lines instead of running wide (and out under the
    sticky name column), its first column has ONE width, and a sideways scroll settles with a column right beside it — a header
    is never left half under the name column (--sc-fc = that width) */
 #sc-ttw{--sc-fc:190px;scroll-snap-type:x proximity;scroll-padding-left:var(--sc-fc);container-type:inline-size}
@@ -2870,7 +2872,7 @@ body[data-screen="scr"] #smp-pick{display:inline-flex}
    stretch and puts .sc-endsnap on #sc-ttw — after every paint and whenever the box is resized), the last column (Cause) is as
    wide as the box less the name column, so at the far right it starts exactly beside the name column (scrollWidth −
    clientWidth = its start − --sc-fc) and the header before it is never left under the name column. A table that fits is left
-   alone. Only the 10-column Screens table has it */
+   alone. Only the 11-column Screens table has it */
 #sc-ttw.sc-endsnap .sc-t.sc-t10 th:last-child,#sc-ttw.sc-endsnap .sc-t.sc-t10 td:last-child{min-width:calc(100cqw - var(--sc-fc))}
 .sc-t tbody tr.sc-clk{cursor:pointer}.sc-t tbody tr.sc-clk:hover td{background:var(--raise)}
 .sc-t tbody tr.sc-on td{background:var(--raise)}.sc-t tbody tr.sc-on td:first-child{box-shadow:inset 3px 0 0 var(--cyan),1px 0 0 var(--line)}
@@ -7617,7 +7619,7 @@ const phone=()=>{ try{ return (+window.innerWidth||1280)<=720; }catch(e){ return
 function ptr(){ const p=(typeof DATA!=='undefined'&&DATA&&DATA.scr)||null; return (p&&typeof p.file==='string'&&/^[\w.-]+\.json\.gz$/.test(p.file)&&p.apps&&typeof p.apps==='object')?p:null; }
 function apPtr(id){ const p=ptr(), a=p&&p.apps[id]; return (a&&typeof a.key==='string'&&/^[0-9a-f]{12}$/.test(a.key))?a:null; }
 function ensure(cb){ const p=ptr(); if(!p||LOADING||(ALL&&VER===p.fv)||(ERR&&VER===p.fv)) return; LOADING=true;
-  fetchGzJson(p.file+'?v='+encodeURIComponent(p.fv||'')).then(j=>{ if(!j||j.v!==2||!j.apps||typeof j.apps!=='object'||Array.isArray(j.apps)) throw new Error('format');   // v 2: imp / user / day (an older file is refused, never mislabelled)
+  fetchGzJson(p.file+'?v='+encodeURIComponent(p.fv||'')).then(j=>{ if(!j||j.v!==3||!j.apps||typeof j.apps!=='object'||Array.isArray(j.apps)) throw new Error('format');   // v 3: + the absolute status (an older file is refused, never mislabelled)
       ALL=j; VER=p.fv; ERR=false; LOADING=false; cb&&cb(); })
     .catch(()=>{ ERR=!ALL; VER=p.fv; LOADING=false; cb&&cb(); }); }
 // one lazy file: kept per name; a newer version loads quietly while the older one stays on screen (never "Loading…" over data)
@@ -7630,8 +7632,8 @@ function f2Of(id){ const a=apPtr(id), j=a&&fRaw(f2Name(a)); return j&&j.key===a.
 function lOf(id){ const a=apPtr(id), j=a&&fRaw(lName(a)); return j&&(j.key==null||j.key===a.key)?j:null; }
 // the open app's two files: file 2 first, its layers right after (both before any drill-down asks)
 function ensureApp(id){ const a=apPtr(id); if(!a) return; const n2=f2Name(a);
-  const goL=()=>loadF(lName(a),a.vl,j=>!!j&&j.v===2&&(j.key==null||j.key===a.key),()=>arrive(id,'l'));
-  loadF(n2,a.v,j=>!!j&&j.v===2&&j.key===a.key&&Array.isArray(j.days)&&Array.isArray(j.screens),()=>{ arrive(id,'2'); goL(); });
+  const goL=()=>loadF(lName(a),a.vl,j=>!!j&&j.v===3&&(j.key==null||j.key===a.key),()=>arrive(id,'l'));
+  loadF(n2,a.v,j=>!!j&&j.v===3&&j.key===a.key&&Array.isArray(j.days)&&Array.isArray(j.screens),()=>{ arrive(id,'2'); goL(); });
   if(FILES[n2]&&!FILES[n2].busy) goL(); }
 function ensureShard(id,k,ym){ const a=apPtr(id), L=lOf(id), v=L&&L.shards&&L.shards[k]?L.shards[k][ym]:null; if(!a||v==null) return;
   loadF(shName(a,k,ym),v,j=>!!j&&j.v===1&&j.key===a.key&&String(j.m).replace('-','')===ym&&Array.isArray(j.days),()=>arrive(id,k)); }
@@ -7825,10 +7827,49 @@ const stOf=(x,i)=>{ const s=(x.status||{})[String(i)]; return Array.isArray(s)&&
 const rankOf=w=>w in RANK?RANK[w]:6;
 function chip(w){ try{ return hubStChip(WDK[w]||'lagu'); }catch(e){ return `<span class="sc-st">${E(w||'N/A')}</span>`; } }
 const judged=it=>it&&(it[1]==='s'||it[1]==='o'||it[1]==='fs');
-function scoreTxt(s,muted,all,low){ if(all) return '<span class="sc-mut" title="All time pe normal nahi">score —</span>';
-  if(low) return '<span class="sc-mut" title="kam ads: app ke ads ka 1% se kam">score —</span>'; if(s==null) return '<span class="sc-mut">score —</span>';
-  if(muted) return `<span class="sc-mut" title="7 se kam final din: score sirf ishaara">score ${s} · short period</span>`;
-  return `score <b class="${s<90?'sc-dn':s>110?'sc-up':''}">${s}</b>`; }
+// a period against its own past (100 × period ÷ its normal) as printed: "vs own past −12%" (owner, 7 Nov 2026: a "Score" read
+// as a grade — "score ka logic hi sahi nahi he"; it only says this row against its own past, the status is the absolute one)
+const vsP=s=>(s>=100?'+':'−')+Math.abs(Math.round(s)-100)+'%';
+function scoreTxt(s,muted,all,low){ if(all) return '<span class="sc-mut" title="All time pe normal nahi">vs own past —</span>';
+  if(low) return '<span class="sc-mut" title="kam ads: app ke ads ka 1% se kam">vs own past —</span>'; if(s==null) return '<span class="sc-mut">vs own past —</span>';
+  if(muted) return `<span class="sc-mut" title="7 se kam final din: sirf ishaara">vs own past ${vsP(s)} · short period</span>`;
+  return `vs own past <b class="${s<90?'sc-dn':s>110?'sc-up':''}">${vsP(s)}</b>`; }
+// ---- the absolute status (owner, 7 Nov 2026: a screen's views against its ads — "ye normal nahi he — ye kam he na?"):
+// a screen row's Ads / view, Fill and Show rate against the SAME AdMob format across all apps' units — scr_all's "bench"
+// (per format: unweighted p10 / p25 / median / p75 over each app's status window, ≥ 20 units, else none). The word, its cause
+// and the weak numbers are the build's (status [7] [8] [9], the status window); the page prints the picked period's numbers.
+// vs own past (status [0]: Worse / Watch / Better / Normal) stays beside it, labelled ----
+const AWD={Low:['bigda','🔴 Low'],'Few ads':['dhyan','🟡 Few ads'],OK:['behtar','🟢 OK'],'Too few ads':['lagu','— Too few ads'],'Not measurable':['lagu','— Not measurable'],'No ads':['lagu','— No ads']};
+const ARANK={Low:0,'Few ads':1,OK:2,'Too few ads':3,'Not measurable':4,'No ads':5,'Too early':6,'N/A':7};
+const ABFN={banner:'banner',native:'native',interstitial:'interstitial',appopen:'app open',rewarded:'rewarded',rewardedinterstitial:'rewarded interstitial'};
+const ABKN={fill:'Fill',show:'Show rate',av:'Ads / view'};
+// the developer's check per weak number: the build's CHECK texts word for word (Lower show rate · Lower fill · Fewer ad
+// requests; tests/test_scr_frontend.py holds them equal), "visit" in the tab's word: screen view
+const ABCHK={show:'Ads are filled but fewer are shown. Check the ad view is attached and visible, the ad is not loaded too late (users leave before it renders), refresh/reload logic, and preloaded ads expiring before show.',
+  fill:'Networks returned fewer ads for the same requests. Usually mediation / demand, not app code: check this unit\'s mediation groups and floors, adapter / SDK versions and the unit\'s status.',
+  av:'The app requests fewer ads per screen view. Check the ad is still loaded on this screen in the latest version: code path, remote-config flags, frequency caps, consent gating, conditions before load().'};
+const AB_PART=0.2, AB_DOM=0.8, SIG_MIN=3, SIG_N=28;   // the build's rule: a part judged from 20 % of the screen's ads; Ads / view on a ≥ 80 % format; σ days
+const PCT=v=>ok(v)?(Math.abs(v)<10?(Math.round(v*10)/10).toFixed(1):Math.round(v).toLocaleString('en-US'))+'%':'—';   // a percent already × 100 (Ads / view)
+const PI=v=>ok(v)?Math.round(v*100)+'%':'—';   // a rate (fraction) as a whole percent: Fill, Show rate
+const fmtNm=f=>ABFN[f]||String(f||'—');
+// a status's abs word: [7] when the file ships it ("" = the benchmark failed: "—"), null for a status without it (its own word)
+const absW=s=>Array.isArray(s)&&s.length>7&&typeof s[7]==='string'?s[7]:null;
+// (the hub's chip, its label the abs word's; "" = the benchmark failed: "—", titled)
+function achip(w){ const c=AWD[w]; if(w&&!c) return chip(w); let h=''; try{ h=hubStChip(c?c[0]:'lagu'); }catch(e){ h='<span class="sc-st">—</span>'; }
+  h=h.replace(/>[^<>]*<\/span>$/,'>'+(c?c[1]:'—')+'</span>'); return w?h:h.replace(/^<span /,'<span title="benchmark nahi bana" '); }
+// a row's status chip: the abs word on a screen row, else (a trigger, an older file) its own word
+const stChip=(st,it)=>{ const w=absW(st); return w!=null&&(w||it&&it[1]==='s')?achip(w):chip(st&&st[0]); };
+// the line under it: the abs cause's first weak number (up to its ":"), the why of a word that is not judged, "" for OK
+const stWhy=(st,it)=>{ const w=absW(st); if(w==null||!(w||it&&it[1]==='s')) return st&&st[1]?String(st[1]):''; if(!w) return 'benchmark nahi bana';
+  const f=String(st[8]||'').split('; ')[0], j=f.indexOf(': '); return j>0&&(w==='Low'||w==='Few ads')?f.slice(0,j):f; };
+// the rank: the abs word (Low first; inside it the weakest value ÷ median first), else the word an older file ships
+const arank=s=>{ const w=absW(s); return w==null||w===''?rankOf(s&&s[0])+10:w in ARANK?ARANK[w]:8; };
+const aweak=s=>{ let m=Infinity; for(const q of Array.isArray(s)&&Array.isArray(s[9])?s[9]:[]) if(ok(+q[2])&&+q[3]>0) m=Math.min(m,q[2]/q[3]); return m; };
+// the format benchmark of a number (k: fill / show → [p10, p25, p50, p75, n] as fractions; av → [p10, p25, p50, n] in %),
+// null when the format has under 20 units / screens; bMin = the build's volume floors (none shipped: nothing is marked)
+const bOf=(f,k)=>{ const b=ALL&&ALL.bench&&ALL.bench.fmt&&ALL.bench.fmt[f], v=b&&b[k]; return Array.isArray(v)&&v.length>=4&&v.every(ok)?v:null; };
+const bMin=()=>{ const m=ALL&&ALL.bench&&ALL.bench.min; return m&&ok(+m.req)&&ok(+m.mt)?m:null; };
+const bTxt=(k,f,b)=>k==='av'?`${fmtNm(f)} Ads / view p25 ${PCT(b[1])}, median ${PCT(b[2])} (${b[3]} screens, all apps)`:`${fmtNm(f)} ${k==='fill'?'fill':'show rate'} p25 ${PI(b[1])}, median ${PI(b[2])} (${b[4]} units, all apps)`;
 // ---- the reader's place ----
 // a tap that repaints: the tapped control (sel) goes back to its place on screen, its sideways strip / table box keeps its
 // scroll, the page holds its height while it is redrawn and lets the blank go afterwards (the 2 Nov rule)
@@ -7893,19 +7934,19 @@ const ga4Off=a=>!!(a&&a[8]&&(a[8].st==='admob'||a[8].st==='na'));
 // the GA4 period score next to the App row is muted (critic S3) when the row is a data N/A OR judged on AdMob (B3: GA4 ≠
 // AdMob, "Worse (AdMob)"): a GA4 ratio across that change says nothing. The GA4 Imp / user stays (GA4 truth by definition)
 const scMute=a=>dataNA(a)?'App row N/A: '+String(a[1]||''):admW(a)?'GA4 logging changed (GA4 ≠ AdMob) — period score GA4 pe nahi':'';
-const muteTxt=t=>`<span class="sc-mut" title="${E(t)}">score —</span>`;
+const muteTxt=t=>`<span class="sc-mut" title="${E(t)}">vs own past —</span>`;
 // the App row's word as printed: "Worse (AdMob)" when the build judged it on AdMob per daily user (GA4 ≠ AdMob)
 const appChip=a=>chip(a&&a[0])+(admW(a)?' <small class="sc-adm">(AdMob)</small>':'');
 function appRow(r){ const a=Array.isArray(r.x.app)?r.x.app:[], all=PER==='all';
-  const z={r,lo:'',hi:'',all,a,st:a[0]||null,why:a[1]||'',wn:+a[2]||0,an:+a[3]||0,p:{},q:null,ru:null,n:null,sc:null,dau:null,muted:true,mute:scMute(a)};
+  const z={r,lo:'',hi:'',all,a,st:a[0]||null,why:a[1]||'',wn:+a[2]||0,an:+a[3]||0,low:typeof r.x.lo==='number'&&isFinite(r.x.lo)?r.x.lo:null,p:{},q:null,ru:null,n:null,sc:null,dau:null,muted:true,mute:scMute(a)};
   if(!r.x.d0||!okD(r.x.ft)) return z;
   const [lo,hi]=rng(r.x), p=appU(r.x,lo,hi), nw=all?null:normWinU(r.x,lo,hi), q=nw?appU(r.x,nw[0],nw[1]):null;
   return Object.assign(z,{lo,hi,p,q,ru:p.r,n:q?q.r:null,dau:p.ud,muted:p.n<7,sc:!all&&!z.mute&&p.r!=null&&q&&q.r>0?Math.round(100*p.r/q.r):null}); }
-// sort: rank (the App row's word, then Worse rows, then Watch rows, then daily users) · name · daily users · imp / user ·
-// normal · score · Worse · Watch
-const AK={r:'ru',n:'n',sc:'sc',dau:'dau',wn:'wn',an:'an'};
+// sort: rank (the App row's word, then Low screens, then Worse rows, then Watch rows, then daily users) · name · daily users
+// · imp / user · Low screens · Worse · Watch
+const AK={r:'ru',n:'n',sc:'sc',dau:'dau',lo:'low',wn:'wn',an:'an'};
 function sortApps(rows){ const k=SORT.k, d=SORT.dir, val=z=>k==='rank'?null:k==='name'?z.r.name:z[AK[k]||k];
-  return rows.slice().sort((a,b)=>{ if(k==='rank') return d*(rankOf(a.st)-rankOf(b.st)||b.wn-a.wn||b.an-a.an)||(b.dau||0)-(a.dau||0)||a.r.name.localeCompare(b.r.name);
+  return rows.slice().sort((a,b)=>{ if(k==='rank') return d*(rankOf(a.st)-rankOf(b.st)||(b.low||0)-(a.low||0)||b.wn-a.wn||b.an-a.an)||(b.dau||0)-(a.dau||0)||a.r.name.localeCompare(b.r.name);
     const va=val(a), vb=val(b); if(va==null&&vb==null) return (b.dau||0)-(a.dau||0); if(va==null) return 1; if(vb==null) return -1;
     return (typeof va==='string'?d*va.localeCompare(vb):d*(va-vb))||(b.dau||0)-(a.dau||0); }); }
 function histCell(x){ const h=histFrom(x,['v','a']); const t=Object.keys(x.bf||{}).map(k=>`${k}: ${(x.bf[k]||[])[0]||'—'}${(x.bf[k]||[])[1]?' ✓':''}`).join(' · ');
@@ -7921,11 +7962,13 @@ function impCell(z){ const p=z.p||{}, x=z.r.x;
   if(!z.lo) return '—'; return z.lo>ftuOf(x)?'<b>—</b>'+waitAds(adsAfter(x,z.lo,z.hi)):`<b>—</b><small>${E(auWhy(x,z.lo))}</small>`; }
 // the columns in the owner's order ("pehle user hota he fir screen view hota he fir ads impression hota he"): Daily users,
 // then the Imp / user / day the row is judged on, its Normal and Score
-function allTable(rows){ const cols=[['rank','App · status'],['dau','Daily users'],['r','Imp / user / day'],['n','Normal'],['sc','Score'],['wn','Worse'],['an','Watch']];
-  const head=cols.map(([k,l])=>`<th aria-sort="${SORT.k===k?(SORT.dir>0?'ascending':'descending'):'none'}"${k==='r'?` title="${E('GA4 ke saare ad impressions ÷ app ke daily users (GA4 Active users, wahi stream) · chhota: inline · full-screen')}"`:''}><button type="button" data-sc-sort="${k}">${l}</button></th>`).join('')+'<th>History</th>';
+const ATT={r:'GA4 ke saare ad impressions ÷ app ke daily users (GA4 Active users, wahi stream) · chhota: inline · full-screen',lo:'Low status wali screens: Fill / Show rate / Ads / view usi format ke saare apps ke units ke neeche 25% me (pichhle 10 final din)',
+  wn:'vs own past: Worse screens (pichhle 10 final din vs 28 pehle)',an:'vs own past: Watch screens (pichhle 10 final din vs 28 pehle)'};
+function allTable(rows){ const cols=[['rank','App · status'],['dau','Daily users'],['r','Imp / user / day'],['lo','Low screens'],['wn','Worse'],['an','Watch']];
+  const head=cols.map(([k,l])=>`<th aria-sort="${SORT.k===k?(SORT.dir>0?'ascending':'descending'):'none'}"${ATT[k]?` title="${E(ATT[k])}"`:''}><button type="button" data-sc-sort="${k}">${l}</button></th>`).join('')+'<th>History</th>';
   const body=rows.map(z=>`<tr class="sc-clk" data-sc-app="${E(z.r.name)}" tabindex="0"><td class="sc-nm"><span class="sc-an">${appIconId(z.r.id,z.r.name,22)}<span>${E(z.r.name)}</span></span><span class="sc-stl">${appChip(z.a)}</span>${z.why?`<small>${E(z.why)}</small>`:''}</td>`
-    +`<td>${N(z.dau)}</td><td>${impCell(z)}</td><td>${PQ(z.n)}</td><td>${z.mute?muteTxt(z.mute):scoreTxt(z.sc,z.muted,z.all)}</td><td>${z.wn||'—'}</td><td>${z.an||'—'}</td><td>${histCell(z.r.x)}</td></tr>`).join('')
-    ||'<tr><td colspan="8" class="sc-faint">Koi app nahi</td></tr>';
+    +`<td>${N(z.dau)}</td><td>${impCell(z)}</td><td${z.low==null?' title="file me nahi"':''}>${z.low==null?'—':z.low?`<b class="sc-dn">${z.low}</b>`:'0'}</td><td>${z.wn||'—'}</td><td>${z.an||'—'}</td><td>${histCell(z.r.x)}</td></tr>`).join('')
+    ||'<tr><td colspan="7" class="sc-faint">Koi app nahi</td></tr>';
   return `<div class="sc-tw sc-x" id="sc-atw"><table class="sc-t"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`; }
 function allHtml(){ const L=apps(); if(!L.length) return '<div class="card sc-card"><p class="sc-note">Abhi kisi app ka Screens data nahi aaya — history bhar rahi hai.</p></div>';
   const ref=refCal(L); if(!ref.ft) return '<div class="card sc-card"><p class="sc-note">Abhi kisi app ka Screens data nahi aaya — history bhar rahi hai.</p></div>';
@@ -7933,14 +7976,20 @@ function allHtml(){ const L=apps(); if(!L.length) return '<div class="card sc-ca
   return `<div class="card sc-card sc-stk" id="sc-stk">${perCtl(ref)}</div>`
     +`<div class="card sc-card"><div class="ct"><h3>Data coverage</h3><span class="sc-faint">har piece kitne apps pe poora (whole) aaya</span></div>${covHtml(L)}</div>`
     +`<div class="card sc-card"><div class="ct"><h3>All apps</h3><span class="sc-faint">status = pichhle 10 final din vs usse pehle ke 28 · app pe tap = us app ke screens · column pe tap = sort</span></div>${allTable(rows)}</div>`
-    +`<p class="sc-note">GA4 data till ${fdy(ref.ft)} (aakhri 2 din GA4 me abhi badalte hain). <b>Imp / user / day</b> = GA4 ke saare ad impressions ÷ app ke daily users · <b>Score</b> = is period ÷ normal × 100 · status = pichhle 10 final din vs 28 pehle.</p>`; }
+    +`<p class="sc-note">GA4 data till ${fdy(ref.ft)} (aakhri 2 din GA4 me abhi badalte hain). <b>Imp / user / day</b> = GA4 ke saare ad impressions ÷ app ke daily users · <b>Low screens</b> = jin screens ka Fill / Show rate / Ads / view usi format ke saare apps ke units ke neeche 25% me · <b>Worse / Watch</b> = vs own past (pichhle 10 final din vs 28 pehle).</p>`; }
 // ---- one app ----
 function tile(l,v,sub,cls,tt){ return `<div class="sc-k${cls?' '+cls:''}"${tt?` title="${E(tt)}"`:''}><div class="sc-kl">${l}</div><div class="sc-kv">${v}</div><div class="sc-ks">${sub}</div></div>`; }
 // the App total (3 rows, from scr_all alone — no ⏳, no late redraw): Daily users, Views / user / day, Imp / user / day (+ the
 // period's score) — users, then views, then the ads (the owner's order, as the tables) · the period · Normal · 7 days ·
 // Yesterday · Today (no daily users yet: "—" + the ads so far ⏳). Cells keep their width: the label column is fixed, the
 // values scroll sideways on a phone
-function totalHtml(x,id,lo,hi){ const all=PER==='all', fu=ftuOf(x), T=x.td, Y=addD(T,-1), s7=[addD(fu,-6),fu], nw=all?null:normWinU(x,lo,hi);
+function totalHtml(x,id,lo,hi){ const fu=ftuOf(x);
+  return `<div class="card sc-card" id="sc-total"><div class="ct"><h3>App total</h3><span class="sc-faint">GA4 data till ${fdy(x.ft)}${fu<x.ft?` · users till ${fdy(fu)}`:''}</span></div>`
+    +`<div class="sc-tw sc-x" id="sc-totw">${totTable(x,id,lo,hi)}</div>`
+    +`<p class="sc-note">${E(NFW)}.${fu<x.ft?` Users till ${fdy(fu)}.`:''} <b>Ads / view</b> = app ke saare ads ÷ app ke screen views × 100 · <b>Fill</b> · <b>Show rate</b> = app ke saare AdMob units (sirf poore AdMob din).</p>`
+    +fold('app','App total · details','formats · GA4 vs AdMob · new vs returning · versions',appDet(x,id,lo,hi))+'</div>'; }
+// the App total's table (#sc-totw: drawn again when file 2 brings the AdMob units — Fill / Show rate ⏳ till then)
+function totTable(x,id,lo,hi){ const all=PER==='all', fu=ftuOf(x), T=x.td, Y=addD(T,-1), s7=[addD(fu,-6),fu], nw=all?null:normWinU(x,lo,hi);
   const C=[[E(perName(PER)),lo,hi]].concat(nw?[['Normal',nw[0],nw[1]]]:[]).concat([['7 days',s7[0],s7[1]],['Yesterday',Y,Y],['Today',T,T]]);
   const Q=C.map(c=>appU(x,c[1],c[2])), P=Q[0], qn=nw?Q[1]:null, mt=all?'':scMute(Array.isArray(x.app)?x.app:[]), sc=!all&&!mt&&P.r!=null&&qn&&qn.r>0?Math.round(100*P.r/qn.r):null;
   const tt=P.r==null?'':(()=>{ const q=addUp(P.r,[P.ir,P.fr,P.nr]); return `inline ${q.p[0]} + full-screen ${q.p[1]} + not recorded ${q.p[2]} = ${q.t} · GA4 ad_impression ÷ app ke daily users (GA4 Active users, wahi stream) · sirf final din`+(P.cp?` · copy-pattern din: ${P.cp}, unke not-recorded ads gine nahi`:''); })();
@@ -7948,12 +7997,16 @@ function totalHtml(x,id,lo,hi){ const all=PER==='all', fu=ftuOf(x), T=x.td, Y=ad
     if(q.r==null) return `<td${j===0?' title="'+E(auWhy(x,c[1]))+'"':''}><b>—</b>${w}</td>`;
     return `<td${j===0&&tt?` title="${E(tt)}"`:''}><b>${PQ(q.r)}</b>${j===0?`<small>${mt?muteTxt(mt):scoreTxt(sc,P.n<7,all)}</small>`:''}${q.n<q.nd&&c[1]<=fu?`<small>${q.n}/${q.nd} days</small>`:''}${w}</td>`; };
   const row=(l,f)=>`<tr><td>${l}</td>${Q.map((q,j)=>`<td>${q.n?f(q):'—'}</td>`).join('')}</tr>`;
-  return `<div class="card sc-card" id="sc-total"><div class="ct"><h3>App total</h3><span class="sc-faint">GA4 data till ${fdy(x.ft)}${fu<x.ft?` · users till ${fdy(fu)}`:''}</span></div>`
-    +`<div class="sc-tw sc-x"><table class="sc-t sc-mini sc-tot"><thead><tr><th></th>${C.map(c=>`<th>${c[0]} <small>${rg(c[1],c[2])}</small></th>`).join('')}</tr></thead><tbody>`
+  // Ads / view: the app's ads (inline + full-screen + not recorded) ÷ its screen views on the days with both (appSum's)
+  const avr=`<tr><td>Ads / view</td>${C.map(c=>{ const s=appSum(x,c[1],c[2]), a=(s.il||0)+(s.fl||0)+(s.ns||0);
+    return s.n&&s.v>0?`<td title="${E(`${N(a)} ads ÷ ${N(s.v)} screen views × 100 · ${s.n} day${s.n>1?'s':''}`)}">${PCT(a/s.v*100)}</td>`:'<td>—</td>'; }).join('')}</tr>`;
+  // Fill / Show rate: every AdMob unit of the app pooled (one per ids tuple), the column's complete AdMob days
+  const a2=apPtr(id), f2=f2Of(id), f2e=!f2&&!!a2&&fErr(f2Name(a2)), uis=f2?(f2.units||[]).map((u,ui)=>ui):[], E2=f2?C.map(c=>abPool(f2,x,uis,c[1],c[2])):null;
+  const abr=(l,k)=>`<tr><td>${l}</td>${C.map((c,j)=>{ if(!f2) return `<td title="${E(f2e?'data load nahi hua':'aa raha hai…')}">${f2e?'—':'⏳'}</td>`; const e=E2[j], v=e[k], t=abTitle(e,'app ke saare AdMob units');
+    return v!=null?`<td${t?` title="${E(t)}"`:''}>${PI(v)}</td>`:`<td title="${E(e.why||'—')}">—${j===0&&e.why?`<small>${E(e.why)}</small>`:''}</td>`; }).join('')}</tr>`;
+  return `<table class="sc-t sc-mini sc-tot"><thead><tr><th></th>${C.map(c=>`<th>${c[0]} <small>${rg(c[1],c[2])}</small></th>`).join('')}</tr></thead><tbody>`
     +row('Daily users',q=>N(q.ud))+row('Views / user / day',q=>PU(q.vu))
-    +`<tr><td>Imp / user / day</td>${Q.map((q,j)=>cell(q,C[j],j)).join('')}</tr></tbody></table></div>`
-    +`<p class="sc-note">${E(NFW)}.${fu<x.ft?` Users till ${fdy(fu)}.`:''}</p>`
-    +fold('app','App total · details','formats · GA4 vs AdMob · new vs returning · versions',appDet(x,id,lo,hi))+'</div>'; }
+    +`<tr><td>Imp / user / day</td>${Q.map((q,j)=>cell(q,C[j],j)).join('')}</tr>`+avr+abr('Fill','fill')+abr('Show rate','show')+'</tbody></table>'; }
 // the App row's details (the old tiles live here): per-format imp / user, GA4 vs AdMob per daily user, the users mix, Ads /
 // 100 views (inline · full-screen) and every version's whole life
 function appDet(x,id,lo,hi){ const a=Array.isArray(x.app)?x.app:[], P=appU(x,lo,hi), s=appScore(x,lo,hi,PER==='all'), mt=PER==='all'?'':scMute(a), m=a[8]||{}, nv=x.nvr, pc=v=>ok(v)?(v>0?'+':v<0?'−':'')+Math.abs(Math.round(v*100))+'%':'—';
@@ -7970,28 +8023,38 @@ function statWin(x){ const f=ftuOf(x); return {W:[addD(f,-9),f],N:[addD(f,-37),a
 const sg1=v=>ok(v)?(v>0?'+':v<0?'−':'')+(Math.abs(v)*100).toFixed(1)+'%':'—';
 function attnHtml(x,id){ const items=x.items||[], w=statWin(x), a=Array.isArray(x.app)?x.app:[], rows=[]; if(okD(x.ft)) RYR=x.ft.slice(0,4);
   items.forEach((it,i)=>{ const s=stOf(x,i); if(s&&judged(it)) rows.push({i,it,s}); });
-  const bad=rows.filter(r=>r.s[0]==='Worse'||r.s[0]==='Watch'), nv=x.nvr, L=[];
+  const bad=rows.filter(r=>r.s[0]==='Worse'||r.s[0]==='Watch'), nv=x.nvr, L=[], ab=rows.filter(r=>r.it[1]==='s'&&(absW(r.s)==='Low'||absW(r.s)==='Few ads'));
   const mix=nv&&!ga4Off(a)?` <small>ads / view: new-user mix ${sg1(nv.mix/100)}, within ${sg1(nv.within/100)}${nv.vpu!=null?` · views / user ${sg1(nv.vpu/100)}`:''} (split nahi: GA4 me new / returning users nahi)</small>`:'';
   if(a[0]==='Worse'||a[0]==='Watch'||a[0]==='Better') L.push(`<div class="sc-at sc-ata">${appChip(a)}<span class="sc-atn">App total</span><span class="sc-atr">${E(a[1])}</span>${a[5]&&!String(a[1]).includes(a[5])?`<span class="sc-atc">${E(a[5])}</span>`:''}${a[0]!=='Better'?mix:''}</div>`);
   else if(a[0]==='N/A'&&/^Not measurable \(GA4/.test(String(a[1]||''))) L.push(`<div class="sc-at sc-ata">⚠️ <span class="sc-atn">App total</span><span class="sc-atr">${E(a[1])}</span></div>`);
   const G=new Map(); for(const r of bad){ const g=String(r.s[4]||r.s[3]||'No single cause'), k=r.s[0]+'|'+g; if(!G.has(k)) G.set(k,{w:r.s[0],g,rows:[],imp:0}); const e=G.get(k); e.rows.push(r); e.imp+=ok(+r.s[5])?+r.s[5]:0; }
-  const gs=[...G.values()].sort((p,q)=>rankOf(p.w)-rankOf(q.w)||p.imp-q.imp).slice(0,Math.max(0,5-L.length));
+  // the absolute lines (the build's weakest number per screen: [k, format, value, median, p25]), weakest group first
+  const AG=new Map(), fv=(k,v)=>k==='av'?PCT(v):PI(v);
+  for(const r of ab){ const q=(Array.isArray(r.s[9])?r.s[9]:[]).slice().sort((u,v)=>(u[2]/u[3])-(v[2]/v[3]))[0]||['','',null,null,null], kk=absW(r.s)+'|'+q[0]+'|'+q[1];
+    if(!AG.has(kk)) AG.set(kk,{w:absW(r.s),q,rows:[],m:Infinity}); const e=AG.get(kk); e.rows.push({r,q}); if(+q[3]>0) e.m=Math.min(e.m,q[2]/q[3]); }
+  const ags=[...AG.values()].sort((p,q)=>ARANK[p.w]-ARANK[q.w]||p.m-q.m);
+  const gs0=[...G.values()].sort((p,q)=>rankOf(p.w)-rankOf(q.w)||p.imp-q.imp), room=Math.max(0,5-L.length), ags1=ags.slice(0,room), gs=gs0.slice(0,Math.max(0,room-ags1.length)), cut=ags.length-ags1.length+gs0.length-gs.length;
+  for(const g of ags1){ const n=g.rows.length, q=g.q, nm=g.rows.slice(0,3).map(z=>itemName(z.r.it)).join(', ')+(n>3?` +${n-3}`:'');
+    const lab=q[0]?`${ABKN[q[0]]||q[0]} under ${fmtNm(q[1])} p25 (${fv(q[0],q[4])})`:'Absolute';
+    L.push(`<details class="sc-at sc-atg"><summary>${achip(g.w)}<span class="sc-atn">${E(lab)}</span><span class="sc-atr">${n} screen${n>1?'s':''} (${nm})</span><span class="sc-chev">▸</span></summary>`
+      +g.rows.sort((u,v)=>(u.q[2]/u.q[3])-(v.q[2]/v.q[3])).map(z=>`<div class="sc-atl"><span class="sc-atn" title="${E(itemTitle(z.r.it))}">${itemName(z.r.it)}</span><span class="sc-atr">${z.q[0]?`${ABKN[z.q[0]]} ${fv(z.q[0],z.q[2])} · ${fmtNm(z.q[1])} median ${fv(z.q[0],z.q[3])}`:E(z.r.s[8]||'')}</span><button type="button" class="sc-lnk" data-sc-open="${z.r.i}">Details ▸</button></div>`).join('')+'</details>'); }
   for(const g of gs){ const n=g.rows.length, nm=g.rows.slice(0,3).map(r=>itemName(r.it)).join(', ')+(n>3?` +${n-3}`:'');
     // the row's whole days of the last 10: scr_all's status [6], here on the first paint (never file 2's, which comes later
     // and never redraws this card — that would close an open line); a file without it: none
     const days=r=>ok(r.s[6])?` · ${+r.s[6]}/10 days`:'';
-    L.push(`<details class="sc-at sc-atg"><summary>${chip(g.w)}<span class="sc-atn">${E(g.g)}</span><span class="sc-atr">${n} row${n>1?'s':''} (${nm}) · ≈ ${sg1(g.imp)} of the app's imp/user</span><span class="sc-chev">▸</span></summary>`
+    L.push(`<details class="sc-at sc-atg"><summary>${chip(g.w)}<span class="sc-atn">${ags.length||ab.length?'vs own past · ':''}${E(g.g)}</span><span class="sc-atr">${n} row${n>1?'s':''} (${nm}) · ≈ ${sg1(g.imp)} of the app's imp/user</span><span class="sc-chev">▸</span></summary>`
       +g.rows.sort((p,q)=>(+p.s[5]||0)-(+q.s[5]||0)).map(r=>`<div class="sc-atl"><span class="sc-atn" title="${E(itemTitle(r.it))}">${itemName(r.it)}</span><span class="sc-atr">${sg1(+r.s[5])}${days(r)} · ${E(r.s[1])}</span><button type="button" class="sc-lnk" data-sc-open="${r.i}">Details ▸</button></div>`).join('')+'</details>'); }
-  const hd=`<div class="ct"><h3>Needs attention</h3><span class="sc-faint">pichhle 10 final din (${rg(w.W[0],w.W[1])}) vs usse pehle ke 28</span></div>`;
-  if(bad.length||L.length&&a[0]!=='Better') return `<div class="card sc-card" id="sc-attn">${hd}${L.join('')}</div>`;
-  const fine=rows.some(r=>r.s[0]==='Normal'||r.s[0]==='Better')||a[0]==='Normal'||a[0]==='Better';
+  if(cut>0) L.push(`<p class="sc-note">+${cut} aur line${cut>1?'s':''} — table me (status se sort)</p>`);
+  const hd=`<div class="ct"><h3>Needs attention</h3><span class="sc-faint">pichhle 10 final din (${rg(w.W[0],w.W[1])})${ab.length?' · Low = usi format ke saare apps ke units ke neeche 25%':''} · vs own past = usse pehle ke 28</span></div>`;
+  if(bad.length||ab.length||L.length&&a[0]!=='Better') return `<div class="card sc-card" id="sc-attn">${hd}${L.join('')}</div>`;
+  const fine=rows.some(r=>r.s[0]==='Normal'||r.s[0]==='Better'||absW(r.s)==='OK')||a[0]==='Normal'||a[0]==='Better';
   if(!fine) return `<div class="card sc-card" id="sc-attn"><div class="ct"><h3>Needs attention</h3></div><p class="sc-note">Abhi koi screen judge nahi ho saki${a[1]?': '+E(a[1]):' (data kam ya din whole nahi)'} — numbers neeche hain, status nahi.</p></div>`;
   return `<div class="card sc-card" id="sc-attn">${hd}<p class="sc-ok">✅ Sab normal</p>${L.join('')}</div>`; }
 // the Screens / Full-screen tables: status chip + its score under the name (sticky column), then the period's numbers.
 // Screens, in the owner's order ("pehle user hota he fir screen view hota he fir ads impression hota he": the chain read left
-// to right): Users / day · Views / user / day · Time / view · Time / user / day · Ads / min · Imp / user / day · Normal · Score
-// · Cause (one day set: the chain holds); Full-screen: Imp / app user / day · Normal · Score · Cause. Ads / 100, screen views,
-// ads and the share live in the row details
+// to right): Users / day · Views / user / day · Time / view · Time / user / day · Ads / min · Imp / user / day (one day set: the
+// chain holds) · Ads / view · Fill · Show rate (the absolute numbers the status is judged on, 7 Nov 2026) · Cause; Full-screen:
+// Imp / app user / day · Normal · vs own past · Fill · Show rate · Cause. Screen views, ads and the share live in the row details
 const BNW='screen khuli rahe to banner har ~30–90 sec me dobara load hota hai: har refresh ek naya impression';
 // a top screen with more than one ad per screen view (Ads / 100 above 100): the seconds a view lasts (engagement ÷ views)
 function bannerSec(x,f2,i,r,lo,hi){ const it=(x.items||[])[i]; if(!f2||!it||it[1]!=='s'||!(r>100)) return null;
@@ -8004,27 +8067,107 @@ function perTime(x,f2,i,lo,hi){ const it=(x.items||[])[i], e={tv:null,am:null,tv
   spanK(x,lo,hi,k=>{ nd++; const q=k+off; if(!(q>=0&&c.has[q])) return; let v=0,g=0; for(const si of S){ if(c.V[si]){ v+=c.V[si][q]; g+=c.G[si][q]; } }
     v0+=v; g0+=g; n0++; const A=itemA(x,i,k); if(A!=null&&itemV(x,i,k)!=null){ a1+=A; g1+=g; n1++; } });
   return Object.assign(e,{nd,tvN:n0,sg:g0,sv:v0,tv:n0&&v0>0?g0/v0:null,amN:n1,sa:a1,sm:g1,am:n1&&g1>0&&v0>0?a1/(g1/60):null}); }
+// ---- Fill and Show rate (file 2: "adm" per unit [req, matched, imp] per GA4 day, null where AdMob is not complete; the
+// period's FINAL days with every unit complete — Today / Yesterday never) ----
+function admDays(f2,x,lo,hi){ const adm=(f2&&f2.adm)||{}, ks=Object.keys(adm), d0=f2&&f2.d0||x.d0, b=hi<x.ft?hi:x.ft, K=[]; if(!ks.length||!d0||lo>b) return K;
+  const n=Math.max(...ks.map(u=>Array.isArray(adm[u])?adm[u].length:0)), i1=Math.min(n-1,dIx({d0},b));
+  for(let k=Math.max(0,dIx({d0},lo));k<=i1;k++) if(ks.every(u=>Array.isArray(adm[u])&&adm[u][k])) K.push(k); return K; }
+const admWhy=(x,lo)=>lo>x.ft?'AdMob ~1–2 din baad pura hota hai':'is period me AdMob ke poore din nahi';
+// a unit's AdMob format (file 2 "ufmt"; a file without it: GA4's)
+const ufOf=(f2,ui)=>{ const u=Array.isArray(f2.ufmt)?f2.ufmt[ui]:null; return typeof u==='string'&&u?u:fmtOf(((f2.units||[])[ui]||[])[1]); };
+const abSum=(A,K)=>{ const X=[0,0,0]; for(const k of K){ const v=A[k]; X[0]+=+v[0]||0; X[1]+=+v[1]||0; X[2]+=+v[2]||0; } return X; };
+const abFin=e=>{ for(const f in e.p){ const P=e.p[f]; e.req+=P[1]; e.mt+=P[2]; e.imp+=P[3]; } e.fill=e.req>0?e.mt/e.req:null; e.show=e.mt>0?e.imp/e.mt:null;
+  if(!(e.req>0)) e.why='AdMob me koi request nahi'; else if(!(e.mt>0)) e.why='koi ad fill nahi hua'; return e; };
+// a SCREEN row (the build's rows[rid].ab on its W, here on the picked period): each unit's share σ = min(1, its GA4 ads on
+// this screen ÷ its GA4 ads on all screens) over the period's whole unit-split days ("fu"; under 3 of them: the newest 28 up
+// to the period's end — sig names them) × the unit's AdMob on the complete days → Fill = Σσ·matched ÷ Σσ·req, Show rate =
+// Σσ·imp ÷ Σσ·matched; per AdMob format part: [share of the screen's ads, req, matched, imp]. A unit with no AdMob id (or no
+// GA4 ads anywhere) stays out of the rates (unm = its share); a shared unit (σ < 95 %) is named. Basis = Imp / user / day's
+// (inline; all formats when allf). why: "" or why there is no number (never a silent 0)
+// (kept per file 2 and scr_all entry — a build's own objects — and the row / dates: a tap's repaint never sums the days again)
+const ABM=new WeakMap();
+function abMemo(f2,x,k,fn){ let m=ABM.get(f2); if(!m||m.x!==x){ m={x,v:new Map()}; ABM.set(f2,m); } if(!m.v.has(k)) m.v.set(k,fn()); return m.v.get(k); }
+function abRates(x,f2,i,lo,hi){ return f2&&typeof f2==='object'?abMemo(f2,x,'r'+i+'|'+lo+'|'+hi,()=>abRates0(x,f2,i,lo,hi)):abRates0(x,f2,i,lo,hi); }
+function abRates0(x,f2,i,lo,hi){ const it=(x.items||[])[i], e={fill:null,show:null,req:0,mt:0,imp:0,p:{},sig:null,unm:0,sh:[],nK:0,why:''};
+  if(!it||it[1]!=='s'||!f2) return e;
+  const adm=f2.adm||{}, U=f2.units||[], ds=f2.days||[], S=clsSet(f2,x,i), d0=f2.d0||x.d0, ix=d=>dIx({d0},d), b=hi<x.ft?hi:x.ft;
+  if(!Object.keys(adm).length){ e.why='AdMob data nahi'; return e; }
+  if(lo>b){ e.why=admWhy(x,lo); return e; }
+  const i0=Math.max(0,ix(lo)), i1=Math.min(ds.length-1,ix(b)), fu=k=>{ const r=ds[k]; return !!(r&&r.a&&r.a.g==='fu'&&r.st&&r.st.a==='w'); };
+  let D=[], src='W'; for(let k=i0;k<=i1;k++) if(fu(k)) D.push(k);
+  if(D.length<SIG_MIN){ D=[]; src='new'; for(let k=i1;k>=0&&D.length<SIG_N;k--) if(fu(k)) D.unshift(k); }
+  if(!D.length){ e.why='GA4 ne is screen ke ads unit ke saath kabhi nahi diye'; return e; }
+  e.sig=[src,D.length,addD(d0,D[0]),addD(d0,D[D.length-1])];
+  const g={}, G={}, inB=ui=>{ const u=U[ui]; return !!u&&(!!x.allf||inl(u[1])); };
+  for(const k of D){ const r=ds[k]; for(const q of r.a.r||[]) if(S.has(q[0])&&inB(q[1])) g[q[1]]=(g[q[1]]||0)+(+q[2]||0); for(const q of r.w||[]) G[q[0]]=(G[q[0]]||0)+(+q[1]||0); }
+  const K=admDays(f2,x,lo,hi); e.nK=K.length; let ga=0, gu=0;
+  for(const u in g){ const gi=g[u], ui=+u, ids=Array.isArray((U[ui]||[])[2])?U[ui][2]:[]; if(!(gi>0)) continue; ga+=gi;
+    if(!ids.length||!(G[u]>0)||!Array.isArray(adm[u])){ gu+=gi; continue; }
+    const sg=Math.min(1,gi/G[u]), X=abSum(adm[u],K), P=e.p[ufOf(f2,ui)]||(e.p[ufOf(f2,ui)]=[0,0,0,0]); P[0]+=gi; P[1]+=sg*X[0]; P[2]+=sg*X[1]; P[3]+=sg*X[2];
+    if(sg<0.95) e.sh.push([U[ui][0]||U[ui][3]||'(unit)',sg]); }
+  if(!ga){ e.why='is period me is screen pe ads unit-wise nahi'; return e; }
+  for(const f in e.p) e.p[f][0]/=ga; e.unm=gu/ga;
+  if(!Object.keys(e.p).length){ e.why=`GA4 unit names AdMob me nahi mile (${P1(e.unm)} of ads)`; return e; }
+  if(!K.length){ e.why=admWhy(x,lo); return e; }
+  return abFin(e); }
+// whole units pooled (σ = 1): a trigger's units, or the App total's (every AdMob unit of the app, one per ids tuple); a part's
+// share = its share of the requests
+function abPool(f2,x,uis,lo,hi){ return f2&&typeof f2==='object'?abMemo(f2,x,'p'+uis.join(',')+'|'+lo+'|'+hi,()=>abPool0(f2,x,uis,lo,hi)):abPool0(f2,x,uis,lo,hi); }
+function abPool0(f2,x,uis,lo,hi){ const e={fill:null,show:null,req:0,mt:0,imp:0,p:{},sig:null,unm:0,sh:[],nK:0,why:''}; if(!f2) return e;
+  const adm=f2.adm||{}, U=f2.units||[]; if(!Object.keys(adm).length){ e.why='AdMob data nahi'; return e; }
+  const K=admDays(f2,x,lo,hi), seen=new Set(); e.nK=K.length; if(!K.length){ e.why=admWhy(x,lo); return e; }
+  for(const ui of uis){ const u=U[ui], ids=u&&Array.isArray(u[2])?u[2]:[], t=ids.slice().sort().join(','); if(!ids.length||!Array.isArray(adm[ui])||seen.has(t)) continue; seen.add(t);
+    const X=abSum(adm[ui],K), P=e.p[ufOf(f2,ui)]||(e.p[ufOf(f2,ui)]=[0,0,0,0]); P[1]+=X[0]; P[2]+=X[1]; P[3]+=X[2]; }
+  if(!seen.size){ e.why='GA4 unit names AdMob me nahi mile'; return e; }
+  abFin(e); for(const f in e.p) e.p[f][0]=e.req>0?e.p[f][1]/e.req:null; return e; }
+// the parts under their format's p25 on these numbers (the build's Low rule): [[k, format, value, benchmark]]; Ads / view (in
+// %, ads = its ads) on a part of ≥ 80 % with ≥ the floor of ads
+function abLow(e,av,ads){ const m=bMin(), out=[]; if(!m||!e) return out;
+  for(const f in e.p){ const P=e.p[f]; if(!(P[0]>=AB_PART)) continue; const bf=bOf(f,'fill'), bs=bOf(f,'show');
+    if(bf&&P[1]>=+m.req&&P[1]>0&&P[2]/P[1]<bf[1]) out.push(['fill',f,P[2]/P[1],bf]);
+    if(bs&&P[2]>=+m.mt&&P[2]>0&&P[3]/P[2]<bs[1]) out.push(['show',f,P[3]/P[2],bs]);
+    const ba=bOf(f,'av'); if(ba&&P[0]>=AB_DOM&&ok(av)&&ads>=+(m.ads||0)&&av<ba[1]) out.push(['av',f,av,ba]); }
+  return out; }
+// the cells' title: the AdMob sums, the days, the unit mix (σ source), the shared units, the parts, what stays out
+function abTitle(e,how){ if(!e||!(e.nK>0)||!(e.req>0)) return ''; const o=[`${how}: ${N(e.req)} requests · ${N(e.mt)} matched · ${N(e.imp)} impressions · ${e.nK} complete AdMob days`];
+  if(e.sig) o.push(`unit mix (σ): ${e.sig[0]==='W'?'is period ke':'period me 3 se kam split din — naye'} ${e.sig[1]} unit-split din, ${rg(e.sig[2],e.sig[3],true)}`);
+  for(const q of e.sh) o.push(`shared unit: ${q[0]} — ${P1(q[1])} of its ads are on this screen; fill / show are the unit's`);
+  const fs=Object.keys(e.p); if(fs.length>1) for(const f of fs){ const P=e.p[f]; o.push(`${fmtNm(f)} ${P1(P[0])}: fill ${PI(P[1]>0?P[2]/P[1]:null)} · show ${PI(P[2]>0?P[3]/P[2]:null)}`); }
+  if(e.unm>0) o.push(`units not in AdMob: ${P1(e.unm)} of the screen's ads (rates ke bahar)`);
+  return o.join(' · '); }
+// the Fill and Show rate cells (a number under its format's p25: sc-lo, the benchmark in the title)
+function abTds(e,how,lw){ const t0=abTitle(e,how);
+  return ['fill','show'].map(k=>{ const v=k==='fill'?e.fill:e.show, w=(lw||[]).filter(q=>q[0]===k), tt=[t0].concat(w.map(q=>bTxt(k,q[1],q[3]))).filter(Boolean).join(' · ');
+    if(v==null) return `<td${tt?` title="${E(tt)}"`:''}><b>—</b><small>${E(e.why||'—')}</small></td>`;
+    return `<td${tt?` title="${E(tt)}"`:''}${w.length?' class="sc-lo"':''}><b>${PI(v)}</b></td>`; }).join(''); }
 const AGG={o:0,ns:1,ad:2,g:3};
 function tableRows(x,lo,hi,seg,f2){ const items=x.items||[], all=PER==='all', idx=[];
   items.forEach((it,i)=>{ if(seg==='f'?it[1]==='fs':it[1]!=='fs') idx.push(i); });
   let tot=0; const si={}; for(const i of idx){ si[i]=sumItem(x,i,lo,hi); if(seg==='s') tot+=si[i].a||0; }   // the screen ads of the period
   return idx.map(i=>{ const it=items[i], ag=it[1] in AGG, ps=perScoreU(x,f2,i,lo,hi,all), p=ps.p, pt=ag?perTime(x,f2,i,lo,hi):null;
+    const ab=ag?null:it[1]==='fs'?abPool(f2,x,f2?trigUnits(f2,x,i):[],lo,hi):abRates(x,f2,i,lo,hi);
     return {i,it,ps,st:stOf(x,i),agg:ag,si:si[i],v:si[i].vAll,sh:ag&&tot>0&&si[i].a!=null?si[i].a/tot:null,r:ag?null:p.r,n:ag||!ps.q?null:ps.q.r,sc:ag?null:ps.score,
-      ud:ag?null:p.ud,vu:ag?null:p.vu,tv:ag?(pt&&pt.tv):p.tv,tu:ag?null:p.tu,am:ag?(pt&&pt.am):p.am,pt}; }); }
-// the order: judged screens by status (Worse → … → N/A), then Imp / user / day (or any column tapped); the aggregate rows
-// (All other screens · Not recorded · Ad screens · GA4 grouped) stay pinned at the bottom in that order under every sort
-function sortItems(rows){ const k=TS.k, d=TS.dir, num=v=>v==null?-Infinity:v;
+      ud:ag?null:p.ud,vu:ag?null:p.vu,tv:ag?(pt&&pt.tv):p.tv,tu:ag?null:p.tu,am:ag?(pt&&pt.am):p.am,pt,av:si[i].rate,ab,fl:ab&&f2?ab.fill:null,sr:ab&&f2?ab.show:null,
+      lw:ab&&f2?abLow(ab,it[1]==='s'?si[i].rate:null,si[i].a||0):[]}; }); }
+// the order: judged screens by status (Low → Few ads → OK → …; inside a word the weakest number ÷ its median first; an older
+// file: Worse → … → N/A), then Imp / user / day (or any column tapped); the aggregate rows (All other screens · Not recorded
+// · Ad screens · GA4 grouped) stay pinned at the bottom in that order under every sort
+function sortItems(rows){ const k=TS.k, d=TS.dir, num=v=>v==null?-Infinity:v, rk=z=>z.st&&judged(z.it)?arank(z.st):99, wk=(a,b)=>{ const p=aweak(a.st), q=aweak(b.st); return p===q?0:p<q?-1:1; };
   const main=rows.filter(z=>!z.agg), tail=rows.filter(z=>z.agg).sort((a,b)=>AGG[a.it[1]]-AGG[b.it[1]]);
-  main.sort((a,b)=>{ if(k==='st') return d*(rankOf(a.st&&judged(a.it)?a.st[0]:null)-rankOf(b.st&&judged(b.it)?b.st[0]:null))||num(b.r)-num(a.r)||(b.v||0)-(a.v||0);
+  main.sort((a,b)=>{ if(k==='st') return d*(rk(a)-rk(b)||wk(a,b))||num(b.r)-num(a.r)||(b.v||0)-(a.v||0);
     const va=k==='name'?String(a.it[0]):a[k], vb=k==='name'?String(b.it[0]):b[k]; if(va==null&&vb==null) return (b.v||0)-(a.v||0); if(va==null) return 1; if(vb==null) return -1;
     return (typeof va==='string'?d*va.localeCompare(vb):d*(va-vb))||(b.v||0)-(a.v||0); });
   return main.concat(tail); }
-// the screens shown at once: the top ones covering 90 % of the period's screen views (+ every Worse / Watch row; the
+// the screens shown at once: the top ones covering 90 % of the period's screen views (+ every Low / Worse / Watch row; the
 // unjudged Not recorded / Ad screens / GA4 grouped rows always); the rest behind "Show N more screens"
 function topSplit(rows){ const sc=rows.filter(z=>z.it[1]==='s'||z.it[1]==='o').sort((a,b)=>(b.v||0)-(a.v||0)), tot=sc.reduce((s,z)=>s+(z.v||0),0), top=new Set(); let c=0;
   for(const z of sc){ if(tot>0&&c>=0.9*tot) break; top.add(z.i); c+=z.v||0; }
-  for(const z of rows) if(!(z.it[1]==='s'||z.it[1]==='o')||(z.st&&(z.st[0]==='Worse'||z.st[0]==='Watch'))) top.add(z.i);
+  for(const z of rows) if(!(z.it[1]==='s'||z.it[1]==='o')||(z.st&&(z.st[0]==='Worse'||z.st[0]==='Watch'||absW(z.st)==='Low'))) top.add(z.i);
   return top; }
+function czTd(st,jd,it){ if(!jd||!st) return '<td class="sc-cz">—</td>'; const w=absW(st);
+  if(w==null||!(w||it[1]==='s')) return `<td class="sc-cz">${st[3]?E(st[3]):'—'}</td>`;
+  const own=st[0]==='Worse'||st[0]==='Watch'?`<small class="sc-own"${st[1]?` title="${E(st[1])}"`:''}>${chip(st[0])} vs own past: ${E(st[3]||st[1]||'')}</small>`:'';
+  return `<td class="sc-cz">${st[8]?E(st[8]):own?'':'—'}${own}</td>`; }
 function whyNull(x,it,lo,hi){ const id=it[1]==='fs'?'w':'a', cv=cover(x,[id],lo,hi); if(!cv.nd) return 'is period me din nahi';
   if(cv.c.w+cv.c.p===cv.nd) return it[1]==='fs'?'units ka data nahi':'format not split (GA4 ne sirf screen-wise diya)'; return covWhy(x,[id],cv); }
 // (#sc-tb is drawn again when file 2 brings the screens' users)
@@ -8032,6 +8175,7 @@ function tableHtml(x,id,lo,hi){ const seg=SEG, all=PER==='all', a2=apPtr(id), f2
   const rows=sortItems(tableRows(x,lo,hi,seg,f2)), top=seg==='s'?topSplit(rows):null, shown=top&&!MORE?rows.filter(z=>top.has(z.i)):rows, more=rows.length-shown.length;
   const th=(k,l,tt)=>`<th aria-sort="${TS.k===k?(TS.dir>0?'ascending':'descending'):'none'}"${tt?` title="${E(tt)}"`:''}><button type="button" data-sc-tsort="${k}">${l}</button></th>`;
   const uof=x.allf?'ads (saare formats — is app me screens ke ads ka format poora nahi milta)':'inline ads';
+  const thF=w=>th('fl','Fill',`AdMob matched ÷ requests, ${w} · sirf poore AdMob din (final)`)+th('sr','Show rate',`AdMob impressions ÷ matched, ${w} · sirf poore AdMob din (final)`);
   const head=seg==='s'?th('st','Screen')
       +th('ud','Users / day','roz ke average users: us screen ke daily users ka jod ÷ din — GA4 me user ek din aur ek screen ke andar unique')
       +th('vu','Views / user / day','ek user din me screen kitni baar kholta hai: screen views ÷ users ka jod')
@@ -8039,11 +8183,11 @@ function tableHtml(x,id,lo,hi){ const seg=SEG, all=PER==='all', a2=apPtr(id), f2
       +th('tu','Time / user / day','ek user roz is screen pe kitni der: engagement time ÷ users ka jod')
       +th('am','Ads / min',`screen pe bitaye har minute me ads: ${uof} ÷ (engagement seconds ÷ 60)`)
       +th('r','Imp / user / day',`is screen ke ${uof} ÷ is screen ke users (roz unique; din ka jod) = Views / user / day × Time / view × Ads / min ÷ 60 · sirf final din (users ~2 din baad)`)
-      +th('n','Normal','period se pehle ke max(28, period) final din')+th('sc','Score')+'<th>Cause</th>'
-    :th('st','Trigger')+th('r','Imp / app user / day','trigger ke ads ÷ app ke daily users (trigger ki koi screen nahi) · sirf final din')+th('n','Normal')+th('sc','Score')+'<th>Cause</th>';
+      +th('av','Ads / view',`is screen ke ${uof} ÷ screen views × 100`)+thF('screen ke units (screen ka hissa σ)')+'<th>Cause</th>'
+    :th('st','Trigger')+th('r','Imp / app user / day','trigger ke ads ÷ app ke daily users (trigger ki koi screen nahi) · sirf final din')+th('n','Normal')+th('sc','vs own past','is period ÷ normal − 1')+thF('trigger ke units')+'<th>Cause</th>';
   const wt=f2e?'<b>—</b><small>data load nahi hua</small>':'⏳', w1=`<td title="${E(f2e?'data load nahi hua':'aa raha hai…')}">${f2e?'—':'⏳'}</td>`;
   const tr=z=>{ const it=z.it, p=z.ps.p, jd=judged(it), st=z.st, after=adsAfter(x,lo,hi,z.i), wait=!z.agg&&seg==='s'&&!f2;
-    const nm=`<td class="sc-nm" title="${E(itemTitle(it))}"><span class="sc-n">${itemName(it)}</span><span class="sc-stl">${jd&&st?chip(st[0])+(st[2]!=null?` <small class="sc-ssc">${E(st[2])}</small>`:''):`<small class="sc-faint">${jd?'—':'not judged'}</small>`}</span>${jd&&st&&st[1]?`<small>${E(st[1])}</small>`:''}</td>`;
+    const wy=jd&&st?stWhy(st,it):'', nm=`<td class="sc-nm" title="${E(itemTitle(it))}"><span class="sc-n">${itemName(it)}</span><span class="sc-stl">${jd&&st?stChip(st,it):`<small class="sc-faint">${jd?'—':'not judged'}</small>`}</span>${wy?`<small>${E(wy)}</small>`:''}</td>`;
     let main;
     // (short, on one line: a phone's narrow column wrapped "of the screen ads" into 4 lines; the full words in its title)
     if(z.agg) main=`<td title="${E(AGGW)}"><b>—</b><small class="sc-nw" title="${P1(z.sh)} of the screen ads">${P1(z.sh)} of ads</small></td>`;
@@ -8052,15 +8196,18 @@ function tableHtml(x,id,lo,hi){ const seg=SEG, all=PER==='all', a2=apPtr(id), f2
       main=z.r!=null?`<td title="${E(tt)}"><b>${PQ(z.r)}</b>${p.n<p.nd&&lo<=fu?`<small>${p.n}/${p.nd} days</small>`:''}${waitAds(after)}</td>`
         :`<td><b>—</b>${lo>fu?waitAds(after):`<small>${E(z.si.n?(seg==='s'?puWhy(x,f2,z.i,lo,hi):auWhy(x,lo)):whyNull(x,it,lo,hi))}</small>`}</td>`; }
     const nrm=z.agg?'<td>—</td><td>—</td>':`<td>${PQ(z.n)}</td><td>${scoreTxt(z.sc,z.ps.muted,all,z.ps.low)}</td>`;
-    const cz=`<td class="sc-cz">${jd&&st&&st[3]?E(st[3]):'—'}</td>`;
-    if(seg!=='s') return `<tr class="sc-clk${OPEN===z.i?' sc-on':''}" data-sc-open="${z.i}" aria-expanded="${OPEN===z.i}" tabindex="0">${nm}${main}${nrm}${cz}</tr>`;
+    const cz=czTd(st,jd,it);
+    const fsr=z.agg?`<td title="kai screens ka jod">—</td><td title="kai screens ka jod">—</td>`:!f2?w1+w1:abTds(z.ab,it[1]==='fs'?'trigger ke units':'screen ka hissa (σ × unit)',z.lw);
+    if(seg!=='s') return `<tr class="sc-clk${OPEN===z.i?' sc-on':''}" data-sc-open="${z.i}" aria-expanded="${OPEN===z.i}" tabindex="0">${nm}${main}${nrm}${fsr}${cz}</tr>`;
+    const aw=(z.lw||[]).filter(q=>q[0]==='av'), avt=[z.si.n?`${N(z.si.a)} ${uof} ÷ ${N(z.si.v)} screen views × 100 · ${z.si.n} days`:''].concat(aw.map(q=>bTxt('av',q[1],q[3]))).filter(Boolean).join(' · ');
+    const avc=z.av!=null?`<td${avt?` title="${E(avt)}"`:''}${aw.length?' class="sc-lo"':''}><b>${PCT(z.av)}</b></td>`:`<td><b>—</b><small>${E(z.si.n?'screen views 0':whyNull(x,it,lo,hi))}</small></td>`;
     const c=(v,fm)=>wait?w1:`<td>${z.agg&&v==null?'—':fm(v)}</td>`;
     const ag=v=>z.agg?`<td title="${E(AGGW)}">—</td>`:v;
     return `<tr class="sc-clk${OPEN===z.i?' sc-on':''}" data-sc-open="${z.i}" aria-expanded="${OPEN===z.i}" tabindex="0">${nm}`
-      +ag(c(z.ud!=null?Math.round(z.ud):null,N))+ag(c(z.vu,PU))+c(z.tv,fmtT)+ag(c(z.tu,fmtT))+c(z.am,PU)+main+nrm+cz+'</tr>'; };
+      +ag(c(z.ud!=null?Math.round(z.ud):null,N))+ag(c(z.vu,PU))+c(z.tv,fmtT)+ag(c(z.tu,fmtT))+c(z.am,PU)+main+avc+fsr+cz+'</tr>'; };
   const nf=rows.length;
-  return `<div class="sc-tw sc-x" id="sc-ttw"><table class="sc-t${seg==='s'?' sc-t10':''}"><thead><tr>${head}</tr></thead><tbody>${shown.map(tr).join('')||`<tr><td colspan="${seg==='f'?5:10}" class="sc-faint">${seg==='f'?'Is app ke full-screen units ka trigger data nahi':'Koi screen nahi'}</td></tr>`}</tbody></table></div>`
-    +(seg==='s'&&nf?'<p class="sc-note"><b>Imp / user / day</b> = Views / user / day × Time / view × Ads / min ÷ 60 (same din). Time = GA4 engagement time: app khuli aur ye screen saamne thi. Ads / 100, screen views aur ads row ki details me.</p>':'')
+  return `<div class="sc-tw sc-x" id="sc-ttw"><table class="sc-t${seg==='s'?' sc-t10':''}"><thead><tr>${head}</tr></thead><tbody>${shown.map(tr).join('')||`<tr><td colspan="${seg==='f'?7:11}" class="sc-faint">${seg==='f'?'Is app ke full-screen units ka trigger data nahi':'Koi screen nahi'}</td></tr>`}</tbody></table></div>`
+    +(seg==='s'&&nf?'<p class="sc-note"><b>Imp / user / day</b> = Views / user / day × Time / view × Ads / min ÷ 60 (same din). Time = GA4 engagement time: app khuli aur ye screen saamne thi. <b>Ads / view</b> = ads ÷ screen views × 100 · <b>Fill</b> = AdMob matched ÷ requests · <b>Show rate</b> = impressions ÷ matched (screen ke units, screen ka hissa). Status = ye numbers usi format ke saare apps ke units ke saath (neeche 25% = Low) · vs own past = Cause me. Screen views aur ads row ki details me.</p>':'')
     +(seg==='s'&&(more>0||MORE)&&nf?`<button type="button" class="sc-more" data-sc-more="1">${MORE?'Show fewer screens':`Show ${more} more screens`}</button>`:''); }
 function segHtml(x,id,lo,hi){ const n=k=>(x.items||[]).filter(it=>k==='f'?it[1]==='fs':it[1]!=='fs').length;
   return `<div class="card sc-card" id="sc-tcard"><div class="sc-seg sc-x" role="group" aria-label="Table">${[['s','Screens'],['f','Full-screen']].map(([k,l])=>`<button type="button" data-sc-seg="${k}" aria-pressed="${SEG===k}">${l} <small>${n(k)}</small></button>`).join('')}</div>`
@@ -8071,10 +8218,15 @@ const SECS=[['ov','Overview'],['un','Units'],['ver','Versions'],['nvr','New vs r
 function ddHtml(x,id,lo,hi){ if(OPEN==null||!(x.items||[])[OPEN]) return ''; const it=x.items[OPEN], st=stOf(x,OPEN), f2=f2Of(id), ps=perScoreU(x,f2,OPEN,lo,hi,PER==='all');
   const rc=it[1]==='s'&&ps.p.reach!=null?` · reach <b>${P1(ps.p.reach)}</b> of the app's daily users${ps.q&&ps.q.reach!=null?` (normal ${P1(ps.q.reach)})`:''}`:'';
   return `<div class="card sc-card sc-dd" id="sc-dd"><div class="sc-ddh"><div class="sc-ddt"><b title="${E(itemTitle(it))}">${itemName(it)}</b><span class="sc-ddc">${it[1]==='s'?E(it[0]):''}</span></div>`
-    +`<span class="sc-dds">${judged(it)&&st?chip(st[0])+(st[2]!=null?` <small>status score ${E(st[2])}</small>`:'')+(st[1]?` <small>${E(st[1])}</small>`:''):'<small class="sc-faint">not judged</small>'} · ${it[1] in AGG?'<small>imp / user nahi (users jode nahi ja sakte)</small>':scoreTxt(ps.score,ps.muted,PER==='all',ps.low)}${rc}</span>`
+    +`<span class="sc-dds">${judged(it)&&st?ddSt(st,it):'<small class="sc-faint">not judged</small>'} · ${it[1] in AGG?'<small>imp / user nahi (users jode nahi ja sakte)</small>':'<small>this period</small> '+scoreTxt(ps.score,ps.muted,PER==='all',ps.low)}${rc}</span>`
     +`<button type="button" class="sc-back" data-sc-close="1">✕ Close</button></div>`
     +`<div class="sc-seg sc-x" role="group" aria-label="Section">${SECS.map(([k,l])=>`<button type="button" data-sc-sec="${k}" aria-pressed="${SEC===k}">${l}</button>`).join('')}</div>`
     +`<div id="sc-ddb">${secHtml(x,id,OPEN,lo,hi)}</div></div>`; }
+// the drill-down's status: the abs word + its first weak number · vs own past (the word, the status window's change, its why);
+// a status without the abs word: its own word as before
+function ddSt(st,it){ const w=absW(st), own=(st[2]!=null?` <small>last 10 days vs own past ${vsP(+st[2])}</small>`:'')+(st[1]?` <small>${E(st[1])}</small>`:'');
+  if(w==null||!(w||it[1]==='s')) return chip(st[0])+own; const y=stWhy(st,it);
+  return stChip(st,it)+(y?` <small>${E(y)}</small>`:'')+` · ${chip(st[0])}${own}`; }
 function waitHtml(n){ return fErr(n)?`<p class="sc-note">⚠️ Data load nahi hua. <button type="button" class="sc-lnk" data-sc-retry="${E(n)}">Try again</button></p>`:'<p class="sc-note">⏳ Loading data…</p>'; }
 // a section's file(s) not here: which = 'f2' (file 2) · 'l' (scr_l; file 2's failure shows while scr_l has not come) ·
 // '2l' (needs both: whichever failed shows its error + Try again — never "Loading" for good while file 2 failed)
@@ -8104,7 +8256,7 @@ const PARTN={vpu:'Views per user',tpv:'Time per view',apm:'Ads per minute',adv:'
 const sgn1=v=>ok(+v)?(+v>0?'+':+v<0?'−':'')+Math.abs(Math.round(+v*10)/10)+'%':'—';
 function partsHtml(row){ const p=row&&row.parts&&typeof row.parts==='object'?row.parts:null; if(!p) return '';
   const ks=['vpu','tpv','apm','adv','avu'].filter(k=>k in p), t=ks.reduce((s,k)=>s+(+p[k]||0),0);
-  return `<h4 class="sc-h4">Why it moved <small class="sc-faint">% of normal · jod ${sgn1(t)} = score − 100</small></h4><div class="sc-tw sc-x"><table class="sc-t sc-terms"><thead><tr><th>Part</th><th>% of normal</th></tr></thead><tbody>`
+  return `<h4 class="sc-h4">Why it moved vs own past <small class="sc-faint">% of normal · jod ${sgn1(t)} = vs own past</small></h4><div class="sc-tw sc-x"><table class="sc-t sc-terms"><thead><tr><th>Part</th><th>% of normal</th></tr></thead><tbody>`
     +ks.map(k=>`<tr><td>${PARTN[k]}</td><td class="${+p[k]<=-10?'sc-dn':''}">${sgn1(p[k])}</td></tr>`).join('')+'</tbody></table></div>'; }
 function termsHtml(row){ if(!row) return ''; let T=row.terms; if(T&&!Array.isArray(T)&&typeof T==='object') T=Object.entries(T); T=Array.isArray(T)?T:[];
   const t=T.map(z=>Array.isArray(z)?[TERMN[z[0]]||z[0],z[1]]:[z&&z.label,z&&z.pct]).filter(z=>z[0]!=null&&z[1]!=null);
@@ -8144,8 +8296,22 @@ function ovSec(x,id,i,lo,hi){ const it=x.items[i], fs=it[1]==='fs', ag=it[1] in 
     body=`<h4 class="sc-h4">Every month <small class="sc-faint">${un} = roz ka average</small></h4><div class="sc-tw sc-x"><table class="sc-t"><thead>${hd.replace('%','Month')}</thead><tbody>${mrow}</tbody></table></div>`
       +`<h4 class="sc-h4">Every day <small class="sc-faint">sabse naya upar</small></h4><div class="sc-tw sc-x sc-tall" id="sc-dtw"><table class="sc-t"><thead>${hd.replace('%','Day')}</thead><tbody>${drow}</tbody></table></div>`; }
   const lab=ag?'<span class="sc-la">Ads / 100 views</span><span class="sc-lb">Screen views (bars)</span>':`<span class="sc-la">${fs?'Imp / app user / day':'Imp / user / day'}</span><span class="sc-lb">${fs?'App daily users':'Screen users'} (bars)</span>`;
-  return `<div class="sc-tiles sc-x">${tu}${t100}</div><div class="sc-chart" id="sc-chart"></div><div class="sc-lg">${lab}<span class="sc-lc">Normal</span>${CH&&CH.by!=='d'?`<span class="sc-faint">${CH.by==='w'?'har hafte':'har mahine'} ka = Σ ads ÷ Σ ${ag?'views':'users'}</span>`:''}</div>`
+  return absHtml(x,f2,i,lo,hi)+`<div class="sc-tiles sc-x">${tu}${t100}</div><div class="sc-chart" id="sc-chart"></div><div class="sc-lg">${lab}<span class="sc-lc">Normal</span>${CH&&CH.by!=='d'?`<span class="sc-faint">${CH.by==='w'?'har hafte':'har mahine'} ka = Σ ads ÷ Σ ${ag?'views':'users'}</span>`:''}</div>`
     +(f2?partsHtml(row)+termsHtml(row):(apPtr(id)?'<p class="sc-note">⏳ Cause ki details aa rahi hain…</p>':''))+body; }
+function absHtml(x,f2,i,lo,hi){ const it=x.items[i]; if(!it||it[1]!=='s') return ''; const st=stOf(x,i), s=sumItem(x,i,lo,hi), w=absW(st);
+  const hd=`<h4 class="sc-h4">Absolute <small class="sc-faint">is period ke numbers · benchmark: usi format ke saare apps ke units</small></h4>`;
+  const sl=st&&w?`<p class="sc-note">Status (pichhle 10 final din): ${achip(w)}${st[8]?' '+E(st[8]):''}</p>`:'';
+  if(!f2) return hd+`<p class="sc-note">Ads / view <b>${PCT(s.rate)}</b> · Fill / Show rate ⏳ aa raha hai…</p>`+sl;
+  const e=abRates(x,f2,i,lo,hi), lw=abLow(e,s.rate,s.a||0), rid=rowId(f2,x,i), r=rid&&f2.rows?f2.rows[rid]:null, ab=r&&r.ab&&typeof r.ab==='object'?r.ab:null;
+  const fs=Object.keys(e.p).sort((a,b)=>e.p[b][0]-e.p[a][0]), bc=(b,k)=>b?`${PI(b[1])} / ${PI(b[2])} <small>${b[4]} units</small>`:`— <small>${k} benchmark nahi (units kam)</small>`;
+  const tb=fs.length?`<div class="sc-tw sc-x"><table class="sc-t sc-terms"><thead><tr><th>Format</th><th>Share of ads</th><th>Fill</th><th>Show rate</th><th>Format fill p25 / median</th><th>Format show p25 / median</th></tr></thead><tbody>`
+    +fs.map(f=>{ const P=e.p[f], lf=lw.some(q=>q[0]==='fill'&&q[1]===f), ls=lw.some(q=>q[0]==='show'&&q[1]===f);
+      return `<tr><td>${E(fmtNm(f))}</td><td>${P1(P[0])}</td><td${lf?' class="sc-lo"':''}>${PI(P[1]>0?P[2]/P[1]:null)}</td><td${ls?' class="sc-lo"':''}>${PI(P[2]>0?P[3]/P[2]:null)}</td><td>${bc(bOf(f,'fill'),'fill')}</td><td>${bc(bOf(f,'show'),'show')}</td></tr>`; }).join('')+'</tbody></table></div>':'';
+  const ks=[...new Set((Array.isArray(st&&st[9])?st[9]:[]).map(q=>q[0]).concat(lw.map(q=>q[0])))].filter(k=>ABCHK[k]);
+  return hd+`<p class="sc-note">Ads / view <b>${PCT(s.rate)}</b> · Fill <b>${PI(e.fill)}</b> · Show rate <b>${PI(e.show)}</b>${e.why?` <small>(${E(e.why)})</small>`:''}${e.nK?` · ${e.nK} complete AdMob days`:''}</p>`+sl+tb
+    +(e.sig?`<p class="sc-note">Unit mix (σ = unit ke GA4 ads is screen pe ÷ unit ke saare GA4 ads): ${e.sig[0]==='W'?'is period ke':'period me 3 se kam unit-split din — naye'} ${e.sig[1]} din, ${rg(e.sig[2],e.sig[3],true)}${e.sh.length?` · shared unit: ${e.sh.map(q=>`${E(q[0])} ${P1(q[1])}`).join(', ')} (fill / show unit ke)`:''}${e.unm>0?` · units not in AdMob: ${P1(e.unm)} of ads (rates ke bahar)`:''}</p>`:'')
+    +(ab&&(ok(ab.fill)||ok(ab.av))?`<p class="sc-note">Status window (build): Ads / view ${PCT(ab.av)} · Fill ${PI(ab.fill)} · Show rate ${PI(ab.show)}${ab.why?' · '+E(ab.why):''}</p>`:'')
+    +ks.map(k=>`<p class="sc-note"><b>Check (developer) · ${ABKN[k]}:</b> ${E(ABCHK[k])}</p>`).join(''); }
 // AdMob per unit (file 2's "adm": [req, matched, imp] per GA4 day, blended from the two IST days by the build) over [lo, hi]
 function admSum(f2,x,ui,lo,hi){ const A=(f2.adm||{})[ui]; if(!Array.isArray(A)) return null; let rq=0,ma=0,im=0,n=0;
   const d0=f2.d0||x.d0, i0=Math.max(0,dIx({d0},lo)), i1=Math.min(A.length-1,dIx({d0},hi));
@@ -8319,8 +8485,15 @@ function howBody(x){ const g=(typeof DATA!=='undefined'&&DATA&&DATA.generated_at
   return `<p class="sc-note">GA4 din = <b>5:30 AM IST se agle din 5:30 AM IST tak</b> (UTC din). GA4 data till <b>${fdy(x.ft)}</b>${ftuOf(x)<x.ft?`, users till <b>${fdy(ftuOf(x))}</b>`:''}; Today / Yesterday abhi final nahi.${ist?` Build: ${ist}.`:''}</p>`
     +'<p class="sc-note"><b>Imp / user / day</b>: screen row pe us screen ke ads ÷ us screen ke users — GA4 me user ek din aur ek screen ke andar unique hai; din ka jod liya, screens ka kabhi nahi (isliye All other screens / Not recorded / Ad screens / GA4 grouped pe "—"). Full-screen trigger aur App total pe ads ÷ app ke daily users (GA4 Active users, wahi stream). Sirf final din; Today / Yesterday "—" (users ~2 din baad aate hain), ads ⏳.</p>'
     +'<p class="sc-note"><b>Screen views</b> = screen_view (har Activity). <b>Chain</b>: Views / user / day × Time / view × Ads / min ÷ 60 = Imp / user / day (same din). <b>Users / day</b> = us screen ke users ka jod ÷ din; <b>Views / user / day</b> = screen views ÷ users ka jod (100 users, 300 views → 3; 200 ads → Imp / user 2).</p>'
-    +'<p class="sc-note"><b>Status</b> (period se alag, fixed): pichhle 10 final din vs usse pehle ke 28. Worse = score 80 se kam, Watch = 90 se kam, Better = 110 se upar. Ye tab lagta hai jab: farq rozana ke utaar-chadhaav se bada ho (z 3); dono 5-din hisson me dikhe; app ke imp / user ka ≥ 1% ho; aur 2 din lagatar ho. Aadhe se zyada gira to z 2 kaafi. Poore app me users kam screens kholein to wo trigger pe nahi, App total pe ek baar dikhega. Kam data = Too early; whole din kam / logging badli / ads nahi / users nahi aaye / ads bahut kam = N/A.</p>'
-    +'<p class="sc-note"><b>App total ka status</b>: GA4 aur AdMob alag kahani bataayein to App total AdMob ke per daily user pe judge hota hai ("Worse (AdMob)"); AdMob ka data kam ho to "Not measurable". <b>Score</b> (picked period) = period ÷ normal (period se pehle ke max(28, period) final din) × 100; 7 se kam din = "short period". <b>Ads / 100 views</b> row ki details me.</p>'; }
+    +'<p class="sc-note"><b>Status</b> (screen row, period se alag, fixed: pichhle 10 final din): is screen ka <b>Fill</b> (AdMob matched ÷ requests), <b>Show rate</b> (impressions ÷ matched) aur <b>Ads / view</b> usi AdMob format ke saare apps ke units ke saath — kisi format (screen ke ads ka ≥ 20%) ka Fill ya Show rate us format ke p25 se kam = <b>Low</b>; Ads / view kam (format ≥ 80%) = <b>Few ads</b>; baaki <b>OK</b>. Screen ka hissa σ = unit ke GA4 ads is screen pe ÷ unit ke saare GA4 ads.</p>'+benchHtml()
+    +'<p class="sc-note"><b>vs own past</b> (Cause me, fixed): pichhle 10 final din vs usse pehle ke 28. Worse = 80% se kam, Watch = 90% se kam, Better = 110% se upar. Ye tab lagta hai jab: farq rozana ke utaar-chadhaav se bada ho (z 3); dono 5-din hisson me dikhe; app ke imp / user ka ≥ 1% ho; aur 2 din lagatar ho. Aadhe se zyada gira to z 2 kaafi. Poore app me users kam screens kholein to wo trigger pe nahi, App total pe ek baar dikhega. Kam data = Too early; whole din kam / logging badli / ads nahi / users nahi aaye / ads bahut kam = N/A.</p>'
+    +'<p class="sc-note"><b>App total ka status</b>: GA4 aur AdMob alag kahani bataayein to App total AdMob ke per daily user pe judge hota hai ("Worse (AdMob)"); AdMob ka data kam ho to "Not measurable". <b>vs own past ±x%</b> (picked period) = period ÷ normal (period se pehle ke max(28, period) final din) − 1; 7 se kam din = "short period". <b>Ads / 100 views</b> row ki details me.</p>'; }
+// the format benchmark as measured (scr_all "bench"): per format p25 / median and how many units / screens it stands on
+function benchHtml(){ const b=ALL&&ALL.bench, F=b&&b.fmt&&typeof b.fmt==='object'?b.fmt:null; if(!F) return '<p class="sc-note">Format benchmark is build me nahi bana — status "—".</p>';
+  const c=(k,f)=>{ const v=bOf(f,k); return v?(k==='av'?`${PCT(v[1])} / ${PCT(v[2])} <small>${v[3]} screens</small>`:`${PI(v[1])} / ${PI(v[2])} <small>${v[4]} units</small>`):'—'; };
+  return `<div class="sc-tw sc-x"><table class="sc-t sc-terms"><thead><tr><th>Format</th><th>Fill p25 / median</th><th>Show rate p25 / median</th><th>Ads / view p25 / median</th><th>Units</th></tr></thead><tbody>`
+    +Object.keys(F).sort().map(f=>`<tr><td>${E(fmtNm(f))}</td><td>${c('fill',f)}</td><td>${c('show',f)}</td><td>${c('av',f)}</td><td>${N(F[f]&&F[f].nall)}</td></tr>`).join('')+'</tbody></table></div>'
+    +`<p class="sc-note">${b.apps!=null?N(b.apps)+' apps · ':''}har unit ka ek vote; Fill ke liye ≥ ${N(b.min&&b.min.req)} requests, Show ke liye ≥ ${N(b.min&&b.min.mt)} matched; ${N(b.min&&b.min.n)} se kam units = us format ka benchmark nahi (—).</p>`; }
 function foldsHtml(x,id,lo,hi){ return fold('src','🗂 Ad sources','format-wise network ka hissa',srcBody(x,id,lo,hi))
   +fold('cov','🗂 Data coverage','har piece kitna whole · kyun',covBody(x,id,lo,hi))+fold('rep','📋 Report for developer','copy karke bhejein',repBody(id))+fold('how','❓ How this works','method',howBody(x)); }
 function appHtml(id){ const x=ALL.apps[id], a=Array.isArray(x.app)?x.app:[];
@@ -8386,9 +8559,10 @@ function reslot(el,html){ let bx=[]; try{ bx=Array.from(el.querySelectorAll('.sc
     bx.forEach((q,j)=>{ const b=same?nb[j]:(q[0]?nb.find(z=>z.id===q[0]):null); if(b&&(q[1]||q[2])){ b.scrollLeft=q[1]; b.scrollTop=q[2]; } }); }catch(e){} }
 function arrive(id,kind){ if(!onScreen()||!ALL||appIdNow()!==id) return; const x=ALL.apps[id]; if(!x||!x.d0) return; const [lo,hi]=rng(x), use=f=>!kind||String(f||'').includes(kind);
   let drew=false;
-  late(()=>{ // file 2 brings the screens' users: the table (its cells keep their width; the App total needs scr_all only)
+  late(()=>{ // file 2 brings the screens' users and the AdMob units: the table (its cells keep their width) and the App total's
     if(use('2')){ const tb=document.getElementById('sc-tb');
-      if(tb){ const tw=document.getElementById('sc-ttw'), sl=tw?+tw.scrollLeft||0:0; reslot(tb,tableHtml(x,id,lo,hi)); endSnap(sl); } }
+      if(tb){ const tw=document.getElementById('sc-ttw'), sl=tw?+tw.scrollLeft||0:0; reslot(tb,tableHtml(x,id,lo,hi)); endSnap(sl); }
+      const tt=document.getElementById('sc-totw'); if(tt) reslot(tt,totTable(x,id,lo,hi)); }
     const b=document.getElementById('sc-ddb'); if(b&&OPEN!=null&&use(SECF[SEC])){ reslot(b,secHtml(x,id,OPEN,lo,hi)); drew=true; }
     const fs={src:()=>srcBody(x,id,lo,hi),ver:()=>verBody(id),cov:()=>covBody(x,id,lo,hi),rep:()=>repBody(id)};
     for(const k in fs){ if(!use(FOLDF[k])) continue; const f=document.getElementById('sc-f-'+k); if(f) reslot(f,fs[k]()); } });
@@ -8469,7 +8643,7 @@ function left(){ let has=false; try{ has=typeof HB!=='undefined'&&HB.st.some(z=>
   Promise.resolve().then(()=>{ if(onScreen()) return; OPEN=null; try{ hbDrop('scr-dd'); }catch(e){} }); }
 return {ptr, ensure, render, paint, show, left, ready:()=>!!ALL&&!!ptr(), fold:(k,o)=>{ FOLD[k]=!!o; },
   _:{rng, normWin, normWinU, finals, sumItem, itemShare, perScore, perScoreU, sumScr, sumTrig, appU, chainOf, ftuOf, perTime, fmtT, endSnap, bannerSec, addUp, appSum, appScore, cover, coverAll, covWhy, dayState, apps, topSplit, tableRows, sortItems, sortApps, appRow, dispName, itemName, fmtOf,
-    chartModel, perLine, tipText, drawChart, rg, fd, copy, perRestore, perLoad, keep, arrive, allHtml, appHtml, secHtml, ddHtml, foldsHtml, totalHtml, attnHtml, tableHtml, userDays, layerPeriod, WDK, RANK, PIECES, SECS, FILES, chip, PU, PQ,
+    chartModel, perLine, tipText, drawChart, rg, fd, copy, perRestore, perLoad, keep, arrive, allHtml, appHtml, secHtml, ddHtml, foldsHtml, totalHtml, attnHtml, tableHtml, userDays, layerPeriod, WDK, RANK, PIECES, SECS, FILES, chip, PU, PQ, abRates, abPool, abLow, admDays, absW, achip, arank, stChip, stWhy, czTd, ddSt, absHtml, benchHtml, totTable, PCT, PI, vsP, ABCHK, AWD, ARANK,
     get:()=>({PER,PF,PTO,OPEN,SEC,SEG,MORE,COVP,SORT,TS,CH,OPENAPP}), set:o=>{ if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o){ OPEN=o.OPEN; OPENAPP=OPEN==null?null:appIdNow(); } if('SEC' in o) SEC=o.SEC;
       if('SEG' in o) SEG=o.SEG; if('MORE' in o) MORE=o.MORE; if('COVP' in o) COVP=o.COVP; if('PREAD' in o) PREAD=o.PREAD; if('TS' in o) TS=o.TS; if('SORT' in o) SORT=o.SORT; if('CH' in o) CH=o.CH; }}};
 })();

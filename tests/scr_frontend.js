@@ -140,7 +140,7 @@ function mkF2(o) {
       w: [[0, 160], [1, 40], [2, 25]], ta: [['banner', 160], ['interstitial', 40], ['app_open', 25]], dup: [0, 0], st: { v: 'w', a: 'w' } });
     if (!o.noPlace) { adm[0].push([2000, 1800, 165]); adm[1].push(k % 10 ? [100, 80, 41] : null); adm[2].push([60, 50, 25]); }
   }
-  const f2 = { v: 2, key: o.key, app_id: o.id, ft: FT, td: TD, d0: D0, screens, units, trig: [['interstitial', 'Back press', [1]], ['appopen', 'App resume', [2]]], days, adm,
+  const f2 = { v: 3, key: o.key, app_id: o.id, ft: FT, td: TD, d0: D0, screens, units, trig: [['interstitial', 'Back press', [1]], ['appopen', 'App resume', [2]]], days, adm,
     rows: { s0: { st: ['Worse', 'gira', 66], z: -4.2, h: [70, 62], W: [10000, 880, 10], N: [28000, 3360, 28], cause: 'Lower fill', terms: { fill: -12.3, req: -3.1, tie: 0.4 },
       units: [[0, 2000, 2100, 0.9, 0.92, 0.092, 0.095, 0.97, 0.99]], fbd: '2026-03-20' } },
     notes: { zone: 'assumed', admob: o.noPlace ? 'none' : 'ok', allf: 0, runs: [['2026-02-01', '2026-02-05', 1, 0]], w: ['2026-03-19', FT], n: ['2026-02-19', '2026-03-18'], dq: [] } };
@@ -165,7 +165,7 @@ function mkL(o) {
     uA: o.key === KEY.a && k === 84 ? { st: 's', g: 'c', smp: 0.4 } : { st: 'w', g: 'c', r: [[0, 600 - 40 * (k % 3)], [1, 100]] },
     s: { st: 'w', g: 'fs', r: [['banner', 'Network A', 90], ['banner', 'Network <B>', 10], ['interstitial', 'Network A', 40]] },
     x: { st: 'w', ev: ['custom_ad_shown'], r: [[0, 'custom_ad_shown', 7]], t: [['custom_ad_shown', 9]] } });
-  return { v: 2, key: o.key, d0: D0, days,
+  return { v: 3, key: o.key, d0: D0, days,
     // versions: items / same days by file 2's class index (-1 = app level)
     ver: { '1.0': { first: '2026-01-01', last: '2026-02-20', prev: null, items: { 0: [40000, 4800, 0], 1: [20000, 2000, 0], '-1': [30000, 1200, 3000] }, same_days: {} },
       '1.1<script>': { first: '2026-02-10', last: TD, prev: '1.0', items: { 0: [30000, 2700, 0], 1: [10000, 1000, 0], '-1': [30000, 2300, 2800] }, same_days: { 0: [5000, 550, 4000, 480] } } },
@@ -186,7 +186,7 @@ const S = (w, why, sc, cz, g, imp, dW) => [w, why, sc, cz, g == null ? cz : g, i
 const AP = (w, why, wn, an, more) => [w, why, wn, an].concat(more || [null, '', null, null, null]);
 // Beta's why, as the build words it now (the W days it lacks, counted by their state)
 const WHY_B = 'Not whole — 0 whole days of inline ads in the last 10 (GA4 sampled 10)';
-const ALLF = { v: 2, apps: {
+const ALLF = { v: 3, apps: {
   // (Alpha: "Format not recorded" ads every 4th day — a copy-pattern day's duplicate copies: never in the app's Ads / user)
   [ID.a]: mkAll({ key: KEY.a, ns: k => (k % 4 === 0 ? 120 : 0), st: { uA: 'w'.repeat(84) + 's' + 'w'.repeat(4) }, dk: '0'.repeat(60) + '2' + '0'.repeat(28), nvr: { mix: 1.2, within: -20.5, vpu: -3.1 },
     app: AP('Worse', 'imp/user 1.20 → 0.90 (−25%) · z −5.1 · AdMob agrees (inline −28%)', 1, 1, [75, '', { avu: -2.0, adv: -23.0 }, 0.04, { st: 'agree', f: 'inline', g: -0.3, m: -0.28, gt: -0.25, mt: -0.24 }]),
@@ -225,7 +225,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     // ── a failed load, then Try again ──
     ctx.DATA = { scr: PTR, apps_catalog: CAT, generated_at: '2026-03-30T06:00:00Z' };
     // a v 1 scr_all (an older build's: ads per 100 views) is refused, never mislabelled — "Data load nahi hua" + Try again
-    FILES['scr_all.json.gz'] = Object.assign({}, ALLF, { v: 1 }); SCR.paint(); await tick(); out.v1_all = SCREEN.innerHTML.includes('data-sc-allretry');
+    FILES['scr_all.json.gz'] = Object.assign({}, ALLF, { v: 2 }); SCR.paint(); await tick(); out.v1_all = SCREEN.innerHTML.includes('data-sc-allretry');
     FILES['scr_all.json.gz'] = ALLF;
     FAIL.add('scr_all.json.gz'); SCR.paint(); out.loading = SCREEN.innerHTML.includes('⏳ Loading…') || SCREEN.innerHTML.includes('data-sc-allretry'); await tick();
     out.fail_html = SCREEN.innerHTML.includes('data-sc-allretry');
@@ -452,7 +452,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
           const ac = am(SCREEN.innerHTML, 'Alpha App');
           ctx.APP = 'Alpha App'; SCR.paint(); const hp = SCREEN.innerHTML, tp = hp.slice(hp.indexOf('id="sc-total"'), hp.indexOf('id="sc-attn"'));
           const c0 = (/<tr><td>Imp \/ user \/ day<\/td><td[^>]*>(.*?)<\/td>/.exec(tp) || [])[1] || '';
-          out.v2.all.admob_mute = { all: [ac['Imp / user / day'], ac.Score, _.appRow({ id: ID.a, name: 'Alpha App', x: xp }).sc], total: c0,
+          out.v2.all.admob_mute = { all: [ac['Imp / user / day'], ac['Low screens'], _.appRow({ id: ID.a, name: 'Alpha App', x: xp }).sc], total: c0,
             crumb: (/<div class="sc-crumb">(.*?)<\/div>/.exec(hp) || [])[1] || '', tile: (/<div class="sc-kl">Ads \/ 100 views<\/div><div class="sc-kv">[^<]*<\/div><div class="sc-ks">(.*?)<\/div><\/div>/.exec(tp) || [])[1] || '',
             // GA4's new vs returning split comes from the GA4 logging that changed: not in the details (nor Needs attention)
             nvr: [tp.includes('New vs returning'), hp.slice(hp.indexOf('id="sc-attn"'), hp.indexOf('id="sc-tcard"')).includes('new-user mix'),
@@ -467,7 +467,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       ctx.document.getElementById = id => id === 'sc-chart' ? box : null; _.set({ OPEN: 0, SEC: 'ov', SEG: 's', PER: '30' }); SCR.paint(); ctx.document.getElementById = () => null;
       h = SCREEN.innerHTML; const dd = h.slice(h.indexOf('id="sc-dd"'));
       out.v2.dd = { tiles: [...dd.matchAll(/<div class="sc-kl">([^<]+)<\/div><div class="sc-kv">([^<]*)<\/div><div class="sc-ks">(.*?)<\/div><\/div>/g)].map(m => m.slice(1)),
-        parts: [...dd.matchAll(/<tr><td>(Views per user|Time per view|Ads per minute)<\/td><td[^>]*>([^<]+)<\/td><\/tr>/g)].map(m => m.slice(1)), why: /Why it moved <small class="sc-faint">% of normal · jod −34%/.test(dd),
+        parts: [...dd.matchAll(/<tr><td>(Views per user|Time per view|Ads per minute)<\/td><td[^>]*>([^<]+)<\/td><\/tr>/g)].map(m => m.slice(1)), why: /Why it moved vs own past <small class="sc-faint">% of normal · jod −34% = vs own past/.test(dd),
         head: (/<span class="sc-dds">(.*?)<\/span><button/.exec(dd) || [])[1] || null, adlogic: dd.includes('Ad logic (AdMob): <b>Lower fill</b>') && dd.includes('<th>% of normal ads per view</th>'),
         months: [...dd.matchAll(/<thead><tr><th>(Month|Day)<\/th>(.*?)<\/tr><\/thead>/g)].map(m => [m[1], [...m[2].matchAll(/<th>([^<]+)<\/th>/g)].map(q => q[1])]),
         svg: { aria: /aria-label="Impressions per user per day and users, by day"/.test(box._h), normal: /class="sc-nt">Normal [\d.]+<\/text>/.test(box._h), last: /class="sc-rl"[^>]*>[\d.]+<\/text>/.test(box._h), avg: /class="sc-al">Avg [\d.]+<\/text>/.test(box._h), bars: (box._h.match(/<rect /g) || []).length },
@@ -491,7 +491,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       delete _.FILES[nA2]; FAIL.add(nA2); _.set({ MORE: true }); SCR.paint(); h = SCREEN.innerHTML;
       out.v2_wait = { main: cm(h, 0)['Imp / user / day'], ud: cm(h, 0)['Users / day'], other: cm(h, 2)['Imp / user / day'], total: /<tr><td>Imp \/ user \/ day<\/td><td[^>]*><b>[\d.]+<\/b>/.test(h) };
       await tick(); SCR.paint(); h = SCREEN.innerHTML; out.v2_wait.err = cm(h, 0)['Imp / user / day'];
-      FAIL.delete(nA2); delete _.FILES[nA2]; FILES[nA2] = Object.assign({}, keepF, { v: 1 }); SCR.paint(); await tick(); SCR.paint();
+      FAIL.delete(nA2); delete _.FILES[nA2]; FILES[nA2] = Object.assign({}, keepF, { v: 2 }); SCR.paint(); await tick(); SCR.paint();
       out.v2_wait.v1 = cm(SCREEN.innerHTML, 0)['Imp / user / day'];
     } finally { FAIL.delete(nA2); FILES[nA2] = keepF; _.FILES[nA2] = keepA2; _.set({ MORE: false }); }
     SCR.paint(); await tick();
@@ -750,7 +750,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     // ── a row under 1 % of the app's ads of its kind in the period and its normal: "score —" (titled, no colour) in the
     // table and the drill-down; one the build left N/A "Too few ads" is never in Needs attention ──
     _.set({ OPEN: null, SEG: 's', MORE: true, PER: '30' }); SCR.paint(); h = SCREEN.innerHTML;
-    out.low = { cells: [1, 3, 4, 5].map(i => cm(h, i).Score),
+    out.low = { cells: [1, 3, 4, 5].map(i => cm(h, i)['Ads / view']),
       ps: [1, 3, 4, 5].map(i => { const p = _.perScoreU(xA, F2A(), i, '2026-02-27', '2026-03-28'); return [p.low, p.score]; }),
       share: [3, 4, 5, 6].map(i => Math.round(_.itemShare(xA, i, '2026-02-27', '2026-03-28') * 1e4) / 1e4) };
     _.set({ OPEN: 5, SEC: 'ov' }); SCR.paint(); out.low.dd = (/<span class="sc-dds">(.*?)<\/span><button/.exec(SCREEN.innerHTML) || [])[1] || null;
@@ -763,7 +763,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     try {
       ctx.APP = 'tiny'; _.set({ PER: '7' }); SCR.paint(); await tick(); SCR.paint(); h = SCREEN.innerHTML;
       out.tiny = { attn: [...h.slice(h.indexOf('id="sc-attn"'), h.indexOf('id="sc-tcard"')).matchAll(/data-sc-open="(\d+)"/g)].map(m => +m[1]),
-        big: cm(h, 0).Score, small: cm(h, 1).Score, why: cm(h, 1).Screen };
+        big: cm(h, 0)['Ads / view'], small: cm(h, 1)['Ads / view'], why: cm(h, 1).Screen };
     } finally { delete ALLF.apps.tiny; delete ctx.DATA.scr.apps.tiny; ctx.DATA.scr.fv = 'f5'; _.set({ PER: '30' }); ctx.APP = 'Alpha App'; }
     SCR.paint(); await tick();
     // ── no whole screen users day (GA4 sampled the users read: no "U") and the daily users of another stream (no "au",
@@ -772,7 +772,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       st: { uV: 's'.repeat(30), uA: 's'.repeat(30) }, bf: {}, dq: [], app: AP('N/A', 'Not whole — 0 whole days of ads in the last 10 (users not in yet 10)', 0, 0), status: {}, auw: 'stream' };
     for (let k = 0; k < 30; k++) { nu.V.push([1000, 100]); nu.A.push([90, 5]); nu.vis.push(1100); nu.ta.push([95, 10, 0]); }
     const nu2 = 'scr_' + nu.key + '.json.gz';
-    FILES[nu2] = { v: 2, key: nu.key, d0: nu.d0, ft: FT, td: TD, screens: [['x.y.OneActivity', 's']], units: [], trig: [], days: Array.from({ length: 30 }, () => ({ v: [[0, 1000, 9000]] })), adm: {}, rows: {}, notes: {}, auw: 'stream' };
+    FILES[nu2] = { v: 3, key: nu.key, d0: nu.d0, ft: FT, td: TD, screens: [['x.y.OneActivity', 's']], units: [], trig: [], days: Array.from({ length: 30 }, () => ({ v: [[0, 1000, 9000]] })), adm: {}, rows: {}, notes: {}, auw: 'stream' };
     ALLF.apps.nu = nu; ctx.DATA.scr.apps.nu = { key: nu.key, v: 'n', vl: 'n', from: nu.d0, ft: FT }; ctx.DATA.scr.fv = 'f6';
     try {
       ctx.APP = 'nu'; _.set({ PER: '7', OPEN: null, SEG: 's', MORE: false }); SCR.paint(); await tick(); SCR.paint(); h = SCREEN.innerHTML;
@@ -786,7 +786,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       vis: [], V: [], A: [], ta: [], st: {}, bf: {}, dq: [], app: ['Normal', '', 0, 0], status: {} };
     for (let k = 0; k < 30; k++) { bn.V.push([1000, 1000, 1000, 1000]); bn.A.push([1500, 1500, 900, 1500]); bn.vis.push(4000); bn.ta.push([5400, 0, 0]); }
     const bn2 = 'scr_' + bn.key + '.json.gz';
-    FILES[bn2] = { v: 2, key: bn.key, d0: bn.d0, ft: FT, td: TD, screens: [['x.y.HotActivity', 's'], ['x.y.NoTimeActivity', 's'], ['x.y.CalmActivity', 's'], ['x.y.RareActivity', 's']], units: [], trig: [],
+    FILES[bn2] = { v: 3, key: bn.key, d0: bn.d0, ft: FT, td: TD, screens: [['x.y.HotActivity', 's'], ['x.y.NoTimeActivity', 's'], ['x.y.CalmActivity', 's'], ['x.y.RareActivity', 's']], units: [], trig: [],
       days: Array.from({ length: 30 }, () => ({ v: [[0, 1000, 44600], [1, 1000, 0], [2, 1000, 30000], [3, 1000, 20000]] })), adm: {}, rows: {}, notes: {}, auw: 'none' };
     ALLF.apps.bn = bn; ctx.DATA.scr.apps.bn = { key: bn.key, v: 'b', vl: 'b', from: bn.d0, ft: FT }; ctx.DATA.scr.fv = 'f8';
     try {
@@ -844,7 +844,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       const zk = 'a0000000000d', zn = 'scr_' + zk + '.json.gz', zs = SU.map((_u, j) => 'x.y.S' + j + 'Activity');
       const zx = { key: zk, ft: FT, td: TD, d0: D0, items: zs.map(c => [c, 's', 'inline']).concat([['', 'o', 'inline'], ['(not set)', 'ns', 'inline']]), vis: [], V: [], A: [], ta: [], st: {}, bf: {},
         dq: [], status: {}, app: AP('Normal', '', 0, 0), ftu: FT, dk: '0'.repeat(ND), au: [] };
-      const zf = { v: 2, key: zk, d0: D0, ft: FT, td: TD, screens: zs.map(c => [c, 's']).concat([['x.y.RestActivity', 's'], ['(not set)', 'ns']]), units: [], trig: [], days: [], adm: {}, rows: {}, notes: {},
+      const zf = { v: 3, key: zk, d0: D0, ft: FT, td: TD, screens: zs.map(c => [c, 's']).concat([['x.y.RestActivity', 's'], ['(not set)', 'ns']]), units: [], trig: [], days: [], adm: {}, rows: {}, notes: {},
         Us: [0, 1, 2, 3, 4], U: [], au: [] };
       for (let k = 0; k < ND; k++) { const ad = k >= 57 ? SA : SN; zx.V.push(SV.concat([100, 10])); zx.A.push(ad.concat([5, 1])); zx.vis.push(SV.reduce((s, v) => s + v, 110));
         zx.ta.push([ad.reduce((s, v) => s + v, 6), 0, 0]); zx.au.push(k > 86 ? null : 3000); zf.au.push(k > 86 ? null : 3000);
@@ -855,8 +855,9 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
         ctx.APP = 'sorty'; show({}); await tick(8); show({}); await tick(8); const hz = show({}); T['s z 30'] = read(hz, 'sc-ttw'); T['tot z 30'] = read(hz, 'sc-total');
         ctx.APP = ''; T['all z'] = read(show({}), 'sc-atw');
         // the rows' own numbers (30 days): the Screens rows (Alpha, sorty) per sort key, All apps' per sort key
-        const mS = id => { const xx = xOf(id); return Object.fromEntries(_.tableRows(xx, ...P30, 's', f2Of(xx)).map(z => [String(z.i), { agg: z.agg, ud: z.ud, vu: z.vu, tv: z.tv, tu: z.tu, am: z.am, r: z.r, n: z.n, sc: z.sc }])); };
-        const M = { a: mS(ID.a), z: mS('sorty'), all: Object.fromEntries(_.apps().map(_.appRow).map(z => [z.r.name, { dau: z.dau, r: z.ru, n: z.n, sc: z.sc, wn: z.wn, an: z.an }])) };
+        // (Fill / Show rate as printed: in %)
+        const mS = id => { const xx = xOf(id), pc = v => v == null ? null : v * 100; return Object.fromEntries(_.tableRows(xx, ...P30, 's', f2Of(xx)).map(z => [String(z.i), { agg: z.agg, ud: z.ud, vu: z.vu, tv: z.tv, tu: z.tu, am: z.am, r: z.r, n: z.n, sc: z.sc, av: z.av, fl: pc(z.fl), sr: pc(z.sr) }])); };
+        const M = { a: mS(ID.a), z: mS('sorty'), all: Object.fromEntries(_.apps().map(_.appRow).map(z => [z.r.name, { dau: z.dau, r: z.ru, n: z.n, sc: z.sc, lo: z.low, wn: z.wn, an: z.an }])) };
         // a tap on every sort header, twice (its direction turns)
         const S = {}, tap = (a, k) => SCREEN.onclick({ target: { closest: s => s === '[data-sc-' + a + ']' ? { dataset: a === 'tsort' ? { scTsort: k } : { scSort: k } } : null } });
         const rec = (t, l, k, want) => ({ head: l, aria: (t.heads.find(q => q[1] === k) || [])[3], rows: t.rows.map(r => r[0]), col: t.rows.map(r => (t.map[r[0]][l] || [])[1]), want });
@@ -868,6 +869,58 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
           S['all ' + k + ' ' + n] = rec(read(SCREEN.innerHTML, 'sc-atw'), l, k, _.sortApps(_.apps().map(_.appRow)).map(z => z.r.name)); } }
         out.order = { T, M, S };
       } finally { delete ALLF.apps.sorty; delete ctx.DATA.scr.apps.sorty; delete FILES[zn]; ctx.DATA.scr.fv = 'f11'; ctx.APP = 'Alpha App';
+        _.set({ OPEN: null, SEG: 's', MORE: false, PER: '30', TS: { k: 'st', dir: 1 }, SORT: { k: 'rank', dir: 1 } }); }
+      SCR.paint(); await tick(); }
+    // ── v 3: the absolute status (owner, 7 Nov 2026: "ye normal nahi he — ye kam he na?") on "absy":
+    // Home (a native unit shared 80 / 20 with List, an unmatched banner unit beside it), List (native 20 % + a shared banner
+    // unit), Rare (few ads per view), All other screens; unit-split days ("fu") up to 21 Mar, screen-only after (σ falls back
+    // to the newest 28 split days); a synthetic format benchmark; the build's W numbers in rows.s0.ab ──
+    { const ak = 'a0000000000e', an2 = 'scr_' + ak + '.json.gz', W = ['2026-03-19', FT];
+      const ST = (w, why, sc, cz, aw, ac, wk) => [w, why, sc, cz, cz, null, 10, aw, ac, wk];
+      const ax = { key: ak, ft: FT, td: TD, d0: D0, items: [['x.y.HomeActivity', 's', 'inline'], ['x.y.ListActivity', 's', 'inline'], ['x.y.RareActivity', 's', 'inline'], ['', 'o', 'inline']],
+        vis: [], V: [], A: [], ta: [], st: {}, bf: {}, dq: [], app: AP('Normal', '', 0, 0), ftu: FT, dk: '0'.repeat(ND), au: [], lo: 2,
+        status: { 0: ST('Normal', '', 101, '', 'Low', 'Show rate 20% (native median 70%): ads filled but not shown; Fill 60% (native median 90%): requests not filled', [['show', 'native', 0.2, 0.7, 0.5], ['fill', 'native', 0.6, 0.9, 0.75]]),
+          1: ST('Worse', 'imp/user 0.30 → 0.20 (−33%)', 67, 'Lower show rate', 'Low', 'Show rate 15% (native median 70%): ads filled but not shown', [['show', 'native', 0.15, 0.7, 0.5]]),
+          2: ST('Normal', '', 100, '', 'Few ads', 'Ads / view 3.0% (banner median 12%): few ads per view', [['av', 'banner', 3, 12, 5]]),
+          3: ST('Normal', '', 100, '', '', '', []) } };
+      const units = [['nat_a', 'native', ['ca-app-pub-0000000000000000/2001'], 'nat_a', 'name', ''], ['ban_b', 'banner', ['ca-app-pub-0000000000000000/2002'], 'ban_b', 'name', ''], ['ghost', 'banner', [], '', '', '']];
+      const af = { v: 3, key: ak, app_id: 'absy', ft: FT, td: TD, d0: D0, screens: [['x.y.HomeActivity', 's'], ['x.y.ListActivity', 's'], ['x.y.RareActivity', 's'], ['x.y.RestActivity', 's']], units, ufmt: ['native', 'banner', null], trig: [],
+        days: [], adm: { 0: [], 1: [] }, notes: {}, Us: [0, 1, 2], U: [], au: [],
+        rows: { s0: { st: ['Normal', '', 101], ab: { av: 30, fill: 0.6, show: 0.2, p: { native: [0.8889, 80000, 48000, 9600] }, sig: ['W', 3, '2026-03-19', '2026-03-21'], unm: 0.1111, why: '' } } } };
+      for (let k = 0; k < ND; k++) { const fu = k <= 79;
+        ax.V.push([1000, 500, 400, 50]); ax.A.push([300, 40, 12, 5]); ax.vis.push(1950); ax.ta.push([357, 0, 0]); ax.au.push(k > 86 ? null : 1000); af.au.push(k > 86 ? null : 1000);
+        af.days.push({ v: [[0, 1000, 30000], [1, 500, 10000], [2, 400, 8000], [3, 50, 500]], a: fu ? { g: 'fu', r: [[0, 0, 80], [1, 0, 20], [0, 2, 10], [1, 1, 30], [2, 1, 5]] } : { g: 'c', r: [[0, 300], [1, 40], [2, 12], [3, 5]] },
+          w: [[0, 100], [1, 40], [2, 10]], st: { v: 'w', a: 'w' } });
+        af.adm[0].push(k > 86 ? null : [10000, k < 77 ? 7000 : 6000, k < 77 ? 1760 : 1200]); af.adm[1].push(k > 86 ? null : [5000, 4500, 4050]); af.U.push(k > 86 ? null : [400, 200, 100]); }
+      for (const r of READS) { ax.st[r] = 'w'.repeat(ND); ax.bf[r] = [D0, true]; }
+      const BENCH = { fmt: { native: { fill: [0.4, 0.75, 0.9, 0.97, 30], show: [0.2, 0.5, 0.7, 0.85, 30], av: [3, 8, 20, 22], nall: 60 }, banner: { fill: [0.5, 0.8, 0.9, 0.95, 40], show: [0.5, 0.7, 0.85, 0.9, 45], av: [2, 5, 12, 25], nall: 80 },
+        rewarded: { fill: null, show: null, av: null, nall: 4 } }, min: { req: 1000, mt: 300, ads: 300, n: 20 }, apps: 3 };
+      ALLF.apps.absy = ax; ALLF.bench = BENCH; FILES[an2] = af; ctx.DATA.scr.apps.absy = { key: ak, v: 'ab', vl: 'ab', from: D0, ft: FT }; ctx.DATA.scr.fv = 'f12';
+      try {
+        ctx.APP = 'absy'; _.set({ OPEN: null, SEG: 's', PER: '30', TS: { k: 'st', dir: 1 } }); SCR.paint(); await tick(8); _.set({ MORE: true }); SCR.paint(); h = SCREEN.innerHTML;
+        const f2 = _.FILES[an2].raw, rr = (i, lo, hi) => { const e = _.abRates(ax, f2, i, lo, hi); return { fill: e.fill, show: e.show, unm: e.unm, sig: e.sig, sh: e.sh, p: e.p, nK: e.nK, why: e.why }; };
+        const titleOf = (hh, i, lab) => { const H = hdOf(hh, 'sc-ttw'), c = tds(hh, i)[H.indexOf(lab)]; return c ? [(/ title="([^"]*)"/.exec(c[0]) || [])[1] || '', / class="sc-lo"/.test(c[0])] : null; };
+        out.abs = { heads: heads(h), rows: [0, 1, 2, 3].map(i => cm(h, i)), lo: [0, 1, 2].map(i => ({ fill: titleOf(h, i, 'Fill'), show: titleOf(h, i, 'Show rate'), av: titleOf(h, i, 'Ads / view') })),
+          r30: [0, 1, 2, 3].map(i => rr(i, ...P30)), r7: rr(0, '2026-03-22', FT), rW: rr(0, ...W), abW: f2.rows.s0.ab, today: rr(0, TD, TD), order: _.sortItems(_.tableRows(ax, ...P30, 's', f2)).map(z => z.i),
+          attn: h.slice(h.indexOf('id="sc-attn"'), h.indexOf('id="sc-tcard"')), tot: h.slice(h.indexOf('id="sc-totw"'), h.indexOf('id="sc-attn"')),
+          pool: (() => { const e = _.abPool(f2, ax, [0, 1, 2], ...P30); return [e.fill, e.show, e.nK]; })(), trig: _.abPool(f2, ax, [2], ...P30).why };
+        // the W numbers: the period = the status window (Custom) — the page's own Fill / Show = the build's rows.s0.ab
+        _.set({ PER: 'cus', PF: W[0], PTO: W[1] }); SCR.paint(); out.abs.cusW = cm(SCREEN.innerHTML, 0);
+        _.set({ PER: 'today' }); SCR.paint(); out.abs.todayCells = cm(SCREEN.innerHTML, 0);
+        _.set({ PER: '30', OPEN: 0, SEC: 'ov' }); SCR.paint(); h = SCREEN.innerHTML; out.abs.dd = h.slice(h.indexOf('id="sc-dd"'));
+        out.abs.dds = (/<span class="sc-dds">(.*?)<\/span><button/.exec(h) || [])[1] || null;
+        _.set({ OPEN: null }); ctx.APP = ''; SCR.paint(); h = SCREEN.innerHTML; out.abs.all = am(h, 'absy'); out.abs.allHeads = [...(/<table class="sc-t"><thead><tr>(.*?)<\/tr>/.exec(h.slice(h.indexOf('id="sc-atw"'))) || [, ''])[1].matchAll(/data-sc-sort="([a-z]+)"/g)].map(m => m[1]);
+        // the How it works fold: the benchmark as measured, with its basis
+        ctx.APP = 'absy'; SCR.paint(); h = SCREEN.innerHTML; out.abs.how = h.slice(h.indexOf('data-sc-fold="how"'));
+        // the benchmark failed (abs word ""): "—", never a word; no benchmark shipped: nothing marked; a status without the abs
+        // fields (an older shape): its own word and cause
+        const xb = JSON.parse(JSON.stringify(ax)); xb.status['0'][7] = ''; xb.status['0'][8] = ''; xb.status['0'][9] = [];
+        out.abs.failed = cm(_.tableHtml(xb, 'absy', ...P30), 0).Screen;
+        const xo = JSON.parse(JSON.stringify(ax)); for (const k in xo.status) xo.status[k] = xo.status[k].slice(0, 7);
+        out.abs.older = cm(_.tableHtml(xo, 'absy', ...P30), 1);
+        delete ALLF.bench; ctx.DATA.scr.fv = 'f12b'; SCR.paint(); await tick(); SCR.paint(); h = SCREEN.innerHTML;
+        out.abs.nobench = [h.includes('data-sc-open="0"'), /class="sc-lo"/.test(h.slice(h.indexOf('id="sc-ttw"')))];
+      } finally { delete ALLF.apps.absy; delete ALLF.bench; delete FILES[an2]; delete ctx.DATA.scr.apps.absy; ctx.DATA.scr.fv = 'f13'; ctx.APP = 'Alpha App';
         _.set({ OPEN: null, SEG: 's', MORE: false, PER: '30', TS: { k: 'st', dir: 1 }, SORT: { k: 'rank', dir: 1 } }); }
       SCR.paint(); await tick(); }
     // hub card none: the pointer alone never loads a file
