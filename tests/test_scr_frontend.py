@@ -32,7 +32,10 @@ from scr_all alone (its parts adding up, copy days left out), All apps from scr_
 user), v 3 files only (an older file refused visibly). The column order (owner: users, then screen views, then the ads): every
 table's headers on every period and file state, each cell read by the header it sits under (bound to the row's own number
 for that key), every sort header sorting its own column, the App total's rows, the users tile first in the details.
-Skipped where node is not installed. No real data."""
+v 4 (owner, 8 Nov 2026: "Naya logic banao"): the one table of Firebase's numbers (Users of the period, Views, Time / user,
+Ads, Revenue, its share) with the AdMob full-screen rows and the total, the signals card and cells, a Custom range and a
+sampled month saying why, the sort, the period's report (English, no money), All apps (Users, Views, Ads, Revenue,
+signals), the old status words gone from the page. Skipped where node is not installed. No real data."""
 import json
 import math
 import os
@@ -106,30 +109,14 @@ def test_sums_skip_days_without_the_quantity(out):
 
 
 def test_coverage_strip(out):
-    want = [["v", 5, 6], ["a", 4, 6], ["w", 5, 6], ["r", 3, 6], ["c", 3, 6], ["n", 4, 6], ["k", 5, 6], ["e", 4, 6],
-            ["u", 4, 6], ["s", 5, 6], ["x", 5, 6]]                                  # (u: Alpha's users who saw ads sampled 26 Mar)
+    want = [["v", 5, 6], ["a", 4, 6], ["m", 5, 6], ["w", 5, 6], ["r", 3, 6], ["c", 3, 6], ["n", 4, 6], ["k", 5, 6],
+            ["e", 4, 6], ["u", 4, 6], ["s", 5, 6], ["x", 5, 6]]                     # (u: Alpha's users who saw ads sampled 26 Mar)
     assert out["cov"] == want and out["cov_fn"] == want                              # the hidden app is not counted
     ids = [x[0] for x in out["cov_list"]]
     assert ids == ["ca-app-pub-0000000000000000~22", "ca-app-pub-0000000000000000~23", "ca-app-pub-0000000000000000~25"]
     assert out["cov_list"][0][1] == "GA4 sampled 30 din"
     assert out["cov_list"][1][1] == "history 2 Mar 2026 se (bhar rahi hai) · 3 din abhi padhe nahi"
     assert out["cov_list"][2][1] == "abhi koi din nahi padha"
-
-
-def test_status_words_and_order(out):
-    assert out["wdk"] == {"Worse": "bigda", "Watch": "dhyan", "Better": "behtar", "Normal": "normal", "Too early": "jaldi", "N/A": "lagu"}
-    assert out["rank"] == {"Worse": 0, "Watch": 1, "Better": 2, "Normal": 3, "Too early": 4, "N/A": 5}
-    assert out["all_rows"] == ["Alpha App", "Gamma App", "Hostile App", "Delta App", "Empty App", "Beta App"]   # Worse first
-    assert out["all_chips"] == ["bigda", "dhyan", "behtar", "normal", "jaldi", "lagu"]
-    assert out["sort_v"][0] == "Alpha App"                                           # by daily users (the others have none)
-    # judged screens by status, then the aggregate rows pinned at the bottom in their fixed order (never sorted)
-    assert out["sort_items"] == [0, 1, 2, 3, 4, 5]
-
-
-def test_all_apps(out):
-    assert not out["all_hidden"] and len(out["all_icons"]) == 6                      # every name with its own logo by app id
-    assert out["all_hostile_why"] and out["all_period"] and out["all_time"]
-    assert out["row_tap"] == "Gamma App"
 
 
 def test_app_pages_render_for_every_kind_of_app(out):
@@ -139,38 +126,29 @@ def test_app_pages_render_for_every_kind_of_app(out):
         assert not p[k]["errors"] and p[k]["n_sections"] == 40 and not p[k]["empty"], k
         assert p[k]["loaded"][:2] == ["scr_%s.json.gz" % key, "scr_l_%s.json.gz" % key]      # file 2, then its layers
     assert p["e"]["empty"] and out["empty_msg"] == "28 Mar 2026 tak"                 # no days yet: says so
-    assert p["a"]["rows"] == [0, 1, 2, 3, 4, 5]                                      # the aggregates pinned last
-    assert p["d"]["ok_all"]                                                          # no flag: "✅ Sab normal"
-    assert not p["b"]["ok_all"]                                                      # all N/A: never "Sab screens normal"
+    assert p["a"]["rows"] == [0, 1, 6, 7, 3, 5]          # v 4: by revenue — screens and full-screen rows, a row's details
+    assert p["d"]["ok_all"] and not p["a"]["ok_all"]     # no signal in the period: "✅ Is period me koi signal nahi"
     assert out["hidden_page"]
 
 
 def test_app_page_parts(out):
     a = out["a_page"]
-    assert a["crumb"] and a["mini"] and a["seg"] and a["period"] and a["cus_row"] and a["how"] and a["total"]
-    # Needs attention: the App row first, then one line per (word, cause group) with ≈ Σ the rows' impacts
-    assert a["attn"][0] == ["bigda", "App total", "imp/user 1.20 → 0.90 (−25%) · z −5.1 · AdMob agrees (inline −28%)"]
-    assert a["attn"][1:] == [["bigda", "Lower fill", "1 row (Main) · ≈ −12.0% of the app's imp/user"],
-                             ["dhyan", "Fewer ad requests", "1 row (All other screens) · ≈ −3.0% of the app's imp/user"]]
-    assert a["editor"] and a["title"] and a["unjudged"] == 3                         # "Activity" dropped, the full class on hover
-    assert a["folds"] == ["app", "src", "cov", "rep", "how"]                         # Versions now inside the App total's details
+    # v 4: the crumb, the period, the signals card, the table — no App total block, no Screens / Full-screen switch
+    assert a["crumb"] and a["period"] and a["cus_row"] and a["how"] and not a["total"] and not a["mini"] and not a["seg"]
+    assert a["editor"] and a["title"] and a["unjudged"] == 0                         # "Activity" dropped, the full class on hover
+    assert a["folds"] == ["src", "cov", "rep", "how"]
     assert a["cov_fold"] and a["rep_fold"] and a["src_fold"] and a["notes"]
     assert a["chips"] == ["today", "yday", "7", "tm", "lm", "30", "60", "90", "all", "cus", "mon:2026-01", "mon:2026-02", "mon:2026-03"]
     assert a["mover"] == [["mon:2026-01", "false", False, "‹"], ["mon:2026-02", "false", False, "Feb 2026"], ["mon:2026-03", "false", False, "›"]]
-    assert out["today"] == {"line": True, "muted": True}                             # "Today (GA4 · 30 Mar) · not final", score muted
-    assert out["top"] == [0, 1, 2, 3, 4, 5]
-    assert out["top_many"] == [0, 1, 2, 9, 10]                                       # 90 % of views + the Worse row + unjudged
-    assert out["many_less"][1] == "6" and out["many_more"] == [11, True]
+
 
 
 def test_drill_down_sections(out):
     x = out["alpha"]
-    assert x["ov_terms"] and x["ov_months"] == [["Mar 2026", 30], ["Feb 2026", 28], ["Jan 2026", 31]]
+    assert not x["ov_terms"] and x["ov_months"] == [["Mar 2026", 30], ["Feb 2026", 28], ["Jan 2026", 31]]   # (no old cause)
     assert x["ov_days"] == 89 and x["ov_first_day"] == "30 Mar 2026"               # full history, newest first
-    assert x["un"] == ["unit_a", "unit_a"] and x["un_fs"] == ["unit_b"]            # the period's units + the cause's (status window)
-    assert x["un_cz"] == ("<td>2,000 <small>normal 2,100</small></td><td>90.0% <small>92.0%</small></td>"
-                          "<td>9.2% <small>9.5%</small></td><td>0.97 <small>0.99</small></td>")
-    assert "<td>3,000</td><td>62.5%</td><td>2,000 <small>normal 2,000</small></td><td>90.0% <small>90.0%</small></td>" in x["un_row"]
+    assert x["un"] == ["unit_a"] and x["un_fs"] == ["unit_b"] and x["un_cz"] is None   # the period's units (v 4: no old cause)
+    assert "<td>3,000</td><td>62.5%</td><td>2,000 <small>pehle 2,000</small></td><td>90.0% <small>90.0%</small></td>" in x["un_row"]
     assert x["ver"] and x["ver_same"] == ["11.0", "12.0", "−8%"]
     assert x["cc"] == [["[XA] Name XA", "16,800", "1,960", "11.7"], ["[XB] Name XB", "8,400", "560", "6.7"]]   # the edge month's shard
     assert x["cc_notes"] == [True, True]                                             # a too-big / failed month says so
@@ -213,12 +191,10 @@ def test_labels_are_simple_english():
 
 
 def test_rendered_labels(out):
-    assert out["labels"] == {"terms": True, "un": True, "cz": True, "ver": True}
-    assert out["a_page"]["mini"]                                                     # the App total's columns
+    assert out["labels"] == {"terms": False, "un": True, "cz": False, "ver": True}   # (the old cause tables: gone)
     # the short cell labels: the History column, the crumb, the days a number stands on, a unit AdMob does not have
-    assert out["all_hist"] == ["from 1 Jan 2026 ✓"] * 4 + ["from 20 Mar 2026 ⏳", "from 1 Jan 2026 ✓"]
+    assert sorted(out["all_hist"]) == sorted(["from 1 Jan 2026 ✓"] * 5 + ["from 20 Mar 2026 ⏳"])   # (v 4: by revenue)
     assert out["a_page"]["crumb"]                                                    # "history from 1 Jan 2026"
-    assert out["pages"]["a"]["basis"] == "27/30 days"                                # the days with the screen's users
     assert out["gamma"]["month_days"] == []                                          # no users: no per-user month numbers
     assert out["not_in_admob"] == "<small>Not in AdMob</small>"
 
@@ -310,25 +286,18 @@ def test_a_section_needing_both_files_shows_a_failed_file_2(out):
     assert g["nvr_l_err"] == ["scr_l_a00000000001.json.gz", False, False]
 
 
-def test_status_sort_honours_its_direction(out):
-    t = out["tsort"]
-    assert t["asc"] == [[0, 1, 2, 3, 4, 5], "ascending"]                             # Worse first (the default)
-    assert t["desc"] == [[1, 0, 2, 3, 4, 5], "descending"]                           # reversed, as its header says
-    assert t["back"] == t["asc"]
-    assert out["sort_items_desc"] == [1, 0, 2, 3, 4, 5]                             # the aggregates stay pinned at the bottom
-
-
 def test_report_copy_control_keeps_its_place_while_loading(out):
+    # v 4: the report is the picked period's signals from file 2 alone (the row's own in its details, the app's in the
+    # fold): before file 2 the same disabled Copy button + reserved line; its failed load: the error + Try again
     r = out["rep"]
     head = ('<div class="sc-copy"><button type="button" class="sc-back" data-sc-copy="row"%s>%s</button>'
             '<span class="sc-cpl" id="sc-cpl-row" aria-live="polite">%s</span></div>')
-    assert r["ready_head"] == head % ("", "📋 Copy report", "4 lines")
-    assert r["l_loading"] == head % (" disabled", "Loading data…", "") == r["f2_loading"]   # same button, same reserved line
-    assert ('<div class="sc-copy"><button type="button" class="sc-back" data-sc-copy="app" disabled>Loading data…</button>'
-            '<span class="sc-cpl" id="sc-cpl-app" aria-live="polite"></span></div>') in r["fold_loading"]
-    for k, f in (("l_err", "scr_l_a00000000001.json.gz"), ("f2_err", "scr_a00000000001.json.gz"),
-                 ("fold_err", "scr_l_a00000000001.json.gz")):
-        assert 'data-sc-retry="%s">Try again</button>' % f in r[k] and "data-sc-copy" not in r[k], k
+    assert r["ready_head"] == head % ("", "📋 Copy report", "5 lines")
+    assert r["l_loading"].startswith(r["ready_head"]) and r["l_err"].startswith(r["ready_head"])   # scr_l is not needed
+    assert r["f2_loading"] == head % (" disabled", "Loading data…", "")
+    assert 'data-sc-retry="scr_a00000000001.json.gz">Try again</button>' in r["f2_err"] and "data-sc-copy" not in r["f2_err"]
+    for k in ("fold_loading", "fold_err"):
+        assert 'data-sc-copy="app">📋 Copy report</button>' in r[k] and "Screens report — Alpha App" in r[k], k
     assert "Is app ki detail file is build me nahi bani." in r["nofile"] and r["after"]
 
 
@@ -351,7 +320,7 @@ def test_unreadable_store_days_say_so(out):
 def test_a_day_not_whole_is_never_called_ga4_sampled(out):
     # a day the fetch never asked GA4 about ships "-" (not read yet): no line puts every day that is not whole on GA4 —
     # the N/A line names each part, a layer note counts the days not read beside the ones GA4 gave
-    assert out["a_page"]["how_na"] == ["whole din kam / logging badli / ads nahi / users nahi aaye / ads bahut kam"]
+    assert out["a_page"]["how_na"] == [None]                                         # (v 4: the old N/A words gone)
     assert out["nvr_note"] == "2/30 din ye layer whole nahi aayi ya abhi padhi nahi (us din ka hissa nahi gina)."
     p = _page()
     m = p[p.index("const SCR=(()=>{"):p.index("function renderScreens(){")]
@@ -359,44 +328,9 @@ def test_a_day_not_whole_is_never_called_ga4_sampled(out):
         assert old not in m, old
 
 
-def test_the_apps_why_shows_whole_and_escaped(out):
-    # the build's N/A why ("Not whole" + the missing W days by their state): the crumb, the All apps row and Needs
-    # attention show it whole (never cut at its dash) and through the page's escaping
-    why = "Not whole — 0 whole days of inline ads in the last 10 (GA4 sampled 10)"
-    b = out["pages"]["b"]
-    assert out["all_why_b"] == b["crumb"] == b["attn_why"] == why
-    assert out["pages"]["h"]["crumb"] == "&lt;b&gt;bold&lt;/b&gt;"                  # (a why with markup: escaped)
-
-
-def test_all_formats_when_ga4_gives_no_format_split(out):
-    # allf 2: GA4 gave the screens without the format on most whole days — the header stays "Ads (all formats)", the
-    # table's line says why is in Data coverage, whose note carries the measured full-screen share on app screens
-    a = out["allf2"]
-    assert a["head"] and a["sub"]
-    head = "GA4 is app ke screen × format split ko sampled deta hai, isliye screens ke ads saare formats pe gine aur judge hue"
-    assert a["note"] == [head + "; jin dinon split poora tha, app screens pe full-screen ads 0.23% the."]
-    assert a["none"] == [head + " (split poora kisi din nahi mila)."]                 # no split day measured
-    assert a["one"] == ["Format kam record hota hai (5% se zyada &quot;not set&quot;): screens ke ads sab formats pe gine "
-                        "aur judge hue."]                                           # allf 1: its own note, as before
-    assert a["off"] == [[], True]
-
-
-def test_a_row_with_too_few_ads_shows_no_score(out):
-    # under 1 % of the app's ads of its kind in the period AND its normal: "score —" (titled, no colour); an aggregate row has
-    # no per-user score at all; a row the build left N/A "Too few ads" never in Needs attention
-    low = out["low"]
-    assert low["share"] == [0.0244, 0.0098, 0.0049, 1]                 # Not recorded · Ad screens · GA4 grouped · a trigger
-    assert low["cells"] == ["<b>10%</b>", "<b>10%</b>", "<b>0.5%</b>", "<b>5.0%</b>"]  # Ads / view (no Score column)
-    assert low["ps"] == [[False, 99], [False, None], [True, None], [True, None]]
-    assert low["dd"].endswith(" · <small>imp / user nahi (users jode nahi ja sakte)</small>")
-    t = out["tiny"]
-    assert t["attn"] == [0] and t["small"] == "<b>0.8%</b>" and t["big"] == "<b>30%</b>"   # Ads / view: 8 ÷ 1,000 · 1,500 ÷ 5,000
-    assert t["why"].endswith("<small>Too few ads — 0.5% of the app&#39;s inline ads</small>")
-
-
 def test_hostile_names_are_escaped(out):
     h = out["hostile"]
-    assert not h["raw"] and h["esc"] and h["why"] and h["cause"]
+    assert not h["raw"] and h["esc"] and out["v4"]["hostile"]                      # the v 4 table escapes it too
     assert h["disp"] == "&lt;img src=x onerror=alert(1)&gt;"
     assert h["item"] == "&lt;x&gt;&quot;y&#39;"
 
@@ -428,7 +362,8 @@ def test_chart(out):
     assert c["w"][:2] == ["w", 29] and c["w"][4] == 10                              # > 120 days: weekly, Σ ads ÷ Σ views
     assert c["m"][:2] == ["m", 20] and c["m"][2] is None                            # > 540 days: monthly
     s = out["chart_svg"]
-    assert s["normal"] and s["last"] and s["avg"] and s["bars"] == 27                # per user: a bar on each users day
+    assert not s["normal"] and s["last"] and s["avg"] and s["bars"] == 27            # per user: a bar on each users day (v 4: no
+    #                                                                                  "normal" line in the details)
 
 
 def test_keep_holds_the_tapped_control(out):
@@ -455,10 +390,10 @@ def test_attention_details_goes_to_the_drill_down(out):
 
 def test_late_file_redraws_only_its_slots_and_keeps_scroll(out):
     r = out["arrive"]
-    # file 2 brings the screens' users: the table and the drill-down — never the App total (scr_all alone)
-    assert r["f2"] == {"sc-ddb": 1, "sc-f-src": 0, "sc-f-ver": 0, "sc-f-cov": 1, "sc-f-rep": 0, "sc-total": 0, "sc-tb": 1} and r["dd"]
+    # file 2 brings the screens' users, revenue and signals: the table, the signals card, the drill-down and the report
+    assert r["f2"] == {"sc-ddb": 1, "sc-f-src": 0, "sc-f-ver": 0, "sc-f-cov": 1, "sc-f-rep": 1, "sc-total": 0, "sc-tb": 1} and r["dd"]
     assert r["kept"] == [300, 50, 25]                                               # the day box's place, sideways tables
-    assert r["tb"] == [True, False, out["v2"]["main"]["Imp / user / day"]]           # its numbers, no ⏳ left
+    assert r["tb"] == [True, False, "3,000"]                                        # the v 4 table: its users, no ⏳ left
     assert r["c_on_ver"] == r["f2"]                                                 # a country shard while on Versions: nothing
     assert r["r_on_ver"]["sc-ddb"] == 2 and r["r_on_ver"]["sc-f-src"] == 0 and r["r_on_ver"]["sc-tb"] == 1
     assert r["l_on_ver"] == {"sc-ddb": 3, "sc-f-src": 1, "sc-f-ver": 1, "sc-f-cov": 1, "sc-f-rep": 1, "sc-total": 0, "sc-tb": 1}
@@ -498,9 +433,9 @@ def test_wiring():
 def test_screen_views_wording(out):
     """'Visits' is 'Screen views' on the whole Screens tab (the data and sort keys keep their names)."""
     p = _page()
-    for w in ("th('vu','Views / user / day'", "'Per 100 app views':'Ads / 100 views'", "<th>Screen views</th>", "tile('Time / view'",
+    for w in ("'Per 100 app views':'Ads / 100 views'", "<th>Screen views</th>", "tile('Time / view'",
               "tile('Exposure per view'", "Ads / 100 views", "Screen views (bars)", "['v','Screen views',['v']]",
-              "<b>Screen views</b> = screen_view"):
+              "th('views','Views','screen views (GA4)')"):
         assert w in p, w
     a, b = p.index("const SCR=(()=>{"), p.index("function renderScreens(){")
     scr = p[a:b]
@@ -559,150 +494,6 @@ def test_endsnap_class_toggle(out):
 
 # ── v 2: Imp / user / day (owner, 6–7 Nov 2026: "total user ke samne kitna impression mila vo imp hota he") ─────────
 
-def test_v2_screens_table_ten_columns_on_one_day_set(out):
-    # main row = Screen | Users / day | Views / user / day | Time / view | Time / user / day | Ads / min | Imp / user / day |
-    # Normal | Score | Cause (the owner's order: users, then views, then the ads) — Ads / 100, screen views, ads and the
-    # share in the row details
-    v = out["v2"]
-    assert v["heads"] == ["Screen", "Users / day", "Views / user / day", "Time / view", "Time / user / day", "Ads / min",
-                          "Imp / user / day", "Ads / view", "Fill", "Show rate", "Cause"]
-    # by hand: Σ Main's ads ÷ Σ its own users on the 27 days file 2 gives them (every 10th day missing) — never the mean of
-    # the daily ratios (users vary by day)
-    ads, users = sum(A_MAIN(k) for k in U_DAYS), sum(U_MAIN(k) for k in U_DAYS)
-    assert v["hand"][0] == pytest.approx(ads / float(users)) and v["hand"][1] == 27
-    assert ads / float(users) != pytest.approx(sum(A_MAIN(k) / float(U_MAIN(k)) for k in U_DAYS) / 27)
-    assert v["fn"] == pytest.approx(v["hand"] + [30])
-    # Imp / user / day and its Normal under 1 with three places, as the build's why prints them ("0.412 → 0.457"); the
-    # other per-user columns keep two
-    nk = [k for k in KN30 if k % 10 != 5]
-    normal = sum(A_MAIN(k) for k in nk) / float(sum(U_MAIN(k) for k in nk))
-    assert {h: c for h, c in v["main"].items() if h != "Screen"} == {
-        "Users / day": "793", "Views / user / day": "1.35", "Time / view": "28s", "Time / user / day": "38s", "Ads / min": "0.23",
-        "Imp / user / day": "<b>%s</b><small>27/30 days</small>" % _p3(ads / float(users)),
-        # Ads / view = Σ ads ÷ Σ views × 100 (30 days); Fill / Show rate = unit_a's (σ = 100 / 160 of it on Main) on the 27
-        # days every unit is complete (unit_b's AdMob is missing every 10th day)
-        "Ads / view": "<b>%s</b>" % _pct(sum(A_MAIN(k) for k in K30) * 100.0 / sum(1000 + k for k in K30)),
-        "Fill": "<b>%s</b>" % _pi(1800 / 2000.0), "Show rate": "<b>%s</b>" % _pi(165 / 1800.0), "Cause": "Lower fill"}
-    assert normal > 0
-    assert _p3(ads / float(users)) != _p2(ads / float(users)) + "0"                      # (the third place shows)
-    # the chain on ONE day set, exactly: Views / user / day × Time / view × Ads / min ÷ 60 = Imp / user / day (also =
-    # Time / user / day × Ads / min ÷ 60), on a period that reaches Today too (its per-user days end at ftU)
-    assert all(abs(c) < 1e-12 for c in v["chain"]) and v["tm_n"] == [25, 30]
-    # a day with the screen's users but no time read (file 2's "v" missing; views without engagement: a GA4 gap) is not
-    # in the one day set: out of n, the ads, the users and Time / view
-    t = v["notime"]
-    assert t["users"] == [500, 600] and t["fn"][0] == t["hand"][0] == 25 and t["fn"] == pytest.approx(t["hand"])
-    assert v["reach"][0] == pytest.approx(v["reach"][1])                             # Σ screen users ÷ Σ the app's daily users
-    assert v["th_r"].startswith("is screen ke inline ads ÷ is screen ke users (roz unique; din ka jod) = Views / user / day ×")
-    assert v["nofile"] == [True, None]                                               # never a number without file 2
-
-
-def test_v2_aggregates_pinned_and_their_share(out):
-    v = out["v2"]
-    # an aggregate row: "—" (users are never added across screens) + "x % of ads" on one line (a phone's narrow column
-    # wrapped "of the screen ads" into 4 lines; the full words in its title); Time / view and Ads / min where views and
-    # time exist
-    p = _p1(v["share"])
-    o = v["other"]
-    assert o["Imp / user / day"] == '<b>—</b><small class="sc-nw" title="%s of the screen ads">%s of ads</small>' % (p, p)
-    assert [o[h] for h in ("Users / day", "Views / user / day", "Time / user / day", "Fill", "Show rate")] == ["—"] * 5
-    assert o["Ads / view"] == "<b>10%</b>"                                           # (30 ads ÷ 300 views a day)
-    assert o["Time / view"] == "13s" and o["Ads / min"] == "0.45"
-    assert v["agg"] == [True, None]
-    # pinned at the bottom in their fixed order under every sort
-    for k, order in v["pinned"].items():
-        assert order[-4:] == [2, 3, 4, 5], k
-
-
-def test_v2_today_and_yesterday_show_the_ads_only(out):
-    # no daily users yet, and the screen users are read hours apart from the ads: the main cell "—" with "ads N ⏳", the
-    # chain columns "—"
-    for k in ("today", "yday"):
-        c = out["v2"][k]["cells"]
-        assert c["Imp / user / day"] == "<b>—</b><small>ads %d ⏳</small>" % out["v2"][k]["ads"], k
-        assert [c[h] for h in ("Users / day", "Views / user / day", "Time / view", "Time / user / day", "Ads / min")] == ["—"] * 5
-        assert c["Fill"] == c["Show rate"] == "<b>—</b><small>AdMob ~1–2 din baad pura hota hai</small>", k   # AdMob not complete
-
-
-def test_v2_full_screen_table_per_app_user(out):
-    f = out["v2"]["fs"]
-    # Normal and the score out (owner, 7 Nov 2026), as on the Screens table: the status is the absolute one
-    assert f["heads"] == ["Trigger", "Imp / app user / day", "Fill", "Show rate", "Cause"]
-    # its unit (no other GA4 unit shares it: σ = 1): unit_b's AdMob on the 27 complete days
-    assert f["cell"]["Fill"] == "<b>%s</b>" % _pi(80 / 100.0) and f["cell"]["Show rate"] == "<b>%s</b>" % _pi(41 / 80.0)
-    assert f["fn"][0] == pytest.approx(f["hand"]) and f["fn"][1] == 30               # Σ trigger ads ÷ Σ the app's daily users
-    assert f["cell"]["Imp / app user / day"] == "<b>0.073</b>" and f["th"].startswith("trigger ke ads ÷ app ke daily users")
-
-
-def test_v2_app_total_block(out):
-    t = out["v2"]["total"]
-    assert t["rows"] == ["Daily users", "Views / user / day", "Imp / user / day", "Ads / view", "Fill", "Show rate"]   # users, views, the ads
-    assert t["heads"] == ["30 days", "Normal", "7 days", "Yesterday", "Today"] and t["no_tiles"]
-    # GA4's inline + full-screen + not recorded ÷ the app's daily users; a copy day AdMob did not confirm ("dk" 2): its
-    # not recorded left out and said so; the hover's parts add up to the printed total
-    assert t["fn"][0] == pytest.approx(t["hand"][0]) and t["fn"][4] == pytest.approx(t["hand"][1]) and t["fn"][6] == t["hand"][2] == 1
-    tt, cell = t["imp"][0]
-    m = re.match(r"inline ([\d.]+) \+ full-screen ([\d.]+) \+ not recorded ([\d.]+) = ([\d.]+) · GA4 ad_impression ÷ app ke daily "
-                 r"users \(GA4 Active users, wahi stream\) · sirf final din · copy-pattern din: 1, unke not-recorded ads gine nahi$", tt)
-    assert m and round(sum(float(g) for g in m.groups()[:3]), 3) == float(m.group(4)) and cell.startswith("<b>%s</b>" % m.group(4))
-    # under 1: three places everywhere it is an Imp / user / day number (the cell, its hover, the Normal, the crumb, the
-    # per-format tiles in its details) — the build's why prints "0.412 → 0.457"
-    r, ir, fr, nr = _app_u(K30)
-    assert m.groups() == (_p3(ir), _p3(fr), _p3(nr), _p3(r)) and t["imp"][1][1] == "<b>%s</b>" % _p3(_app_u(KN30)[0])
-    assert t["tiles"] == [["Inline / user", _p3(ir)], ["Full-screen / user", _p3(fr)], ["Not recorded / user", _p3(nr)]]
-    assert t["imp"][3][1].startswith("<b>—</b><small>ads ") and t["imp"][4][1].startswith("<b>—</b><small>ads ")   # Yesterday · Today
-    assert t["note"] and "App total <b>%s</b> vs %s <small>" % (_p3(r), _p3(_app_u(KN30)[0])) in t["crumb"]
-    assert t["nvr"]                                                                  # the users mix in the details (GA4 = AdMob)
-
-
-def test_v2_needs_attention_one_line_per_cause(out):
-    a = out["v2"]["attn"]
-    assert a["app"].startswith('<span class="hub-st st-bigda">bigda</span><span class="sc-atn">App total</span>')
-    # the users mix, measured parts only (critic S1: never "not the cause")
-    assert "ads / view: new-user mix +1.2%, within −20.5% · views / user −3.1% (split nahi" in a["app"] and "not the cause" not in a["app"]
-    # two rows of one cause group ("Mixed: A + B" groups under A): one line, ≈ Σ their impacts; the rows open under it
-    assert a["sum"][0] == ["bigda", "Lower fill", "2 rows (Main, Interstitial · Back press) · ≈ −14.1% of the app's imp/user"]
-    assert [r[0] for r in a["list"]] == ["Main", "Interstitial · Back press", "All other screens"]
-    # each row's impact and its whole days of the last 10 — from scr_all's status alone, so they are there on the first
-    # paint (file 2 comes later and never redraws this card): a status without them (an older file) prints none, never
-    # file 2's (its row has 10 W days here)
-    assert a["list"][0][1] == "−12.0% · 9/10 days · ads/100 34% gira" and a["list"][2][1] == "−3.0% · 10/10 days · thoda gira"
-    assert "/10 days" not in a["list"][1][1]
-    assert a["no_dw"][0] == ["Main", "−12.0% · ads/100 34% gira"] and a["f2_w"] == 10
-    # GA4 ≠ AdMob: judged on AdMob ("Worse (AdMob)"), without GA4's users mix (the same GA4 logging); AdMob too thin: N/A
-    # with a ⚠️ line
-    assert a["admob"].startswith('<span class="hub-st st-bigda">bigda</span> <small class="sc-adm">(AdMob)</small>')
-    assert "new-user mix" not in a["admob"] and "new-user mix" not in a["na"]
-    assert a["na"].startswith("⚠️ <span class=\"sc-atn\">App total</span><span class=\"sc-atr\">Not measurable (GA4 ≠ AdMob)")
-
-
-def test_v2_all_apps_from_scr_all_alone(out):
-    a = out["v2"]["all"]
-    assert a["heads"] == [["rank", "App · status"], ["dau", "Daily users"], ["r", "Imp / user / day"], ["lo", "Low"],
-                          ["wn", "Worse"], ["an", "Watch"]]
-    r, ir, fr, _nr = _app_u(K30)                                                    # under 1: three places (the build's _q)
-    al = a["alpha"]
-    assert al["Imp / user / day"] == "<b>%s</b><small>%s · %s</small>" % (_p3(r), _p3(ir), _p3(fr)) and a["fn"] == _p3(r)
-    assert al["Low"] == "—" and al["Daily users"] == "550"                         # (a file without "lo": "—", never 0)
-    assert a["loads"] == []                                                          # no file 2 asked for (scr_all's "au")
-    assert a["admob"]                                                                # "Worse (AdMob)"
-    assert a["mute"] == [True, None, True] and a["keep"] == [False, True]            # a data N/A mutes the period score only
-
-
-def test_v2_admob_judged_app_row_mutes_the_ga4_score(out):
-    # critic S3 after B3: "Worse (AdMob)" (GA4 ≠ AdMob) never sits next to a GA4 period score — "score —" (titled) in All
-    # apps, the App total and the details; the crumb drops its GA4 "vs"; the GA4 Imp / user number itself stays
-    m, why = out["v2"]["all"]["admob_mute"], "GA4 logging changed (GA4 ≠ AdMob) — period score GA4 pe nahi"
-    mut = '<span class="sc-mut" title="%s">vs own past —</span>' % why
-    assert m["all"][0].startswith("<b>") and m["all"][0] != "<b>—</b>"            # Imp / user / day kept
-    assert m["all"][1] == "—" and m["all"][2] is None                              # (no Score column: Low)
-    assert m["total"].startswith("<b>") and "<small>%s</small>" % mut in m["total"] and "vs own past <b" not in m["total"]
-    assert "App total <b>" in m["crumb"] and " vs " not in m["crumb"]
-    assert m["tile"] == "inline %s · full %s" % (mut, mut)
-    # GA4's new vs returning split comes from the GA4 logging that changed: not in the details, not in Needs attention —
-    # nor for an App row not measurable (GA4 ≠ AdMob, AdMob too thin)
-    assert m["nvr"] == [False, False, False]
-
 
 def test_v2_drill_down_parts_reach_and_chart(out):
     d = out["v2"]["dd"]
@@ -712,10 +503,10 @@ def test_v2_drill_down_parts_reach_and_chart(out):
     assert d["tiles"][1][:2] == ["Ads / 100 views", "10.9"] and "32,145 views · 3,511 ads" in d["tiles"][1][2]
     assert out["alpha"]["ov_tiles"] == [["Screen users / day", "Ads / 100 views"], ["Ads / 100 views"],
                                         ["App daily users", "Per 100 app views"]]
-    assert d["parts"] == [["Views per user", "−3.2%"], ["Time per view", "+1.1%"], ["Ads per minute", "−31.9%"]] and d["why"]
-    assert " · reach <b>" in d["head"] and d["adlogic"]
+    assert d["parts"] == [] and not d["why"] and not d["adlogic"]                   # v 4: no old cause in the details
+    assert " · reach <b>" in d["head"]
     assert d["months"] == [["Month", ["Screen users / day", "Ads", "Imp / user", "Reach"]], ["Day", ["Screen users / day", "Ads", "Imp / user", "Reach"]]]
-    assert d["svg"] == {"aria": True, "normal": True, "last": True, "avg": True, "bars": 27} and d["ch"]["pu"]
+    assert d["svg"] == {"aria": True, "normal": False, "last": True, "avg": True, "bars": 27} and d["ch"]["pu"]
     assert out["v2"]["days"]["last2"] == [[None, True, "users abhi nahi (~2 din baad)"]] * 2   # Today / Yesterday: no users
     c = out["v2"]["chart"]
     assert c[0] == [None, 0.8, None] and c[1] == {"last": "0.80", "avg": "Avg 0.80", "norm": "Normal 0.90"} and c[2]
@@ -723,24 +514,22 @@ def test_v2_drill_down_parts_reach_and_chart(out):
 
 
 def test_v2_waits_for_file_2_and_refuses_v1(out):
-    w = out["v2_wait"]
-    assert w["main"] == "⏳" and w["ud"] == "⏳" and w["total"]                       # the App total never waits
-    assert w["other"].endswith("% of ads</small>")                                   # an aggregate row needs no file
-    assert w["err"] == "<b>—</b><small>data load nahi hua</small>" == w["v1"]         # failed / a v 2 file: refused, said so
-    n = out["v2_none"]
-    assert n["one"] == "<b>—</b><small>GA4 sampled 7 din</small>" and n["fn"] is None
-    assert n["total"] == [' title="app ke daily users doosre GA4 stream ke hain — gine nahi"', "<b>—</b>"]
+    w = out["v4wait"]
+    assert w["wait"] and w["err"] and w["v3"]           # ⏳ till file 2 is here; a failed load / a v 3 file: Try again, said so
 
 
 def test_v2_page_contract():
     p = _page()
     m = p[p.index("const SCR=(()=>{"):p.index("function renderScreens(){")]
-    assert "j.v!==3||!j.apps" in m and "j=>!!j&&j.v===3&&j.key===a.key&&Array.isArray(j.days)" in m and "j=>!!j&&j.v===3&&(j.key==null" in m
+    assert "j.v!==4||!j.apps" in m and "j=>!!j&&j.v===4&&j.key===a.key&&Array.isArray(j.days)" in m and "j=>!!j&&j.v===4&&(j.key==null" in m
     assert "j=>!!j&&j.v===1&&j.key===a.key&&String(j.m)" in m                       # shards stay v 1
     for gone in ("puTile", "function tilesIn", "function miniHtml", "function perUser", "function appUser", "'Inline ads / 100'"):
         assert gone not in m, gone
-    assert "colspan=\"${seg==='f'?5:11}\"" in m and "sc-t10" in m and "#sc-ttw.sc-endsnap .sc-t.sc-t10 th:last-child" in p
-    assert ".sc-t td small.sc-nw{white-space:nowrap}" in p                          # the aggregates' "x% of ads": one line
+    # v 4: the app page draws the signals card and the one table, never the old App total / Needs attention / switch
+    ah = m[m.index("function appHtml(id){"):m.index("// ---- the chart:")]
+    assert "sigCard(x,id,lo,hi)+v4Table(x,id,lo,hi)+ddHtml(x,id,lo,hi)" in ah
+    for gone in ("totalHtml(", "attnHtml(", "segHtml("):
+        assert gone not in ah, gone
 
 
 def test_v2_per_user_numbers_print_as_the_build_does(out):
@@ -797,197 +586,6 @@ def _same(cell, v):
     return abs(p - v) <= (30 if "h " in t else 0.5 if t.endswith("s") else 0.5 * 10 ** -len(d.group(1) if d else "")) + 1e-9
 
 
-def test_the_columns_run_users_views_time_ads_then_imp(out):
-    # users, then screen views, then the ads: the chain Views / user / day × Time / view × Ads / min ÷ 60 = Imp / user / day
-    # read left to right, Normal and Score right after the number they judge, Cause last (the end-snap's column); All apps:
-    # Daily users before Imp / user / day; the App total: Daily users → Views / user / day → Imp / user / day — on every
-    # period (a picked month and Custom too), file state (⏳ · failed), app and row kind
-    T = out["order"]["T"]
-    assert len(T) == 49 and {k.split()[0] for k in T} == {"s", "f", "all", "tot"}
-    for k, t in T.items():
-        kind, labels = k.split()[0], [h[0] for h in t["heads"]]
-        if kind == "tot":
-            assert [r[0] for r in t["rows"]] == ["Daily users", "Views / user / day", "Imp / user / day", "Ads / view", "Fill", "Show rate"], k
-            assert labels[0] == "" and labels[-2:] == ["Yesterday", "Today"], k
-        else:
-            assert [h[:2] for h in t["heads"]] == {"s": SCREENS, "f": FULL, "all": ALLAPPS}[kind], k
-        for key, n, span in t["rows"]:                                       # one cell per header, or the one colspan row
-            assert n == len(labels) or (n == 1 and span == len(labels)), (k, key)
-    assert T["s none"]["rows"] == [["empty", 1, 11]] and T["f none"]["rows"] == [["empty", 1, 5]]
-    # every row kind: the screens, All other screens, Not recorded, Ad screens, GA4 grouped — with file 2 or waiting for it
-    assert [r[0] for r in T["s a 30"]["rows"]] == ["0", "1", "2", "3", "4", "5"] == [r[0] for r in T["s a wait"]["rows"]]
-    assert T["s a wait"]["map"]["0"]["Users / day"] == [' title="aa raha hai…"', "⏳"]
-    assert T["s a err"]["map"]["0"]["Users / day"] == [' title="data load nahi hua"', "—"]
-    # the header tooltips stay word for word (Imp / user / day keeps its chain)
-    assert {h[1]: h[2] for h in T["s a 30"]["heads"]} == {
-        "st": None, "ud": "roz ke average users: us screen ke daily users ka jod ÷ din — GA4 me user ek din aur ek screen ke andar unique",
-        "vu": "ek user din me screen kitni baar kholta hai: screen views ÷ users ka jod",
-        "tv": "ek baar screen khulne pe kitni der: engagement time ÷ screen views",
-        "tu": "ek user roz is screen pe kitni der: engagement time ÷ users ka jod",
-        "am": "screen pe bitaye har minute me ads: inline ads ÷ (engagement seconds ÷ 60)",
-        "r": "is screen ke inline ads ÷ is screen ke users (roz unique; din ka jod) = Views / user / day × Time / view × Ads / min ÷ 60"
-             " · sirf final din (users ~2 din baad)",
-        "av": "is screen ke inline ads ÷ screen views × 100",
-        "fl": "AdMob matched ÷ requests, screen ke units (screen ka hissa σ) · sirf poore AdMob din (final)",
-        "sr": "AdMob impressions ÷ matched, screen ke units (screen ka hissa σ) · sirf poore AdMob din (final)", None: None}
-    assert {h[1]: h[2] for h in T["all 30"]["heads"]} == {
-        "rank": "App ka status = uske screens aur full-screen triggers ka (pichhle 10 final din, usi format ke saare apps ke units ke"
-                " saath): koi Low = Low · N screens · M triggers, warna Few ads · N, warna OK · chhoti line = vs own past (pichhle 10 final"
-                " din vs 28 pehle)",
-        "dau": None, "r": "GA4 ke saare ad impressions ÷ app ke daily users (GA4 Active users, wahi stream) · chhota: inline"
-                                        " · full-screen",
-        "lo": "Low status wali screens aur full-screen triggers: Fill / Show rate (screens: Ads / view bhi) usi format ke saare apps ke"
-              " units ke neeche 25% me (pichhle 10 final din)",
-        "wn": "vs own past: Worse screens (pichhle 10 final din vs 28 pehle)",
-        "an": "vs own past: Watch screens (pichhle 10 final din vs 28 pehle)", None: None}
-
-
-def test_each_cell_sits_under_its_own_header(out):
-    # every header's sort key is bound to the cells under it: each one the row's own number for that key, as printed —
-    # Alpha (its screens and the four aggregate rows), "sorty" (five screens every column ranks differently) and All apps —
-    # so a column moved with its header, never without it
-    T, M, n = out["order"]["T"], out["order"]["M"], 0
-    for tk, rows in (("s a 30", M["a"]), ("s z 30", M["z"]), ("all z", M["all"])):
-        t = T[tk]
-        for i, row in rows.items():
-            for lab, key, _tt, _ar in t["heads"]:
-                if key in row and key != "agg":
-                    v = row[key] if key not in ("wn", "an") else (row[key] or None)      # (no Worse / Watch rows: "—")
-                    assert _same(t["map"][i][lab][1], v), (tk, i, lab, t["map"][i][lab][1], v)
-                    n += 1
-    assert n == 6 * 9 + 7 * 9 + 7 * 5
-
-
-def test_every_sort_header_sorts_its_own_column(out):
-    # a tap on every sort header, twice (high first, then low): the page's own sort for its key — the same as before the new
-    # order — and the column under the header tapped in that order, the unknown ("—") after it; the aggregates stay pinned at
-    # the bottom. "sorty" by hand: users / day 1000 · 800 · 600 · 400 · 200, views / user 2 · 5 · 2.5 · 6 · 1.5, time / view
-    # 30 · 10 · 48 · 5 · 35 s, time / user 60 · 50 · 120 · 30 · 52.5 s, ads / min 0.3 · 0.6 · 0.4 · 0.5 · 1.71, imp / user
-    # 0.3 · 0.5 · 0.8 · 0.25 · 1.5, normal 0.5 · 0.4 · 0.762 · 0.228 · 1.58, score 60 · 125 · 105 · 110 · 95
-    S = out["order"]["S"]
-    # (ads / view = the period's ads ÷ views × 100: 15 · 10 · 32 · 4.2 · 100; no AdMob units: Fill / Show rate all "—")
-    hi = {"ud": [0, 1, 2, 3, 4], "vu": [3, 1, 2, 0, 4], "tv": [2, 4, 0, 1, 3], "tu": [2, 0, 4, 1, 3], "am": [4, 1, 3, 2, 0],
-          "r": [4, 2, 1, 0, 3], "av": [4, 2, 0, 1, 3]}
-    for k, o in hi.items():
-        assert S["s %s 1" % k]["rows"] == [str(i) for i in o] + ["5", "6"], k
-        assert S["s %s 2" % k]["rows"] == [str(i) for i in o[::-1]] + ["5", "6"], k
-    assert len(S) == 2 * (10 + 6)                                                    # 10 Screens headers, 6 All apps ones
-    assert S["all dau 1"]["rows"][:2] == ["sorty", "Alpha App"] and S["all r 1"]["rows"][:2] == ["Alpha App", "sorty"]
-    for key, s in S.items():
-        tab, k, n = key.split()
-        assert s["rows"] == s["want"] and s["aria"] == ("descending" if n == "1" else "ascending"), key
-        if k in ("st", "rank"):
-            continue
-        cs = [c for r, c in zip(s["rows"], s["col"]) if not (tab == "s" and r in ("5", "6"))]   # (the pinned aggregates)
-        v = [_num(c) if k not in ("wn", "an") else (_num(c) or 0) for c in cs]                     # (no Worse / Watch: "—")
-        known = [q for q in v if q is not None]
-        assert v[:len(known)] == known and known == sorted(known, reverse=n == "1"), key
-
-
-# ── v 3: the absolute status (owner, 7 Nov 2026: "ye normal nahi he — ye kam he
-# na?"; "haan isi tarah karo, ads/view ka percentage me rakhna") — on the synthetic "absy" app ──
-def test_v3_screens_table_absolute_numbers(out):
-    a = out["abs"]
-    assert a["heads"] == [h[0] for h in SCREENS]                                     # Normal + Score gone; Cause last
-    home, lst, rare, oth = a["rows"]
-    # Home: native unit nat_a, 80 of its 100 GA4 ads a split day on Home (σ 0.8); ghost (no AdMob id) beside it stays out of
-    # the rates. 30 days: req 30 × 10,000, matched 20 × 7,000 + 10 × 6,000, imp 20 × 1,760 + 10 × 1,200 (σ scales all three)
-    assert home["Fill"] == "<b>%s</b>" % _pi(200000 / 300000.0) and home["Show rate"] == "<b>%s</b>" % _pi(47200 / 200000.0)
-    assert home["Ads / view"] == "<b>30%</b>"                                          # 300 ads ÷ 1,000 views × 100
-    r = a["r30"][0]
-    assert r["fill"] == pytest.approx(2 / 3.0) and r["show"] == pytest.approx(47200 / 200000.0) and r["unm"] == pytest.approx(10 / 90.0)
-    assert r["sig"] == ["W", 23, "2026-02-27", "2026-03-21"] and r["sh"] == [["nat_a", 0.8]] and r["nK"] == 30
-    assert r["p"]["native"] == pytest.approx([80 / 90.0, 240000, 160000, 37760])
-    # List: nat_a's other 20 % + ban_b (30 of its 40 GA4 ads: σ 0.75) — two parts pooled σ-weighted, both shared units named
-    l = a["r30"][1]
-    req, mt, imp = 0.2 * 300000 + 0.75 * 150000, 0.2 * 200000 + 0.75 * 135000, 0.2 * 47200 + 0.75 * 121500
-    assert l["fill"] == pytest.approx(mt / req) and l["show"] == pytest.approx(imp / mt) and l["sh"] == [["nat_a", 0.2], ["ban_b", 0.75]]
-    assert lst["Fill"] == "<b>%s</b>" % _pi(mt / req) and sorted(l["p"]) == ["banner", "native"] and l["p"]["native"][0] == pytest.approx(0.4)
-    # an aggregate row: Ads / view only (per view, not per user); Fill / Show rate "—" ("kai screens ka jod")
-    assert oth["Fill"] == oth["Show rate"] == "—" and oth["Ads / view"] == "<b>10%</b>"
-    # the chip = the build's abs word, the first weak number under it; the Cause = its weak numbers + vs own past (Worse /
-    # Watch) as a labelled second line
-    assert '<span class="hub-st st-bigda">🔴 Low</span>' in home["Screen"]
-    # (30 days ≠ the status window W: the number under the chip and the Cause say "last 10 days", the Cause with W's dates)
-    assert home["Screen"].endswith("<small>Show rate 20% (native median 70%) · last 10 days</small>")
-    assert home["Cause"] == ("Show rate 20% (native median 70%): ads filled but not shown; Fill 60% (native median 90%): requests not filled"
-                             " · last 10 days (19 Mar – 28 Mar)")
-    assert lst["Cause"] == ('Show rate 15% (native median 70%): ads filled but not shown · last 10 days (19 Mar – 28 Mar)'
-                            '<small class="sc-own" title="imp/user 0.30 → 0.20 (−33%)">'
-                            '<span class="hub-st st-bigda">bigda</span> vs own past: Lower show rate</small>')
-    assert "🟡 Few ads" in rare["Screen"] and rare["Cause"].startswith("Ads / view 3.0%")
-    assert '<span class="hub-st st-normal">normal</span>' in oth["Screen"]             # an aggregate row keeps its own word
-    # Low first, inside it the weakest number ÷ its median first (List 15 / 70 before Home 20 / 70), then Few ads
-    assert a["order"] == [1, 0, 2, 3]
-
-
-def test_v3_weak_numbers_marked_against_their_format(out):
-    home, lst, rare = out["abs"]["lo"]
-    assert home["fill"][1] and home["show"][1] and not home["av"][1]
-    assert "native fill p25 75%, median 90% (30 units, all apps)" in home["fill"][0]
-    assert "native show rate p25 50%, median 70% (30 units, all apps)" in home["show"][0]
-    assert "shared unit: nat_a — 80.0% of its ads are on this screen; fill / show are the unit&#39;s" in home["fill"][0]
-    assert "units not in AdMob: 11.1% of the screen&#39;s ads (rates ke bahar)" in home["fill"][0]
-    assert "unit mix (σ): is period ke 23 unit-split din, 27 Feb – 21 Mar 2026" in home["fill"][0]
-    # List: the pooled cell marked because its native part (40 % of its ads) is under the native p25 — the parts in the title
-    assert lst["fill"][1] and "native 40.0%: fill 67% · show 24% · banner 60.0%: fill 90% · show 90%" in lst["fill"][0]
-    # Rare: banner Ads / view 3.0% under the banner p25 5.0% (360 ads ≥ the 300 floor); its fill / show fine
-    assert rare["av"][1] and not rare["fill"][1] and not rare["show"][1]
-    assert "banner Ads / view p25 5.0%, median 12% (25 screens, all apps)" in rare["av"][0]
-    assert out["abs"]["nobench"] == [True, False]                                    # no benchmark shipped: nothing marked
-
-
-def test_v3_sigma_fallback_w_parity_and_today(out):
-    a = out["abs"]
-    # a period with under 3 unit-split days: σ from the newest 28 split days up to its end, named
-    assert a["r7"]["sig"] == ["new", 28, "2026-02-22", "2026-03-21"] and a["r7"]["fill"] == pytest.approx(0.6) and a["r7"]["nK"] == 7
-    # the period = the status window W: the page's own Fill / Show = the build's rows.s0.ab
-    w, ab = a["rW"], a["abW"]
-    assert w["fill"] == pytest.approx(ab["fill"], abs=1e-3) and w["show"] == pytest.approx(ab["show"], abs=1e-3)
-    assert w["unm"] == pytest.approx(ab["unm"], abs=1e-3) and w["sig"] == ab["sig"]
-    for f, v in ab["p"].items():
-        assert w["p"][f] == pytest.approx(v, abs=1e-3), f
-    assert a["cusW"]["Fill"] == "<b>60%</b>" and a["cusW"]["Show rate"] == "<b>20%</b>"
-    # (the period = W: no window label on the chip's number or the Cause)
-    assert a["cusW"]["Screen"].endswith("<small>Show rate 20% (native median 70%)</small>") and "last 10 days" not in a["cusW"]["Cause"]
-    # Today: AdMob not complete — "—" with the reason, never 0; Ads / view (views and ads so far) stays
-    assert a["today"]["why"] == "AdMob ~1–2 din baad pura hota hai" and a["today"]["fill"] is None
-    assert a["todayCells"]["Fill"] == "<b>—</b><small>AdMob ~1–2 din baad pura hota hai</small>"
-    assert a["todayCells"]["Ads / view"] == "<b>30%</b>"
-    assert a["trig"] == "GA4 unit names AdMob me nahi mile"                           # a unit with no AdMob id: said so
-
-
-def test_v3_app_total_all_apps_attention_and_details(out):
-    a = out["abs"]
-    # the App total: every AdMob unit pooled (ghost has no id) on the 30 complete days; "vs own past", never "score"
-    assert a["pool"] == [pytest.approx(335000 / 450000.0), pytest.approx(168700 / 335000.0), 30]
-    assert ('<tr><td>Fill</td><td title="app ke saare AdMob units: 450,000 requests · 335,000 matched · 168,700 impressions · '
-            '30 complete AdMob days') in a["tot"]
-    assert "<tr><td>Ads / view</td>" in a["tot"] and 'vs own past <b class="">+0%</b>' in a["tot"] and "score" not in a["tot"]
-    # All apps: Low (scr_all "lo" + "lt", said what they are) between Imp / user / day and Worse
-    assert a["allHeads"] == ["rank", "dau", "r", "lo", "wn", "an"] and a["all"]["Low"] == '<b class="sc-dn">2</b><small>2 screens</small>'
-    # Needs attention: one line per (word, weak number, format), the weakest first inside; vs own past after, labelled
-    at = a["attn"]
-    assert ('<span class="hub-st st-bigda">🔴 Low</span><span class="sc-atn">Show rate under native p25 (50%)</span>'
-            '<span class="sc-atr">2 screens (Home, List)</span>') in at
-    assert at.index('data-sc-open="1"') < at.index('data-sc-open="0"')
-    assert '<span class="hub-st st-dhyan">🟡 Few ads</span><span class="sc-atn">Ads / view under banner p25 (5.0%)</span>' in at
-    assert '<span class="sc-atn">vs own past · Lower show rate</span>' in at and at.index("🟡 Few ads") < at.index("vs own past · ")
-    # the details: the abs word + its first weak number, then vs own past; the Absolute block: parts, σ, the build's W, the check
-    assert a["dds"].startswith('<span class="hub-st st-bigda">🔴 Low</span> <small>Show rate 20% (native median 70%) · last 10 days</small> · '
-                               '<span class="hub-st st-normal">normal</span> <small>last 10 days vs own past +1%</small>')
-    dd = a["dd"]
-    assert '<p class="sc-note">Ads / view <b>30%</b> · Fill <b>67%</b> · Show rate <b>24%</b> · 30 complete AdMob days</p>' in dd
-    assert ('<tr><td>native</td><td>88.9%</td><td class="sc-lo">67%</td><td class="sc-lo">24%</td><td>75% / 90% <small>30 units</small></td>'
-            '<td>50% / 70% <small>30 units</small></td></tr>') in dd
-    assert "Status window (build): Ads / view 30% · Fill 60% · Show rate 20%" in dd
-    assert "<b>Check (developer) · Show rate:</b> Ads are filled but fewer are shown." in dd and "<b>Check (developer) · Fill:</b>" in dd
-    # How this works: the benchmark as measured, with its basis (units / screens per format; under 20: "—")
-    assert ("<tr><td>native</td><td>75% / 90% <small>30 units</small></td><td>50% / 70% <small>30 units</small></td>"
-            "<td>8.0% / 20% <small>22 screens</small></td><td>60</td></tr>") in a["how"]
-    assert "<tr><td>rewarded</td><td>—</td><td>—</td><td>—</td><td>4</td></tr>" in a["how"]
-
-
 def test_v3_benchmark_failed_and_a_status_without_the_abs_fields(out):
     a = out["abs"]
     assert a["failed"] == ('<span class="sc-n">Home</span><span class="sc-stl"><span title="benchmark nahi bana" class="hub-st st-lagu">—</span>'
@@ -1030,40 +628,6 @@ def test_v3_a_screen_without_ads_in_the_period_has_no_fill_or_show(out):
     assert n["cells"]["Ads / view"] == "<b>0.0%</b>" and n["home"]["fill"] is not None   # a screen with its ads: as before
 
 
-def test_v3_the_app_status_is_absolute_and_vs_own_past_a_labelled_line(out):
-    # owner, 7 Nov 2026: "ye normal nahi he — ye kam he" — the app's chip = its screens' absolute words; its own past (the App
-    # row's word + score) goes to a labelled second line, never the main word
-    a = out["abs"]["app"]
-    assert a["low"] == ['<span class="hub-st st-bigda">🔴 Low · 2\u00a0screens</span>', '<small class="sc-own">vs own past: same</small>']
-    assert a["few"][0] == '<span class="hub-st st-dhyan">🟡 Few ads · 1 screen</span>' and a["ok"][0] == '<span class="hub-st st-behtar">🟢 OK</span>'
-    # nothing judged: the App row's own N/A / Too early with its why, as before — else N/A, said why; the benchmark failed: "—"
-    assert a["noneNa"] == ['<span class="hub-st st-lagu">lagu</span>', '<small>Not whole — 3 whole days</small>']
-    assert a["noneOwn"] == ['<span class="hub-st st-lagu">lagu</span>',
-                            '<small>koi screen judge nahi hui</small><small class="sc-own">vs own past: same</small>']
-    assert a["failed"][0] == '<span title="benchmark nahi bana" class="hub-st st-lagu">—</span>' and a["older"] is None
-    assert a["own"] == ['<small class="sc-own" title="App imp/user 1.00 → 1.31 (+31%)">vs own past: <b class="sc-up">Better +31%</b></small>',
-                        '<small class="sc-own" title="AdMob imp/user −35%">vs own past: <b class="sc-dn">Worse (AdMob) −35%</b></small>',
-                        '<small class="sc-own" title="App imp/user 3.53 → 3.42 (−3%)">vs own past: same</small>',
-                        '<small class="sc-own" title="x">vs own past: <b class="sc-dn">Watch −12%</b></small>',
-                        '<small class="sc-own" title="y">vs own past: Too early</small>']
-    # All apps by status: absolute first — Low by its Low screens (most first), Few ads, OK, —, Too early, N/A
-    assert out["abs"]["appSort"] == ["low3", "low1", "few", "ok", "dash", "early", "na"]
-    # the app page's top line, the All apps cell, the notes saying what the status is
-    # (the line is the build's alone — the same on every period: a period tap never re-wraps it; the App total is the card below)
-    assert out["abs"]["appCrumb"].endswith('<span><span class="hub-st st-bigda">🔴 Low · 2\u00a0screens</span> · history from 1 Jan 2026</span>'
-                                           '<small class="sc-own">vs own past: same</small>')
-    assert out["abs"]["appCrumbYday"] == out["abs"]["appCrumb"]
-    assert out["abs"]["allCell"].endswith('<span class="sc-stl"><span class="hub-st st-bigda">🔴 Low · 2\u00a0screens</span></span>'
-                                          '<small class="sc-own">vs own past: same</small>')
-    assert ("status = screens aur full-screen triggers ka, usi format ke saare apps ke units ke saath (pichhle 10 final din) · vs own past"
-            in out["abs"]["allNote"])
-    assert out["abs"]["howApp"].startswith("<b>App ka status</b> = uske screens aur full-screen triggers ka: koi Low = ")
-    # Needs attention: a Worse App row is labelled "vs own past" and comes after the absolute lines; all screens OK: "Sab OK"
-    w, ok_ = out["abs"]["attnApp"]
-    assert '<span class="sc-atn">vs own past · App total</span>' in w and w.index("🟡 Few ads") < w.index("vs own past · App total")
-    assert '<p class="sc-ok">✅ Sab OK</p>' in ok_ and "Sab normal" not in ok_
-
-
 def test_v3_the_reader_stays_put_at_the_page_end_and_when_file_2_comes_late(out):
     # "Show N more screens" at the page's end with a held height bigger than the content: the held height grows by what the
     # page below the window lacks — the button moves 0 px; the reader's scroll lets the blank go (none left)
@@ -1089,98 +653,82 @@ def test_v3_close_on_a_phone_stays_put_when_its_back_step_lands(out):
     assert c["none"] == [0, 0, 0]                          # a tap that keeps the step, no step (wide), no step back started
 
 
-# ── the full-screen triggers on the same absolute rule (owner, 7 Nov 2026: "ye normal nahi he — ye kam he"; Normal + Score
-# out) — on the synthetic "trigy" app ──
-def test_triggers_table_absolute_numbers_and_their_status(out):
-    t = out["trg"]
-    assert t["heads"] == [h[0] for h in FULL]                                        # Trigger · Imp / app user / day · Fill · Show rate · Cause
-    back, save, rew, res = t["rows"]
-    # Back press: int_back (90 of the unit's 100 GA4 ads a day: σ 0.9) + house_exit (no AdMob id: 10 % of the trigger's ads,
-    # out of the rates). 30 days: req 30 × 10,000, matched 23 × 9,000 + 7 × 8,000, imp 23 × 2,000 + 7 × 1,600 (σ scales all)
-    r = t["r30"][0]
-    assert r["fill"] == pytest.approx(263000 / 300000.0) and r["show"] == pytest.approx(57200 / 263000.0) and r["unm"] == pytest.approx(0.1)
-    assert r["p"]["interstitial"] == pytest.approx([0.9, 270000, 236700, 51480]) and r["sh"] == [["int_back", 0.9]] and r["nK"] == 30
-    assert r["sig"] == ["W", 30, "2026-02-27", "2026-03-28"]
-    assert back["Fill"] == "<b>%s</b>" % _pi(263000 / 300000.0) and back["Show rate"] == "<b>%s</b>" % _pi(57200 / 263000.0)
-    # Save / apply (interstitial): the same AdMob unit's other 10 % — its rates are the unit's, the σ named
-    s = t["r30"][1]
-    assert s["fill"] == pytest.approx(r["fill"]) and s["show"] == pytest.approx(r["show"]) and s["sh"] == [["int_save", pytest.approx(0.1)]]
-    assert s["p"]["interstitial"] == pytest.approx([1, 30000, 26300, 5720])
-    # the chip = the build's abs word, its first weak number under it (30 days ≠ W: "last 10 days"); the Cause = the weak number,
-    # its format median, W's dates + vs own past (Worse) as a labelled second line
-    assert back["Trigger"] == ('<span class="sc-n">Interstitial · Back press</span><span class="sc-stl"><span class="hub-st st-bigda">🔴 Low</span></span>'
-                               '<small>Show rate 21% (interstitial median 50%) · last 10 days</small>')
-    assert back["Cause"] == ('Show rate 21% (interstitial median 50%): ads filled but not shown · last 10 days (19 Mar – 28 Mar)'
-                             '<small class="sc-own" title="imp/app user 0.15 → 0.10 (−33%)"><span class="hub-st st-bigda">bigda</span> vs own past: '
-                             'Lower show rate</small>')
-    assert "Normal" not in t["rows"][0] and "vs own past" not in t["rows"][0]
-    # a format without a benchmark (rewarded, under 20 units): the numbers shown, never judged, said so
-    assert '<span class="hub-st st-lagu">— No benchmark</span>' in rew["Trigger"] and rew["Trigger"].endswith("<small>rewarded: no benchmark (n &lt; 20)</small>")
-    assert rew["Fill"] == "<b>88%</b>" and rew["Show rate"] == "<b>86%</b>"
-    fl, sh = t["lo"][1]["fill"], t["lo"][1]["show"]
-    assert not fl[1] and not sh[1] and "rewarded fill: no benchmark (n &lt; 20 units, all apps)" in fl[0] and "rewarded show rate: no benchmark" in sh[0]
-    # the cells' marks against the format: Back press's show under the interstitial p25 (sc-lo + the benchmark), its fill not
-    bf, bs = t["lo"][0]["fill"], t["lo"][0]["show"]
-    assert bs[1] and not bf[1] and "interstitial show rate p25 30%, median 50% (30 units, all apps)" in bs[0]
-    assert "shared unit: int_back — 90.0% of its ads are on this trigger; fill / show are the unit&#39;s" in bf[0]
-    assert "units not in AdMob: 10.0% of the trigger&#39;s ads (rates ke bahar)" in bf[0] and "30 whole units-read din" in bf[0]
-    # Low first (the weakest ÷ median, then imp / app user), then No benchmark, then No ads
-    assert t["order"] == [2, 3, 4, 5] and '<span class="hub-st st-lagu">— No ads</span>' in res["Trigger"]
-    assert t["note"].startswith('<p class="sc-note"><b>Imp / app user / day</b> = trigger ke ads ÷ app ke daily users · <b>Fill</b>')
-    assert "status aur Cause last 10 days (19 Mar – 28 Mar) ke numbers pe" in t["note"]
+# ── v 4 (owner, 8 Nov 2026, Firebase's own export beside the tab: "Naya logic banao") ──────────────────────────────────
+def test_v4_the_table_is_firebases_numbers(out):
+    v = out["v4"]
+    assert v["heads"] == ["Screen / Ad", "Users", "Views", "Time / user", "Ads", "Revenue", "%", "Signal"]
+    r = v["rows"]
+    assert list(r) == ["Main", "Editor", "Back press", "App resume", "Other1", "Not recorded", "Other (GA4 grouped)",
+                       "Total (app)"]                                               # by revenue, the total last
+    m = r["Main"]
+    assert (m["Users"], m["Views"], m["Time / user"], m["Ads"], m["Revenue"], m["%"]) == \
+        ("3,000", "32,145", "5m 00s", "3,000", "$60.00", "71.4%")
+    # Users = the period's unique users (file 2's "pu"), never a sum of days; Time / user = Σ engagement ÷ them
+    s = v["sums"]
+    assert s["tot"]["users"] == 4000 and s["tot"]["tu"] == s["tot"]["eng"] / 4000 and s["n"] == [30, 30, 30, 30]
+    # the full-screen rows: AdMob on its own days; no users, views or time of their own
+    b = r["Back press"]
+    assert b["Users"] == b["Views"] == b["Time / user"] == "—" and (b["Ads"], b["Revenue"], b["%"]) == ("1,230", "$6.00", "6.5%")
+    #                                                                   (a full-screen row's %: of AdMob's own total, $93)
+    assert s["fs"] == [["Back press", 1230, 6000000, 30, 30], ["App resume", 750, 3000000, 30, 30]]
+    # a screen GA4 gave no users row: "—", never 0
+    assert r["Other1"]["Users"] == "—" and r["Other1"]["Time / user"] == "—" and r["Other1"]["Views"] == "9,000"
+    # the total: the app's own users, GA4's revenue (= Firebase's total) = 100 %
+    t = r["Total (app)"]
+    assert (t["Users"], t["Revenue"], t["%"]) == ("4,000", "$84.00", "100%")
+    # the ad screen's GA4 revenue only in the note: its full-screen ads are the AdMob rows
+    assert "AdActivity" in v["note"] and "$9.00" in v["note"] and "Ad screens" not in r and "AdActivity" not in r
+    assert v["old"] == []                                                           # none of the old words on the page
 
 
-def test_triggers_w_parity_no_ads_and_today(out):
-    t = out["trg"]
-    # the period = the status window W: the page's own Fill / Show = the build's rows.t0.ab (no window label then)
-    w, ab = t["rW"], t["abW"]
-    assert w["fill"] == pytest.approx(ab["fill"], abs=1e-3) and w["show"] == pytest.approx(ab["show"], abs=1e-3)
-    assert w["unm"] == pytest.approx(ab["unm"], abs=1e-3) and w["sig"] == ab["sig"]
-    for f, v in ab["p"].items():
-        assert w["p"][f] == pytest.approx(v, abs=0.1), f
-    assert t["cusW"]["Fill"] == "<b>83%</b>" and t["cusW"]["Show rate"] == "<b>21%</b>" and "last 10 days" not in t["cusW"]["Trigger"] + t["cusW"]["Cause"]
-    # no ads of its own in the period (App resume from 19 Mar): "—" with the reason, never 0 — nor its unit's rates
-    assert (t["r7"]["fill"], t["r7"]["show"], t["r7"]["p"]) == (None, None, {}) and t["r7"]["why"] == "is period me is trigger ke koi ad nahi"
-    assert t["d7"]["Fill"] == t["d7"]["Show rate"] == "<b>—</b><small>is period me is trigger ke koi ad nahi</small>"
-    # Today: AdMob not complete — said so
-    assert t["today"]["why"] == "AdMob ~1–2 din baad pura hota hai" and t["today"]["fill"] is None
+def test_v4_signals_in_the_cells_the_card_and_the_details(out):
+    v = out["v4"]
+    assert v["rows"]["Main"]["Signal"] == "⚠️ unit_a: sirf 25% dikhe"
+    assert v["rows"]["Editor"]["Signal"] == "💡 40.0% time, 1.0% ads"
+    assert v["rows"]["Back press"]["Signal"] == "🔻 Imp / user −25%"
+    a = v["attn"]
+    assert "Signals · 30 days" in a and "💡 1 · ⚠️ 1 · 🔻 1" in a
+    assert a.index("Main") < a.index("Back press") < a.index("Editor")              # ⚠️, then 🔻, then 💡
+    assert all('data-sc-open="%d"' % i in a for i in (0, 6, 1))                    # each line: Details ▸ of its row
+    assert "unit_a — 40,000 ads fill hue, 10,000 dikhe (25%)" in a and "vs 28 Jan – 26 Feb 2026" in a
+    assert v["dds"].startswith('<span title="Ads waste: unit_a')                     # the details' header: its own signal
 
 
-def test_triggers_count_in_the_app_status_all_apps_attention_and_details(out):
-    t = out["trg"]
-    # the app's chip and its Low count say what they are: screens and triggers (in the chip each count holds together: a
-    # chip longer than a phone's name column wraps inside its pill between them, never past the pill)
-    assert t["crumb"].endswith('<span><span class="hub-st st-bigda">🔴 Low · 1\u00a0screen · 2\u00a0triggers</span> · history from 1 Jan 2026</span>'
-                               '<small class="sc-own">vs own past: same</small>')
-    assert t["onlyT"] == '<span class="hub-st st-bigda">🔴 Low · 2\u00a0triggers</span>'
-    assert t["all"]["Low"] == '<b class="sc-dn">3</b><small>1 screen · 2 triggers</small>'
-    assert '<span class="hub-st st-bigda">🔴 Low · 1\u00a0screen · 2\u00a0triggers</span>' in t["all"]["App · status"]
-    assert ".sc-stl .hub-st,.sc-crumb .hub-st{white-space:normal;border-radius:12px}" in _page()
-    # Needs attention: the Low triggers' own line (weakest first), counted as triggers; vs own past after, labelled
-    at = t["attn"]
-    assert ('<span class="hub-st st-bigda">🔴 Low</span><span class="sc-atn">Show rate under interstitial p25 (30%)</span>'
-            '<span class="sc-atr">2 triggers (Interstitial · Back press, Interstitial · Save / apply)</span>') in at
-    assert '<span class="sc-atr">1 screen (Home)</span>' in at and at.index("2 triggers") < at.index("1 screen (Home)")
-    assert at.index("Show rate under interstitial") < at.index("vs own past · Lower show rate")
-    # the details: the abs word + its weak number, then vs own past; the Absolute block (no Ads / view on a trigger)
-    assert t["dds"].startswith('<span class="hub-st st-bigda">🔴 Low</span> <small>Show rate 21% (interstitial median 50%) · last 10 days</small> · '
-                               '<span class="hub-st st-bigda">bigda</span> <small>last 10 days vs own past −33%</small>')
-    dd = t["dd"]
-    assert '<p class="sc-note">Fill <b>88%</b> · Show rate <b>22%</b> · 30 complete AdMob days</p>' in dd and "Ads / view" not in dd[:dd.index("sc-tiles")]
-    assert ('<tr><td>interstitial</td><td>90.0%</td><td>88%</td><td class="sc-lo">22%</td><td>80% / 90% <small>30 units</small></td>'
-            '<td>30% / 50% <small>30 units</small></td></tr>') in dd
-    assert "shared unit: int_back 90.0% (fill / show unit ke) · units not in AdMob: 10.0% of ads (rates ke bahar)" in dd
-    assert "<p class=\"sc-note\">Status window (build): Fill 83% · Show rate 21%</p>" in dd
-    assert "<b>Check (developer) · Show rate:</b> Ads are filled but fewer are shown." in dd
+def test_v4_custom_and_a_sampled_period(out):
+    v = out["v4"]
+    c = v["cus"]["rows"]["Main"]
+    assert c["Users"] == "—" and c["Signal"] == "—" and c["Views"] != "—" and c["Revenue"] == "$38.00"   # any period's sums
+    assert "Custom period: unique users aur signals sirf dashboard ke periods pe" in v["cus"]["attn"]
+    assert v["cus30"]["Main"]["Users"] == "3,000" and v["cus30"]["Main"]["Signal"].startswith("⚠️")   # = a build period
+    assert v["feb"]["rows"]["Main"]["Users"] == "—" and "GA4 ne is period ke users sampled diye" in v["feb"]["note"]
 
 
-def test_triggers_of_an_older_file_keep_their_own_word_and_a_failed_benchmark_says_so(out):
-    t = out["trg"]
-    o, orew = t["older"]                                       # no "lt": the build did not judge its triggers — as before
-    assert o["Trigger"] == ('<span class="sc-n">Interstitial · Back press</span><span class="sc-stl"><span class="hub-st st-bigda">bigda</span></span>'
-                            '<small>imp/app user 0.15 → 0.10 (−33%)</small>') and o["Cause"] == "Lower show rate"
-    assert '<span class="hub-st st-normal">normal</span>' in orew["Trigger"]
-    assert t["olderApp"] == {"w": "Low", "n": 1, "ns": 1, "nt": 0, "why": ""}           # its screens alone
-    assert t["failed"] == ('<span class="sc-n">Interstitial · Back press</span><span class="sc-stl"><span title="benchmark nahi bana" '
-                           'class="hub-st st-lagu">—</span></span><small>benchmark nahi bana</small>')
-    assert t["failedApp"] == {"w": "", "n": 0, "why": "benchmark nahi bana"}
+def test_v4_sorting_and_the_report(out):
+    v = out["v4"]
+    assert v["order_rev"][:4] == ["Main", "Editor", "Back press", "App resume"] and v["order_rev"][-1] == "Total (app)"
+    assert v["order_views"][:3] == ["Main", "Editor", "Other1"] and v["order_views"][-3:] == ["Back press", "App resume",
+                                                                                              "Total (app)"]
+    assert v["order_views_up"][:2] == ["Other (GA4 grouped)", "Not recorded"]
+    r = v["rep"]
+    assert r.startswith("Screens report — Alpha App — 27 Feb – 28 Mar 2026")
+    assert "1. Screen: x.y.MainActivity — Ads wasted" in r and "2. Screen: x.y.EditorActivity — Room for ads" in r
+    assert "3. Full-screen: Back press — Dropped" in r and r.count("Check: ") == 3
+    assert "$" not in r and "₹" not in r                                            # for the developer: no money
+
+
+def test_v4_all_apps(out):
+    a = out["v4"]["all"]
+    assert a["hd"] == ["App", "Users", "Views", "Ads", "Revenue", "Signals"]
+    al = a["rows"]["Alpha App"]
+    assert (al["Users"], al["Revenue"], al["Signals"]) == ("9,000", "$95.14", "💡 1 · ⚠️ 1 · 🔻 1")   # Revenue = AdMob's
+    assert a["rows"]["Delta App"]["Signals"] == "💡 0 · ⚠️ 0 · 🔻 0" and "Hidden App" not in a["rows"]
+    assert out["v4"]["hostile"]
+
+
+
+def test_v4_today_a_month_before_the_app_and_their_reasons(out):
+    v = out["v4"]
+    t = v["today"]
+    assert "Is period me abhi koi final din nahi" in t["attn"] and "koi signal nahi" not in t["attn"]   # never "✅ none"
+    assert t["rows"]["Back press"]["Ads"] == "—" and t["rows"]["Back press"]["Revenue"] == "—" and t["fsWhy"]
+    assert "is period me is app ka data nahi (history" in v["before"] and "Custom period" not in v["before"]

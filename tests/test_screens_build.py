@@ -137,7 +137,7 @@ def write_store(data, aid=AID, sc=None, first="2026-08-01", last="2026-11-04", p
     sc = sc or {}
     key = gu.file_key(aid)
     cut = (now.date() - timedelta(days=4)).isoformat()
-    groups = {"core": ("t", "v", "w", "a"), "small": ("k", "e", "uV", "uA", "s", "x", "nV", "nA"),
+    groups = {"core": ("t", "v", "w", "a", "m"), "small": ("k", "e", "uV", "uA", "s", "x", "nV", "nA"),
               "ver": ("rV", "rA"), "cc": ("cV", "cA")}
     files, recent = {}, {}
     if users:
@@ -1096,16 +1096,18 @@ def test_run_files_pointer_report_and_stale_removal(tmp_path):
     assert e["v"] == hashlib.sha1(raw2).hexdigest()[:12] and e["vl"] == hashlib.sha1(rawl).hexdigest()[:12]
     assert p["fv"] == hashlib.sha1(rawa).hexdigest()[:12]
     f2, fl, fa = json.loads(raw2), json.loads(rawl), json.loads(rawa)
-    assert (f2["v"], f2["key"], f2["td"], f2["d0"]) == (3, KEY, "2026-11-04", "2026-08-01")
+    assert (f2["v"], f2["key"], f2["td"], f2["d0"]) == (4, KEY, "2026-11-04", "2026-08-01")
     assert len(f2["days"]) == len(_days("2026-08-01", "2026-11-04")) and len(f2["adm"]["0"]) == len(f2["days"])
     one = fa["apps"][AID]
     # scr_all: All apps' day arrays + the app's daily users "au" (≤ ftU: the App total and All apps from this file
     # alone), ftU, the copy-day states "dk", the Low screens / triggers "lo" / "lt"; the screens' own users ("U" / "Us")
     # stay file 2's
     assert set(one) == {"key", "ft", "td", "d0", "items", "vis", "V", "A", "ta", "st", "bf", "status", "app", "dq", "au",
-                        "ftu", "dk", "nvr", "lo", "lt"} and one["ftu"] == "2026-11-02" and len(one["au"]) == len(one["vis"])
+                        "ftu", "dk", "nvr", "lo", "lt", "rv", "pt", "sg"} and one["ftu"] == "2026-11-02" \
+        and len(one["au"]) == len(one["vis"]) == len(one["rv"])
     assert set(f2) == {"v", "key", "app_id", "ft", "td", "d0", "screens", "units", "trig", "days", "adm", "rows", "notes",
-                       "Us", "U", "au", "ufmt"} and len(f2["U"]) == len(f2["days"]) and f2["au"] == one["au"]
+                       "Us", "U", "au", "ufmt", "pw", "pu", "sig", "fs4", "fsd", "adt"} and len(f2["U"]) == len(f2["days"]) \
+        and f2["au"] == one["au"] and len(f2["adt"]) == len(f2["days"])
     assert one["dk"] == "0" * len(one["vis"]) and f2["notes"]["ftu"] == "2026-11-02"
     assert len(one["vis"]) == len(f2["days"]) and all(len(s) == len(f2["days"]) for s in one["st"].values())
     assert set(one["st"]) == set(sb.READ_IDS) and one["st"]["a"].count("w") == len(f2["days"])
@@ -1671,7 +1673,7 @@ def test_an_unreadable_store_month_file_is_counted_flagged_and_its_days_say_so(t
         assert {st[i][d] for i in ids for d in ds} == {"x"}, ids                     # store file unreadable
         assert {st[i][d] for i in ids for d in days if d not in ds} == {"w"}, ids    # every other day: its own state
     f2 = gz(out / ("scr_%s.json.gz" % KEY))
-    assert f2["days"][days.index("2026-09-10")] == {"st": {"t": "x", "v": "x", "w": "x", "a": "x"}}
+    assert f2["days"][days.index("2026-09-10")] == {"st": {"t": "x", "v": "x", "w": "x", "a": "x"}}   # (m: never fetched)
     # never cached as an empty month: the next build reads the files again, counts and flags them again
     assert not os.path.exists(data / "ga4_screens_cache" / KEY / "cc_2026-08.json.gz")
     assert not os.path.exists(data / "ga4_screens_cache" / KEY / "cc_2026-08.sum.json.gz")
@@ -2075,12 +2077,12 @@ def test_line_users_and_stale_users_warning(tmp_path, monkeypatch, capsys):
     assert "au" in gz(out2 / "scr_all.json.gz")["apps"][AID]          # the daily users themselves are in
 
 
-def test_v3_files_and_shards_v1(tmp_path):
+def test_v4_files_and_shards_v1(tmp_path):
     data, out, dash = build(tmp_path)
     sb.run(dash, str(data), str(out), {}, NOW)
-    assert sb.V == 3 and dash["scr"]["v"] == 3
-    assert gz(out / "scr_all.json.gz")["v"] == 3 and gz(out / ("scr_%s.json.gz" % KEY))["v"] == 3
-    assert gz(out / ("scr_l_%s.json.gz" % KEY))["v"] == 3
+    assert sb.V == 4 and dash["scr"]["v"] == 4
+    assert gz(out / "scr_all.json.gz")["v"] == 4 and gz(out / ("scr_%s.json.gz" % KEY))["v"] == 4
+    assert gz(out / ("scr_l_%s.json.gz" % KEY))["v"] == 4
     assert gz(out / ("scr_c_%s_202609.json.gz" % KEY))["v"] == 1 == sb.V_SHARD == sb.SHARD_V    # shards untouched
 
 
@@ -2419,3 +2421,160 @@ def test_absolute_trigger_words_ship_in_scr_all_with_their_low_count(tmp_path, m
     assert "scr bench skipped: ZeroDivisionError" in capsys.readouterr().err
     fb = gz(out2 / "scr_all.json.gz")["apps"][AID]
     assert "lt" in fb and fb["lt"] is None and all(s[7:] == ["", "", []] for s in fb["status"].values())
+
+
+
+# ── v 4: Firebase's numbers and the three signals (owner, 8 Nov 2026) ─────────────────────────────────────────────────
+def _ix(d, d0="2026-08-01"):
+    return (date.fromisoformat(d) - date.fromisoformat(d0)).days
+
+
+def test_v4_periods_are_the_fetchs_and_the_pages():
+    from admob_iq.fetch import ga4_screens as gs
+    for td in (date(2026, 11, 4), date(2026, 3, 1), date(2026, 1, 31), date(2024, 2, 29), date(2026, 12, 31)):
+        for d0 in (td, td - timedelta(days=1), td - timedelta(days=45), td - timedelta(days=400), td.replace(day=1)):
+            assert sb.pwin(td, d0) == [(k, lo.isoformat(), hi.isoformat(), kd) for k, lo, hi, kd in gs.pu_wanted(td, d0)]
+    w = {k: (lo, hi, kd) for k, lo, hi, kd in sb.pwin("2026-11-04", "2026-08-01")}
+    assert w["2026-10-27_2026-11-02"] == ("2026-10-27", "2026-11-02", "roll")           # 7 days ending td − 2
+    assert w["2026-10-01_2026-10-31"][2] == "month" and w["2026-11-01_2026-11-04"][2] == "day"
+    assert sb._prev("2026-10-01", "2026-10-31", "month") == ("2026-09-01", "2026-09-30")
+    assert sb._prev("2026-11-01", "2026-11-04", "day") == ("2026-10-01", "2026-10-31")   # this month: the month before
+    assert sb._prev("2026-10-27", "2026-11-02", "roll") == ("2026-10-20", "2026-10-26")
+
+
+def test_v4_revenue_full_screen_rows_users_of_a_period(tmp_path):
+    def day_fn(d):
+        r = core_recs(d, {})
+        r["m"] = {"st": "w", "g": "c", "t": [2600000, 2550000],
+                  "r": [[MAIN, 500000, 500000], [EDIT, 100000, 50000], [ADACT, 2000000, 2000000]]}
+        return r
+    data, out, dash = build(tmp_path, day_fn=day_fn)
+    for p in dash["placements"]:
+        for row in p["daily"]:
+            row[1] = row[2] * 1000 + 7                  # AdMob revenue micros, its own per unit and day
+    users = {"2026-10-01_2026-10-31": {"lo": "2026-10-01", "hi": "2026-10-31", "st": "w", "tot": 1000, "fin": 1,
+                                       "r": [[MAIN, 900], [EDIT, 300], ["x.y.Gone", 5]]},
+             "2026-10-02_2026-10-30": {"lo": "2026-10-02", "hi": "2026-10-30", "st": "w", "tot": 9, "r": []},
+             "2026-10-27_2026-11-02": {"lo": "2026-10-27", "hi": "2026-11-02", "st": "s", "smp": 0.5},
+             "2026-09-01_2026-09-30": {"lo": "2026-09-02", "hi": "2026-09-30", "st": "w", "tot": 5, "r": []}}
+    write_json_gz_stable(str(data / "ga4_screens" / KEY / "users.json.gz"), {"v": 1, "w": users})
+    sb.run(dash, str(data), str(out), {}, NOW)
+    f2, one = gz(out / ("scr_%s.json.gz" % KEY)), gz(out / "scr_all.json.gz")["apps"][AID]
+    assert f2["pw"] == [list(x) for x in sb.pwin("2026-11-04", "2026-08-01")]
+    six = {c: i for i, (c, _) in enumerate(f2["screens"])}
+    e = f2["days"][_ix("2026-10-15")]
+    assert e["m"] == sorted([[six[MAIN], 500000, 500000], [six[EDIT], 100000, 50000], [six[ADACT], 2000000, 2000000]])
+    assert e["st"]["m"] == "w" and set(one["st"]) == set(sb.READ_IDS) and "m" in one["st"]
+    # the users of a period: only a period the page offers with the same days; a class the build does not know left
+    # out; a sampled period ships its state only
+    assert f2["pu"] == {"2026-10-01_2026-10-31": {"st": "w", "u": sorted([[six[MAIN], 900], [six[EDIT], 300]]),
+                                                  "tot": 1000},
+                        "2026-10-27_2026-11-02": {"st": "s"}}
+    assert one["pt"] == {"2026-10-01_2026-10-31": 1000}
+    # the full-screen rows from AdMob: by trigger label, summed on AdMob's own days (never blended), none after
+    # latest_complete
+    labels = [(f, lab) for f, lab, _ in f2["fs4"]]
+    assert labels == [("appopen", "App resume"), ("interstitial", "Back press")]
+    assert f2["fs4"][1][2] == ["zz_back_1"] and len(f2["fsd"]) == 2 and len(f2["fsd"][1]) == len(f2["days"])
+    row = next(r for r in next(p for p in dash["placements"] if p["name"] == "zz_back_1")["daily"] if r[0] == "2026-10-15")
+    assert f2["fsd"][1][_ix("2026-10-15")] == [row[3], row[4], row[2], row[1]]
+    assert f2["fsd"][1][_ix("2026-11-04")] is None and f2["fsd"][1][_ix("2026-11-03")] is not None
+    day = [next(r for r in p["daily"] if r[0] == "2026-10-15") for p in dash["placements"]]
+    assert f2["adt"][_ix("2026-10-15")] == [sum(r[3] for r in day), sum(r[4] for r in day), sum(r[2] for r in day),
+                                            sum(r[1] for r in day)]
+    # scr_all: per day [GA4's revenue on every screen, AdMob's app total]
+    assert one["rv"][_ix("2026-10-15")] == [2600000, sum(r[1] for r in day)]
+    assert one["rv"][_ix("2026-11-04")] == [2600000, None]
+    assert set(one["sg"]) == {k for k, *_ in sb.pwin("2026-11-04", "2026-08-01")}
+
+
+def test_v4_the_three_signals(tmp_path):
+    # ⚠️ + 🔻: the main screen's banner unit shows 36 % of its fills from W0 (24 Oct) and its ads per user fall 40 %
+    data, out, dash = build(tmp_path, {"show_w": 0.6})
+    sb.run(dash, str(data), str(out), {}, NOW)
+    f2, one = gz(out / ("scr_%s.json.gz" % KEY)), gz(out / "scr_all.json.gz")["apps"][AID]
+    six = {c: i for i, (c, _) in enumerate(f2["screens"])}
+    w7 = f2["sig"]["2026-10-27_2026-11-02"]["s%d" % six[MAIN]]
+    codes = {x[0]: x for x in w7}
+    assert set(codes) == {"w", "d"}
+    w = codes["w"]
+    assert w[1] == "unit_a" and 0.35 < w[2] < 0.37 and w[3] >= sb.SIG_WASTE and w[4] > w[5] > 0
+    d = codes["d"]
+    assert d[3:] == ["2026-10-20", "2026-10-26"] and d[2] <= (1 - sb.SIG_DROP) * d[1]
+    assert one["sg"]["2026-10-27_2026-11-02"] == [0, 1, 1]
+    # a whole month before W0: neither (the show rate 60 %, no drop)
+    assert "2026-09-01_2026-09-30" not in f2["sig"] and one["sg"]["2026-09-01_2026-09-30"] == [0, 0, 0]
+    # October: 8 days of the change in 31 — its month shows more than half its fills (no ⚠️) and −10 % only (no 🔻)
+    assert "s%d" % six[MAIN] not in f2["sig"].get("2026-10-01_2026-10-31", {})
+    # All time: no 🔻 (nothing before it)
+    assert all(x[0] != "d" for xs in f2["sig"].get("2026-08-01_2026-11-04", {}).values() for x in xs)
+
+
+def test_v4_ad_space_signal(tmp_path):
+    # 💡: the edit screen keeps a third of the screen time but shows no ads at all
+    def day_fn(d):
+        r = core_recs(d, {})
+        r["a"]["r"] = [x for x in r["a"]["r"] if x[0] != EDIT]
+        r["w"]["r"] = [x for x in r["w"]["r"] if x[1] != "unit_n"]
+        r["t"]["a"] = [[f, n] for f, n in r["t"]["a"] if f != "Native advanced"]
+        return r
+    data, out, dash = build(tmp_path, day_fn=day_fn)
+    sb.run(dash, str(data), str(out), {}, NOW)
+    f2, one = gz(out / ("scr_%s.json.gz" % KEY)), gz(out / "scr_all.json.gz")["apps"][AID]
+    six = {c: i for i, (c, _) in enumerate(f2["screens"])}
+    b = f2["sig"]["2026-10-01_2026-10-31"]["s%d" % six[EDIT]]
+    assert len(b) == 1 and b[0][0] == "b" and abs(b[0][1] - 1 / 3) < 0.01 and b[0][2] == 0
+    assert one["sg"]["2026-10-01_2026-10-31"][0] == 1
+    assert "s%d" % six[MAIN] not in f2["sig"]["2026-10-01_2026-10-31"]
+
+
+def test_v4_a_row_whose_ads_stop_is_flagged_dropped(tmp_path):
+    # the main screen's ads stop from W0: its share of the app's ads NOW is 0, before it was most of them — 🔻 holds on
+    # the larger of the two (a materiality on the period alone would never flag the row that matters most)
+    def day_fn(d):
+        r = core_recs(d, {})
+        if d >= W0:
+            r["a"]["r"] = [x for x in r["a"]["r"] if x[0] != MAIN]
+            r["t"]["a"] = [[f, n - (200 + _j(d) if f == "Banner" else 0)] for f, n in r["t"]["a"]]
+        return r
+    data, out, dash = build(tmp_path, day_fn=day_fn)
+    sb.run(dash, str(data), str(out), {}, NOW)
+    f2 = gz(out / ("scr_%s.json.gz" % KEY))
+    six = {c: i for i, (c, _) in enumerate(f2["screens"])}
+    codes = [x[0] for x in f2["sig"]["2026-10-27_2026-11-02"]["s%d" % six[MAIN]]]
+    assert "d" in codes
+    d = next(x for x in f2["sig"]["2026-10-27_2026-11-02"]["s%d" % six[MAIN]] if x[0] == "d")
+    assert d[2] == 0 and d[1] > 0 and d[3:] == ["2026-10-20", "2026-10-26"]
+
+
+def test_v4_one_admob_unit_two_ga4_names_counts_once(tmp_path):
+    # one AdMob unit logged by GA4 under two names (two cases) on the main screen: ⚠️ weighs it ONCE — fills 100 a day,
+    # shown 40, the app's fills 400: 60 not shown = 15 % of the app's fills, under the 20 % bar (counted twice: 30 %)
+    def day_fn(d):
+        r = core_recs(d, {})
+        r["a"]["r"] = [[MAIN, "Banner", "unit_a", 50], [MAIN, "Banner", "Unit_A", 50], [EDIT, "Native advanced", "unit_n", 50]]
+        r["w"]["r"] = [["Banner", "unit_a", 50], ["Banner", "Unit_A", 50], ["Native advanced", "unit_n", 50]]
+        r["t"]["a"] = [["Banner", 100], ["Native advanced", 50]]
+        return r
+    data, out, dash = build(tmp_path, day_fn=day_fn)
+    for p in dash["placements"]:
+        for row in p["daily"]:
+            if p["name"] == "unit_a":
+                row[2:5] = [40, 110, 100]                   # imp, req, matched
+            elif p["name"] == "unit_n":
+                row[2:5] = [290, 310, 300]
+            else:
+                row[2:5] = [0, 0, 0]
+    sb.run(dash, str(data), str(out), {}, NOW)
+    f2 = gz(out / ("scr_%s.json.gz" % KEY))
+    six = {c: i for i, (c, _) in enumerate(f2["screens"])}
+    assert all(x[0] != "w" for xs in f2["sig"].values() for x in xs.get("s%d" % six[MAIN], []))
+    # (the same unit at 30 % of the app's fills — a smaller app: it is flagged, once)
+    for p in dash["placements"]:
+        if p["name"] == "unit_n":
+            for row in p["daily"]:
+                row[2:5] = [90, 110, 100]
+    sb.run(dash, str(data), str(out), {}, NOW)
+    f2 = gz(out / ("scr_%s.json.gz" % KEY))
+    w = [x for x in f2["sig"]["2026-10-01_2026-10-31"]["s%d" % six[MAIN]] if x[0] == "w"]
+    assert len(w) == 1 and w[0][1] in ("unit_a", "Unit_A") and w[0][4] == 3100 and w[0][5] == 1240   # 31 days, once
