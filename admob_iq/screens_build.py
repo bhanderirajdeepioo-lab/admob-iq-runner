@@ -108,6 +108,9 @@ GZ_LEVEL = 6                           # the scr_ files' gzip level (9 took ~4×
 IDX_V, IDX_APP, IDX_ALL = 1, "shards.json", "all.json"      # the out-file index (_idx_path)
 SHARD_V = 1                            # bump when shard_body's output changes for the same inputs (a shard key part)
 V_SHARD = 1                            # the shard files' own format version (unchanged by V 2: no shard is rewritten)
+KEY_V = 3                              # the file-version part of every shard key, held at V 3: shard_body never reads
+                                       # V, so a V bump keeps every shard (with V itself there, each V bump derived every
+                                       # month of every app again — the step's slowest build — to write the same bytes)
 GROUPS = {"core": ("t", "v", "w", "a"), "small": ("k", "e", "uV", "uA", "s", "x", "nV", "nA"),
           "ver": ("rV", "rA"), "cc": ("cV", "cA")}
 READ_IDS = ("t", "v", "w", "a", "nV", "nA", "rV", "rA", "cV", "cA", "k", "e", "s", "x", "uV", "uA")
@@ -2469,11 +2472,12 @@ class Layer:
 
     def _shard_key(self, m, src, dk):
         """Everything a month's shard body depends on: its store month file, its recent days, its copy days, the display
-        items, its day span (d0 … today), the file / cache / shard-code versions and the size limit."""
+        items, its day span (d0 … today), the cache / shard-code versions (KEY_V: the file version held, never V's
+        bumps) and the size limit."""
         app = self.app
         rk = _sha(_raw({d: e for d, e in self.recent.items() if d[:7] == m})) if self._has_recent(m) else ""
         lo, hi = max(app.d0 or "", m + "-01"), min(_month_end(m), _iso(app.td))
-        return _sha(_raw([V, CACHE_V, SHARD_V, MAX_GZ, self.grp, m, src, rk, dk, app.ditems, lo, hi]))[:20]
+        return _sha(_raw([KEY_V, CACHE_V, SHARD_V, MAX_GZ, self.grp, m, src, rk, dk, app.ditems, lo, hi]))[:20]
 
     def _shard_ok(self, fn, shk):
         """The index knows this shard for these inputs: too big, or written and still the file on disk."""

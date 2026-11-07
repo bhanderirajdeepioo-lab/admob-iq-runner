@@ -2084,6 +2084,27 @@ def test_v3_files_and_shards_v1(tmp_path):
     assert gz(out / ("scr_c_%s_202609.json.gz" % KEY))["v"] == 1 == sb.V_SHARD == sb.SHARD_V    # shards untouched
 
 
+def test_a_file_version_bump_derives_no_shard(tmp_path, monkeypatch):
+    # V is file 2's / scr_l's / scr_all's version only: a bump writes those again, never derives or writes a shard (the
+    # shard keys hold KEY_V) — the next build as quick as an unchanged one, every shard's bytes the same
+    data, out, dash = build(tmp_path, {"show_w": 0.6})
+    sb.run(dash, str(data), str(out), {}, NOW)
+    shards = lambda: {f: (out / f).read_bytes() for f in sorted(os.listdir(out)) if re.match(r"scr_[rc]_", f)}
+    before = shards()
+    assert len(before) > 2
+    built, written = [], []
+    real_body, real_write = sb.shard_body, sb._write_gz
+    monkeypatch.setattr(sb, "shard_body", lambda app, m, merged: built.append(m) or real_body(app, m, merged))
+    monkeypatch.setattr(sb, "_write_gz", lambda p, g: written.append(os.path.basename(p)) or real_write(p, g))
+    monkeypatch.setattr(sb, "V", sb.V + 1)
+    dash2 = dashboard({"show_w": 0.6})
+    assert sb.run(dash2, str(data), str(out), {}, NOW) == ["/scr_*"]
+    assert built == [] and shards() == before and not [f for f in written if re.match(r"scr_[rc]_", f)]
+    assert dash2["scr"]["v"] == sb.V == gz(out / "scr_all.json.gz")["v"] == gz(out / ("scr_%s.json.gz" % KEY))["v"]
+    assert gz(out / ("scr_l_%s.json.gz" % KEY))["v"] == sb.V and sorted(written) == sorted(
+        ["scr_all.json.gz", "scr_%s.json.gz" % KEY, "scr_l_%s.json.gz" % KEY])
+
+
 # ── backtest ────────────────────────────────────────────────────────────────────────────────
 
 def test_backtest_v2_tiny_store(tmp_path):
