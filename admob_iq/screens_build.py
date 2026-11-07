@@ -62,7 +62,10 @@ each unit weighted by σ = the screen's share of the unit's GA4 ads (ab_side / a
 unit's). The words judge them against the SAME AdMob format across every built app's units (ab_bench: one vote per
 AdMob unit id, unweighted quantiles, no benchmark under AB_MIN_N units; run() after the app loop) → Low (a part ≥ 20 %
 under its format's p25) · Few ads · OK · Too few ads · Not measurable · No ads (ab_judge) in scr_all's status [7] – [9];
-the vs-own-past word stays beside them. The page windows Fill / Show itself from file 2 (units, ufmt, adm, days).
+the vs-own-past word stays beside them. A full-screen trigger gets the same from its units (ab_tside / ab_trig: σ splits
+an AdMob unit two GA4 units share; no views, so no Few ads; a format without a benchmark: No benchmark, the number
+shown) and file 2's rows["t<n>"]["ab"]; scr_all's "lt" counts its Low triggers beside "lo" (an older file has no "lt":
+its triggers ship "" and keep their own word). The page windows Fill / Show itself from file 2 (units, ufmt, adm, days).
 
 run(dashboard, data_dir, out_dir, s) → the _headers no-store paths (["/scr_*"], ONE splat rule) or [] (no store / switched
 off / a failure: every scr_ file removed, no pointer); only the apps the dashboard's apps_catalog selects (when it has
@@ -2070,8 +2073,8 @@ def row_report(app, label, what, st, cz, series, fbd, ver=None, cc=None, version
         out.append("  %s  %s  %s  %s  %s  %s" % (d, _n(u), _n(v), _n(a), _q(a / u) if u else "—",
                                                  _fmt100(a / v) if v else "—"))
     if ab is not None:                                 # numbers only: the benchmark needs every app (the page has it)
-        out.append("Absolute (last %d days): Ads / view %s, Fill %s, Show rate %s%s%s" % (
-            W_DAYS, _pa(ab["av"]), _pf(ab["fill"]), _pf(ab["show"]), "".join(
+        out.append("Absolute (last %d days): %sFill %s, Show rate %s%s%s" % (
+            W_DAYS, "Ads / view %s, " % _pa(ab["av"]) if scr else "", _pf(ab["fill"]), _pf(ab["show"]), "".join(
                 " · %s %s of the unit ads (fill %s, show %s)" % (FMT_NAME.get(f, f), _pf(p[0]),
                                                                  _pf(p[2] / p[1] if p[1] else None),
                                                                  _pf(p[3] / p[2] if p[2] else None))
@@ -3191,6 +3194,77 @@ def ab_row(app, side, c, w, allf):
             "unm": unm / tot if tot else None, "why": why, "nm": not parts or not side["K"]}
 
 
+def ab_tside(app, w):
+    """The full-screen triggers' σ side over window w (W): σ's source days S = W's whole units-read days (the shipped "w"
+    state; under SIG_MIN of them the newest SIG_N such days ≤ W's end), g {unit: its GA4 ads over S} and G {AdMob ids
+    tuple: the GA4 ads over S of every GA4 unit with those ids} — an AdMob unit two GA4 units share (a name in two cases,
+    two GA4 formats) is split between them as a screen's σ splits a unit."""
+    ok = [d for d in app.days if d <= w[-1] and d in app.whole["w"] and d in app.w]
+    sw = [d for d in ok if d >= w[0]]
+    S, src = (sw, "W") if len(sw) >= SIG_MIN else (ok[-SIG_N:], "new")
+    g, G = {}, {}
+    for d in S:
+        for k, n in app.w[d].items():
+            ui = app.uix.get(k)
+            if ui is not None and n:
+                g[ui] = g.get(ui, 0) + n
+                if app.units[ui][2]:
+                    t = tuple(app.units[ui][2])
+                    G[t] = G.get(t, 0) + n
+    return {"S": S, "sig": [src, len(S), S[0], S[-1]] if S else None, "g": g, "G": G}
+
+
+def ab_trig(app, side, ts, gi, w):
+    """One full-screen trigger's absolute numbers over W, the screens' rule (ab_row) on its units: its ads (the units
+    read on W's days with app visits — the page's sumItem days), then per AdMob unit (its ids tuple, once) of the trigger
+    σ = min(1, the trigger's GA4 ads on it ÷ every GA4 unit's on it) over ts's days × its AdMob [req, matched, imp] on
+    W's complete days → Fill = matched ÷ requests, Show rate = impressions ÷ matched; per AdMob format p [share of the
+    trigger's GA4 ads (unmatched in the whole), req, matched, imp]; unm the share of units with no AdMob id (or no GA4
+    ads anywhere): never in a rate; sh the shared units [name, σ] (σ < 0.95); why "" or why a number is "—"."""
+    uis = app.trig[gi][2]
+    keys = [(app.units[u][0], app.units[u][1]) for u in uis]
+    a = nd = 0
+    for d in w:
+        wd = app.w.get(d)
+        if wd is None or app.vis.get(d) is None:
+            continue
+        nd += 1
+        a += sum(wd.get(k, 0) for k in keys)
+    if not a:
+        return {"ads": a, "av": None, "fill": None, "show": None, "p": {}, "unm": None, "sh": [], "nm": True,
+                "why": "is period me is trigger ke koi ad nahi" if nd else "is period me units ka data nahi"}
+    tot = sum(ts["g"].get(u, 0) for u in uis)
+    by, unm = {}, 0
+    for u in uis:
+        n = ts["g"].get(u, 0)
+        if not n:
+            continue
+        t = tuple(app.units[u][2])
+        if not t or u not in side["X"] or not ts["G"].get(t):
+            unm += n
+            continue
+        by.setdefault(t, [u, 0])[1] += n
+    parts, sh = {}, []
+    for t, (u, n) in sorted(by.items()):
+        s = min(1.0, n / ts["G"][t])
+        p = parts.setdefault(side["ufmt"][u], [0.0, 0.0, 0.0, 0.0])
+        p[0] += n
+        for j in range(3):
+            p[j + 1] += s * side["X"][u][j]
+        if s < 0.95:
+            sh.append([app.units[u][0] or app.units[u][3], _r(s, 4)])
+    T = [sum(p[j] for p in parts.values()) for j in (1, 2, 3)]
+    why = ("AdMob data nahi" if not app.adm else
+           "GA4 ne is app ke units whole nahi diye" if not ts["S"] else
+           "GA4 ne is trigger ke ads unit ke saath nahi diye" if not tot else
+           "GA4 unit names AdMob me nahi mile (unmatched 100 %)" if not parts else
+           "AdMob ~1–2 din baad pura hota hai" if not side["K"] else
+           "koi ad fill nahi hua" if T[0] and not T[1] else "")
+    return {"ads": a, "av": None, "fill": T[1] / T[0] if T[0] else None, "show": T[2] / T[1] if T[1] else None,
+            "p": {f: [p[0] / tot] + p[1:] for f, p in parts.items()}, "unm": unm / tot if tot else None, "sh": sh,
+            "why": why, "nm": not parts or not side["K"]}
+
+
 def ab_ship(ab, sig):
     """File 2's rows[rid]["ab"]: shares / rates 4 places, sums 1, Ads / view % 2."""
     return {"av": _r(ab["av"], 2), "fill": _r(ab["fill"], 4), "show": _r(ab["show"], 4),
@@ -3253,16 +3327,19 @@ def _dm(s, ref):
     return "%d %s%s" % (d.day, MONTHS[d.month - 1], "" if d.year == ref.year else " %d" % d.year)
 
 
-def ab_judge(word, ab, B, sig):
+def ab_judge(word, ab, B, sig, trig=False):
     """A top screen row's absolute status → [word, cause, weak [[k, format, value, median, p25], …] weakest first]: a
     vs-own-past word not judged stays (N/A, Too early); No ads; Not measurable (why); Low (a part ≥ AB_PART with fill
     under its format's p25 on ≥ AB_REQ requests, or show under p25 on ≥ AB_MT matched); Too few ads (no such part with
     ≥ AB_MT matched); Few ads (the dominant part ≥ AB_DOM, Ads / view under its format's p25); else OK. Cause: up to 2
-    weak numbers, weakest (value ÷ median) first; a σ from older split days names them."""
+    weak numbers, weakest (value ÷ median) first; a σ from older split days names them. trig: a full-screen trigger
+    (ab_trig: no views, so no Few ads) — OK when a part ≥ AB_PART has a number its format's benchmark judges (≥ the
+    floors), else No benchmark when such a part has the volume but its format no benchmark (under AB_MIN_N units: the
+    number is shown, never judged), else Too few ads."""
     if word not in JUDGED:
         return [word, "", []]
     if not ab["ads"]:
-        return ["No ads", "10 din me is screen pe koi ad nahi", []]
+        return ["No ads", "10 din me is %s koi ad nahi" % ("trigger ke" if trig else "screen pe"), []]
     if ab["nm"]:
         return ["Not measurable", ab["why"], []]
     fm, weak = B["fmt"], []
@@ -3275,6 +3352,15 @@ def ab_judge(word, ab, B, sig):
         if b.get("show") and p[2] >= AB_MT and p[3] / p[2] < b["show"][1]:
             weak.append(["show", f, p[3] / p[2], b["show"][2], b["show"][1]])
     out = "Low"
+    if not weak and trig:
+        big = [(f, p, fm.get(f) or {}) for f, p in sorted(ab["p"].items()) if p[0] >= AB_PART]
+        if any(b.get("fill") and p[1] >= AB_REQ or b.get("show") and p[2] >= AB_MT for f, p, b in big):
+            return ["OK", "", []]
+        nob = [f for f, p, b in big if not b.get("fill") and not b.get("show") and (p[1] >= AB_REQ or p[2] >= AB_MT)]
+        if nob:
+            return ["No benchmark", "%s: no benchmark (n < %d)" % (", ".join(FMT_NAME.get(f, f) for f in nob), AB_MIN_N),
+                    []]
+        return ["Too few ads", "har bade part pe AdMob matched %d se kam" % AB_MT, []]
     if not weak:
         if not any(p[0] >= AB_PART and p[2] >= AB_MT for p in ab["p"].values()):
             return ["Too few ads", "har bade part pe AdMob matched %d se kam" % AB_MT, []]
@@ -3344,6 +3430,9 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
     # the absolute numbers over W (every screen row; the words need every app's benchmark: run() after the app loop)
     side = ab_side(app, w, allf)
     abr = {rid: ab_row(app, side, row[1], w, allf) for rid, row, *_ in rows if row[0] == "s"}
+    # … and every full-screen trigger's (its units, σ on its own side: the units read)
+    ts = ab_tside(app, w)
+    abt = {rid: ab_trig(app, side, ts, row[1], w) for rid, row, *_ in rows if row[0] == "t"}
     fbd, rtext = {}, {}
     for rid, row, label, k, ii, ser, st in rows:
         if st["word"] in JUDGED:
@@ -3351,7 +3440,8 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
         if rid in report_rows:
             rtext[rid] = row_report(app, label, "screen" if row[0] == "s" else "full-screen trigger", st,
                                     causes.get(rid) or {}, ser, fbd.get(rid), _ver_line(app, row, order, wsame, prev),
-                                    _cc_line(lay["cc"].wsum.get(rid)), {v: ver[v]["first"] for v in ver}, abr.get(rid))
+                                    _cc_line(lay["cc"].wsum.get(rid)), {v: ver[v]["first"] for v in ver},
+                                    abr.get(rid) or abt.get(rid))
     dq, dql = dq_items(app, clicks)
     nvr = nvr_split(app, sdays, w, n, ast)
     head = report_head(app, key, alist, ast, nvr, rows)
@@ -3402,6 +3492,8 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
                       "fbd": fbd.get(rid)}
         if rid in abr:
             rows2[rid]["ab"] = ab_ship(abr[rid], side["sig"])
+        elif rid in abt:
+            rows2[rid]["ab"] = ab_ship(abt[rid], ts["sig"])
     allfs = app.allf_share() if allf else None
     notes = {"zone": "assumed" if app.adm.assumed else ("account" if app.adm else "none"),
              "admob": "ok" if app.adm else "none", "allf": allf, "allfs": allfs,
@@ -3468,7 +3560,7 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
     # per display item: [word, why, score, cause, its Needs attention group, impact, W days] — the W days (its whole days
     # of the last W_DAYS) here, not only in file 2: Needs attention's "n/10 days" is drawn from scr_all alone — + [the
     # absolute word, its cause, the weak numbers]: "", "", [] until run() judges them on every app's benchmark
-    status, abj = {}, {}
+    status, abj, abjt = {}, {}, {}
     for rid, row, label, k, ii, ser, st in rows:
         if ii is not None:
             cz = causes.get(rid) or {}
@@ -3477,10 +3569,12 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
                                st.get("group", "") if st["word"] in FLAGS else "", st["imp"], st["dW"], "", "", []]
             if rid in abr:
                 abj[str(ii)] = (st["word"], abr[rid])
+            elif rid in abt:
+                abjt[str(ii)] = (st["word"], abt[rid])
     bf = {i: _bf(r) for i, r in ((meta.get("reads") or {}).items()) if isinstance(r, dict)}
     entry = {"key": key, "ft": _iso(app.ft), "td": _iso(app.td), "d0": app.d0, "items": app.items, "vis": vis,
              "V": V_, "A": A_, "ta": ta, "st": stall, "bf": bf, "status": status, "app": alist, "dq": dq,
-             "ftu": _iso(app.ftu), "dk": "".join(str(app.dup.get(d, 0)) for d in app.days), "lo": None}
+             "ftu": _iso(app.ftu), "dk": "".join(str(app.dup.get(d, 0)) for d in app.days), "lo": None, "lt": None}
     # the App total and All apps from this file alone: the app's daily users per day ≤ ftU (null else) — or why none
     if aul is not None:
         entry["au"] = aul
@@ -3499,7 +3593,7 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
     c["stale"] += 1 if stale_users(app) else 0
     return {"app": app, "body2": body2, "lraw": _splice(lbody, [sdays.get(d) for d in app.days]), "entry": entry,
             "keep": keep,
-            "seen": lay["ver"].seen | lay["cc"].seen, "ab": (side["bu"], abj, side["sig"])}
+            "seen": lay["ver"].seen | lay["cc"].seen, "ab": (side["bu"], abj, side["sig"]), "abt": (abjt, ts["sig"])}
 
 
 # ── run ──────────────────────────────────────────────────────────────────────────────────────
@@ -3545,7 +3639,7 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
         by_id = _by_id(data_dir)
         counts = {"rows": 0, "judged": 0, "worse": 0, "watch": 0, "big": 0, "failed": 0, "cached": 0, "users": 0,
                   "stale": 0}
-        apps, entries, keep, abx = {}, {}, set(), {}
+        apps, entries, keep, abx, abt = {}, {}, set(), {}, {}
         bad = []                                    # (key, group, month, error type): store month files not readable
         sel = selected(dashboard)
         for key in store_keys(data_dir):
@@ -3579,6 +3673,7 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                 keep |= mine
                 entries[aid] = res["entry"]
                 abx[aid] = res["ab"]
+                abt[aid] = res["abt"]
                 apps[aid] = {"key": key, "v": h2[:12], "vl": hl[:12] if hl else None,
                              "from": res["entry"]["d0"], "ft": res["entry"]["ft"]}
             except Exception as e:                  # a broken app: its own files and pointer entry gone
@@ -3600,14 +3695,20 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                 B = ab_bench(abx)
                 js = {aid: {ii: ab_judge(word, ab, B, sig) for ii, (word, ab) in rws.items()}
                       for aid, (_, rws, sig) in abx.items()}
+                jt = {aid: {ii: ab_judge(word, ab, B, sig, trig=True) for ii, (word, ab) in rws.items()}
+                      for aid, (rws, sig) in abt.items()}
                 bench = ab_bench_ship(B)
             except Exception as e:                  # the words ship "" (the page: "—", benchmark nahi bana)
-                js = {}
+                js, jt = {}, {}
                 print("scr bench skipped: %s" % type(e).__name__, file=sys.stderr)
             for aid, jj in js.items():
                 for ii, j in jj.items():
                     entries[aid]["status"][ii][7:10] = j
                 entries[aid]["lo"] = sum(1 for j in jj.values() if j[0] == "Low")
+            for aid, jj in jt.items():                # the triggers: "lt" their Low count (the key says the file judges
+                for ii, j in jj.items():            # them: an older file's triggers ship "" — the page shows their own word)
+                    entries[aid]["status"][ii][7:10] = j
+                entries[aid]["lt"] = sum(1 for j in jj.values() if j[0] == "Low")
         fv = None
         if apps:
             ia = _idx_path(data_dir)

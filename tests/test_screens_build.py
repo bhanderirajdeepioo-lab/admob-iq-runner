@@ -1100,9 +1100,10 @@ def test_run_files_pointer_report_and_stale_removal(tmp_path):
     assert len(f2["days"]) == len(_days("2026-08-01", "2026-11-04")) and len(f2["adm"]["0"]) == len(f2["days"])
     one = fa["apps"][AID]
     # scr_all: All apps' day arrays + the app's daily users "au" (≤ ftU: the App total and All apps from this file
-    # alone), ftU, the copy-day states "dk"; the screens' own users ("U" / "Us") stay file 2's
+    # alone), ftU, the copy-day states "dk", the Low screens / triggers "lo" / "lt"; the screens' own users ("U" / "Us")
+    # stay file 2's
     assert set(one) == {"key", "ft", "td", "d0", "items", "vis", "V", "A", "ta", "st", "bf", "status", "app", "dq", "au",
-                        "ftu", "dk", "nvr", "lo"} and one["ftu"] == "2026-11-02" and len(one["au"]) == len(one["vis"])
+                        "ftu", "dk", "nvr", "lo", "lt"} and one["ftu"] == "2026-11-02" and len(one["au"]) == len(one["vis"])
     assert set(f2) == {"v", "key", "app_id", "ft", "td", "d0", "screens", "units", "trig", "days", "adm", "rows", "notes",
                        "Us", "U", "au", "ufmt"} and len(f2["U"]) == len(f2["days"]) and f2["au"] == one["au"]
     assert one["dk"] == "0" * len(one["vis"]) and f2["notes"]["ftu"] == "2026-11-02"
@@ -2267,12 +2268,12 @@ def test_absolute_files_v3_and_a_benchmark_failure_ships_blank_words(tmp_path, m
     assert fa["bench"]["fmt"]["banner"] == {"fill": None, "show": None, "av": None, "nall": 1}       # 1 unit < 20
     st = {it[0]: one["status"][str(i)] for i, it in enumerate(one["items"]) if str(i) in one["status"]}
     assert all(len(s) == 10 for s in st.values()) and st[MAIN][7] == "OK" and one["lo"] == 0
-    assert all(s[7:] == ["", "", []] for i, s in one["status"].items() if one["items"][int(i)][1] == "fs")  # triggers
+    assert all(s[7] for i, s in one["status"].items() if one["items"][int(i)][1] == "fs") and one["lt"] == 0  # triggers
     assert len(f2["ufmt"]) == len(f2["units"]) and "banner" in f2["ufmt"]
     rid = {c: "s%d" % i for i, (c, k) in enumerate(f2["screens"])}
     ab = f2["rows"][rid[MAIN]]["ab"]
     assert set(ab) == {"av", "fill", "show", "p", "sig", "unm", "why"} and ab["sig"][0] == "W" and ab["p"]["banner"][0] == 1
-    assert "ab" not in f2["rows"]["t0"] and "ab" not in f2["rows"].get(rid[ADACT], {})
+    assert "ab" in f2["rows"]["t0"] and "ab" not in f2["rows"].get(rid[ADACT], {})
     rep = fl["report"]["rows"][rid[MAIN]]
     assert "\nAbsolute (last 10 days): Ads / view " in rep and "banner 100 % of the unit ads (fill 90 %, show" in rep
     # a failing benchmark: the words ship "", one health line, the rest of the files unchanged
@@ -2283,3 +2284,117 @@ def test_absolute_files_v3_and_a_benchmark_failure_ships_blank_words(tmp_path, m
     fb = gz(out2 / "scr_all.json.gz")
     assert fb["bench"] is None and fb["apps"][AID]["lo"] is None and fb["apps"][AID]["status"]["0"][7:] == ["", "", []]
     assert gz(out2 / ("scr_%s.json.gz" % KEY)) == f2
+
+
+# ── absolute numbers of the full-screen triggers (owner, 7 Nov 2026: the same rule as the screens) ──────────────
+
+def _trig(app, label, f):
+    return next(gi for gi, (f_, lab, _) in enumerate(app.trig) if lab == label and f_ == f)
+
+
+def test_absolute_trigger_numbers_split_a_shared_unit_by_sigma_and_keep_unmatched_units_out(tmp_path):
+    # Back press (interstitial): zz_back_1 + house_exit (no AdMob id: the unmatched share, never in a rate); the same
+    # AdMob unit is also logged as "ZZ_back_1" with the rewarded format (a second GA4 unit, its own trigger): σ splits the
+    # unit's AdMob between the two triggers by their GA4 ads, the rates stay the unit's (fill 0.9, show 0.6)
+    def day_fn(d):
+        r = core_recs(d, {})
+        r["w"]["r"] += [["Rewarded", "ZZ_back_1", 10], ["Interstitial", "house_exit", 15]]
+        return r
+    app = app_of(tmp_path, day_fn=day_fn)
+    w = app.windows()[0]
+    side, ts = sb.ab_side(app, w, app.allf()), sb.ab_tside(app, w)
+    assert ts["sig"] == ["W", 10, w[0], w[-1]] and ts["S"] == w
+    bi, br = _trig(app, "Back press", "interstitial"), _trig(app, "Back press", "rewarded")
+    ua, ub = app.uix[("zz_back_1", "interstitial")], app.uix[("ZZ_back_1", "rewarded")]
+    assert app.units[ua][2] == app.units[ub][2] and side["ufmt"][ub] == "interstitial"     # AdMob's format, one unit
+    ga = sum(app.w[d][("zz_back_1", "interstitial")] for d in w)
+    gb, gh = 10 * len(w), 15 * len(w)
+    assert ts["G"][tuple(app.units[ua][2])] == ga + gb
+    X = side["X"][ua]
+    t = sb.ab_trig(app, side, ts, bi, w)
+    s = ga / (ga + gb)
+    assert t["p"]["interstitial"] == pytest.approx([ga / (ga + gh), s * X[0], s * X[1], s * X[2]])
+    assert t["unm"] == pytest.approx(gh / (ga + gh)) and t["ads"] == ga + gh and t["why"] == "" and not t["nm"]
+    assert t["fill"] == pytest.approx(X[1] / X[0]) and t["show"] == pytest.approx(X[2] / X[1])     # the unit's own
+    assert abs(t["fill"] - 0.9) < 0.01 and abs(t["show"] - 0.6) < 0.01 and t["sh"] == [["zz_back_1", round(s, 4)]]
+    r = sb.ab_trig(app, side, ts, br, w)
+    assert r["p"]["interstitial"] == pytest.approx([1.0, (1 - s) * X[0], (1 - s) * X[1], (1 - s) * X[2]])
+    assert r["show"] == pytest.approx(X[2] / X[1]) and r["sh"] == [["ZZ_back_1", round(1 - s, 4)]]
+    # an unshared unit: σ = 1, its own AdMob whole (App resume)
+    ar = sb.ab_trig(app, side, ts, _trig(app, "App resume", "appopen"), w)
+    assert ar["p"]["appopen"][1:] == side["X"][app.uix[("aoa_resume", "appopen")]] and ar["sh"] == [] and ar["unm"] == 0
+    # file 2's shape = the screens' (no Ads / view on a trigger)
+    sh = sb.ab_ship(t, ts["sig"])
+    assert set(sh) == {"av", "fill", "show", "p", "sig", "unm", "why"} and sh["av"] is None and sh["sig"][0] == "W"
+
+
+def test_absolute_trigger_sigma_falls_back_and_a_trigger_without_ads_has_no_fill_or_show(tmp_path):
+    # the units read is sampled on 8 of W's 10 days: σ from the newest 28 whole units-read days ≤ W's end; App resume
+    # shows no ads in W at all: no Fill / Show rate, "—" with the reason, the word "No ads"; no AdMob: "AdMob data nahi"
+    def day_fn(d):
+        r = core_recs(d, {})
+        if d >= W0:
+            r["w"]["r"] = [x for x in r["w"]["r"] if x[1] != "aoa_resume"]
+        if W0 <= d <= "2026-10-31":
+            r["w"] = {"st": "s", "g": "u", "smp": 0.5}
+        return r
+    app = app_of(tmp_path, day_fn=day_fn)
+    w = app.windows()[0]
+    side, ts = sb.ab_side(app, w, app.allf()), sb.ab_tside(app, w)
+    ok = [d for d in app.days if d <= w[-1] and d in app.whole["w"]]
+    assert ts["sig"] == ["new", 28, ok[-28], ok[-1]] and len([d for d in ok if d >= w[0]]) == 2
+    t = sb.ab_trig(app, side, ts, _trig(app, "Back press", "interstitial"), w)
+    assert abs(t["fill"] - 0.9) < 0.01 and abs(t["show"] - 0.6) < 0.01 and t["why"] == ""
+    z = sb.ab_trig(app, side, ts, _trig(app, "App resume", "appopen"), w)
+    assert (z["ads"], z["fill"], z["show"], z["p"], z["why"]) == (0, None, None, {}, "is period me is trigger ke koi ad nahi")
+    assert sb.ab_judge("Normal", z, {"fmt": {}}, ts["sig"], trig=True)[:2] == ["No ads", "10 din me is trigger ke koi ad nahi"]
+    app2 = app_of(tmp_path / "b", dash=dashboard(placements=False))
+    s2, t2 = sb.ab_side(app2, w, 0), sb.ab_tside(app2, w)
+    n2 = sb.ab_trig(app2, s2, t2, _trig(app2, "Back press", "interstitial"), w)
+    assert (n2["fill"], n2["show"], n2["why"], n2["nm"]) == (None, None, "AdMob data nahi", True)
+
+
+def test_absolute_trigger_words_low_ok_no_benchmark_and_too_few_ads():
+    B = {"fmt": {"interstitial": {"fill": [0.4, 0.8, 0.9, 0.95, 30], "show": [0.2, 0.3, 0.5, 0.7, 30], "av": None},
+                 "appopen": {"fill": [0.4, 0.8, 0.9, 0.95, 25], "show": [0.1, 0.2, 0.3, 0.5, 25], "av": None},
+                 "rewarded": {"fill": None, "show": None, "av": None}}}
+
+    def ab(p, ads=5000, nm=False):
+        return {"p": p, "av": None, "ads": ads, "nm": nm, "why": "x" if nm else ""}
+    j = sb.ab_judge("Normal", ab({"interstitial": [0.9, 10000, 9500, 2000], "rewarded": [0.1, 500, 400, 300]}), B, None,
+                    trig=True)
+    assert j == ["Low", "Show rate 21 % (interstitial median 50 %): ads filled but not shown",
+                 [["show", "interstitial", 0.2105, 0.5, 0.3]]]
+    assert sb.ab_judge("Watch", ab({"appopen": [1.0, 4000, 3800, 1500]}), B, None, trig=True) == ["OK", "", []]
+    # a format with no benchmark (n < 20): the number shown, never judged
+    assert sb.ab_judge("Normal", ab({"rewarded": [1.0, 5000, 4000, 3000]}), B, None, trig=True) == [
+        "No benchmark", "rewarded: no benchmark (n < 20)", []]
+    # … beside a judged part: that part's word
+    assert sb.ab_judge("Normal", ab({"rewarded": [0.7, 5000, 4000, 3000], "appopen": [0.3, 4000, 3800, 1500]}), B, None,
+                       trig=True)[0] == "OK"
+    # under the floors (999 requests, 299 matched): Too few ads; the screens' words for the same parts stay theirs
+    few = ab({"interstitial": [1.0, 999, 299, 10]})
+    assert sb.ab_judge("Normal", few, B, None, trig=True)[0] == "Too few ads"
+    assert sb.ab_judge("Normal", ab({"rewarded": [1.0, 5000, 4000, 3000]}), B, None) == ["OK", "", []]
+    assert sb.ab_judge("N/A", few, B, None, trig=True) == ["N/A", "", []]
+    assert sb.ab_judge("Normal", ab({}, nm=True), B, None, trig=True) == ["Not measurable", "x", []]
+
+
+def test_absolute_trigger_words_ship_in_scr_all_with_their_low_count(tmp_path, monkeypatch, capsys):
+    data, out, dash = build(tmp_path, {"show_w": 0.6})
+    sb.run(dash, str(data), str(out), {}, NOW)
+    fa, f2 = gz(out / "scr_all.json.gz"), gz(out / ("scr_%s.json.gz" % KEY))
+    one = fa["apps"][AID]
+    tr = {it[0]: one["status"][str(i)] for i, it in enumerate(one["items"]) if it[1] == "fs"}
+    assert sorted(tr) == ["App resume", "Back press"] and all(len(s) == 10 for s in tr.values())
+    # 1 unit per format < 20: no benchmark — the words never "" and never Low; "lt" beside "lo"
+    assert {s[7] for s in tr.values()} <= {"No benchmark", "N/A", "Too few ads", "Too early"} and one["lt"] == 0
+    assert set(f2["rows"]["t0"]["ab"]) == {"av", "fill", "show", "p", "sig", "unm", "why"}
+    assert abs(f2["rows"]["t0"]["ab"]["fill"] - 0.9) < 0.01
+    # a benchmark failure: "lt" null like "lo" (the key stays: the page says "—", benchmark nahi bana)
+    monkeypatch.setattr(sb, "ab_bench", lambda apps: 1 / 0)
+    out2 = tmp_path / "site2"
+    sb.run(dashboard({"show_w": 0.6}), str(data), str(out2), {}, NOW)
+    assert "scr bench skipped: ZeroDivisionError" in capsys.readouterr().err
+    fb = gz(out2 / "scr_all.json.gz")["apps"][AID]
+    assert "lt" in fb and fb["lt"] is None and all(s[7:] == ["", "", []] for s in fb["status"].values())

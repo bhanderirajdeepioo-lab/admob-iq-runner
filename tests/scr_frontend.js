@@ -138,7 +138,7 @@ function mkF2(o) {
     // the build's a rows: fu [class, unit, n] (the unit's format in units) · f [class, inline, full, notset] · c [class, n]
     days.push({ v: [[0, 1000 + k, 30000], [1, 500, 9000], [2, 300, 4000], [3, 50, 500], [4, 400, 2000], [5, 20, 100]],
       a: g === 'fu' ? { g, r: [[0, 0, 100], [1, 0, 50], [4, 1, 30]] } : g === 'f' ? { g, r: [[0, 100, 0, 0], [1, 50, 0, 0], [4, 0, 30, 0]] } : { g, r: [[0, 120], [1, 50]] },
-      w: [[0, 160], [1, 40], [2, 25]], ta: [['banner', 160], ['interstitial', 40], ['app_open', 25]], dup: [0, 0], st: { v: 'w', a: 'w' } });
+      w: [[0, 160], [1, 40], [2, 25]], ta: [['banner', 160], ['interstitial', 40], ['app_open', 25]], dup: [0, 0], st: { v: 'w', a: 'w', w: 'w' } });
     if (!o.noPlace) { adm[0].push([2000, 1800, 165]); adm[1].push(k % 10 ? [100, 80, 41] : null); adm[2].push([60, 50, 25]); }
   }
   const f2 = { v: 3, key: o.key, app_id: o.id, ft: FT, td: TD, d0: D0, screens, units, trig: [['interstitial', 'Back press', [1]], ['appopen', 'App resume', [2]]], days, adm,
@@ -453,7 +453,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
           const ac = am(SCREEN.innerHTML, 'Alpha App');
           ctx.APP = 'Alpha App'; SCR.paint(); const hp = SCREEN.innerHTML, tp = hp.slice(hp.indexOf('id="sc-total"'), hp.indexOf('id="sc-attn"'));
           const c0 = (/<tr><td>Imp \/ user \/ day<\/td><td[^>]*>(.*?)<\/td>/.exec(tp) || [])[1] || '';
-          out.v2.all.admob_mute = { all: [ac['Imp / user / day'], ac['Low screens'], _.appRow({ id: ID.a, name: 'Alpha App', x: xp }).sc], total: c0,
+          out.v2.all.admob_mute = { all: [ac['Imp / user / day'], ac['Low'], _.appRow({ id: ID.a, name: 'Alpha App', x: xp }).sc], total: c0,
             crumb: (/<div class="sc-crumb">(.*?)<\/div>/.exec(hp) || [])[1] || '', tile: (/<div class="sc-kl">Ads \/ 100 views<\/div><div class="sc-kv">[^<]*<\/div><div class="sc-ks">(.*?)<\/div><\/div>/.exec(tp) || [])[1] || '',
             // GA4's new vs returning split comes from the GA4 logging that changed: not in the details (nor Needs attention)
             nvr: [tp.includes('New vs returning'), hp.slice(hp.indexOf('id="sc-attn"'), hp.indexOf('id="sc-tcard"')).includes('new-user mix'),
@@ -891,7 +891,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       for (let k = 0; k < ND; k++) { const fu = k <= 79;
         ax.V.push([1000, 500, 400, 50]); ax.A.push([300, 40, 12, 5]); ax.vis.push(1950); ax.ta.push([357, 0, 0]); ax.au.push(k > 86 ? null : 1000); af.au.push(k > 86 ? null : 1000);
         af.days.push({ v: [[0, 1000, 30000], [1, 500, 10000], [2, 400, 8000], [3, 50, 500]], a: fu ? { g: 'fu', r: [[0, 0, 80], [1, 0, 20], [0, 2, 10], [1, 1, 30], [2, 1, 5]] } : { g: 'c', r: [[0, 300], [1, 40], [2, 12], [3, 5]] },
-          w: [[0, 100], [1, 40], [2, 10]], st: { v: 'w', a: 'w' } });
+          w: [[0, 100], [1, 40], [2, 10]], st: { v: 'w', a: 'w', w: 'w' } });
         af.adm[0].push(k > 86 ? null : [10000, k < 77 ? 7000 : 6000, k < 77 ? 1760 : 1200]); af.adm[1].push(k > 86 ? null : [5000, 4500, 4050]); af.U.push(k > 86 ? null : [400, 200, 100]); }
       for (const r of READS) { ax.st[r] = 'w'.repeat(ND); ax.bf[r] = [D0, true]; }
       const BENCH = { fmt: { native: { fill: [0.4, 0.75, 0.9, 0.97, 30], show: [0.2, 0.5, 0.7, 0.85, 30], av: [3, 8, 20, 22], nall: 60 }, banner: { fill: [0.5, 0.8, 0.9, 0.95, 40], show: [0.5, 0.7, 0.85, 0.9, 45], av: [2, 5, 12, 25], nall: 80 },
@@ -1052,6 +1052,53 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
         delete ALLF.bench; ctx.DATA.scr.fv = 'f12b'; SCR.paint(); await tick(); SCR.paint(); h = SCREEN.innerHTML;
         out.abs.nobench = [h.includes('data-sc-open="0"'), /class="sc-lo"/.test(h.slice(h.indexOf('id="sc-ttw"')))];
       } finally { delete ALLF.apps.absy; delete ALLF.bench; delete FILES[an2]; delete ctx.DATA.scr.apps.absy; ctx.DATA.scr.fv = 'f13'; ctx.APP = 'Alpha App';
+        _.set({ OPEN: null, SEG: 's', MORE: false, PER: '30', TS: { k: 'st', dir: 1 }, SORT: { k: 'rank', dir: 1 } }); }
+      SCR.paint(); await tick(); }
+    // ── the full-screen triggers on the same absolute rule (owner, 7 Nov 2026: Normal + Score out there too) on "trigy":
+    // Back press (int_back + house_exit, no AdMob id) and Save / apply (int_save) share ONE AdMob interstitial unit 90 / 10
+    // (σ), its show rate under the interstitial p25; Save / apply rewarded (no benchmark: shown, never judged); App resume
+    // without ads from 19 Mar; one Low screen beside them; a synthetic benchmark; the build's W numbers in rows.t0.ab ──
+    { const tk = 'a0000000000f', tn2 = 'scr_' + tk + '.json.gz', W = ['2026-03-19', FT];
+      const ST = (w, why, sc, cz, aw, ac, wk) => [w, why, sc, cz, cz, null, 10, aw, ac, wk];
+      const tx = { key: tk, ft: FT, td: TD, d0: D0, items: [['x.y.HomeActivity', 's', 'inline'], ['', 'o', 'inline'], ['Back press', 'fs', 'interstitial'], ['Save / apply', 'fs', 'interstitial'],
+        ['Save / apply', 'fs', 'rewarded'], ['App resume', 'fs', 'appopen']], vis: [], V: [], A: [], ta: [], st: {}, bf: {}, dq: [], app: AP('Normal', '', 1, 0), ftu: FT, dk: '0'.repeat(ND), au: [], lo: 1, lt: 2,
+        status: { 0: ST('Normal', '', 100, '', 'Low', 'Fill 60% (banner median 90%): requests not filled', [['fill', 'banner', 0.6, 0.9, 0.8]]),
+          2: ST('Worse', 'imp/app user 0.15 → 0.10 (−33%)', 67, 'Lower show rate', 'Low', 'Show rate 21% (interstitial median 50%): ads filled but not shown', [['show', 'interstitial', 0.2072, 0.5, 0.3]]),
+          3: ST('Normal', '', 100, '', 'Low', 'Show rate 21% (interstitial median 50%): ads filled but not shown', [['show', 'interstitial', 0.2072, 0.5, 0.3]]),
+          4: ST('Normal', '', 100, '', 'No benchmark', 'rewarded: no benchmark (n < 20)', []), 5: ST('Normal', '', 100, '', 'No ads', '10 din me is trigger ke koi ad nahi', []) } };
+      const U = ['ca-app-pub-0000000000000000/3001', 'ca-app-pub-0000000000000000/3002', 'ca-app-pub-0000000000000000/3003', 'ca-app-pub-0000000000000000/3004'];
+      const units = [['ban_h', 'banner', [U[0]], 'ban_h', 'name', ''], ['int_back', 'interstitial', [U[1]], 'int_back', 'name', 'Back press'], ['int_save', 'interstitial', [U[1]], 'int_back', 'name', 'Save / apply'],
+        ['aoa_res', 'appopen', [U[2]], 'aoa_res', 'name', 'App resume'], ['house_exit', 'interstitial', [], '', '', 'Back press'], ['rew_save', 'rewarded', [U[3]], 'rew_save', 'name', 'Save / apply']];
+      const tf = { v: 3, key: tk, app_id: 'trigy', ft: FT, td: TD, d0: D0, screens: [['x.y.HomeActivity', 's'], ['x.y.RestActivity', 's']], units, ufmt: ['banner', 'interstitial', 'interstitial', 'appopen', null, 'rewarded'],
+        trig: [['interstitial', 'Back press', [1, 4]], ['interstitial', 'Save / apply', [2]], ['rewarded', 'Save / apply', [5]], ['appopen', 'App resume', [3]]], days: [], adm: { 0: [], 1: [], 2: [], 3: [], 5: [] }, notes: {}, Us: [0], U: [], au: [],
+        rows: { t0: { st: ['Worse', 'imp/app user 0.15 → 0.10 (−33%)', 67], ab: { av: null, fill: 0.83, show: 0.2072, p: { interstitial: [0.9, 90000, 74700, 15480] }, sig: ['W', 10, W[0], W[1]], unm: 0.1, why: '' } } } };
+      for (let k = 0; k < ND; k++) { const ar = k < 77 ? 50 : 0;
+        tx.V.push([1000, 100, null, null, null, null]); tx.A.push([300, 20, 100, 10, 40, ar]); tx.vis.push(2000); tx.ta.push([320, 150 + ar, 0]); tx.au.push(k > 86 ? null : 1000); tf.au.push(k > 86 ? null : 1000);
+        tf.days.push({ v: [[0, 1000, 30000], [1, 100, 1000]], a: { g: 'fu', r: [[0, 0, 300]] }, w: [[0, 300], [1, 90], [2, 10], [3, ar], [4, 10], [5, 40]], st: { v: 'w', a: 'w', w: 'w' } });
+        const c = k > 86; tf.adm[0].push(c ? null : [5000, 4500, 4000]); tf.adm[1].push(c ? null : [10000, k < 80 ? 9000 : 8000, k < 80 ? 2000 : 1600]); tf.adm[2].push(tf.adm[1][k]);
+        tf.adm[3].push(c ? null : [3000, 2700, 900]); tf.adm[5].push(c ? null : [800, 700, 600]); tf.U.push(c ? null : [400]); }
+      for (const r of READS) { tx.st[r] = 'w'.repeat(ND); tx.bf[r] = [D0, true]; }
+      const BENCH = { fmt: { interstitial: { fill: [0.4, 0.8, 0.9, 0.95, 30], show: [0.2, 0.3, 0.5, 0.7, 30], av: null, nall: 40 }, appopen: { fill: [0.4, 0.8, 0.9, 0.95, 25], show: [0.1, 0.2, 0.3, 0.5, 25], av: null, nall: 30 },
+        banner: { fill: [0.5, 0.8, 0.9, 0.95, 40], show: [0.5, 0.7, 0.85, 0.9, 45], av: [2, 5, 12, 25], nall: 80 }, rewarded: { fill: null, show: null, av: null, nall: 3 } }, min: { req: 1000, mt: 300, ads: 300, n: 20 }, apps: 3 };
+      ALLF.apps.trigy = tx; ALLF.bench = BENCH; FILES[tn2] = tf; ctx.DATA.scr.apps.trigy = { key: tk, v: 'tg', vl: 'tg', from: D0, ft: FT }; ctx.DATA.scr.fv = 'f14';
+      try {
+        ctx.APP = 'trigy'; _.set({ OPEN: null, SEG: 'f', PER: '30', TS: { k: 'st', dir: 1 } }); SCR.paint(); await tick(8); SCR.paint(); h = SCREEN.innerHTML;
+        const f2 = _.FILES[tn2].raw, rt = (i, lo, hi) => { const e = _.abTrig(tx, f2, i, lo, hi); return { fill: e.fill, show: e.show, unm: e.unm, sig: e.sig, sh: e.sh, p: e.p, nK: e.nK, why: e.why }; };
+        const ttl = (hh, i, lab) => { const H = hdOf(hh, 'sc-ttw'), c = tds(hh, i)[H.indexOf(lab)]; return c ? [(/ title="([^"]*)"/.exec(c[0]) || [])[1] || '', / class="sc-lo"/.test(c[0])] : null; };
+        out.trg = { heads: heads(h), rows: [2, 3, 4, 5].map(i => cm(h, i)), lo: [2, 4].map(i => ({ fill: ttl(h, i, 'Fill'), show: ttl(h, i, 'Show rate') })), note: (/<p class="sc-note"><b>Imp \/ app user \/ day<\/b>.*?<\/p>/.exec(h) || [''])[0],
+          r30: [2, 3, 4, 5].map(i => rt(i, ...P30)), rW: rt(2, ...W), abW: f2.rows.t0.ab, r7: rt(5, '2026-03-22', FT), today: rt(2, TD, TD), order: _.sortItems(_.tableRows(tx, ...P30, 'f', f2)).map(z => z.i),
+          attn: h.slice(h.indexOf('id="sc-attn"'), h.indexOf('id="sc-tcard"')), crumb: (/<div class="sc-crumb">(.*?)<\/div>/.exec(h) || [])[1] || '' };
+        _.set({ PER: 'cus', PF: W[0], PTO: W[1] }); SCR.paint(); out.trg.cusW = cm(SCREEN.innerHTML, 2);
+        _.set({ PER: '7' }); SCR.paint(); out.trg.d7 = cm(SCREEN.innerHTML, 5);
+        _.set({ PER: '30', OPEN: 2, SEC: 'ov' }); SCR.paint(); h = SCREEN.innerHTML; out.trg.dd = h.slice(h.indexOf('id="sc-dd"')); out.trg.dds = (/<span class="sc-dds">(.*?)<\/span><button/.exec(h) || [])[1] || null;
+        _.set({ OPEN: null }); ctx.APP = ''; SCR.paint(); h = SCREEN.innerHTML; out.trg.all = am(h, 'trigy');
+        // an older file (no "lt": its triggers ship ""): their own word, as before; the benchmark failed ("lt" null): "—"
+        const xo = JSON.parse(JSON.stringify(tx)); delete xo.lt; for (const k of ['2', '3', '4', '5']) xo.status[k] = xo.status[k].slice(0, 7).concat(['', '', []]);
+        const xb = JSON.parse(JSON.stringify(tx)); xb.lt = null; xb.lo = null; for (const k in xb.status) xb.status[k] = xb.status[k].slice(0, 7).concat(['', '', []]);
+        _.set({ SEG: 'f' }); out.trg.older = [cm(_.tableHtml(xo, 'trigy', ...P30), 2), cm(_.tableHtml(xo, 'trigy', ...P30), 4)]; out.trg.olderApp = _.appAbs(xo);
+        out.trg.failed = cm(_.tableHtml(xb, 'trigy', ...P30), 2).Trigger; out.trg.failedApp = _.appAbs(xb);
+        out.trg.onlyT = (() => { const y = JSON.parse(JSON.stringify(tx)); y.lo = 0; y.status['0'][7] = 'OK'; const z = _.appAbs(y); return _.absAppChip(z); })();
+      } finally { delete ALLF.apps.trigy; delete ALLF.bench; delete FILES[tn2]; delete ctx.DATA.scr.apps.trigy; ctx.DATA.scr.fv = 'f15'; ctx.APP = 'Alpha App';
         _.set({ OPEN: null, SEG: 's', MORE: false, PER: '30', TS: { k: 'st', dir: 1 }, SORT: { k: 'rank', dir: 1 } }); }
       SCR.paint(); await tick(); }
     // hub card none: the pointer alone never loads a file
