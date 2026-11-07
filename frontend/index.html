@@ -3012,6 +3012,17 @@ h2.cpx-h{font-size:20px;margin:0 0 3px;font-weight:800}.cpx-d{margin:0;color:var
 .cpx-lvc{color:var(--good);font-weight:800}
 .cpx-t td.cpx-lvw{white-space:normal;min-width:190px;max-width:340px}   /* "Measured on" wraps: the owner buttons stay in view */
 .cpx-lvt{display:inline-block;margin-top:2px;font-size:11.5px;font-weight:800;color:var(--cyan)}
+/* 🤖 the level agent: its answer in the 🆕 tag's place, the scoreboard, the decisions list (one line each, details on tap) */
+.cpx-lvt.cpx-agt{color:var(--ink2)}.cpx-vm.cpx-agv{color:var(--ink2)}
+.cpx-agb{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 10px;margin:6px 0 4px}.cpx-agb p{margin:3px 0 0}
+.cpx-agb .cpx-agb1{margin:0;color:var(--ink);font-size:12.5px;font-weight:700}
+.cpx-agl{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
+.cpx-agr{display:block;width:100%;text-align:left;background:none;border:none;border-top:1px solid var(--line);padding:7px 10px;font:inherit;font-size:12.5px;color:var(--ink2);cursor:pointer}
+.cpx-agi:first-child>.cpx-agr{border-top:none}.cpx-agr:hover{background:var(--panel2)}.cpx-agr[aria-expanded="true"]{background:var(--raise);color:var(--ink)}
+.cpx-agr:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px}
+.cpx-agr::after{content:'›';float:right;margin-left:8px;color:var(--faint);font-weight:800}.cpx-agr[aria-expanded="true"]::after{content:'▾'}   /* details on tap */
+.cpx-agx{padding:2px 12px 9px;background:var(--raise);font-size:12.5px;color:var(--ink2);overflow-wrap:anywhere}.cpx-agx p{margin:5px 0 0}.cpx-agx b{color:var(--ink)}
+.cpx-t td.cpx-agw{white-space:normal;min-width:190px;max-width:340px}   /* a How with the agent's reason wraps */
 .cpx-lvp{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 10px}
 .cpx-lvx{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:8px 0}
 .cpx-lvxr{display:flex;gap:8px 12px;flex-wrap:wrap;align-items:center;margin:4px 0;color:var(--muted);font-size:12.5px}
@@ -8470,6 +8481,8 @@ let EL=null, WIRED=false, KEEPING=false;
 let PER='14', PF='', PTO='', PREAD=false;
 // OPEN: the app (id) whose details are open under its row (null = none); TAB: its details tab; DN: Day-wise rows shown
 let OPEN=null, TAB='ch', DN=30;
+// AGD: the level agent's decision (id) whose details are open under its line in History · Levels (null = none)
+let AGD=null;
 // CTY: the Chart tab's country per app (app id → cc; '' / none = All countries), remembered per viewer — read lazily (the first
 // Chart tab), CTY_LS in try/catch
 let CTY=null;
@@ -8695,7 +8708,7 @@ function sinceOf(r){ if(!r.since) return {a:'—',b:''};
 function rowHtml(r,on,one){ const c=stw(r), m=now3(r), lv=lostV(r), ls=lostS(r), sw=sinceOf(r);
   const sn=sw.b?`<span class="cpx-mob">${sw.b}</span>`:'';
   const nm=one?'':`<span class="cpx-nm">${E(r.name)}</span>`;   // one app: its name is in the top bar already (once per page)
-  const lt=+r.a.lp>0?`<span class="cpx-lvt">🆕 New level ready</span>`:'';
+  const lt=agTag(r.a)||(+r.a.lp>0?`<span class="cpx-lvt">🆕 New level ready</span>`:'');   // the agent's answer in the 🆕 tag's place
   const sc=ls!=null?`<span class="cpx-lsc">since ${fd(r.lost.from)}: ≈${fM(r.lost.sinr,r.lost.susd)}</span>`:'';
   const loss=(lv!=null?`<span class="cpx-lv cpx-bad">≈${fM(r.lost.inr,r.lost.usd)}</span>`:`<span class="cpx-lv">—</span>`)+sc;
   return `<div class="cpx-row${on?' cpx-on':''}" data-cpx-app="${E(r.id)}" role="button" tabindex="0" aria-expanded="${!!on}">`
@@ -8766,11 +8779,21 @@ function moneyLine(r){ const g=r.lost; if(!g) return '';
   if(g.ptr) return `💸 <b>≈${fM(g.inr,g.usd)}</b> zyada kharch hua is period me${g.from?` — problem ${fd(g.from)} se`:''}.`;
   const fm=v=>VIN()?fI(v):fU(v);
   return `💸 <b>≈${fM(g.sinr,g.susd)}</b> zyada kharch hua — ${fd(g.from)} se ab tak ${fm(g.scost)} spend pe utni hi D0 value normal ROAS (${fR(g.B)}) pe sirf ${fm(g.sval/g.B)} me milti.`; }
+// the money a proposal stops counting since its first day: a money level's gap; a CPI one's extra paid — not a loss (the D0
+// ROAS alarm carries the money: R-m2)
+function gapTxt(p){ if(!p||!p.gap||!ok(+p.gap.inr)) return '';
+  return p.fam==='CPI'?` · extra paid vs old level ≈${fM(+p.gap.inr,+p.gap.usd)} since ${E(fd(p.day))} (not a loss)`:` · gap vs old level ≈${fM(+p.gap.inr,+p.gap.usd)} since ${E(fd(p.day))}`; }
+// the lines under the verdict: a proposal with the agent's answer (lp[i].ag) → the agent's line, without it → the 🆕 line as
+// before; then every other decision still standing (or an accept / revert / override of the last 28 days, the tag's window)
+function propLines(F){ const pt=ptr(); if(!pt) return ''; const lp=F&&Array.isArray(F.lp)?F.lp:[], R=agRows(F), used=new Set(), t=pt.t;
+  return lp.map(p=>{ if(!p) return ''; const g=p.ag&&typeof p.ag==='object'&&has(AGW,p.ag.st)?p.ag:null;
+      if(g){ const x=R.find(z=>z.id===g.id); if(x) used.add(x.id); return agLine(F,x||{id:String(g.id||''),fam:p.fam,st:g.st,cause:g.cause,short:g.short,next:g.next},p); }
+      const v=lvV(F,p.fam,{v:p.v,sums:p.sums,from:p.days&&p.days[1]});
+      return `<p class="cpx-vm">🆕 ${E(FAMW[p.fam]||p.fam)}: new level ready <b>${E(lvFmt(p.fam,v))}</b> (${E(PROPW[p.why]||p.why||'')})${gapTxt(p)} — <button type="button" class="cpx-lnk" data-cpx-tab="hi">History → Levels</button></p>`; }).join('')
+    +R.filter(x=>!used.has(x.id)&&agShow(x,t)).map(x=>agLine(F,x,null)).join(''); }
 function detHtml(r){ const n=TABS.map(([k,l])=>`<button type="button" class="cpx-tab" role="tab" data-cpx-tab="${k}" aria-selected="${TAB===k}">${l}</button>`).join('');
-  const ml=moneyLine(r), F=fOf(r.id), lp=F&&Array.isArray(F.lp)?F.lp:[];
-  const pl=lp.map(p=>{ const v=lvV(F,p.fam,{v:p.v,sums:p.sums,from:p.days&&p.days[1]}), g=p.gap&&ok(+p.gap.inr)?` · gap vs old level ≈${fM(+p.gap.inr,+p.gap.usd)} since ${E(fd(p.day))}`:'';
-    return `<p class="cpx-vm">🆕 ${E(FAMW[p.fam]||p.fam)}: new level ready <b>${E(lvFmt(p.fam,v))}</b> (${E(PROPW[p.why]||p.why||'')})${g} — <button type="button" class="cpx-lnk" data-cpx-tab="hi">History → Levels</button></p>`; }).join('');
-  return `<div class="cpx-det" id="cpx-det" data-cpx-det="${E(r.id)}"><p class="cpx-vd">${verdict(r)}</p>${ml?`<p class="cpx-vm">${ml}</p>`:''}${pl}`
+  const ml=moneyLine(r), F=fOf(r.id), pl=propLines(F);
+  return `<div class="cpx-det" id="cpx-det" data-cpx-det="${E(r.id)}"><p class="cpx-vd">${verdict(r)}</p>${ml?`<p class="cpx-vm">${ml}</p>`:''}<div id="cpx-vls">${pl}</div>`
     +`<div class="cpx-tabs" role="tablist" aria-label="Details">${n}</div><div class="cpx-tb" id="cpx-tb">${tabBody(r)}</div></div>`; }
 function tabBody(r){ const a=apPtr(r.id);
   if(!a) return '<p class="cpx-note cpx-wait">Is build me is app ki detail file nahi bani.</p>';
@@ -8839,11 +8862,13 @@ function cSeries(c,from,to,f){ const d0=c.from, nr0=(c.nrm||{})[f==='ROAS_G'?'RO
     else if(nr!=null&&f!=='CPI') n=nr;
     out.push({x,v,n}); }
   return out; }
-// the level changes inside the chart's days (resting levels in force; gone / rejected / alarm baselines left out), newest 4
+// the level changes inside the chart's days (resting levels in force; gone / rejected / alarm baselines left out, and the
+// agent's blocked / on-hold / reverted ones — never the level in the agent's world), newest 4
+const LVOFF=new Set(['gone','rejected','blocked','hold','reverted']);
 function lvMarks(F,f,P){ const L=F&&F.lv&&Array.isArray(F.lv[f])?F.lv[f]:[], a=P[0].x, b=P[P.length-1].x;
-  return L.filter(x=>x&&x.src!=='alarm'&&x.st!=='gone'&&x.st!=='rejected'&&okD(x.from)&&x.from>=a&&x.from<=b).sort((x,y)=>x.from<y.from?1:-1).slice(0,4); }
+  return L.filter(x=>x&&x.src!=='alarm'&&!LVOFF.has(x.st)&&okD(x.from)&&x.from>=a&&x.from<=b).sort((x,y)=>x.from<y.from?1:-1).slice(0,4); }
 function lvAt(F,f,day){ const L=F&&F.lv&&Array.isArray(F.lv[f])?F.lv[f]:[]; let o=null;
-  for(const x of L){ if(!x||x.st==='gone'||x.st==='rejected'||!okD(x.from)||x.from>day) continue; if(x.src==='alarm'&&x.to&&x.to<day) continue; if(!o||x.from>o.from||(x.from===o.from&&x.src==='alarm')) o=x; }
+  for(const x of L){ if(!x||LVOFF.has(x.st)||!okD(x.from)||x.from>day) continue; if(x.src==='alarm'&&x.to&&x.to<day) continue; if(!o||x.from>o.from||(x.from===o.from&&x.src==='alarm')) o=x; }
   return o; }
 // one family's 14-day points: v (CPI in the view's currency; the $ normal at the window's own rate), n (normal), raw sums
 function series(F,from,to,f){ const i0=fIx(F,from), i1=fIx(F,to), d=F.d, out=[];
@@ -9019,9 +9044,11 @@ const LVK={CPI:['sp_inr','sp_usd','inst'],ECPM:['rev','imp'],GAP:['sp_usd','inst
   ROAS_C0:['c_r0','c_sp'],ROAS_C1:['c_r1','c_sp'],ROAS_C7:['c_r7','c_sp'],SPEND:['sp_usd']};
 const LVINT=new Set(['imp','dau']);                                  // whole numbers in "d" (the rest: 2 decimals)
 const LVMAIN=['CPI','ECPM','ROAS_G'], LVREST=['GAP','IPU','ROAS_C0','ROAS_C1','ROAS_C7','SPEND'];
-const HOWW={first:'Auto · first level',auto:'Auto',accepted:'Accepted after 56 days',alarm:'Alarm baseline',manual:'Set by owner',rollback:'Rolled back',accepted_owner:'Accepted by owner'};
-const HOWS={first:'first',auto:'auto',accepted:'accepted',manual:'set',rollback:'rollback',accepted_owner:'accepted'};
-const STW={now:['In force','cpx-good'],rest:['Resting level','cpx-fnt'],earlier:['Earlier','cpx-fnt'],rejected:['Rejected','cpx-wat'],gone:['Gone','cpx-fnt']};
+const HOWW={first:'Auto · first level',auto:'Auto',accepted:'Accepted after 56 days',alarm:'Alarm baseline',manual:'Set by owner',rollback:'Rolled back',accepted_owner:'Accepted by owner',accepted_agent:'Accepted by agent'};
+const HOWS={first:'first',auto:'auto',accepted:'accepted',manual:'set',rollback:'rollback',accepted_owner:'accepted',accepted_agent:'agent'};
+const STW={now:['In force','cpx-good'],rest:['Resting level','cpx-fnt'],earlier:['Earlier','cpx-fnt'],rejected:['Rejected','cpx-wat'],gone:['Gone','cpx-fnt'],
+  blocked:['Blocked','cpx-wat'],hold:['On hold','cpx-fnt'],reverted:['Reverted','cpx-fnt']};   // (the agent's: an engine settle it blocked / holds, an accept it reverted)
+const LVNOREJ=new Set(['rejected','blocked','hold','reverted']);    // no ✖ Reject: nothing in force to reject (a blocked settle never applied)
 const PROPW={money:'12 hafte steady',open:'120+ din se khula',held:'8 hafte steady (aapke set / reject ki wajah se auto nahi laga)'};
 const LAW={applied:'Applied',waiting:'Waiting for its data day',undone:'Undone',bad:'Not applied'};
 const ACTW={set:'Set level',rollback:'Use earlier level',reject:'Reject auto acceptance',accept:'Accept new level',auto:'Back to auto',undo:'Undo'};
@@ -9099,44 +9126,175 @@ function lvActionsHtml(r,F,act){ const A=lvActs(r,F), ref=id=>A.find(a=>a.id===i
       const st=a.st==='pending'?`<span class="cpx-wat">⏳ Saved ${E(istAt(a.at))} — agle update me lagega (1–1½ ghante)</span>`:`<span class="${a.st==='bad'?'cpx-wat':a.st==='applied'?'cpx-good':'cpx-nv'}">${E(LAW[a.st]||a.st||'—')}${a.why?' · '+E(a.why):''}</span>`;
       const dn=a.act!=='undo'&&a.st!=='undone'&&!A.some(z=>z.act==='undo'&&z.ref===a.id);
       return `<tr><td>${E(istAt(a.at))}</td><td>${E(ACTW[a.act]||a.act)}${a.act==='undo'&&u.act?' · '+E(ACTW[u.act]||u.act):''}${a.note?`<small>${E(a.note)}</small>`:''}</td><td>${E(FAMW[u.fam]||u.fam||'—')}</td><td>${st}</td>${act?`<td>${dn?`<button type="button" class="cpx-lvb" data-cpx-lvundo="${E(a.id)}"${lvDis()}>Undo</button>`:''}</td>`:''}</tr>`; }).join('')}</tbody></table></div>`:''; }
-function levelsHtml(r,F){ const LV=F.lv&&typeof F.lv==='object'?F.lv:null;
+// ---- 🤖 the level agent (the build's agent step, rule C1): its answer to each new-level question — a proposal, or the engine's
+// own CPI / GAP settle — read only from what the build shipped: the pointer (apps[id].ag = the row tag, agent = the scoreboard)
+// and the app file (ag.rows = every decision; lp[i].ag; a level row's ag). Without those fields nothing of it shows (an older
+// file: the page as before). Its words never claim a cause: the build's sentences say what was SEEN with the move ----
+const AGW={accepted:'Accepted',passed:'Passed',kept:'Kept',blocked:'Blocked',waiting:'Waiting',hold:'On hold',trial:'Accept — trial',
+  reverted:'Reverted',overridden:'Overridden',held:'Held',closed:'Closed'};                                   // a decision row's status word
+const AGC={accepted:'cpx-good',passed:'cpx-good',kept:'cpx-wat',blocked:'cpx-wat',waiting:'cpx-fnt',hold:'cpx-fnt',trial:'cpx-fnt',reverted:'cpx-fnt',
+  overridden:'cpx-nv',held:'cpx-nv',closed:'cpx-nv'};
+// the details' verdict line says what a settle row is about, and who acted
+const AGV=Object.assign({},AGW,{blocked:'Engine settle blocked',hold:'Engine settle on hold',passed:'Engine settle passed',reverted:'Reverted by agent',
+  overridden:'Overridden by you',held:'Held by your action',trial:'Accept — trial (not applied yet)'});
+const AGDEC={accept:'Accept',keep:'Keep',wait:'Wait',revert:'Revert'};
+const AGQ={money:'money level steady 12 weeks',open:'alarm open 120+ days',settle:"the engine's own new level (56 days steady)",revert:"the engine's own new level (watched by the revert check)"};
+const AGVD={right:'Right',wrong:'Wrong',unclear:'Unclear',pending:'Pending',stayed:'Level stayed',came_back:'Came back'};
+const AGEND={recovered:'recovered',stopped:'spend stopped',no_paid:'no paid users',owner:'level set by owner',agent:'new level accepted by agent',settled:'new level accepted',gone:'alarm no longer in the data'};
+const AGTW={parity:'a past decision did not repeat',vintage:'an accept changed on later data',rule:'the rule changed'};   // why accepts went back to trial
+const AGPF={A1:'a fortnight without a value in the last 12 weeks',A2:'the move is under 4 bands',A3:'the 14-day level too far off its 56-day median',
+  A4:'a recent fortnight is back toward the old level',A5:'the last 14 days moved back toward the old level',A6:'too noisy to tell old from new in 28 days',
+  A7:'the change started less than 84 days ago',K1:'a year earlier the same move came back (seasonal)',K2:'returning toward the old level'};
+const AGHI='Agent khud decide karta hai: kaaran market ka ho aur number steady ho tabhi naya level; kaaran aapka apna lever ho (spend, campaigns, budget, ads per user) to alarm khula rehta hai — engine ka CPI / GAP accept bhi isi se check hota hai.';
+const has=(o,k)=>typeof k==='string'&&Object.prototype.hasOwnProperty.call(o,k);
+const nb=v=>typeof v==='number'&&isFinite(v)?v:null;                     // a shipped number (null / text / missing → none)
+const famW=f=>has(FAMW,f)?FAMW[f]:String(f||'—');
+const istDay=s=>{ const x=Date.parse(s); return isFinite(x)?iso(x+19800000):''; };   // a UTC time → its IST day
+// the list row's tag (the build's pick among the app's rows: reverted ≤ 28 d > accepted ≤ 28 d > trial > waiting / on hold > kept
+// / blocked > overridden ≤ 28 d > held); +N = its other standing questions; '' = none (the 🆕 tag stays). A blocked settle reads
+// as a keep, an on-hold one as a wait
+function agSay(st,short,day){ const sh=E(short||''), dy=okD(day)?' '+E(fd(day)):'';
+  return st==='kept'||st==='blocked'?`🤖 Kept · ${sh}`:st==='waiting'||st==='hold'?`🤖 Waiting · ${sh}${dy?' · next check'+dy:''}`:st==='trial'?`🤖 Accept — trial · ${sh}`
+    :st==='accepted'?`🤖 Accepted${dy}`:st==='reverted'?`↩ Reverted by agent${dy}`:st==='overridden'?`Overridden by you${dy}`:st==='held'?'Held by your action':''; }
+function agTag(a){ const g=a&&a.ag; if(dev()||!g||typeof g!=='object') return ''; const t=agSay(g.st,g.short,g.day), m=nb(g.more);
+  return t?`<span class="cpx-lvt cpx-agt" title="${E(famW(g.fam))}">${t}${m>0?` (+${Math.round(m)})`:''}</span>`:''; }
+// a decision's last activity: its last ask, the revert, the owner's override, the applied accept (the build's order)
+function agDay(x){ return [x.last,x.rev&&x.rev.day,x.applied&&x.applied.day,x.ovr&&istDay(x.ovr.at)].filter(okD).sort().pop()||''; }
+// the day of what the status names: the accept applied, the revert, the override
+function agEvt(x){ const st=x.st; return st==='accepted'?(x.applied&&okD(x.applied.day)?x.applied.day:x.end&&okD(x.end.t)?x.end.t:''):st==='reverted'?(x.rev&&okD(x.rev.day)?x.rev.day:'')
+  :st==='overridden'?(x.ovr?istDay(x.ovr.at):''):''; }
+// the app file's decision rows: the well-formed ones, newest first by their last activity (ties keep the build's order)
+function agRows(F){ const g=F&&F.ag, L=!dev()&&g&&Array.isArray(g.rows)?g.rows:[];
+  return L.filter(x=>x&&typeof x==='object'&&typeof x.id==='string'&&x.id&&typeof x.fam==='string'&&has(AGW,x.st))
+    .map((x,i)=>[x,agDay(x),i]).sort((a,b)=>a[1]<b[1]?1:a[1]>b[1]?-1:a[2]-b[2]).map(z=>z[0]); }
+// under the verdict: a question still standing (its alarm open), or an accept / revert / override of the last 28 days
+function agShow(x,t){ if(!x.end&&x.st!=='closed'&&x.st!=='passed') return true;
+  const d=agEvt(x); return (x.st==='accepted'||x.st==='reverted'||x.st==='overridden')&&okD(d)&&d>=addD(t,-27); }
+// one line: "🤖 Family: status — cause. Agla check: next" + that question's money — a money proposal's gap, or a CPI decision's
+// extra paid vs the old level (this line only, never summed: R-m1); the link opens the decision in History · Levels
+function agLine(F,x,p){ const f=x.fam, st=x.st, dy=agEvt(x), xp=x.xp;
+  const w=AGV[st]+(dy?' '+fd(dy):''), xpT=f==='CPI'&&xp&&nb(xp.inr)!=null&&nb(xp.usd)!=null?` · extra paid vs old level ≈${fM(xp.inr,xp.usd)} since ${E(fd(okD(xp.from)?xp.from:x.first))} (not a loss)`:'';
+  return `<p class="cpx-vm cpx-agv">🤖 ${E(famW(f))}: <b class="${AGC[st]}">${E(w)}</b> — ${E(x.cause||x.short||'—')}${okD(x.next)?`. Agla check: ${E(fd(x.next))}`:''}${xpT||(p?gapTxt(p):'')}`
+    +` — <button type="button" class="cpx-lnk" data-cpx-tab="hi" data-cpx-ago="${E(x.id)}" data-cpx-agf="${E(f)}">History → Levels</button></p>`; }
+// a level value of the agent's numbers in the view's money: CPI ₹ as billed, $ at the rate of the 14 days ending `day` (both
+// ends of a move at the same rate: the printed % is the one the agent judged in ₹)
+function agLv(F,f,v,day){ if(f!=='CPI'||VIN()) return lvFmt(f,v); const k=F&&okD(day)?lvK(F,day):null; return k>0?lvFmt(f,v*k):'₹'+v.toFixed(v<10?2:1); }
+// one ask's key numbers (k: numbers only) in words, each part only when shipped
+function agNums(F,f,k,day){ if(!k||typeof k!=='object') return ''; const g=q=>nb(k[q]), sh=v=>(v<-0.005?'−':'')+Math.round(Math.abs(v)*100)+'%', o=[];
+  const ol=g('old'), nw=g('new'), mv=g('mv'), same=g('same'), opp=g('opp'), cost=g('cost'), val=g('val'), cp=g('cpi'), ec=g('ecpm');
+  if(ol!=null&&nw!=null) o.push(`Old → new ${E(agLv(F,f,ol,day))} → ${E(agLv(F,f,nw,day))}${mv!=null?' ('+fP(mv)+')':''}`); else if(mv!=null) o.push('Move '+fP(mv));
+  if(g('bands')!=null) o.push(g('bands').toFixed(1)+' bands');
+  if(g('spx')!=null) o.push('spend ×'+g('spx').toFixed(1));
+  if(g('l14p14')!=null) o.push('last 14 d vs 14 before '+fP(g('l14p14')));
+  if(g('st56')!=null) o.push('steady ±'+sh(g('st56')));
+  if(g('mkt_n')!=null) o.push(`other apps ${Math.round(g('mkt_n'))}${g('mkt_med')!=null?', median '+fP(g('mkt_med')):''}${g('own')!=null?' (own '+fP(g('own'))+')':''}`);
+  if(g('ipu')!=null) o.push('ads per user '+fP(g('ipu')));
+  if(g('turn')!=null) o.push('spend in new / gone campaigns '+sh(g('turn')));
+  if(g('rate')!=null) o.push('move inside the units '+sh(g('rate')));
+  if(same!=null||opp!=null) o.push([same!=null?'same way '+sh(same):'',opp!=null?'opposite '+sh(opp):''].filter(Boolean).join(', '));
+  if(g('nl')!=null) o.push('not listed '+sh(g('nl')));
+  if(cost!=null||val!=null) o.push([cost!=null?'cost part '+sh(cost):'',val!=null?'value part '+sh(val):''].filter(Boolean).join(', ')+' of the move');
+  if(cp!=null||ec!=null) o.push([cp!=null?'CPI part '+sh(cp):'',ec!=null?'eCPM part '+sh(ec):''].filter(Boolean).join(', ')+' of the move');
+  if(has(AGPF,k.pf)) o.push('persistence: '+AGPF[k.pf]);
+  return o.join(' · '); }
+const kSame=(a,b)=>{ const ka=Object.keys(a||{}).sort(), kb=Object.keys(b||{}).sort(); return ka.join()===kb.join()&&ka.every(q=>a[q]===b[q]); };
+// a decision's details (on tap): the question, the cause, the next check, the asks (runs of the same answer, newest first), the
+// numbers (the last ask's; the first ask's when they differ), the 28 / 56 / 84-day checks and the verdict, a revert / override /
+// hold / close, a CPI decision's extra paid
+function agDetHtml(F,x){ const f=x.fam, o=[], n=nb(x.n), ep=x.ep&&typeof x.ep==='object'?x.ep:{}, c=x.chk&&typeof x.chk==='object'?x.chk:null, ap=x.applied;
+  o.push(`<b>${E(famW(f))}</b> · ${E(has(AGQ,x.why)?AGQ[x.why]:String(x.why||'—'))}${okD(ep.c)?' · change since '+E(fd(ep.c)):''}${n?` · asked ${Math.round(n)}×${okD(x.first)?' ('+E(rg(x.first,okD(x.last)?x.last:x.first))+')':''}`:''}`);
+  o.push(`<b>Cause:</b> ${E(x.cause||'—')}`);
+  if(okD(x.next)) o.push(`<b>Agla check:</b> ${E(fd(x.next))}`);
+  if(x.trial===true) o.push('<b>Accept — trial:</b> recorded, not applied yet — your ✅ Accept still works');
+  if(ap&&okD(ap.day)) o.push(`<b>Applied</b> ${E(fd(ap.day))}${Array.isArray(ap.days)&&okD(ap.days[0])&&okD(ap.days[1])?' · new level = '+E(rg(ap.days[0],ap.days[1])):''}`);
+  const H=Array.isArray(x.h)?x.h.filter(z=>Array.isArray(z)&&okD(z[0])):[];
+  if(H.length) o.push('<b>Asks</b>'+H.map(z=>`<br>${E(rg(z[0],okD(z[1])?z[1]:z[0]))} · ${Math.max(1,Math.round(nb(z[2])||1))}× ${E(has(AGDEC,z[3])?AGDEC[z[3]]:String(z[3]||'—'))} · ${E(z[6]||'—')}`).join(''));
+  const k=agNums(F,f,x.k,x.last), k0=x.k0&&!kSame(x.k,x.k0)?agNums(F,f,x.k0,x.first):'';
+  if(k) o.push('<b>Numbers:</b> '+k); if(k0) o.push(`<b>First ask</b>${okD(x.first)?' ('+E(fd(x.first))+')':''}: ${k0}`);
+  if(c){ const v=c.v&&typeof c.v==='object'?c.v:{}, d=okD(c.p)?c.p:x.last, lv=q=>nb(q)!=null?E(agLv(F,f,q,d)):'—';
+    o.push(`<b>Checks</b> after ${E(okD(c.p)?fd(c.p):'—')} (old ${lv(c.old)}, new ${lv(c.new)}): ${['28','56','84'].map(q=>`${q} d ${lv(v[q])}`).join(' · ')}`); }
+  o.push(`<b>Verdict:</b> ${has(AGVD,x.vd)?AGVD[x.vd]:'Pending'}${has(AGVD,x.ve)&&x.ve!==x.vd?' · alarm check: '+AGVD[x.ve]:''}`);
+  const rv=x.rev; if(rv&&okD(rv.day)) o.push(`↩ <b>Reverted by agent</b> ${E(fd(rv.day))} — ${rv.by==='r3'?'the alarm, kept open without this level, closed as recovered':rv.by==='r2'?'two 28-day checks in a row were back within one band of the old level':'the number came back to the old level'}`);
+  const ov=x.ovr; if(ov&&ov.at) o.push(`<b>Overridden by you</b> ${E(istAt(ov.at))}${has(ACTW,ov.act)?' · '+E(ACTW[ov.act]):''} — your action wins over the agent (Undo brings its decision back)`);
+  if(x.held===true) o.push(`<b>Held:</b> your own action holds ${E(famW(f))} — the agent does not decide it (🔄 Back to auto gives it back)`);
+  const en=x.end; if(en&&okD(en.t)) o.push(`<b>Closed</b> ${E(fd(en.t))}${has(AGEND,en.why)?' · '+AGEND[en.why]:''}`);
+  const xp=x.xp; if(f==='CPI'&&xp&&nb(xp.inr)!=null&&nb(xp.usd)!=null) o.push(`<b>Extra paid</b> vs old level ≈${fM(xp.inr,xp.usd)} since ${E(fd(okD(xp.from)?xp.from:x.first))} — extra paid, not a loss (the D0 ROAS alarm carries the money)`);
+  return `<div class="cpx-agx">${o.map(z=>`<p>${z}</p>`).join('')}</div>`; }
+// History · Levels: every decision of this app, one line each — "date · Family · status · short", newest first, the full
+// history; a tap opens its details under it (keep(): the line stays where it was)
+function agListHtml(F){ const L=agRows(F); if(!L.length) return '';
+  return `<h4 class="cpx-h4">Agent decisions</h4><div class="cpx-agl" id="cpx-agl">${L.map(x=>{ const on=AGD===x.id, d=agDay(x);
+    return `<div class="cpx-agi"><button type="button" class="cpx-agr" data-cpx-agd="${E(x.id)}" aria-expanded="${on}">${E(d?fd(d):'—')} · ${E(famW(x.fam))} · <b class="${AGC[x.st]}">${E(AGW[x.st])}</b> · ${E(x.short||'—')}</button>${on?agDetHtml(F,x):''}</div>`; }).join('')}</div>`; }
+// the private backtest line (shipped as is): only when every number is there
+function agBt(b){ if(!b||typeof b!=='object'||b.v!==1) return ''; const P=b.proposals||{}, S=b.settles||{}, y=nb(b.years);
+  const i=(o,k)=>{ const v=nb(o&&o[k]); return v!=null&&v>=0?Math.round(v):null; };
+  const q=[i(P,'moments'),i(P,'c1_accept'),i(P,'c1_right'),i(P,'c1_wrong'),i(P,'accept'),i(S,'checked'),i(S,'passed'),i(S,'blocked'),i(S,'hold')], lh=i(S,'level_held');
+  if(y==null||!(y>0&&y<50)||q.some(v=>v==null)) return ''; const note=typeof b.note==='string'?b.note.slice(0,200):'';
+  return `Backtest on your history (${Math.round(y*10)/10} y): ${q[0]} proposals → ${q[1]} accept (${q[2]} right, ${q[3]} wrong); with the engine's steadiness test ${q[4]}`
+    +` · CPI / GAP settles ${q[5]} → ${q[6]} passed, ${q[7]} blocked, ${q[8]} on hold${lh!=null?` (${lh} of them held the new level)`:''}.${note?' '+E(note):''}`; }
+// the scoreboard on top of History · Levels (pointer agent; the counts by the build's strict verdicts) + the one Hinglish line
+function agBoard(){ const p=ptr(), g=p&&p.agent; if(!g||typeof g!=='object'||g.v!==1||g.mode!=='on') return '';
+  const n=g.n||{}, s=g.settle||{}, tr=g.trial||{}, pa=g.parity||{}, vi=g.vintage||{}, c=(o,k)=>Math.max(0,Math.round(nb(o&&o[k])||0));
+  const more=[['trial','accept — trial'],['overridden','overridden by you'],['held','held by you']].filter(([k])=>c(n,k)>0).map(([k,w])=>` · ${c(n,k)} ${w}`).join('');
+  const l1=`🤖 Agent since ${E(okD(g.since)?fd(g.since):'—')}: ${c(n,'accepted')} accepted (${c(n,'right')} right, ${c(n,'wrong')} wrong, ${c(n,'pending')} pending${c(n,'unclear')?`, ${c(n,'unclear')} unclear`:''})`
+    +` · ${c(n,'kept')} kept · ${c(n,'waiting')} waiting · ${c(n,'reverted')} reverted${more}`
+    +` · Engine settles (CPI / GAP): ${c(s,'checked')} checked · ${c(s,'passed')} passed · ${c(s,'blocked')} blocked · ${c(s,'hold')} on hold${c(s,'later')?` · ${c(s,'later')} accepted later`:''}`;
+  const dd=nb(tr.day)!=null&&nb(tr.need)!=null?`, day ${c(tr,'day')} of ${c(tr,'need')}`:'';
+  const chk=` · ${c(pa,'checked')} decisions re-checked (${c(pa,'bad')} differ) · ${c(vi,'done')} re-asks on later data (${c(vi,'accept_flips')} accept flips)`;
+  const l2=tr.st==='live'?`Accepts: live since ${E(fd(okD(tr.exit)?tr.exit:tr.since))}`
+    :(has(AGTW,tr.why)?`Accepts: trial again since ${E(fd(tr.since))} (${AGTW[tr.why]})`:'Accepts: trial')+`${dd} (not applied yet)${chk}`;
+  const bt=agBt(g.bt);
+  return `<div class="cpx-agb" id="cpx-agb"><p class="cpx-agb1">${l1}</p><p class="cpx-fn">${l2}</p>${bt?`<p class="cpx-fn">${bt}</p>`:''}<p class="cpx-fn">${E(AGHI)}</p></div>`; }
+function levelsHtml(r,F){ const LV=F.lv&&typeof F.lv==='object'?F.lv:null, ab=agBoard(), ad=agListHtml(F);
   lvLoad();                                                                  // (also without a history block: the admin state decides the Undo buttons)
-  if(!LV) return '<div class="cpx-lvs" id="cpx-lvs"><h4 class="cpx-h4">Levels</h4><p class="cpx-note">Is build me level history nahi bani — agle update me aayegi.</p>'+lvActionsHtml(r,F,canAct())+'</div>';
+  // the agent's scoreboard on top and its decisions under the table — also when the file has no level history / no level yet
+  if(!LV) return '<div class="cpx-lvs" id="cpx-lvs">'+ab+'<h4 class="cpx-h4">Levels</h4><p class="cpx-note">Is build me level history nahi bani — agle update me aayegi.</p>'+ad+lvActionsHtml(r,F,canAct())+'</div>';
   const LP=Array.isArray(F.lp)?F.lp:[], fams=LVMAIN.concat(LVREST).filter(f=>(Array.isArray(LV[f])&&LV[f].length)||LP.some(p=>p&&p.fam===f));
-  if(!fams.length) return '<div class="cpx-lvs" id="cpx-lvs"><h4 class="cpx-h4">Levels</h4><p class="cpx-note">Is app ka abhi tak koi level nahi bana (kaafi din ka data chahiye).</p>'+lvActionsHtml(r,F,canAct())+'</div>';
+  if(!fams.length) return '<div class="cpx-lvs" id="cpx-lvs">'+ab+'<h4 class="cpx-h4">Levels</h4><p class="cpx-note">Is app ka abhi tak koi level nahi bana (kaafi din ka data chahiye).</p>'+ad+lvActionsHtml(r,F,canAct())+'</div>';
   const f=fams.includes(LVF)?LVF:fams[0], rows=Array.isArray(LV[f])?LV[f]:[], act=canAct();
   const btn=(k,l)=>`<button type="button" class="cpx-lvf" data-cpx-lvf="${k}" aria-pressed="${f===k}">${E(l)}</button>`;
   const sw=fams.filter(k=>LVMAIN.includes(k)).map(k=>btn(k,FAMW[k]||k)).join('')
     +(fams.some(k=>LVREST.includes(k))?`<label class="cpx-lvmo"><span>More</span><select data-cpx-lvmore="1" aria-label="More families"><option value="">—</option>${fams.filter(k=>LVREST.includes(k)).map(k=>`<option value="${k}"${f===k?' selected':''}>${E(FAMW[k]||k)}</option>`).join('')}</select></label>`:'');
   const pins=rows.some(x=>(x.src==='manual'||x.src==='rollback'||x.src==='accepted_owner')&&(x.st==='now'||x.st==='rest'));
   const lp=LP.filter(p=>p&&p.fam===f);
-  const prop=lp.map((p,i)=>{ const g=p.gap&&ok(+p.gap.inr)?` · gap vs old level ≈${fM(+p.gap.inr,+p.gap.usd)} since ${E(fd(p.day))}`:'';
+  // a proposal: the agent's answer beside it (lp[i].ag); the owner's ✅ Accept stays — "anyway" when the agent keeps / waits
+  const prop=lp.map((p,i)=>{ const g=gapTxt(p), ag=p.ag&&typeof p.ag==='object'&&has(AGW,p.ag.st)?p.ag:null, say=ag?agSay(ag.st,ag.short,ag.next):'';
     const pv=lvV(F,f,{v:p.v,sums:p.sums,from:p.days&&p.days[1]});
-    return `<p class="cpx-vm cpx-lvp">🆕 New level ready: <b>${E(lvFmt(f,pv))}</b> (${E(PROPW[p.why]||p.why||'')}) · ${E(lvMeas(f,{v:p.v,sums:p.sums,days:p.days}))} · old ${E(lvFmt(f,lvV(F,f,{v:p.old,from:p.opened})))}${g}`
-      +(act?` <button type="button" class="cpx-lvb cpx-lvgo" data-cpx-lvact="accept" data-cpx-lvp="${i}"${lvDis()}>✅ Accept</button>`:'')+'</p>'; }).join('');
-  const body=rows.map(x=>{ const c=lvCheck(F,f,x), s=STW[x.st]||STW.earlier, how=HOWW[x.src]||x.src;
-    const ex=x.src==='accepted'&&x.ep&&ok(+x.ep.old)?` <small>old ${E(lvFmt(f,lvV(F,f,{v:x.ep.old,from:x.ep.opened})))} · alarm ${E(fd(x.ep.opened))}</small>`:x.src==='alarm'&&x.ep?` <small>${E(OPW[x.ep.opener]||'')} · ${x.ep.why?E(WHYW[x.ep.why]||x.ep.why):'open'}</small>`:'';
+    return `<p class="cpx-vm cpx-lvp">🆕 New level ready: <b>${E(lvFmt(f,pv))}</b> (${E(PROPW[p.why]||p.why||'')}) · ${E(lvMeas(f,{v:p.v,sums:p.sums,days:p.days}))} · old ${E(lvFmt(f,lvV(F,f,{v:p.old,from:p.opened})))}${g}${say?' · '+say+(ag.st==='trial'?' (not applied yet)':''):''}`
+      +(act?` <button type="button" class="cpx-lvb cpx-lvgo" data-cpx-lvact="accept" data-cpx-lvp="${i}"${lvDis()}>${ag&&ag.st!=='trial'?'✅ Accept anyway':'✅ Accept'}</button>`:'')+'</p>'; }).join('');
+  const body=rows.map(x=>{ const c=lvCheck(F,f,x), s=STW[x.st]||STW.earlier, ag=x.ag&&typeof x.ag==='object'?x.ag:null, how=lvHow(F,x,ag);
+    const ex=(x.src==='accepted'||x.src==='accepted_agent')&&x.ep&&ok(+x.ep.old)?` <small>old ${E(lvFmt(f,lvV(F,f,{v:x.ep.old,from:x.ep.opened})))} · alarm ${E(fd(x.ep.opened))}</small>`:x.src==='alarm'&&x.ep?` <small>${E(OPW[x.ep.opener]||'')} · ${x.ep.why?E(WHYW[x.ep.why]||x.ep.why):'open'}</small>`:'';
     const rs=x.rs&&ok(+x.rs.v_old)?`<small>value corrected after Google / AdMob restated data (was ${E(lvFmt(f,lvV(F,f,{v:x.rs.v_old,sums:null,from:x.from})))})</small>`:'';
     const ck=c.k==='ok'?`<span class="cpx-lvc" title="Day-wise ke in ${c.n} din ka jod = ye level">✓</span>`:c.k==='bad'?'<span class="cpx-wat" title="Day-wise ka jod is level se nahi milta">⚠</span>':c.k==='typed'?'<span class="cpx-nv">typed</span>':'<span class="cpx-nv">—</span>';
     const b=[]; if(act){ if(x.st!=='now'&&x.st!=='rest') b.push(`<button type="button" class="cpx-lvb" data-cpx-lvact="rollback" data-cpx-lvid="${E(x.id)}"${lvDis()}>↩ Use this level</button>`);
-      if(x.src==='accepted'&&x.st!=='rejected') b.push(`<button type="button" class="cpx-lvb" data-cpx-lvact="reject" data-cpx-lvid="${E(x.id)}"${lvDis()}>✖ Reject</button>`); }
-    return `<tr data-cpx-lvrow="${E(x.id)}"${x.st==='gone'||x.st==='rejected'?' class="cpx-rest"':''}><td><b>${E(lvFmt(f,lvV(F,f,x)))}</b></td><td>${E(fdy(x.from))}</td><td>${x.to?E(fdy(x.to)):x.st==='now'||x.st==='rest'?'now':'—'}</td>`
-      +`<td class="cpx-lvw">${E(lvMeas(f,x))}${rs}</td><td>${E(how)}${ex}</td><td><span class="${s[1]}">${s[0]}</span></td><td>${ck}</td>${act?`<td>${b.join(' ')}</td>`:''}</tr>`; }).join('');
+      if((x.src==='accepted'||x.src==='accepted_agent')&&!LVNOREJ.has(x.st)) b.push(`<button type="button" class="cpx-lvb" data-cpx-lvact="reject" data-cpx-lvid="${E(x.id)}"${lvDis()}>✖ Reject</button>`); }
+    return `<tr data-cpx-lvrow="${E(x.id)}"${x.st==='gone'||x.st==='rejected'||x.st==='reverted'?' class="cpx-rest"':''}><td><b>${E(lvFmt(f,lvV(F,f,x)))}</b></td><td>${E(fdy(x.from))}</td><td>${x.to?E(fdy(x.to)):x.st==='now'||x.st==='rest'?'now':'—'}</td>`
+      +`<td class="cpx-lvw">${E(lvMeas(f,x))}${rs}</td><td${ag||LVNOREJ.has(x.st)?' class="cpx-agw"':''}>${E(how)}${ex}</td><td><span class="${s[1]}">${s[0]}</span></td><td>${ck}</td>${act?`<td>${b.join(' ')}</td>`:''}</tr>`; }).join('');
   const al=lvActionsHtml(r,F,act);
   const tools=act?`<div class="cpx-lvxr">${LVSET&&LVSET.fam===f?'':`<button type="button" class="cpx-lvb" data-cpx-lvset="1"${lvDis()}>✏️ Set level</button>`}${pins?`<button type="button" class="cpx-lvb" data-cpx-lvact="auto"${lvDis()}>🔄 Back to auto</button>`:''}</div>`
     :LVQ.st==='busy'?'':`<p class="cpx-fn">${LVQ.st==='ro'?'Sirf admin level badal sakta hai — aapke liye history read-only hai.':'History read-only (level badalne ka server abhi nahi mila).'}</p>`;
-  return `<div class="cpx-lvs" id="cpx-lvs"><h4 class="cpx-h4">Levels</h4><div class="cpx-lvfs" role="group" aria-label="Family">${sw}</div>`
+  return `<div class="cpx-lvs" id="cpx-lvs">${ab}<h4 class="cpx-h4">Levels</h4><div class="cpx-lvfs" role="group" aria-label="Family">${sw}</div>`
     +`<p class="cpx-fn">Level = in dino ka exact average. Day-wise tab me same din jod ke dekh sakte ho (✓ = page ne khud jod ke mila liya).</p>${prop}${tools}`
     +(LVSET&&LVSET.fam===f&&act?lvSetHtml(F,f):'')
-    +`<div class="cpx-x" id="cpx-lvtx"><table class="cpx-t"><thead><tr><th>Level</th><th>From</th><th>To</th><th>Measured on</th><th>How</th><th>Status</th><th>Check</th>${act?'<th></th>':''}</tr></thead><tbody>${body}</tbody></table></div>${al}</div>`; }
+    +`<div class="cpx-x" id="cpx-lvtx"><table class="cpx-t"><thead><tr><th>Level</th><th>From</th><th>To</th><th>Measured on</th><th>How</th><th>Status</th><th>Check</th>${act?'<th></th>':''}</tr></thead><tbody>${body}</tbody></table></div>${ad}${al}</div>`; }
+// a level row's How: the agent's marks (an engine settle it blocked / holds, an accept it reverted, an agent accept with its
+// reason, a settle that passed its check), else how the level formed
+function lvHow(F,x,ag){ let h=HOWW[x.src]||x.src;
+  if(x.st==='blocked') h='Engine settle blocked by agent: '+((ag&&ag.cause)||'—');
+  else if(x.st==='hold') h='Engine settle on hold (agent): '+((ag&&ag.cause)||'—')+(ag&&okD(ag.next)?' · next check '+fd(ag.next):'');
+  else if(x.st==='reverted'){ const d=ag&&agRows(F).find(z=>z.id===ag.dec), day=d&&d.rev&&okD(d.rev.day)?d.rev.day:okD(x.to)?x.to:''; h='Reverted by agent'+(day?' '+fd(day):''); }
+  else if(x.src==='accepted_agent'&&ag&&ag.short) h+=' · '+ag.short;
+  if(ag&&ag.st==='passed') h+=' · 🤖 passed';
+  return h; }
 // the owner's click → one action (from = the data day shown: D3; a reject applies from the start of its alarm)
 function lvAct(kind,id,pi){ const F=fOf(OPEN); if(LVBUSY||!F||!canAct()) return; const f=LVF, t=ptr().t, rows=(F.lv&&F.lv[f])||[], x=rows.find(z=>z.id===id);
   const cf=m=>{ try{ return typeof confirm!=='function'||confirm(m); }catch(e){ return true; } };
   if(kind==='rollback'&&x){ if(!cf(`${FAMW[f]||f}: level ${lvFmt(f,lvV(F,f,x))} (${fd(x.from)} wala) ${fdy(t)} se lagaye?`)) return; lvSend({act:'rollback',app:OPEN,fam:f,from:t,level:x.id}); return; }
-  if(kind==='reject'&&x){ if(!cf(`${FAMW[f]||f}: ${fd(x.from)} ka auto accept reject karein? Alarm apne shuru se khula rahega.`)) return; lvSend({act:'reject',app:OPEN,fam:f,level:x.id}); return; }
+  if(kind==='reject'&&x&&(x.src==='accepted'||x.src==='accepted_agent')&&!LVNOREJ.has(x.st)){ if(!cf(`${FAMW[f]||f}: ${fd(x.from)} ka ${x.src==='accepted_agent'?'agent wala':'auto'} accept reject karein? Alarm apne shuru se khula rahega.`)) return; lvSend({act:'reject',app:OPEN,fam:f,level:x.id}); return; }
   if(kind==='auto'){ if(!cf(`${FAMW[f]||f}: ${fdy(t)} se automatic level pe wapas?`)) return; lvSend({act:'auto',app:OPEN,fam:f,from:t}); return; }
   if(kind==='accept'){ const p=(Array.isArray(F.lp)?F.lp:[]).filter(z=>z&&z.fam===f)[pi]; if(!p||!Array.isArray(p.days)) return;
-    if(!cf(`${FAMW[f]||f}: naya level ${lvFmt(f,lvV(F,f,{v:p.v,sums:p.sums,from:p.days[1]}))} ${fdy(t)} se accept karein?`)) return;
+    const ag=p.ag&&typeof p.ag==='object'&&has(AGW,p.ag.st)&&p.ag.st!=='trial'?p.ag:null;   // (the agent keeps / waits: the owner's accept wins)
+    if(!cf(`${ag?`Agent: ${AGW[ag.st]} · ${String(ag.short||'')}. `:''}${FAMW[f]||f}: naya level ${lvFmt(f,lvV(F,f,{v:p.v,sums:p.sums,from:p.days[1]}))} ${fdy(t)} se accept karein?`)) return;
     lvSend({act:'accept',app:OPEN,fam:f,from:t,proposal:{day:p.day,days:[p.days[0],p.days[1]]}}); } }
 function lvSave(){ const F=fOf(OPEN), s=LVSET; if(LVBUSY||!F||!s||!canAct()) return; const t=ptr().t, f=s.fam;
   const q=sel=>{ try{ const b=EL&&EL.querySelector?EL.querySelector(sel):null; return b?String(b.value||''):null; }catch(e){ return null; } };
@@ -9188,18 +9346,23 @@ function late(fn){ const s=EL; let an=null, y0=0;
     for(const c of Array.from(s.querySelectorAll('.cpx-row,.cpx-det,.cpx-sum,.cpx-per'))){ const r=c.getBoundingClientRect(); if(r.height>0&&r.bottom>Math.max(top,H*0.3)){ an=c; y0=r.top; break; } } } }catch(e){}
   fn();
   try{ if(an&&an.isConnected!==false){ const d=an.getBoundingClientRect().top-y0; if(Math.abs(d)>1) quiet(()=>window.scrollBy(0,d)); } }catch(e){} }
-// a late file: only its slot is drawn again (the details' tab body; cpi.json.gz: the list)
+// a late file: only its slots are drawn again (the details' tab body and the lines under the verdict — the 🆕 / agent lines
+// read the app file; cpi.json.gz: the list)
 function arrive(id){ if(!onScreen()||OPEN!==id) return; const b=document.getElementById('cpx-tb'); if(!b) return;
   const c=cal(), [lo,hi]=rng(), r=rows(lo,hi).find(z=>z.id===id); if(!c||!r) return;
-  late(()=>{ b.innerHTML=tabBody(r); }); }
+  late(()=>{ const v=document.getElementById('cpx-vls'), h=propLines(fOf(id)); if(v&&v._h!==h){ v.innerHTML=h; v._h=h; } b.innerHTML=tabBody(r); }); }
 // ---- events ----
-function setOpen(id){ const was=OPEN; OPEN=id; if(id!=null&&id!==was){ TAB='ch'; DN=30; }
+function setOpen(id){ const was=OPEN; OPEN=id; if(id!=null&&id!==was){ TAB='ch'; DN=30; AGD=null; }
   if(id!=null&&was==null&&phone()&&typeof hbPush==='function') try{ hbPush('cpx-dd',()=>{ OPEN=null; if(onScreen()) paint(); }); }catch(e){}
   if(id==null&&typeof hbDrop==='function') try{ hbDrop('cpx-dd'); }catch(e){} }
 const sq=v=>String(v).replace(/\\/g,'\\\\').replace(/"/g,'\\"');
 function onClick(e){ const t=e.target; if(!t||!t.closest) return; let b;
   if((b=t.closest('[data-cpx-per]'))){ const k=b.dataset.cpxPer; keep(`[data-cpx-per="${sq(k)}"]`,()=>{ PER=k; perSave(); paint(); }); return; }
-  if((b=t.closest('[data-cpx-tab]'))){ const k=b.dataset.cpxTab; keep(`[data-cpx-tab="${sq(k)}"]`,()=>{ TAB=k; DN=30; paint(); }); return; }
+  if((b=t.closest('[data-cpx-tab]'))){ const k=b.dataset.cpxTab, go=b.dataset.cpxAgo, gf=b.dataset.cpxAgf;   // (an agent line's link: History with that decision open, its family's levels)
+    // the tapped control itself is held in place: the lines above the tabs carry links to the same tab
+    const at=go?`[data-cpx-ago="${sq(go)}"]`:b.classList&&b.classList.contains('cpx-tab')?`.cpx-tab[data-cpx-tab="${sq(k)}"]`:`[data-cpx-tab="${sq(k)}"]`;
+    keep(at,()=>{ TAB=k; DN=30; if(go){ AGD=String(go); if(LVMAIN.includes(gf)||LVREST.includes(gf)) LVF=gf; } paint(); }); return; }
+  if((b=t.closest('[data-cpx-agd]'))){ const id=String(b.dataset.cpxAgd||''); if(!id) return; keep(`[data-cpx-agd="${sq(id)}"]`,()=>{ AGD=AGD===id?null:id; paint(); }); return; }
   if((b=t.closest('[data-cpx-more]'))){ keep('[data-cpx-more]',()=>{ DN+=30; paint(); }); return; }
   if((b=t.closest('[data-cpx-retry]'))){ const n=b.dataset.cpxRetry, st=FILES[n]; if(st){ st.err=false; st.v=null; } if(OPEN) ensureApp(OPEN); paint(); return; }
   if(t.closest('[data-cpx-allretry]')){ ALLF.err=false; ALLF.v=null; ensureAll(()=>{ if(onScreen()) late(()=>paint()); }); paint(); return; }
@@ -9276,8 +9439,8 @@ function card(name){ const p=ptr(); if(!p) return null; const id=Object.keys(p.a
 function hubVerdict(name){ const p=ptr(); if(!p||!Object.keys(p.apps).some(k=>p.apps[k]&&p.apps[k].name===name)) return null; return card(name); }
 return {ptr, render, paint, show:showMe, left, alarmN, alertNote, card, hubVerdict,
   _:{rg, fd, rng, isDef, sums, rows, rowOf, judge, normal, hLvl, lossG, epOf, eps, now3, perRestore, perLoad, keep, cal, fI, fU, fP, series, cSeries, ctyList, ctyOf, dayRows, verdict, moneyLine, tabBody, ALLF, FILES, CHD,
-    lvCheck, lvOf, lvV, lvActs, levelsHtml, tipHtml, chart, LVQ:()=>LVQ, PEND:()=>PEND,
-    get:()=>({PER,PF,PTO,OPEN,TAB,DN,CTY,LVF,LVSET,LVBUSY}), set:o=>{ if('LVBUSY' in o) LVBUSY=!!o.LVBUSY; if('LVF' in o) LVF=o.LVF; if('LVSET' in o) LVSET=o.LVSET; if('LVQ' in o) LVQ=o.LVQ; if('PEND' in o) PEND=o.PEND; if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o) OPEN=o.OPEN; if('TAB' in o) TAB=o.TAB; if('DN' in o) DN=o.DN; if('PREAD' in o) PREAD=o.PREAD; if('CTY' in o) CTY=o.CTY; }}};
+    lvCheck, lvOf, lvV, lvActs, levelsHtml, tipHtml, chart, LVQ:()=>LVQ, PEND:()=>PEND, agTag, agRows, agBoard, agBt, agNums, agDetHtml, agListHtml, propLines,
+    get:()=>({PER,PF,PTO,OPEN,TAB,DN,CTY,LVF,LVSET,LVBUSY,AGD}), set:o=>{ if('AGD' in o) AGD=o.AGD; if('LVBUSY' in o) LVBUSY=!!o.LVBUSY; if('LVF' in o) LVF=o.LVF; if('LVSET' in o) LVSET=o.LVSET; if('LVQ' in o) LVQ=o.LVQ; if('PEND' in o) PEND=o.PEND; if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o) OPEN=o.OPEN; if('TAB' in o) TAB=o.TAB; if('DN' in o) DN=o.DN; if('PREAD' in o) PREAD=o.PREAD; if('CTY' in o) CTY=o.CTY; }}};
 })();
 function renderCpx(){ return CPX.render(); }
 // ---- 📈 ROI — a section of the 💸 Install value tab (owner, 13 Oct: "every date wise uska incremental day wise revenue from

@@ -135,4 +135,127 @@ function build() {
     placements, apps_catalog: catalog, app_icons: {}, cpi };
   return { DATA, FILES, IDS, KEYS, NAMES, T, TODAY, DAY0, C, FX1, fxd, M };
 }
-module.exports = { build, addD, nD, days };
+// ── 🤖 the level agent's ship fields (AGENT SPEC §6.3–§6.6, exact shapes) laid onto a build() output: the scoreboard
+// (DATA.cpi.agent), the row tags (apps[id].ag), every app file's decision rows (ag.rows — Alpha carries one per status word
+// but trial, which is Beta's), the proposals' answers (lp[i].ag) and the agent's marks on level rows (lv rows' st / ag).
+// Made-up numbers and words in the shapes of the rule's sentences, dates inside the fixture's calendar:
+//   * Alpha: kept D0 ROAS proposal (spend ×2.6, its first ask a wait) · waiting install-day D7 proposal (narrow: countries) ·
+//     an install-day D0 proposal the owner accepted (overridden) · the engine's CPI settle of 24 Mar blocked (spend ×3.5;
+//     extra paid ₹90,000 since) · its GAP settle on hold (app only) · an eCPM accept applied 21 Mar (live) · a Spend family
+//     the owner holds · an older eCPM accept reverted 25 Feb (r3) · a closed install-day D1 keep (came back) · a CPI settle of
+//     10 Jan that passed;
+//   * Beta: a CPI accept in trial; Gamma: a CPI proposal without the agent's answer (the 🆕 line, "not a loss"); Delta: a
+//     waiting eCPM row and no level history; Zeta: hostile text in its row and tag, a level block with no family.
+//   usage: const fx = build(); agent(fx);
+function agent(fx) {
+  const { DATA, FILES } = fx, P = DATA.cpi, F = k => FILES['cpi_' + KEYS[k] + '.json.gz'];
+  const sums = (k, f, a, b) => { const s = {}, add = (q, v) => { s[q] = (s[q] || 0) + v; };   // the per-day arrays' own rounding
+    for (const x of days(a, b)) { const m = M[k](x);
+      if (f === 'CPI') { add('sp_inr', r2(m.sp)); add('sp_usd', r2(m.sp * fxd(x))); add('inst', r2(m.inst)); }
+      if (f === 'ECPM') { add('rev', r2(m.imp * m.ecpm / 1000)); add('imp', m.imp); }
+      if (f === 'ROAS_G') { add('d0_inr', r2(m.sp * m.d0)); add('sp_inr', r2(m.sp)); } }
+    return s; };
+  P.agent = { v: 1, mode: 'on', rule: 'C1', th: '0123456789ab', since: '2026-01-20', ms: 12,
+    trial: { st: 'live', since: '2026-01-20', day: 67, need: 28, why: 'start', exit: '2026-02-17' },
+    n: { accepted: 2, right: 0, wrong: 1, unclear: 0, pending: 1, kept: 2, waiting: 2, trial: 1, reverted: 1, overridden: 1, held: 1 },
+    settle: { checked: 3, passed: 1, blocked: 1, hold: 1, later: 0 }, parity: { checked: 40, bad: 0 }, vintage: { done: 6, flips: 0, accept_flips: 0 }, bt: null };
+  P.apps[IDS.a].ag = { st: 'accepted', fam: 'ECPM', short: 'eCPM market move', day: '2026-03-21', more: 4 };
+  P.apps[IDS.b].ag = { st: 'trial', fam: 'CPI', short: 'CPI market move', day: null, more: 0 };
+  P.apps[IDS.d].ag = { st: 'waiting', fam: 'ECPM', short: 'still moving', day: '2026-04-03', more: 1 };
+  P.apps[IDS.z].ag = { st: 'kept', fam: 'ECPM', short: '<img src=x onerror=alert(3)>', day: null, more: 0 };
+  P.apps[IDS.c].lp = 1;                                                     // a proposal without the agent's answer: the 🆕 tag stays
+  const row = o => Object.assign({ id: '', fam: 'CPI', why: 'money', st: 'kept', dec: 'keep', branch: 'spend_scaled', part: null, cause: '', short: '',
+    first: '2026-03-20', last: '2026-03-27', next: '2026-04-03', n: 1, ep: { opened: '2026-03-14', c: C }, applied: null, trial: false, level: null,
+    h: [], k: {}, k0: {}, chk: null, vd: 'pending', ve: 'pending', rev: null, ovr: null, held: false, end: null, xp: null }, o);
+  const cS = 'CPI part 140% of the move: seen with spend ×2.6 since the old level (your lever)', sS = 'seen with spend ×3.5 since the old level (your lever)';
+  const cW = 'CPI part 120% of the move: narrow: countries moving the same way = 61% of spend (opposite 9%)';
+  const cE = "other apps' eCPM moved the same way (4 other apps: median −18% vs own −17%, 75% moved the same way); ads per user +2%";
+  const cG = 'eCPM part 85% of the move: eCPM moved on this app only — the cause is not in the data (ad sources / mediation / units)';
+  const cC = "other apps' CPI moved the same way (3 other apps: median +6% vs own +5%, 67% moved the same way)";
+  const cT = "other apps' CPI moved the same way (3 other apps: median +29% vs own +30%, 100% moved the same way)";
+  const kS = { old: 0.4, new: 0.3, mv: -0.25, bands: 3.2, l14p14: -0.01, st56: 0.04, spx: 2.6, mkt_n: 4, mkt_med: -0.03, own: -0.25, cost: 1.4, val: -0.4 };
+  const kW = { old: 0.72, new: 0.54, mv: -0.25, bands: 2.4, same: 0.61, opp: 0.09, nl: 0.05, cost: 1.2, val: -0.2, pf: 'A7' };
+  const kB = { old: 20, new: 31.25, mv: 0.5625, bands: 4.5, l14p14: 0.01, st56: 0.03, spx: 3.5, mkt_n: 3, mkt_med: 0.02, turn: 0.12 };
+  const kE = { old: 6, new: 5, mv: -0.1667, bands: 2.6, st56: 0.05, l14p14: 0, mkt_n: 4, mkt_med: -0.18, own: -0.17, ipu: 0.02 };
+  F('a').ag = { rows: [
+    row({ id: 'D-00000000p1', fam: 'ROAS_G', cause: cS, short: 'spend ×2.6 (your lever)', n: 2, ep: { opened: '2026-03-14', c: C },
+      h: [['2026-03-27', '2026-03-27', 1, 'keep', 'spend_scaled', null, 'spend ×2.6 (your lever)'], ['2026-03-20', '2026-03-20', 1, 'wait', 'not_steady', null, 'not steady']],
+      k: kS, k0: { old: 0.4, new: 0.31, mv: -0.225, bands: 2.9, l14p14: -0.06, st56: 0.13, spx: 1.9 } }),
+    row({ id: 'D-00000000w1', fam: 'ROAS_C7', st: 'waiting', dec: 'wait', branch: 'narrow', part: 'cpi', cause: cW, short: 'narrow: countries 61%',
+      first: '2026-03-13', last: '2026-03-26', n: 2, ep: { opened: '2026-03-12', c: '2026-03-11' },
+      h: [['2026-03-13', '2026-03-26', 2, 'wait', 'narrow', 'cpi', 'narrow: countries 61%']], k: kW, k0: kW }),
+    row({ id: 'D-00000000o1', fam: 'ROAS_C0', st: 'overridden', branch: 'campaign_mix', part: 'cpi', short: 'campaign mix 62%',
+      cause: 'CPI part 130% of the move: seen with 62% of spend in campaigns new since / gone after the old level', first: '2026-03-20', last: '2026-03-24', next: null,
+      n: 2, ep: { opened: '2026-03-20', c: '2026-03-11' }, ovr: { at: '2026-03-25T09:30:00Z', act: 'accept' }, end: { t: '2026-03-25', why: 'owner' },
+      h: [['2026-03-20', '2026-03-24', 2, 'keep', 'campaign_mix', 'cpi', 'campaign mix 62%']], k: { old: 0.5, new: 0.4, mv: -0.2, bands: 2.2, turn: 0.62 } }),
+    row({ id: 'D-00000000s1', fam: 'CPI', why: 'settle', st: 'blocked', cause: sS, short: 'spend ×3.5 (your lever)', first: '2026-03-24', last: '2026-03-24',
+      ep: { opened: '2026-03-13', c: C }, level: 'L-00000000b1', h: [['2026-03-24', '2026-03-24', 1, 'keep', 'spend_scaled', null, 'spend ×3.5 (your lever)']],
+      k: kB, k0: kB, xp: { inr: 90000, usd: 1080, from: '2026-03-24' } }),
+    row({ id: 'D-00000000s2', fam: 'GAP', why: 'settle', st: 'hold', dec: 'wait', branch: 'app_only', part: 'ecpm', cause: cG, short: 'app only',
+      first: '2026-03-06', last: '2026-03-23', n: 3, ep: { opened: '2025-12-28', c: '2025-12-20' }, level: 'L-00000000g1',
+      h: [['2026-03-06', '2026-03-23', 3, 'wait', 'app_only', 'ecpm', 'app only']], k: { old: 4.2, new: 5.5, mv: 0.31, bands: 3, cpi: 0.15, ecpm: 0.85, ipu: -0.02 } }),
+    row({ id: 'D-00000000p2', fam: 'ECPM', why: 'open', st: 'accepted', dec: 'accept', branch: 'ecpm_market', cause: cE, short: 'eCPM market move',
+      first: '2026-03-14', last: '2026-03-21', next: null, n: 2, ep: { opened: '2025-11-12', c: '2025-11-10' },
+      applied: { day: '2026-03-21', days: ['2026-03-10', '2026-03-21'] }, level: 'L-00000000e2', end: { t: '2026-03-21', why: 'agent' },
+      chk: { p: '2026-03-21', old: 6, new: 5, v: { 28: null, 56: null, 84: null }, final: false },
+      h: [['2026-03-21', '2026-03-21', 1, 'accept', 'ecpm_market', null, 'eCPM market move'], ['2026-03-14', '2026-03-14', 1, 'wait', 'engine_steady', null, 'not steady']],
+      k: kE, k0: { old: 6, new: 5.1, mv: -0.15, bands: 2.3, st56: 0.12, mkt_n: 4, mkt_med: -0.16, own: -0.15 } }),
+    row({ id: 'D-00000000h1', fam: 'SPEND', why: 'open', st: 'held', branch: 'spend', short: 'budget (your lever)', first: '2026-03-06', last: '2026-03-06', next: null,
+      cause: 'budget / bid limit (your lever): spend −45%, campaign C1 carries 80% of the change', ep: { opened: '2025-11-01', c: '2025-10-29' }, held: true,
+      h: [['2026-03-06', '2026-03-06', 1, 'keep', 'spend', null, 'budget (your lever)']], k: { old: 600, new: 330, mv: -0.45, bands: 5 } }),
+    row({ id: 'D-00000000r1', fam: 'ECPM', why: 'open', st: 'reverted', dec: 'accept', branch: 'ecpm_market', short: 'eCPM market move', first: '2026-02-13', last: '2026-02-20', next: null,
+      cause: "other apps' eCPM moved the same way (5 other apps: median −12% vs own −14%, 80% moved the same way)", n: 2, ep: { opened: '2025-10-15', c: '2025-10-12' },
+      applied: { day: '2026-02-20', days: ['2026-01-24', '2026-02-20'] }, level: 'L-00000000e1', rev: { by: 'r3', day: '2026-02-25' }, end: { t: '2026-02-25', why: 'recovered' },
+      chk: { p: '2026-02-20', old: 6, new: 5.2, v: { 28: 5.9, 56: null, 84: null }, final: false }, vd: 'wrong', ve: 'wrong',
+      h: [['2026-02-20', '2026-02-20', 1, 'accept', 'ecpm_market', null, 'eCPM market move'], ['2026-02-13', '2026-02-13', 1, 'wait', 'not_steady', null, 'not steady']],
+      k: { old: 6, new: 5.2, mv: -0.133, bands: 2.1, st56: 0.06, mkt_n: 5, mkt_med: -0.12, own: -0.14 } }),
+    row({ id: 'D-00000000c1', fam: 'ROAS_C1', st: 'closed', short: 'spend ×0.6 (your lever)', cause: 'CPI part 110% of the move: seen with spend ×0.6 since the old level (your lever)',
+      first: '2026-01-24', last: '2026-02-21', next: null, n: 5, ep: { opened: '2025-10-20', c: '2025-10-18' }, end: { t: '2026-02-28', why: 'recovered' },
+      chk: { p: '2026-01-24', old: 0.6, new: 0.45, v: { 28: 0.5, 56: 0.58, 84: null }, final: false }, vd: 'pending', ve: 'came_back',
+      h: [['2026-01-24', '2026-02-21', 5, 'keep', 'spend_scaled', 'cpi', 'spend ×0.6 (your lever)']], k: { old: 0.6, new: 0.45, mv: -0.25, bands: 3.5, spx: 0.6 } }),
+    row({ id: 'D-00000000s3', fam: 'CPI', why: 'settle', st: 'passed', dec: 'accept', branch: 'cpi_market', cause: cC, short: 'CPI market move', first: '2026-01-10', last: '2026-01-10',
+      next: null, ep: { opened: '2025-11-15', c: '2025-11-12' }, level: 'L-00000000b2', end: { t: '2026-01-10', why: 'settled' },
+      chk: { p: '2026-01-10', old: 20, new: 21, v: { 28: 21.1, 56: 20.9, 84: null }, final: false },
+      h: [['2026-01-10', '2026-01-10', 1, 'accept', 'cpi_market', null, 'CPI market move']], k: { old: 20, new: 21, mv: 0.05, bands: 2.3, st56: 0.04, mkt_n: 3, mkt_med: 0.06, own: 0.05 } }),
+  ] };
+  const lp = (o) => Object.assign({ sums: null, gap: null }, o);
+  F('a').lp = [
+    lp({ fam: 'ROAS_G', opened: '2026-03-14', day: '2026-03-20', why: 'money', v: 0.3, days: ['2026-03-10', T], sums: sums('a', 'ROAS_G', '2026-03-10', T), old: 0.4,
+      gap: { inr: 123456, usd: 1500 }, ag: { id: 'D-00000000p1', st: 'kept', short: 'spend ×2.6 (your lever)', cause: cS, next: '2026-04-03' } }),
+    lp({ fam: 'ROAS_C7', opened: '2026-03-12', day: '2026-03-13', why: 'money', v: 0.54, days: ['2026-02-19', '2026-03-18'], old: 0.72, gap: { inr: 40000, usd: 480 },
+      ag: { id: 'D-00000000w1', st: 'waiting', short: 'narrow: countries 61%', cause: cW, next: '2026-04-03' } })];
+  const lv = o => Object.assign({ id: '', from: '2025-12-01', to: null, v: 1, days: null, sums: null, src: 'auto', ep: null, act: null, st: 'earlier', seen: '2026-03-30T05:22:00Z', rs: null, gone: null, rejected: null }, o);
+  const b1 = sums('a', 'CPI', '2026-03-10', '2026-03-23'), b0 = sums('a', 'CPI', '2026-02-24', '2026-03-09'), b3 = sums('a', 'CPI', '2025-11-01', '2025-11-14');
+  const e2 = sums('a', 'ECPM', '2026-03-10', '2026-03-21'), e0 = sums('a', 'ECPM', '2025-11-01', '2025-11-14');
+  F('a').lv = {
+    CPI: [lv({ id: 'L-00000000b1', src: 'accepted', from: '2026-03-24', v: b1.sp_inr / b1.inst, days: ['2026-03-10', '2026-03-23'], sums: b1, st: 'blocked', ep: { opened: '2026-03-13', old: 20 },
+            ag: { st: 'blocked', dec: 'D-00000000s1', short: 'spend ×3.5 (your lever)', cause: sS, next: '2026-04-03' } }),
+          lv({ id: 'L-00000000b0', src: 'alarm', from: '2026-03-13', v: b0.sp_inr / b0.inst, days: ['2026-02-24', '2026-03-09'], sums: b0, st: 'now', ep: { opened: '2026-03-13', c: C, why: null, opener: 'SUDDEN' } }),
+          lv({ id: 'L-00000000b2', src: 'accepted', from: '2026-01-10', to: '2026-03-12', v: 21, days: ['2025-12-13', '2026-01-09'], st: 'rest', ep: { opened: '2025-11-15', old: 20 },
+            ag: { st: 'passed', dec: 'D-00000000s3', short: 'CPI market move', cause: cC, next: null } }),
+          lv({ id: 'L-00000000b3', src: 'first', from: '2025-12-01', to: '2026-01-09', v: b3.sp_inr / b3.inst, days: ['2025-11-01', '2025-11-14'], sums: b3, st: 'earlier' })],
+    ECPM: [lv({ id: 'L-00000000e2', src: 'accepted_agent', from: '2026-03-21', v: e2.rev / e2.imp * 1000, days: ['2026-03-10', '2026-03-21'], sums: e2, st: 'now', ep: { opened: '2025-11-12', old: 6 },
+             act: 'D-00000000p2', ag: { st: 'agent', dec: 'D-00000000p2', short: 'eCPM market move', cause: cE, next: null } }),
+           lv({ id: 'L-00000000e1', src: 'accepted_agent', from: '2026-02-20', to: '2026-02-25', v: 5.2, days: ['2026-01-24', '2026-02-20'], st: 'reverted', ep: { opened: '2025-10-15', old: 6 },
+             act: 'D-00000000r1', ag: { st: 'reverted', dec: 'D-00000000r1', short: 'eCPM market move', cause: "other apps' eCPM moved the same way", next: null } }),
+           lv({ id: 'L-00000000e0', src: 'first', from: '2025-12-01', to: '2026-02-19', v: e0.rev / e0.imp * 1000, days: ['2025-11-01', '2025-11-14'], sums: e0, st: 'earlier' })],
+    GAP: [lv({ id: 'L-00000000g1', src: 'accepted', from: '2026-03-06', v: 5.5, days: ['2026-02-06', '2026-03-05'], st: 'hold', ep: { opened: '2025-12-28', old: 4.2 },
+            ag: { st: 'hold', dec: 'D-00000000s2', short: 'app only', cause: cG, next: '2026-04-03' } }),
+          lv({ id: 'L-00000000g0', src: 'first', from: '2025-12-01', v: 4.2, st: 'now' })] };
+  F('b').ag = { rows: [row({ id: 'D-00000000t1', fam: 'CPI', why: 'open', st: 'trial', dec: 'accept', branch: 'cpi_market', cause: cT, short: 'CPI market move', trial: true,
+    first: '2026-03-25', last: '2026-03-27', n: 2, ep: { opened: '2026-03-18', c: '2026-03-15' }, xp: { inr: 30000, usd: 360, from: '2026-03-25' },
+    h: [['2026-03-25', '2026-03-27', 2, 'accept', 'cpi_market', null, 'CPI market move']], k: { old: 10, new: 13, mv: 0.3, bands: 2.8, st56: 0.03, mkt_n: 3, mkt_med: 0.29, own: 0.3 } })] };
+  F('b').lp = [lp({ fam: 'CPI', opened: '2026-03-18', day: '2026-03-25', why: 'open', v: 13, days: ['2026-03-15', '2026-03-27'], old: 10, gap: { inr: 30000, usd: 360 },
+    ag: { id: 'D-00000000t1', st: 'trial', short: 'CPI market move', cause: cT, next: '2026-04-03' } })];
+  F('b').lv = { CPI: [lv({ id: 'L-00000000t0', src: 'first', from: '2025-12-01', v: 10, st: 'now' })] };
+  F('c').lp = [lp({ fam: 'CPI', opened: '2026-03-01', day: '2026-03-24', why: 'open', v: 20, days: ['2026-02-25', '2026-03-24'], old: 16, gap: { inr: 60000, usd: 720 } })];
+  F('c').lv = { CPI: [lv({ id: 'L-00000000c0', src: 'first', from: '2025-12-01', v: 16, st: 'now' })] };
+  F('d').ag = { rows: [row({ id: 'D-00000000d1', fam: 'ECPM', why: 'open', st: 'waiting', dec: 'wait', branch: 'still_sliding', short: 'still moving', first: '2026-03-27', last: '2026-03-27',
+    cause: "other apps' eCPM moved the same way (3 other apps: median −10% vs own −12%, 67% moved the same way); but coming back / still moving: last 14 days −6% vs the 14 before",
+    ep: { opened: '2026-03-22', c: '2026-03-20' }, h: [['2026-03-27', '2026-03-27', 1, 'wait', 'still_sliding', null, 'still moving']], k: { old: 2.2, new: 2, mv: -0.12, l14p14: -0.06 } })] };
+  F('z').ag = { rows: [row({ id: 'D-"><img src=x onerror=alert(6)>', fam: 'ECPM', why: 'open', short: '<img src=x onerror=alert(3)>', cause: '<script>alert(4)</script>',
+    ep: { opened: '2026-03-20', c: '2026-03-18' }, h: [['2026-03-20', '2026-03-27', 2, 'keep', 'app_side', null, '<b>x</b>']], k: { old: 2, new: 1.5, mv: -0.25 } })] };
+  F('z').lv = {};
+  return fx;
+}
+module.exports = { build, agent, addD, nD, days };

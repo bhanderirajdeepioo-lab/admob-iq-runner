@@ -12,7 +12,11 @@
 //   * the details: the verdict, the money line, every tab (Chart printed numbers, Day-wise paging, Countries + Rest,
 //     Campaigns' tROAS, eCPM kyun, Loss math, History) and the file states (⏳ Loading… / ⚠️ + Try again / no file);
 //   * keep(): the tapped row back to its place at 375 and 1280 px; one row open at a time;
-//   * the developer copy renders nothing; a hostile app name escaped; the hub card + the Alerts note + the nav count.
+//   * the developer copy renders nothing; a hostile app name escaped; the hub card + the Alerts note + the nav count;
+//   * 🤖 the level agent (cpx_fixture.js agent(): AGENT SPEC §6.3–§6.6 ship fields): the row tag per status word, the lines
+//     under the verdict, History · Levels (scoreboard, the blocked / on-hold / reverted level rows, Agent decisions with the
+//     details on tap and keep()), the owner's buttons and POST bodies, hostile text, the dev view, money never summed — and
+//     the plain fixture (no agent field) rendering none of it.
 // Prints ONE JSON report; tests/test_cpx_frontend.py asserts on it.   usage: node cpx_frontend.js <index.html>
 'use strict';
 const fs = require('fs'), vm = require('vm'), path = require('path');
@@ -457,6 +461,156 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     const pA2 = FX.DATA.cpi.apps[ID.a]; FX.DATA.cpi.apps[ID.a] = Object.assign({}, pA2, { lp: 1 }); reset(); _.set({ OPEN: ID.a }); CPX.paint(); await tick(); await tick(); CPX.paint();
     out.lv.tag = { row: SCREEN.innerHTML.includes('class="cpx-lvt"'), det: strip(det2(SCREEN.innerHTML)).includes('D0 ROAS: new level ready') };
     FX.DATA.cpi.apps[ID.a] = pA2; delete FA.lv; delete FA.lp; delete FA.la; delete ctx.fetch;
+    // ── 🤖 the level agent (AGENT SPEC §6.3–§6.6 ship fields → §7 page) ──
+    // without the agent's fields (every render above): none of its words, classes or controls
+    const NOAG = [H0, ...all, ro, adm].join('');
+    out.noag = { words: ['🤖', 'cpx-ag', 'Agent decisions', 'Agent since', 'Accept — trial', 'Engine settle', 'not a loss', 'data-cpx-ag'].filter(w => NOAG.includes(w)),
+      classes: [...new Set(NOAG.match(/class="[^"]*"/g).flatMap(c => c.slice(7, -1).split(/\s+/)).filter(Boolean))] };
+    // a fresh build with the agent's fields laid on (tests/cpx_fixture.js agent())
+    FX = FXM.agent(build()); ctx.DATA = FX.DATA;
+    const txt = h => strip(String(h).replace(/<br>/g, ' | ')).replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+    const ADM = { st: 'ok', admin: true, save: true, acts: [] }, RO = { st: 'no', admin: false, save: false, acts: [] };
+    const agP = async (o) => { reset(); _.set(Object.assign({ AGD: null, LVF: 'CPI', LVSET: null, LVQ: RO, PEND: [] }, o || {})); CPX.paint(); await settle(); CPX.paint(); await settle(); CPX.paint(); return SCREEN.innerHTML; };
+    const chunk = (h, id) => { const i = h.indexOf('data-cpx-app="' + id + '"'); if (i < 0) return ''; const j = h.indexOf('data-cpx-app="', i + 10); return h.slice(i, j < 0 ? h.length : j); };
+    const AGR = [];                                                            // every agent render (the classes / words checks)
+    out.ag = {};
+    // T-P1 the row tag: one text per status (+N; nothing for an unknown one, the 🆕 tag then stays)
+    const tagOf = (st, o) => txt(_.agTag({ ag: Object.assign({ st, fam: 'CPI', short: 'S1', day: '2026-03-21', more: 0 }, o || {}) }));
+    out.ag.tags = Object.fromEntries(['kept', 'blocked', 'waiting', 'hold', 'trial', 'accepted', 'reverted', 'overridden', 'held', 'passed', 'closed', 'bogus', 'constructor'].map(s => [s, tagOf(s)]));
+    Object.assign(out.ag.tags, { more: tagOf('kept', { more: 2 }), more_txt: tagOf('kept', { more: 'x' }), no_day: tagOf('waiting', { day: 'soon' }), past: tagOf('accepted', { day: '2025-12-30' }),
+      none: [_.agTag({}), _.agTag({ ag: null }), _.agTag({ ag: 'kept' }), _.agTag(null)], title: (_.agTag({ ag: { st: 'kept', fam: 'GAP', short: 'S1' } }).match(/title="([^"]*)"/) || [])[1] });
+    const L0 = await agP({}); AGR.push(L0);
+    out.ag.list = Object.fromEntries(['a', 'b', 'c', 'd', 'e', 'z'].map(k => { const h = chunk(L0, ID[k]), m = h.match(/<span class="(cpx-lvt[^"]*)"[^>]*>([\s\S]*?)<\/span>/);
+      return [k, m ? { cls: m[1], text: txt(m[2]) } : null]; }));
+    out.ag.list_raw = L0.includes('<img src=x onerror=alert(3)>');
+    // T-P9 the money: the list's summary and each row's money lost are the D0 ROAS ones, exactly as without the agent
+    const sumOfL = h => txt((h.match(/Money lost: <b[^>]*>([^<]*)<\/b>/) || [])[1] || '');
+    out.ag.money = { ag: sumOfL(L0), noag: sumOfL(H0), rows: _.rows(..._.rng('14')).map(r => [r.id, r.lost ? r.lost.inr : null]), card: CPX.card('Alpha App') };
+    // T-P2 the details' lines under the verdict
+    const linesOf = h => [...det2(h).matchAll(/<p class="cpx-vm[^"]*">([\s\S]*?)<\/p>/g)].map(m => txt(m[1]));
+    const DA = await agP({ OPEN: ID.a }); AGR.push(DA);
+    out.ag.lines = { a: linesOf(DA), links: [...DA.matchAll(/data-cpx-ago="([^"]+)" data-cpx-agf="([^"]+)"/g)].map(m => [m[1], m[2]]),
+      cls: [...det2(DA).matchAll(/<p class="(cpx-vm[^"]*)">/g)].map(m => m[1]) };
+    for (const k of ['b', 'c', 'd']) { const h = await agP({ OPEN: ID[k] }); AGR.push(h); out.ag.lines[k] = linesOf(h); }
+    out.ag.money.det = (await agP({ OPEN: ID.a })) && strip(SCREEN.innerHTML).match(/💸[^—]*/)[0].trim();
+    // a late app file fills the lines under the verdict too (arrive(): that slot and the tab body, nothing else repainted)
+    const SLOT = { 'cpx-vls': { innerHTML: '' }, 'cpx-tb': { innerHTML: '' } }, gid0 = ctx.document.getElementById;
+    ctx.document.getElementById = k => SLOT[k] || null;
+    reset(); _.set({ OPEN: ID.a, TAB: 'ch', LVQ: RO }); CPX.paint(); const vls0 = SCREEN.innerHTML.includes('cpx-agv'); await settle();
+    out.ag.arrive = { before: vls0, lines: (SLOT['cpx-vls'].innerHTML.match(/<p class="cpx-vm cpx-agv">/g) || []).length, tb: SLOT['cpx-tb'].innerHTML.length > 0,
+      slot: SCREEN.innerHTML.includes('<div id="cpx-vls"></div>') };
+    ctx.document.getElementById = gid0;
+    // the line's link: History, that decision open, its family's levels
+    await agP({ OPEN: ID.a });
+    SCREEN._on.click[0]({ target: { closest: s => s === '[data-cpx-tab]' ? { dataset: { cpxTab: 'hi', cpxAgo: 'D-00000000s2', cpxAgf: 'GAP' } } : null } });
+    out.ag.link = { tab: _.get().TAB, agd: _.get().AGD, lvf: _.get().LVF, open: txt(det2(SCREEN.innerHTML)).includes('Cause: eCPM part 85% of the move') };
+    // keep() holds the control that was tapped: the agent line's own link, a tab button itself (the lines above the tabs link
+    // to the same tab); a target without a class keeps the old selector
+    const QS = []; SCREEN.querySelector = s => { QS.push(s); return null; };
+    await agP({ OPEN: ID.a }); QS.length = 0;
+    SCREEN._on.click[0]({ target: { closest: s => s === '[data-cpx-tab]' ? { dataset: { cpxTab: 'hi', cpxAgo: 'D-00000000s1', cpxAgf: 'CPI' } } : null } });
+    SCREEN._on.click[0]({ target: { closest: s => s === '[data-cpx-tab]' ? { dataset: { cpxTab: 'ch' }, classList: { contains: c => c === 'cpx-tab' } } : null } });
+    SCREEN._on.click[0]({ target: { closest: s => s === '[data-cpx-tab]' ? { dataset: { cpxTab: 'dw' } } : null } });
+    out.ag.keep_sel = [...new Set(QS)]; SCREEN.querySelector = () => null;
+    // T-P3 History · Levels: the decisions, one line each, newest first; a tap opens the details under the line
+    const HA = await agP({ OPEN: ID.a, TAB: 'hi' }); AGR.push(HA);
+    const lvsOf = h => { const i = h.indexOf('id="cpx-lvs"'); return i < 0 ? '' : h.slice(i); }, hText = txt(lvsOf(HA));
+    out.ag.hist = { ids: [...HA.matchAll(/data-cpx-agd="([^"]+)"/g)].map(m => m[1]), lines: [...HA.matchAll(/<button type="button" class="cpx-agr"[^>]*>([\s\S]*?)<\/button>/g)].map(m => txt(m[1])),
+      order: ['🤖 Agent since', 'Levels', 'Measured on', 'Agent decisions'].map(w => hText.indexOf(w)), hinglish: (hText.match(/Agent khud decide karta hai/g) || []).length,
+      closed: !HA.includes('class="cpx-agx"'), expanded: (HA.match(/class="cpx-agr"[^>]*aria-expanded="true"/g) || []).length };
+    const detOf = async (app, id) => { const h = await agP({ OPEN: app, TAB: 'hi', AGD: id }); AGR.push(h); const m = h.match(/<div class="cpx-agx">([\s\S]*?)<\/div>/);
+      return m ? [...m[1].matchAll(/<p>([\s\S]*?)<\/p>/g)].map(z => txt(z[1])) : null; };
+    out.ag.det = {}; for (const id of out.ag.hist.ids) out.ag.det[id] = await detOf(ID.a, id);
+    out.ag.det_b = await detOf(ID.b, 'D-00000000t1');
+    const hb = await agP({ OPEN: ID.b, TAB: 'hi' }); out.ag.hist_b = [...hb.matchAll(/<button type="button" class="cpx-agr"[^>]*>([\s\S]*?)<\/button>/g)].map(m => txt(m[1]));
+    // the two early-return paths (no level history · no level yet) carry the scoreboard and the decisions too
+    const hd = await agP({ OPEN: ID.d, TAB: 'hi' }), hz = await agP({ OPEN: ID.z, TAB: 'hi' }); AGR.push(hd, hz);
+    out.ag.early = { d: { note: txt(hd).includes('Is build me level history nahi bani'), board: txt(hd).includes('🤖 Agent since'), list: [...hd.matchAll(/class="cpx-agr"[^>]*>([\s\S]*?)<\/button>/g)].map(m => txt(m[1])) },
+      z: { note: txt(hz).includes('Is app ka abhi tak koi level nahi bana'), board: txt(hz).includes('🤖 Agent since'), list: (hz.match(/class="cpx-agr"/g) || []).length } };
+    // a tap through the screen's own handler: opens, a second tap closes; an empty id does nothing
+    await agP({ OPEN: ID.a, TAB: 'hi' });
+    clickD('[data-cpx-agd]', { cpxAgd: 'D-00000000s1' }); out.ag.tap = [{ agd: _.get().AGD, open: SCREEN.innerHTML.includes('class="cpx-agx"'), exp: SCREEN.innerHTML.includes('data-cpx-agd="D-00000000s1" aria-expanded="true"') }];
+    clickD('[data-cpx-agd]', { cpxAgd: 'D-00000000s1' }); out.ag.tap.push({ agd: _.get().AGD, open: SCREEN.innerHTML.includes('class="cpx-agx"') });
+    clickD('[data-cpx-agd]', { cpxAgd: '' }); out.ag.tap.push({ agd: _.get().AGD });
+    // newest first by the page itself (rows shipped in another order); another app opened: no decision open
+    const FAg = FX.FILES['cpi_' + KEY.a + '.json.gz'], rows0 = FAg.ag.rows.slice(); FAg.ag.rows = rows0.slice().reverse();
+    out.ag.shuffled = [...(await agP({ OPEN: ID.a, TAB: 'hi' })).matchAll(/data-cpx-agd="([^"]+)"/g)].map(m => m[1]); FAg.ag.rows = rows0;
+    await agP({ AGD: 'D-00000000s1' }); tapId = ID.a; tap('[data-cpx-app]'); out.ag.reopen = _.get().AGD;
+    // keep(): the tapped line stays where it was (1280 / 375)
+    out.ag.keep = {};
+    for (const w of [1280, 375]) { await agP({ OPEN: ID.a, TAB: 'hi' }); ctx.window.innerWidth = w; SCROLL = []; let n = 0;
+      const LN = { getBoundingClientRect: () => ({ top: n++ === 0 ? 300 : 420 }) }; SCREEN.querySelector = s => s === '[data-cpx-agd="D-00000000s1"]' ? LN : null;
+      clickD('[data-cpx-agd]', { cpxAgd: 'D-00000000s1' }); out.ag.keep[w] = { dy: SCROLL.slice(), agd: _.get().AGD, held: SCREEN.style.minHeight }; SCREEN.querySelector = () => null; }
+    ctx.window.innerWidth = 1280;
+    // T-P4 the scoreboard: live / trial / trial again, with and without the backtest; nothing when absent / off / another version
+    const B0 = JSON.stringify(FX.DATA.cpi.agent), bd = o => { FX.DATA.cpi.agent = Object.assign(JSON.parse(B0), o); const s = _.agBoard(); FX.DATA.cpi.agent = JSON.parse(B0); return s; };
+    const BTK = { v: 1, years: 1.8, proposals: { moments: 12, c1_accept: 2, c1_right: 1, c1_wrong: 0, accept: 0 }, settles: { checked: 5, passed: 1, blocked: 3, hold: 1, level_held: 2 }, note: 'Synthetic backtest note.' };
+    const BTx = o => Object.assign(JSON.parse(JSON.stringify(BTK)), o);
+    out.ag.board = { live: txt(bd({})), html: bd({}),
+      trial: txt(bd({ trial: { st: 'trial', since: '2026-03-10', day: 18, need: 28, why: 'start', exit: null } })),
+      again: txt(bd({ trial: { st: 'trial', since: '2026-03-14', day: 14, need: 28, why: 'vintage', exit: null } })),
+      parity: txt(bd({ trial: { st: 'trial', since: '2026-03-20', day: 8, need: 28, why: 'parity', exit: null } })),
+      rule: txt(bd({ trial: { st: 'trial', since: '2025-12-20', day: 3, need: 28, why: 'rule', exit: null } })),
+      bt: txt(bd({ bt: BTK })),
+      bt_bad: [BTx({ years: 0 }), BTx({ v: 2 }), BTx({ proposals: { moments: 12 } }), BTx({ years: 80 }), BTx({ settles: Object.assign({}, BTK.settles, { hold: -1 }) }), 'x']
+        .map(b => txt(bd({ bt: b })).includes('Backtest')),
+      bt_nolh: txt(bd({ bt: BTx({ settles: { checked: 5, passed: 1, blocked: 3, hold: 1 } }) })),
+      note: bd({ bt: BTx({ note: '<img src=x onerror=alert(7)> note' }) }),
+      off: bd({ mode: 'off' }), v2: bd({ v: 2 }), junk: txt(bd({ n: 'x', settle: null, trial: null, since: 'soon' })) };
+    const PA = FX.DATA.cpi.agent; delete FX.DATA.cpi.agent; out.ag.board.none = _.agBoard(); FX.DATA.cpi.agent = PA;
+    AGR.push(out.ag.board.html, out.ag.board.note);
+    // T-P5 the level rows: blocked / on hold / reverted with their How, "🤖 passed", an agent accept; the chart skips the never-applied ones
+    const lvRows = h => [...det2(h).matchAll(/<tr data-cpx-lvrow="([^"]+)"([^>]*)>([\s\S]*?)<\/tr>/g)].map(m => ({ id: m[1], rest: m[2].includes('cpx-rest'),
+      cells: [...m[3].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(c => txt(c[1])), btn: [...m[3].matchAll(/data-cpx-lvact="([a-z]+)"/g)].map(c => c[1]), wrap: m[3].includes('class="cpx-agw"') }));
+    out.ag.lv = {}; out.ag.lv_ro = {};
+    for (const f of ['CPI', 'ECPM', 'GAP']) { const h = await agP({ OPEN: ID.a, TAB: 'hi', LVF: f, LVQ: ADM }); AGR.push(h); out.ag.lv[f] = lvRows(h); out.ag.lv_ro[f] = lvRows(await agP({ OPEN: ID.a, TAB: 'hi', LVF: f })).map(r => r.btn.length); }
+    const propOf = async (app, f) => [...det2(await agP({ OPEN: app, TAB: 'hi', LVF: f, LVQ: ADM })).matchAll(/<p class="cpx-vm cpx-lvp">([\s\S]*?)<\/p>/g)].map(m => txt(m[1]));
+    out.ag.props = { g: await propOf(ID.a, 'ROAS_G'), c7: await propOf(ID.a, 'ROAS_C7'), b: await propOf(ID.b, 'CPI'), c: await propOf(ID.c, 'CPI') };
+    const chA = await agP({ OPEN: ID.a, TAB: 'ch', PER: 'all' });
+    const cg1 = _.CHD['cpx-c1'], cg2 = _.CHD['cpx-c2'];
+    out.ag.chart = { labels: [...chA.matchAll(/class="cpx-lvn"[^>]*>([^<]+)</g)].map(m => m[1]), tip1: cg1 ? txt(_.tipHtml(cg1, cg1.P.length - 1)) : null, tip2: cg2 ? txt(_.tipHtml(cg2, cg2.P.length - 1)) : null };
+    // T-P6 the owner's buttons: ✖ Reject on an agent accept (the same POST), ↩ Use this level on a blocked / on-hold row, Accept anyway
+    ctx.fetch = async (u, o) => { const b = o && o.body ? JSON.parse(o.body) : null; if (o && o.method === 'POST') POSTS.push({ u, b });
+      const a = ANS ? ANS(u, o, b) : { status: 404, j: null }; return { status: a.status, type: 'basic', json: async () => a.j }; };
+    ANS = (u, o, b) => o && o.method === 'POST' ? { status: 200, j: { ok: true, action: ACTION(b), actions: [] } } : { status: 200, j: { actions: [], me: 'x', admin: true, server_save: true } };
+    const CONF = []; ctx.confirm = m => { CONF.push(String(m)); return true; }; POSTS.length = 0;
+    const act = async (f, ds) => { await agP({ OPEN: ID.a, TAB: 'hi', LVF: f, LVQ: ADM }); clickD('[data-cpx-lvact]', ds); await tick(); await tick(); };
+    await act('ECPM', { cpxLvact: 'reject', cpxLvid: 'L-00000000e2' });
+    await act('ECPM', { cpxLvact: 'reject', cpxLvid: 'L-00000000e1' });       // (a reverted row has no Reject: a stray call sends nothing)
+    await act('CPI', { cpxLvact: 'reject', cpxLvid: 'L-00000000b1' });        // (… nor a blocked one)
+    await act('CPI', { cpxLvact: 'rollback', cpxLvid: 'L-00000000b1' });
+    await act('GAP', { cpxLvact: 'rollback', cpxLvid: 'L-00000000g1' });
+    await act('ROAS_G', { cpxLvact: 'accept', cpxLvp: '0' });
+    out.ag.posts = POSTS.map(p => p.b); out.ag.conf = CONF.slice(); ctx.confirm = () => true;
+    // T-P7 hostile text: escaped everywhere (the list tag, the line, the decision list and details, its id, the backtest note)
+    const hzo = await agP({ OPEN: ID.z, TAB: 'hi', AGD: 'D-"><img src=x onerror=alert(6)>' }), hzl = await agP({ OPEN: ID.z }); AGR.push(hzo, hzl);
+    const HOST = [L0, hzo, hzl, out.ag.board.note].join('');
+    out.ag.hostile = { raw: ['<img src=x onerror=alert(3)>', '<script>alert(4)</script>', '<img src=x onerror=alert(6)>', '<img src=x onerror=alert(7)>', '<b>x</b>'].filter(s => HOST.includes(s)),
+      esc: ['&lt;img src=x onerror=alert(3)&gt;', '&lt;script&gt;alert(4)&lt;/script&gt;', 'data-cpx-agd="D-&quot;&gt;&lt;img src=x onerror=alert(6)&gt;"', '&lt;img src=x onerror=alert(7)&gt; note', '&lt;b&gt;x&lt;/b&gt;'].map(s => HOST.includes(s)),
+      open: hzo.includes('class="cpx-agx"') };
+    await agP({ OPEN: ID.z, TAB: 'hi' }); clickD('[data-cpx-agd]', { cpxAgd: 'D-"><img src=x onerror=alert(6)>' }); out.ag.hostile.tap = _.get().AGD;
+    // T-P8 the developer copy: nothing of it; every class cpx- (the new ones cpx-ag only)
+    ctx.window.__DEV_VIEW__ = true; reset(); _.set({ OPEN: ID.a, TAB: 'hi', AGD: 'D-00000000s1' }); CPX.paint(); await settle(); CPX.paint();
+    out.ag.dev = { html: SCREEN.innerHTML, board: _.agBoard(), tag: _.agTag(FX.DATA.cpi.apps[ID.a]), rows: _.agRows(FX.FILES['cpi_' + KEY.a + '.json.gz']).length,
+      list: _.agListHtml(FX.FILES['cpi_' + KEY.a + '.json.gz']), lines: _.propLines(FX.FILES['cpi_' + KEY.a + '.json.gz']), ptr: CPX.ptr() };
+    ctx.window.__DEV_VIEW__ = false;
+    const AGH = AGR.join('');
+    out.ag.classes = [...new Set(AGH.match(/class="[^"]*"/g).flatMap(c => c.slice(7, -1).split(/\s+/)).filter(Boolean))];
+    out.ag.bad_words = ['undefined', 'NaN', '[object Object]', 'Infinity', 'function'].filter(w => AGR.some(h => txt(h).includes(w)));
+    out.ag.causal = (AGR.map(txt).join(' ').match(/\b(follows|because|caused|due to|driven)\b/gi) || []);
+    // the $ view: a CPI level of the agent's numbers at the 14 days' rate ending the ask day; eCPM as it is
+    CURV = 'USD'; out.ag.usd = { s1: (await detOf(ID.a, 'D-00000000s1')).find(z => z.startsWith('Numbers:')), p2: (await detOf(ID.a, 'D-00000000p2')).find(z => z.startsWith('Numbers:')),
+      line: linesOf(await agP({ OPEN: ID.a })).find(z => z.startsWith('🤖 CPI')) }; CURV = 'INR';
+    // an older build: the pointer's scoreboard only, files without any agent field → the list / details / Levels as before + the board
+    FX = build(); FX.DATA.cpi.agent = JSON.parse(B0); ctx.DATA = FX.DATA; FX.DATA.cpi.apps[ID.a].lp = 1;
+    const FO = FX.FILES['cpi_' + KEY.a + '.json.gz'];
+    FO.lp = [{ fam: 'ROAS_G', opened: '2026-03-14', day: '2026-03-20', why: 'money', v: 0.3, days: ['2026-03-10', FX.T], sums: null, old: 0.4, gap: { inr: 123456, usd: 1500 } }];
+    FO.lv = { CPI: [{ id: 'L-00000000o1', from: '2025-12-01', to: null, v: 20, days: null, sums: null, src: 'accepted', ep: { opened: '2025-11-15', old: 18 }, act: null, st: 'now', seen: '2026-03-30T05:22:00Z', rs: null, gone: null, rejected: null }] };
+    const o0 = await agP({}), o1 = await agP({ OPEN: ID.a }), o2 = await agP({ OPEN: ID.a, TAB: 'hi', LVQ: ADM }), o3 = await agP({ OPEN: ID.a, TAB: 'hi', LVF: 'ROAS_G', LVQ: ADM });
+    out.ag.older = { tag: (chunk(o0, ID.a).match(/<span class="(cpx-lvt[^"]*)"[^>]*>([^<]*)</) || []).slice(1), lines: linesOf(o1),
+      board: txt(o2).includes('🤖 Agent since'), list: o2.includes('Agent decisions') || o2.includes('cpx-agr'), reject: [...o2.matchAll(/data-cpx-lvact="reject" data-cpx-lvid="([^"]+)"/g)].map(m => m[1]),
+      how: lvRows(o2).map(r => r.cells[4]), accept: (o3.match(/data-cpx-lvact="accept"[^>]*>([^<]*)</) || [])[1], wrap: o2.includes('cpx-agw') };
+    FX = build(); ctx.DATA = FX.DATA; delete ctx.fetch;
   } catch (e) { errors.push(String(e && e.stack || e)); }
   console.log(JSON.stringify({ errors, out }));
 })();

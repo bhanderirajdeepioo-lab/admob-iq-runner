@@ -7,7 +7,9 @@ rate) against hand math, CPI judged in ₹; normal / status / since / money of S
 no file) and other periods (cpi.json.gz); the list's order, the summary and the footer; the file states (⏳ Loading… /
 ⚠️ + Try again / a refused file); the details (verdict, money line, every tab); one app; keep() — no page jump — at 375 and
 1280 px; the developer copy; a hostile app name escaped; cpx- classes only; and the wiring into the page (gated on
-DATA.cpi). Skipped where node is not installed. No real data."""
+DATA.cpi). The level agent's part (AGENT SPEC §7, tests T-P1 … T-P9): its answer in the row tag, the lines under the verdict,
+the scoreboard, the level rows it marks, the Agent decisions list, the owner's buttons; nothing of it without its fields.
+Skipped where node is not installed. No real data."""
 import json
 import os
 import re
@@ -582,3 +584,246 @@ def test_dates_carry_their_year_when_not_in_the_reference_year(out):
     assert out["lv"]["ticks"][0].endswith("’25") and "Jan ’26" in out["lv"]["ticks"]    # chart month ticks: the first one and every January carry the year
     assert out["lv"]["ticks_cur"] == ["May", "Jun", "Jul", "Aug", "Sep"]                # a chart inside the reference year: no year on any tick
     assert out["lv"]["ticks_jan"] == ["Jan", "Feb", "Mar", "Apr"]                      # from 1 Jan of the reference year: January stays short
+
+
+# ── 🤖 the level agent (AGENT SPEC §6.3–§6.6 ship fields → §7 page; synthetic `ag` / `agent` from cpx_fixture.agent()) ──
+S1, S2, S3, P1, P2, W1, O1, H1, R1, C1 = ("D-00000000" + k for k in ("s1", "s2", "s3", "p1", "p2", "w1", "o1", "h1", "r1", "c1"))
+ROWS_NEWEST_FIRST = [P1, W1, O1, S1, S2, P2, H1, R1, C1, S3]
+
+
+def test_agent_without_its_fields_the_page_is_as_before(out):
+    # every render of the plain fixture (list, all tabs, Levels read-only + admin): none of the agent's words, classes, controls
+    assert out["noag"]["words"] == []
+    assert not any(c.startswith("cpx-ag") for c in out["noag"]["classes"])
+    o = out["ag"]["older"]                                   # an older build: the pointer's scoreboard only, no ag in any file
+    assert o["tag"] == ["cpx-lvt", "🆕 New level ready"]     # the 🆕 tag stays
+    assert o["lines"][1] == "🆕 D0 ROAS: new level ready 30.0% (12 hafte steady) · gap vs old level ≈₹1.2 L since 20 Mar — History → Levels"
+    assert o["board"] and not o["list"] and o["accept"] == "✅ Accept" and not o["wrap"]
+    assert o["reject"] == ["L-00000000o1"] and o["how"] == ["Accepted after 56 days old ₹18.0 · alarm 15 Nov 2025"]
+
+
+def test_agent_row_tag_per_status(out):
+    # T-P1: one text per status word (a blocked settle reads as a keep, an on-hold one as a wait); +N; unknown → none
+    t = out["ag"]["tags"]
+    assert (t["kept"], t["blocked"]) == ("🤖 Kept · S1", "🤖 Kept · S1")
+    assert (t["waiting"], t["hold"]) == ("🤖 Waiting · S1 · next check 21 Mar", "🤖 Waiting · S1 · next check 21 Mar")
+    assert t["trial"] == "🤖 Accept — trial · S1" and t["accepted"] == "🤖 Accepted 21 Mar"
+    assert t["reverted"] == "↩ Reverted by agent 21 Mar" and t["overridden"] == "Overridden by you 21 Mar" and t["held"] == "Held by your action"
+    assert t["passed"] == t["closed"] == t["bogus"] == t["constructor"] == ""
+    assert t["more"] == "🤖 Kept · S1 (+2)" and t["more_txt"] == "🤖 Kept · S1" and t["no_day"] == "🤖 Waiting · S1"
+    assert t["past"] == "🤖 Accepted 30 Dec 2025"             # the year rule: a date outside the reference year carries it
+    assert t["none"] == ["", "", "", ""] and t["title"] == "Ads to pay back an install"
+    # the list itself: the agent's answer in the 🆕 tag's place; an app without one keeps 🆕 (Gamma) or shows nothing (Epsilon)
+    li = out["ag"]["list"]
+    assert li["a"] == {"cls": "cpx-lvt cpx-agt", "text": "🤖 Accepted 21 Mar (+4)"}
+    assert li["b"] == {"cls": "cpx-lvt cpx-agt", "text": "🤖 Accept — trial · CPI market move"}
+    assert li["d"] == {"cls": "cpx-lvt cpx-agt", "text": "🤖 Waiting · still moving · next check 3 Apr (+1)"}
+    assert li["c"] == {"cls": "cpx-lvt", "text": "🆕 New level ready"} and li["e"] is None
+
+
+def test_agent_verdict_lines_in_the_details(out):
+    # T-P2: one line per standing decision (and an accept / override of the last 28 days); a proposal with lp[i].ag → the
+    # agent's line (+ the money level's gap); a CPI decision ends with its extra paid, "not a loss"; the reverted (25 Feb),
+    # the closed and the passed ones stay in History only
+    L = out["ag"]["lines"]
+    assert L["a"][0].startswith("💸 ≈₹2.4 L zyada kharch hua")                       # the money line as before
+    assert L["a"][1:] == [
+        "🤖 D0 ROAS: Kept — CPI part 140% of the move: seen with spend ×2.6 since the old level (your lever). Agla check: 3 Apr · gap vs old level ≈₹1.2 L since 20 Mar — History → Levels",
+        "🤖 Install-day ROAS D7 (AdMob): Waiting — CPI part 120% of the move: narrow: countries moving the same way = 61% of spend (opposite 9%). Agla check: 3 Apr · gap vs old level ≈₹40.0k since 13 Mar — History → Levels",
+        "🤖 Install-day ROAS D0 (AdMob): Overridden by you 25 Mar — CPI part 130% of the move: seen with 62% of spend in campaigns new since / gone after the old level — History → Levels",
+        "🤖 CPI: Engine settle blocked — seen with spend ×3.5 since the old level (your lever). Agla check: 3 Apr · extra paid vs old level ≈₹90.0k since 24 Mar (not a loss) — History → Levels",
+        "🤖 Ads to pay back an install: Engine settle on hold — eCPM part 85% of the move: eCPM moved on this app only — the cause is not in the data (ad sources / mediation / units). Agla check: 3 Apr — History → Levels",
+        "🤖 eCPM: Accepted 21 Mar — other apps' eCPM moved the same way (4 other apps: median −18% vs own −17%, 75% moved the same way); ads per user +2% — History → Levels",
+        "🤖 Spend: Held by your action — budget / bid limit (your lever): spend −45%, campaign C1 carries 80% of the change — History → Levels"]
+    assert out["ag"]["lines"]["cls"] == ["cpx-vm"] + ["cpx-vm cpx-agv"] * 7
+    assert [x[0] for x in L["links"]] == [P1, W1, O1, S1, S2, P2, H1] and dict(L["links"])[S2] == "GAP"
+    assert L["b"] == ["🤖 CPI: Accept — trial (not applied yet) — other apps' CPI moved the same way (3 other apps: median +29% vs own +30%, 100% moved the same way). Agla check: 3 Apr · extra paid vs old level ≈₹30.0k since 25 Mar (not a loss) — History → Levels"]
+    # a proposal without the agent's answer keeps today's 🆕 line — a CPI one's gap says extra paid, not a loss (R-m2)
+    assert L["c"] == ["🆕 CPI: new level ready ₹20.0 (120+ din se khula) · extra paid vs old level ≈₹60.0k since 24 Mar (not a loss) — History → Levels"]
+    assert L["d"] == ["🤖 eCPM: Waiting — other apps' eCPM moved the same way (3 other apps: median −10% vs own −12%, 67% moved the same way); but coming back / still moving: last 14 days −6% vs the 14 before. Agla check: 3 Apr — History → Levels"]
+    # the line's link: History · Levels with that decision open and its family's levels
+    assert out["ag"]["link"] == {"tab": "hi", "agd": S2, "lvf": "GAP", "open": True}
+    # opened before its file arrived: an empty slot, then the late file fills it (with the tab body), no full repaint
+    assert out["ag"]["arrive"] == {"before": False, "lines": 7, "tb": True, "slot": True}
+
+
+def test_agent_cpi_extra_paid_is_not_a_loss_and_the_money_is_unchanged(out):
+    # T-P9 (R-m1): a CPI decision's extra paid shows on its own line only; the list's money = the D0 ROAS one, as without the agent
+    m = out["ag"]["money"]
+    assert m["ag"] == m["noag"] == "≈₹1.8 L"                                      # 14 × (₹50,000 − ₹15,000 ÷ 0.40)
+    assert dict(m["rows"])[A] == pytest.approx(14 * 12500) and all(v is None for k, v in m["rows"] if k != A)
+    assert m["card"]["line"].endswith("≈₹1.8 L lost") and m["det"] == "💸 ≈₹2.4 L zyada kharch hua"
+    assert sum("not a loss" in x for x in out["ag"]["lines"]["a"]) == 1               # the blocked CPI settle's line only
+    assert out["ag"]["usd"]["line"].endswith("extra paid vs old level ≈$1,080 since 24 Mar (not a loss) — History → Levels")
+
+
+def test_agent_decisions_list_one_line_per_decision_newest_first(out):
+    # T-P3: under the Levels table, one line per decision — date · Family · status word · short — newest first, full history
+    h = out["ag"]["hist"]
+    assert h["ids"] == ROWS_NEWEST_FIRST and out["ag"]["shuffled"] == ROWS_NEWEST_FIRST   # the page orders them itself
+    assert h["lines"] == ["27 Mar · D0 ROAS · Kept · spend ×2.6 (your lever)",
+                          "26 Mar · Install-day ROAS D7 (AdMob) · Waiting · narrow: countries 61%",
+                          "25 Mar · Install-day ROAS D0 (AdMob) · Overridden · campaign mix 62%",
+                          "24 Mar · CPI · Blocked · spend ×3.5 (your lever)",
+                          "23 Mar · Ads to pay back an install · On hold · app only",
+                          "21 Mar · eCPM · Accepted · eCPM market move",
+                          "6 Mar · Spend · Held · budget (your lever)",
+                          "25 Feb · eCPM · Reverted · eCPM market move",
+                          "21 Feb · Install-day ROAS D1 (AdMob) · Closed · spend ×0.6 (your lever)",
+                          "10 Jan · CPI · Passed · CPI market move"]
+    assert out["ag"]["hist_b"] == ["27 Mar · CPI · Accept — trial · CPI market move"]
+    words = {ln.split(" · ")[2] for ln in h["lines"] + out["ag"]["hist_b"]}
+    assert words == {"Accepted", "Passed", "Kept", "Blocked", "Waiting", "On hold", "Accept — trial", "Reverted", "Overridden", "Held", "Closed"}
+    a, lv, m, d = h["order"]                                                         # scoreboard → Levels → its table → Agent decisions
+    assert 0 <= a < lv < m < d and h["hinglish"] == 1 and h["closed"] and h["expanded"] == 0
+    e = out["ag"]["early"]                                                           # also in the two early-return paths
+    assert e["d"] == {"note": True, "board": True, "list": ["27 Mar · eCPM · Waiting · still moving"]}
+    assert e["z"] == {"note": True, "board": True, "list": 1}
+
+
+def test_agent_decision_details_on_tap(out):
+    d = out["ag"]["det"]
+    s1 = d[S1]                                                                       # the blocked CPI settle
+    assert s1[0] == "CPI · the engine's own new level (56 days steady) · change since 10 Mar · asked 1× (24 Mar)"
+    assert s1[1] == "Cause: seen with spend ×3.5 since the old level (your lever)" and s1[2] == "Agla check: 3 Apr"
+    assert s1[3] == "Asks | 24 Mar · 1× Keep · spend ×3.5 (your lever)"
+    assert s1[4] == ("Numbers: Old → new ₹20.0 → ₹31.3 (+56%) · 4.5 bands · spend ×3.5 · last 14 d vs 14 before +1% · steady ±3% · "
+                     "other apps 3, median +2% · spend in new / gone campaigns 12%")
+    assert s1[5:] == ["Verdict: Pending",
+                      "Extra paid vs old level ≈₹90.0k since 24 Mar — extra paid, not a loss (the D0 ROAS alarm carries the money)"]
+    p1 = d[P1]                                                                       # the first ask's numbers when they differ (k0)
+    assert p1[3] == "Asks | 27 Mar · 1× Keep · spend ×2.6 (your lever) | 20 Mar · 1× Wait · not steady"
+    assert p1[4].endswith("cost part 140%, value part −40% of the move")
+    assert p1[5] == "First ask (20 Mar): Old → new 40.0% → 31.0% (−23%) · 2.9 bands · spend ×1.9 · last 14 d vs 14 before −6% · steady ±13%"
+    assert not any(x.startswith("First ask") for x in d[S1] + d[W1])               # k0 = k: no second line
+    assert d[W1][4].endswith("persistence: the change started less than 84 days ago")
+    p2 = d[P2]                                                                       # an applied accept: the days, the checks, the close
+    assert "Applied 21 Mar · new level = 10 Mar – 21 Mar" in p2
+    assert "Checks after 21 Mar (old $6.00, new $5.00): 28 d — · 56 d — · 84 d —" in p2 and p2[-1] == "Closed 21 Mar · new level accepted by agent"
+    r1 = d[R1]                                                                       # reverted by the safety net (r3): wrong
+    assert "Checks after 20 Feb (old $6.00, new $5.20): 28 d $5.90 · 56 d — · 84 d —" in r1 and "Verdict: Wrong" in r1
+    assert "↩ Reverted by agent 25 Feb — the alarm, kept open without this level, closed as recovered" in r1
+    c1 = d[C1]                                                                       # the build's two verdicts differ: both shown
+    assert "Verdict: Pending · alarm check: Came back" in c1 and c1[-1] == "Closed 28 Feb · recovered"
+    assert "Overridden by you 25 Mar, 15:00 IST · Accept new level — your action wins over the agent (Undo brings its decision back)" in d[O1]
+    assert "Held: your own action holds Spend — the agent does not decide it (🔄 Back to auto gives it back)" in d[H1]
+    assert d[H1][3] == "Numbers: Old → new $600/day → $330/day (−45%) · 5.0 bands"             # (no next check: one line less)
+    assert d[S2][4] == "Numbers: Old → new 4.20 → 5.50 (+31%) · 3.0 bands · ads per user −2% · CPI part 15%, eCPM part 85% of the move"
+    assert d[S3][-1] == "Closed 10 Jan · new level accepted"
+    assert "Accept — trial: recorded, not applied yet — your ✅ Accept still works" in out["ag"]["det_b"]
+    # the $ view: a CPI level at the 14 days' rate ending the ask day (Σ$ ÷ Σ₹ = 0.012 here), the % move as judged in ₹
+    u = out["ag"]["usd"]
+    assert u["s1"].startswith("Numbers: Old → new $0.24 → $0.38 (+56%)") and u["p2"].startswith("Numbers: Old → new $6.00 → $5.00 (−17%)")
+
+
+def test_agent_decision_tap_opens_closes_and_keeps_the_page_in_place(out):
+    t = out["ag"]["tap"]
+    assert t[0] == {"agd": S1, "open": True, "exp": True} and t[1] == {"agd": None, "open": False} and t[2] == {"agd": None}
+    assert out["ag"]["reopen"] is None                                               # another app's details: nothing open
+    for w in ("375", "1280"):                                                        # keep(): the tapped line back where it was
+        assert out["ag"]["keep"][w] == {"dy": [120], "agd": S1, "held": "900px"}, w
+    # the anchor is the tapped control itself: the agent line's link / the tab button (links above the tabs point to the same tab)
+    assert out["ag"]["keep_sel"] == ['[data-cpx-ago="%s"]' % S1, '.cpx-tab[data-cpx-tab="ch"]', '[data-cpx-tab="dw"]']
+
+
+def test_agent_scoreboard_trial_live_again_and_the_backtest(out):
+    # T-P4: the counts, the accepts' trial (live / trial / trial again), the backtest line only with every number, one Hinglish line
+    b = out["ag"]["board"]
+    head = ("🤖 Agent since 20 Jan: 2 accepted (0 right, 1 wrong, 1 pending) · 2 kept · 2 waiting · 1 reverted · 1 accept — trial · "
+            "1 overridden by you · 1 held by you · Engine settles (CPI / GAP): 3 checked · 1 passed · 1 blocked · 1 on hold")
+    hi = ("Agent khud decide karta hai: kaaran market ka ho aur number steady ho tabhi naya level; kaaran aapka apna lever ho "
+          "(spend, campaigns, budget, ads per user) to alarm khula rehta hai — engine ka CPI / GAP accept bhi isi se check hota hai.")
+    chk = " · 40 decisions re-checked (0 differ) · 6 re-asks on later data (0 accept flips)"
+    assert b["live"] == head + " Accepts: live since 17 Feb " + hi
+    assert b["trial"] == head + " Accepts: trial, day 18 of 28 (not applied yet)" + chk + " " + hi
+    assert b["again"] == head + " Accepts: trial again since 14 Mar (an accept changed on later data), day 14 of 28 (not applied yet)" + chk + " " + hi
+    assert "Accepts: trial again since 20 Mar (a past decision did not repeat), day 8 of 28" in b["parity"]
+    assert "Accepts: trial again since 20 Dec 2025 (the rule changed), day 3 of 28" in b["rule"]
+    assert b["bt"] == head + (" Accepts: live since 17 Feb Backtest on your history (1.8 y): 12 proposals → 2 accept (1 right, 0 wrong); "
+                              "with the engine's steadiness test 0 · CPI / GAP settles 5 → 1 passed, 3 blocked, 1 on hold "
+                              "(2 of them held the new level). Synthetic backtest note. ") + hi
+    assert "1 on hold. Synthetic backtest note." in b["bt_nolh"]
+    assert b["bt_bad"] == [False] * 6                                                 # years 0 / v 2 / a number missing / 80 y / −1 / junk
+    assert b["off"] == b["v2"] == b["none"] == ""                                     # mode off · another version · no block
+    assert b["junk"].startswith("🤖 Agent since —: 0 accepted (0 right, 0 wrong, 0 pending)") and "Accepts: trial (not applied yet)" in b["junk"]
+    assert b["html"].startswith('<div class="cpx-agb" id="cpx-agb"><p class="cpx-agb1">🤖 Agent since')
+    assert "3 accepts, 3 right" not in json.dumps(out["ag"], ensure_ascii=False)      # (D-f: numbers only from the private file)
+
+
+def test_agent_level_rows_blocked_on_hold_reverted_and_passed(out):
+    # T-P5: the How texts and status words; the never-applied rows stay off the chart; a reverted row is grey
+    lv = out["ag"]["lv"]
+    cpi = {r["id"]: r for r in lv["CPI"]}
+    b1 = cpi["L-00000000b1"]["cells"]
+    assert b1[4] == "Engine settle blocked by agent: seen with spend ×3.5 since the old level (your lever) old ₹20.0 · alarm 13 Mar"
+    assert b1[5] == "Blocked" and b1[6] == "✓" and cpi["L-00000000b1"]["wrap"]        # its own 14 data days add up (✓); the How wraps
+    assert cpi["L-00000000b2"]["cells"][4] == "Accepted after 56 days · 🤖 passed old ₹20.0 · alarm 15 Nov 2025"
+    assert cpi["L-00000000b0"]["cells"][4:6] == ["Alarm baseline Sudden step · open", "In force"] and not cpi["L-00000000b0"]["wrap"]
+    ec = {r["id"]: r for r in lv["ECPM"]}
+    assert ec["L-00000000e2"]["cells"][4:7] == ["Accepted by agent · eCPM market move old $6.00 · alarm 12 Nov 2025", "In force", "✓"]
+    assert ec["L-00000000e1"]["cells"][4:6] == ["Reverted by agent 25 Feb old $6.00 · alarm 15 Oct 2025", "Reverted"] and ec["L-00000000e1"]["rest"]
+    g1 = lv["GAP"][0]["cells"]
+    assert g1[4] == ("Engine settle on hold (agent): eCPM part 85% of the move: eCPM moved on this app only — the cause is not in the data "
+                     "(ad sources / mediation / units) · next check 3 Apr old 4.20 · alarm 28 Dec 2025") and g1[5] == "On hold"
+    ch = out["ag"]["chart"]
+    assert ch["labels"] == ["₹21.0 · accepted", "₹20.0 · first", "$5.00 · agent", "$6.00 · first", "new? 30.0%"]   # no blocked ₹31.3 / reverted $5.20
+    assert ch["tip1"].endswith("Level: Alarm baseline · 13 Mar se · measured 24 Feb – 9 Mar")   # not the blocked settle
+    assert ch["tip2"].endswith("Level: Accepted by agent · 21 Mar se · measured 10 Mar – 21 Mar")
+    p = out["ag"]["props"]                                                           # the proposal line carries the agent's answer
+    assert p["g"] == ["🆕 New level ready: 30.0% (12 hafte steady) · 10 Mar – 28 Mar 2026 (19 din) · ₹2.9 L D0 value ÷ ₹9.5 L cost · old 40.0% · "
+                      "gap vs old level ≈₹1.2 L since 20 Mar · 🤖 Kept · spend ×2.6 (your lever) ✅ Accept anyway"]
+    assert p["c7"][0].endswith("· 🤖 Waiting · narrow: countries 61% · next check 3 Apr ✅ Accept anyway")
+    assert p["b"] == ["🆕 New level ready: ₹13.0 (120+ din se khula) · 15 Mar – 27 Mar 2026 · old ₹10.0 · extra paid vs old level ≈₹30.0k since 25 Mar "
+                      "(not a loss) · 🤖 Accept — trial · CPI market move (not applied yet) ✅ Accept"]
+    assert p["c"] == ["🆕 New level ready: ₹20.0 (120+ din se khula) · 25 Feb – 24 Mar 2026 · old ₹16.0 · extra paid vs old level ≈₹60.0k since 24 Mar (not a loss) ✅ Accept"]
+
+
+def test_agent_owner_buttons_reject_on_an_agent_accept_and_use_this_level_on_a_blocked_row(out):
+    # T-P6: ✖ Reject on an accepted_agent level (the same POST as today), never on a blocked / on-hold / reverted row;
+    # ↩ Use this level on every row not in force (blocked / on hold / reverted included); read-only: no button at all
+    btn = {f: {r["id"]: r["btn"] for r in out["ag"]["lv"][f]} for f in ("CPI", "ECPM", "GAP")}
+    assert btn["CPI"] == {"L-00000000b1": ["rollback"], "L-00000000b0": [], "L-00000000b2": ["reject"], "L-00000000b3": ["rollback"]}
+    assert btn["ECPM"] == {"L-00000000e2": ["reject"], "L-00000000e1": ["rollback"], "L-00000000e0": ["rollback"]}
+    assert btn["GAP"] == {"L-00000000g1": ["rollback"], "L-00000000g0": []}
+    assert out["ag"]["lv_ro"] == {"CPI": [0, 0, 0, 0], "ECPM": [0, 0, 0], "GAP": [0, 0]}
+    t = T.isoformat()
+    assert out["ag"]["posts"] == [                                                   # the stray rejects (reverted / blocked) sent nothing
+        {"act": "reject", "app": A, "fam": "ECPM", "level": "L-00000000e2"},
+        {"act": "rollback", "app": A, "fam": "CPI", "from": t, "level": "L-00000000b1"},
+        {"act": "rollback", "app": A, "fam": "GAP", "from": t, "level": "L-00000000g1"},
+        {"act": "accept", "app": A, "fam": "ROAS_G", "from": t, "proposal": {"day": "2026-03-20", "days": ["2026-03-10", t]}}]
+    c = out["ag"]["conf"]
+    assert c[0] == "eCPM: 21 Mar ka agent wala accept reject karein? Alarm apne shuru se khula rahega."
+    assert c[-1] == "Agent: Kept · spend ×2.6 (your lever). D0 ROAS: naya level 30.0% 28 Mar 2026 se accept karein?"
+
+
+def test_agent_hostile_text_is_escaped(out):
+    # T-P7: cause / short / ask-run short / id / backtest note: never raw HTML, always the escaped text
+    h = out["ag"]["hostile"]
+    assert h["raw"] == [] and h["esc"] == [True] * 5 and h["open"]
+    assert h["tap"] == 'D-"><img src=x onerror=alert(6)>'                             # the tap still finds its row
+    assert not out["ag"]["list_raw"]
+
+
+def test_agent_dev_view_renders_nothing_and_classes_are_cpx_ag(out):
+    # T-P8: the developer copy: no screen, no scoreboard / tag / rows / lines; new classes are cpx-ag* only
+    assert out["ag"]["dev"] == {"html": "", "board": "", "tag": "", "rows": 0, "list": "", "lines": "", "ptr": None}
+    cls = set(out["ag"]["classes"])
+    assert all(c.startswith("cpx-") or c == "aicon" for c in cls), cls
+    css = _page()[_page().index("<style>"):_page().index("</style>")]
+    for c in cls - set(out["noag"]["classes"]):                                      # new to the agent renders: cpx-ag*, or an existing CPX class
+        assert c.startswith("cpx-ag") or ("." + c) in css, c
+    assert {"cpx-agt", "cpx-agb", "cpx-agl", "cpx-agr", "cpx-agx", "cpx-agw", "cpx-agv"} <= cls
+    assert all(("." + c) in css for c in cls if c.startswith("cpx-ag"))
+    assert out["ag"]["bad_words"] == [] and out["ag"]["causal"] == []               # no undefined / NaN; no causal claim (D-e)
+
+
+def test_agent_wiring_literals():
+    src = _page()
+    m = src[src.index("const CPX=(()=>{"):src.index("function renderCpx(){")]
+    a = m[m.index("// ---- 🤖 the level agent"):m.index("function levelsHtml(")]
+    assert "keep(`[data-cpx-agd=\"${sq(id)}\"]`" in m                                # the new control keeps the page in place
+    assert m.count("Agent khud decide karta hai") == 1                               # one Hinglish line
+    assert not re.search(r"\b(follows|because|caused|due to|driven)\b", a, re.I)     # D-e: the page's own words claim no cause
+    assert "LVNOREJ.has(x.st)" in m and "x.src==='accepted_agent'" in m             # Reject on an agent accept, never on a blocked one
+    assert "AGD=null;" in m and "'AGD' in o" in m
