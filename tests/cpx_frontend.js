@@ -655,6 +655,15 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     for (const f of ['CPI', 'ECPM', 'GAP']) { const h = await agP({ OPEN: ID.a, TAB: 'hi', LVF: f, LVQ: ADM }); AGR.push(h); out.ag.lv[f] = lvRows(h); out.ag.lv_ro[f] = lvRows(await agP({ OPEN: ID.a, TAB: 'hi', LVF: f })).map(r => r.btn.length); }
     const propOf = async (app, f) => [...det2(await agP({ OPEN: app, TAB: 'hi', LVF: f, LVQ: ADM })).matchAll(/<p class="cpx-vm cpx-lvp">([\s\S]*?)<\/p>/g)].map(m => txt(m[1]));
     out.ag.props = { g: await propOf(ID.a, 'ROAS_G'), c7: await propOf(ID.a, 'ROAS_C7'), b: await propOf(ID.b, 'CPI'), c: await propOf(ID.c, 'CPI') };
+    // a decision the agent no longer asks: no next check anywhere — an overridden proposal says its override's day (not the stale
+    // next), an on-hold settle row of a held family no next check; a hold from the owner's reject points to Undo
+    const FAp = FX.FILES['cpi_' + KEY.a + '.json.gz'], lp0 = FAp.lp, rw0 = FAp.ag.rows, rH = rw0.find(x => x.id === 'D-00000000h1');
+    FAp.lp = lp0.concat([{ fam: 'ROAS_C0', opened: '2026-03-20', day: '2026-03-20', why: 'money', v: 0.4, days: ['2026-02-21', '2026-03-20'], old: 0.5, sums: null, gap: null,
+      ag: { id: 'D-00000000o1', st: 'overridden', short: 'campaign mix 62%', cause: 'x', next: '2026-03-27' } }]);
+    out.ag.props.o1 = await propOf(ID.a, 'ROAS_C0'); FAp.lp = lp0;
+    FAp.ag.rows = rw0.map(x => x.id === 'D-00000000s2' ? Object.assign({}, x, { st: 'held', held: true }) : x);
+    out.ag.lv_held = lvRows(await agP({ OPEN: ID.a, TAB: 'hi', LVF: 'GAP' }))[0].cells[4]; FAp.ag.rows = rw0;
+    out.ag.held_reject = txt((_.agDetHtml(FAp, Object.assign({}, rH, { ovr: { at: '2026-03-26T04:00:00Z', act: 'reject' } })).match(/<p><b>Held:<\/b>([\s\S]*?)<\/p>/) || [])[1] || '');
     const chA = await agP({ OPEN: ID.a, TAB: 'ch', PER: 'all' });
     const cg1 = _.CHD['cpx-c1'], cg2 = _.CHD['cpx-c2'];
     out.ag.chart = { labels: [...chA.matchAll(/class="cpx-lvn"[^>]*>([^<]+)</g)].map(m => m[1]), tip1: cg1 ? txt(_.tipHtml(cg1, cg1.P.length - 1)) : null, tip2: cg2 ? txt(_.tipHtml(cg2, cg2.P.length - 1)) : null };

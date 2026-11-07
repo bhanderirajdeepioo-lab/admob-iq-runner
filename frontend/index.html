@@ -9140,6 +9140,7 @@ const AGW={accepted:'Accepted',passed:'Passed',kept:'Kept',blocked:'Blocked',wai
   reverted:'Reverted',overridden:'Overridden',held:'Held',closed:'Closed'};                                   // a decision row's status word
 const AGC={accepted:'cpx-good',passed:'cpx-good',kept:'cpx-wat',blocked:'cpx-wat',waiting:'cpx-fnt',hold:'cpx-fnt',trial:'cpx-fnt',reverted:'cpx-fnt',
   overridden:'cpx-nv',held:'cpx-nv',closed:'cpx-nv'};
+const AGSTAND=new Set(['kept','waiting','blocked','hold','trial']);          // the questions the agent asks again: only these have a next check
 // the details' verdict line says what a settle row is about, and who acted
 const AGV=Object.assign({},AGW,{blocked:'Engine settle blocked',hold:'Engine settle on hold',passed:'Engine settle passed',reverted:'Reverted by agent',
   overridden:'Overridden by you',held:'Held by your action',trial:'Accept — trial (not applied yet)'});
@@ -9176,11 +9177,12 @@ function agRows(F){ const g=F&&F.ag, L=!dev()&&g&&Array.isArray(g.rows)?g.rows:[
 // under the verdict: a question still standing (its alarm open), or an accept / revert / override of the last 28 days
 function agShow(x,t){ if(!x.end&&x.st!=='closed'&&x.st!=='passed') return true;
   const d=agEvt(x); return (x.st==='accepted'||x.st==='reverted'||x.st==='overridden')&&okD(d)&&d>=addD(t,-27); }
-// one line: "🤖 Family: status — cause. Agla check: next" + that question's money — a money proposal's gap, or a CPI decision's
-// extra paid vs the old level (this line only, never summed: R-m1); the link opens the decision in History · Levels
+// one short line: "🤖 Family: status — short. Next check: next" (the full cause is in the decision's details, on tap) + that
+// question's money — a money proposal's gap, or a CPI decision's extra paid vs the old level (this line only, never summed:
+// R-m1); the link opens the decision in History · Levels
 function agLine(F,x,p){ const f=x.fam, st=x.st, dy=agEvt(x), xp=x.xp;
   const w=AGV[st]+(dy?' '+fd(dy):''), xpT=f==='CPI'&&xp&&nb(xp.inr)!=null&&nb(xp.usd)!=null?` · extra paid vs old level ≈${fM(xp.inr,xp.usd)} since ${E(fd(okD(xp.from)?xp.from:x.first))} (not a loss)`:'';
-  return `<p class="cpx-vm cpx-agv">🤖 ${E(famW(f))}: <b class="${AGC[st]}">${E(w)}</b> — ${E(x.cause||x.short||'—')}${okD(x.next)?`. Agla check: ${E(fd(x.next))}`:''}${xpT||(p?gapTxt(p):'')}`
+  return `<p class="cpx-vm cpx-agv">🤖 ${E(famW(f))}: <b class="${AGC[st]}">${E(w)}</b> — ${E(x.short||x.cause||'—')}${AGSTAND.has(st)&&okD(x.next)?`. Next check: ${E(fd(x.next))}`:''}${xpT||(p?gapTxt(p):'')}`
     +` — <button type="button" class="cpx-lnk" data-cpx-tab="hi" data-cpx-ago="${E(x.id)}" data-cpx-agf="${E(f)}">History → Levels</button></p>`; }
 // a level value of the agent's numbers in the view's money: CPI ₹ as billed, $ at the rate of the 14 days ending `day` (both
 // ends of a move at the same rate: the printed % is the one the agent judged in ₹)
@@ -9210,7 +9212,7 @@ const kSame=(a,b)=>{ const ka=Object.keys(a||{}).sort(), kb=Object.keys(b||{}).s
 function agDetHtml(F,x){ const f=x.fam, o=[], n=nb(x.n), ep=x.ep&&typeof x.ep==='object'?x.ep:{}, c=x.chk&&typeof x.chk==='object'?x.chk:null, ap=x.applied;
   o.push(`<b>${E(famW(f))}</b> · ${E(has(AGQ,x.why)?AGQ[x.why]:String(x.why||'—'))}${okD(ep.c)?' · change since '+E(fd(ep.c)):''}${n?` · asked ${Math.round(n)}×${okD(x.first)?' ('+E(rg(x.first,okD(x.last)?x.last:x.first))+')':''}`:''}`);
   o.push(`<b>Cause:</b> ${E(x.cause||'—')}`);
-  if(okD(x.next)) o.push(`<b>Agla check:</b> ${E(fd(x.next))}`);
+  if(AGSTAND.has(x.st)&&okD(x.next)) o.push(`<b>Next check:</b> ${E(fd(x.next))}`);
   if(x.trial===true) o.push('<b>Accept — trial:</b> recorded, not applied yet — your ✅ Accept still works');
   if(ap&&okD(ap.day)) o.push(`<b>Applied</b> ${E(fd(ap.day))}${Array.isArray(ap.days)&&okD(ap.days[0])&&okD(ap.days[1])?' · new level = '+E(rg(ap.days[0],ap.days[1])):''}`);
   const H=Array.isArray(x.h)?x.h.filter(z=>Array.isArray(z)&&okD(z[0])):[];
@@ -9220,10 +9222,11 @@ function agDetHtml(F,x){ const f=x.fam, o=[], n=nb(x.n), ep=x.ep&&typeof x.ep===
   if(c){ const v=c.v&&typeof c.v==='object'?c.v:{}, d=okD(c.p)?c.p:x.last, lv=q=>nb(q)!=null?E(agLv(F,f,q,d)):'—';
     o.push(`<b>Checks</b> after ${E(okD(c.p)?fd(c.p):'—')} (old ${lv(c.old)}, new ${lv(c.new)}): ${['28','56','84'].map(q=>`${q} d ${lv(v[q])}`).join(' · ')}`); }
   o.push(`<b>Verdict:</b> ${has(AGVD,x.vd)?AGVD[x.vd]:'Pending'}${has(AGVD,x.ve)&&x.ve!==x.vd?' · alarm check: '+AGVD[x.ve]:''}`);
-  const rv=x.rev; if(rv&&okD(rv.day)) o.push(`↩ <b>Reverted by agent</b> ${E(fd(rv.day))} — ${rv.by==='r3'?'the alarm, kept open without this level, closed as recovered':rv.by==='r2'?'two 28-day checks in a row were back within one band of the old level':'the number came back to the old level'}`);
+  const rv=x.rev; if(rv&&okD(rv.day)) o.push(`↩ <b>Reverted by agent</b> ${E(fd(rv.day))} — ${rv.by==='r3'?'the alarm, kept open without this level, closed as recovered':rv.by==='r2'?'two 28-day checks in a row were back within one band of the old level':'the number came back to the old level'}`
+    +(nb(rv.old)!=null&&nb(rv.v)!=null?` (old ${E(agLv(F,f,rv.old,rv.day))}, last 28 days ${E(agLv(F,f,rv.v,rv.day))})`:''));
   const ov=x.ovr; if(ov&&ov.at) o.push(`<b>Overridden by you</b> ${E(istAt(ov.at))}${has(ACTW,ov.act)?' · '+E(ACTW[ov.act]):''} — your action wins over the agent (Undo brings its decision back)`);
-  if(x.held===true) o.push(`<b>Held:</b> your own action holds ${E(famW(f))} — the agent does not decide it (🔄 Back to auto gives it back)`);
-  const en=x.end; if(en&&okD(en.t)) o.push(`<b>Closed</b> ${E(fd(en.t))}${has(AGEND,en.why)?' · '+AGEND[en.why]:''}`);
+  if(x.held===true) o.push(`<b>Held:</b> your own action holds ${E(famW(f))} — the agent does not decide it (${ov&&ov.act==='reject'?'↩ Undo of your reject gives it back':'🔄 Back to auto gives it back'})`);
+  const en=x.end; if(en&&okD(en.t)) o.push(`<b>Closed</b> ${E(fd(okD(en.day)?en.day:en.t))}${has(AGEND,en.why)?' · '+AGEND[en.why]:''}`);   // (day: the alarm's own close day)
   const xp=x.xp; if(f==='CPI'&&xp&&nb(xp.inr)!=null&&nb(xp.usd)!=null) o.push(`<b>Extra paid</b> vs old level ≈${fM(xp.inr,xp.usd)} since ${E(fd(okD(xp.from)?xp.from:x.first))} — extra paid, not a loss (the D0 ROAS alarm carries the money)`);
   return `<div class="cpx-agx">${o.map(z=>`<p>${z}</p>`).join('')}</div>`; }
 // History · Levels: every decision of this app, one line each — "date · Family · status · short", newest first, the full
@@ -9244,7 +9247,7 @@ function agBoard(){ const p=ptr(), g=p&&p.agent; if(!g||typeof g!=='object'||g.v
   const more=[['trial','accept — trial'],['overridden','overridden by you'],['held','held by you']].filter(([k])=>c(n,k)>0).map(([k,w])=>` · ${c(n,k)} ${w}`).join('');
   const l1=`🤖 Agent since ${E(okD(g.since)?fd(g.since):'—')}: ${c(n,'accepted')} accepted (${c(n,'right')} right, ${c(n,'wrong')} wrong, ${c(n,'pending')} pending${c(n,'unclear')?`, ${c(n,'unclear')} unclear`:''})`
     +` · ${c(n,'kept')} kept · ${c(n,'waiting')} waiting · ${c(n,'reverted')} reverted${more}`
-    +` · Engine settles (CPI / GAP): ${c(s,'checked')} checked · ${c(s,'passed')} passed · ${c(s,'blocked')} blocked · ${c(s,'hold')} on hold${c(s,'later')?` · ${c(s,'later')} accepted later`:''}`;
+    +` · Engine settles: ${c(s,'checked')} checked · ${c(s,'passed')} passed · ${c(s,'blocked')} blocked · ${c(s,'hold')} on hold${c(s,'later')?` · ${c(s,'later')} accepted later`:''}`;
   const dd=nb(tr.day)!=null&&nb(tr.need)!=null?`, day ${c(tr,'day')} of ${c(tr,'need')}`:'';
   const chk=` · ${c(pa,'checked')} decisions re-checked (${c(pa,'bad')} differ) · ${c(vi,'done')} re-asks on later data (${c(vi,'accept_flips')} accept flips)`;
   const l2=tr.st==='live'?`Accepts: live since ${E(fd(okD(tr.exit)?tr.exit:tr.since))}`
@@ -9264,7 +9267,8 @@ function levelsHtml(r,F){ const LV=F.lv&&typeof F.lv==='object'?F.lv:null, ab=ag
   const pins=rows.some(x=>(x.src==='manual'||x.src==='rollback'||x.src==='accepted_owner')&&(x.st==='now'||x.st==='rest'));
   const lp=LP.filter(p=>p&&p.fam===f);
   // a proposal: the agent's answer beside it (lp[i].ag); the owner's ✅ Accept stays — "anyway" when the agent keeps / waits
-  const prop=lp.map((p,i)=>{ const g=gapTxt(p), ag=p.ag&&typeof p.ag==='object'&&has(AGW,p.ag.st)?p.ag:null, say=ag?agSay(ag.st,ag.short,ag.next):'';
+  const prop=lp.map((p,i)=>{ const g=gapTxt(p), ag=p.ag&&typeof p.ag==='object'&&has(AGW,p.ag.st)?p.ag:null;
+    const say=ag?agSay(ag.st,ag.short,AGSTAND.has(ag.st)?ag.next:agEvt(agRows(F).find(z=>z.id===ag.id)||{})):'';   // (the day: its next check, else its event's)
     const pv=lvV(F,f,{v:p.v,sums:p.sums,from:p.days&&p.days[1]});
     return `<p class="cpx-vm cpx-lvp">🆕 New level ready: <b>${E(lvFmt(f,pv))}</b> (${E(PROPW[p.why]||p.why||'')}) · ${E(lvMeas(f,{v:p.v,sums:p.sums,days:p.days}))} · old ${E(lvFmt(f,lvV(F,f,{v:p.old,from:p.opened})))}${g}${say?' · '+say+(ag.st==='trial'?' (not applied yet)':''):''}`
       +(act?` <button type="button" class="cpx-lvb cpx-lvgo" data-cpx-lvact="accept" data-cpx-lvp="${i}"${lvDis()}>${ag&&ag.st!=='trial'?'✅ Accept anyway':'✅ Accept'}</button>`:'')+'</p>'; }).join('');
@@ -9287,7 +9291,8 @@ function levelsHtml(r,F){ const LV=F.lv&&typeof F.lv==='object'?F.lv:null, ab=ag
 // reason, a settle that passed its check), else how the level formed
 function lvHow(F,x,ag){ let h=HOWW[x.src]||x.src;
   if(x.st==='blocked') h='Engine settle blocked by agent: '+((ag&&ag.cause)||'—');
-  else if(x.st==='hold') h='Engine settle on hold (agent): '+((ag&&ag.cause)||'—')+(ag&&okD(ag.next)?' · next check '+fd(ag.next):'');
+  else if(x.st==='hold'){ const d=ag&&agRows(F).find(z=>z.id===ag.dec);                 // (a next check only while the agent asks it again)
+    h='Engine settle on hold (agent): '+((ag&&ag.cause)||'—')+(d&&AGSTAND.has(d.st)&&okD(ag.next)?' · next check '+fd(ag.next):''); }
   else if(x.st==='reverted'){ const d=ag&&agRows(F).find(z=>z.id===ag.dec), day=d&&d.rev&&okD(d.rev.day)?d.rev.day:okD(x.to)?x.to:''; h='Reverted by agent'+(day?' '+fd(day):''); }
   else if(x.src==='accepted_agent'&&ag&&ag.short) h+=' · '+ag.short;
   if(ag&&ag.st==='passed') h+=' · 🤖 passed';
