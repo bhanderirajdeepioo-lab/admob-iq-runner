@@ -905,9 +905,12 @@ def test_v3_screens_table_absolute_numbers(out):
     # the chip = the build's abs word, the first weak number under it; the Cause = its weak numbers + vs own past (Worse /
     # Watch) as a labelled second line
     assert '<span class="hub-st st-bigda">🔴 Low</span>' in home["Screen"]
-    assert home["Screen"].endswith("<small>Show rate 20% (native median 70%)</small>")
-    assert home["Cause"] == "Show rate 20% (native median 70%): ads filled but not shown; Fill 60% (native median 90%): requests not filled"
-    assert lst["Cause"] == ('Show rate 15% (native median 70%): ads filled but not shown<small class="sc-own" title="imp/user 0.30 → 0.20 (−33%)">'
+    # (30 days ≠ the status window W: the number under the chip and the Cause say "last 10 days", the Cause with W's dates)
+    assert home["Screen"].endswith("<small>Show rate 20% (native median 70%) · last 10 days</small>")
+    assert home["Cause"] == ("Show rate 20% (native median 70%): ads filled but not shown; Fill 60% (native median 90%): requests not filled"
+                             " · last 10 days (19 Mar – 28 Mar)")
+    assert lst["Cause"] == ('Show rate 15% (native median 70%): ads filled but not shown · last 10 days (19 Mar – 28 Mar)'
+                            '<small class="sc-own" title="imp/user 0.30 → 0.20 (−33%)">'
                             '<span class="hub-st st-bigda">bigda</span> vs own past: Lower show rate</small>')
     assert "🟡 Few ads" in rare["Screen"] and rare["Cause"].startswith("Ads / view 3.0%")
     assert '<span class="hub-st st-normal">normal</span>' in oth["Screen"]             # an aggregate row keeps its own word
@@ -942,6 +945,8 @@ def test_v3_sigma_fallback_w_parity_and_today(out):
     for f, v in ab["p"].items():
         assert w["p"][f] == pytest.approx(v, abs=1e-3), f
     assert a["cusW"]["Fill"] == "<b>60%</b>" and a["cusW"]["Show rate"] == "<b>20%</b>"
+    # (the period = W: no window label on the chip's number or the Cause)
+    assert a["cusW"]["Screen"].endswith("<small>Show rate 20% (native median 70%)</small>") and "last 10 days" not in a["cusW"]["Cause"]
     # Today: AdMob not complete — "—" with the reason, never 0; Ads / view (views and ads so far) stays
     assert a["today"]["why"] == "AdMob ~1–2 din baad pura hota hai" and a["today"]["fill"] is None
     assert a["todayCells"]["Fill"] == "<b>—</b><small>AdMob ~1–2 din baad pura hota hai</small>"
@@ -966,7 +971,7 @@ def test_v3_app_total_all_apps_attention_and_details(out):
     assert '<span class="hub-st st-dhyan">🟡 Few ads</span><span class="sc-atn">Ads / view under banner p25 (5.0%)</span>' in at
     assert '<span class="sc-atn">vs own past · Lower show rate</span>' in at and at.index("🟡 Few ads") < at.index("vs own past · ")
     # the details: the abs word + its first weak number, then vs own past; the Absolute block: parts, σ, the build's W, the check
-    assert a["dds"].startswith('<span class="hub-st st-bigda">🔴 Low</span> <small>Show rate 20% (native median 70%)</small> · '
+    assert a["dds"].startswith('<span class="hub-st st-bigda">🔴 Low</span> <small>Show rate 20% (native median 70%) · last 10 days</small> · '
                                '<span class="hub-st st-normal">normal</span> <small>last 10 days vs own past +1%</small>')
     dd = a["dd"]
     assert '<p class="sc-note">Ads / view <b>30%</b> · Fill <b>67%</b> · Show rate <b>24%</b> · 30 complete AdMob days</p>' in dd
@@ -990,6 +995,17 @@ def test_v3_benchmark_failed_and_a_status_without_the_abs_fields(out):
     assert o["Cause"] == "Lower show rate" and o["Fill"].startswith("<b>")
     # N/A / Too early keep their why under the chip (the build ships them an empty abs cause); OK has none
     assert a["naWhy"] == ["Too few ads — 0.4% of the app's inline ads", "21 ads expected (needs 30)", ""]
+    # the details' status line of an N/A screen: its word and why once, never twice
+    assert a["ddNa"].count("Too few ads — 0.4% of the app&#39;s inline ads") == 1 and a["ddNa"].count("hub-st") == 1
+
+
+def test_v3_word_on_w_vs_the_periods_own_marks(out):
+    # 30 days: the abs word (judged on W) against the period's own marks — OK with marked cells, Low with no Fill / Show mark:
+    # "(last 10 days)" on the chip (its number under it unlabelled); Low with its marks: the plain chip, W after the number
+    home, lst, rare = out["abs"]["dis"]
+    assert home == '<span class="sc-n">Home</span><span class="sc-stl"><span class="hub-st st-behtar">🟢 OK (last 10 days)</span></span>'
+    assert lst.endswith('<span class="hub-st st-bigda">🔴 Low</span></span><small>Show rate 15% (native median 70%) · last 10 days</small>')
+    assert rare.endswith('<span class="hub-st st-bigda">🔴 Low (last 10 days)</span></span><small>Fill 50% (banner median 90%)</small>')
 
 
 def test_v3_check_texts_are_the_builds():

@@ -7855,15 +7855,19 @@ const fmtNm=f=>ABFN[f]||String(f||'—');
 // a status's abs word: [7] when the file ships it ("" = the benchmark failed: "—"), null for a status without it (its own word)
 const absW=s=>Array.isArray(s)&&s.length>7&&typeof s[7]==='string'?s[7]:null;
 // (the hub's chip, its label the abs word's; "" = the benchmark failed: "—", titled)
-function achip(w){ const c=AWD[w]; if(w&&!c) return chip(w); let h=''; try{ h=hubStChip(c?c[0]:'lagu'); }catch(e){ h='<span class="sc-st">—</span>'; }
-  h=h.replace(/>[^<>]*<\/span>$/,'>'+(c?c[1]:'—')+'</span>'); return w?h:h.replace(/^<span /,'<span title="benchmark nahi bana" '); }
-// a row's status chip: the abs word on a screen row, else (a trigger, an older file) its own word
-const stChip=(st,it)=>{ const w=absW(st); return w!=null&&(w||it&&it[1]==='s')?achip(w):chip(st&&st[0]); };
+function achip(w,sx){ const c=AWD[w]; if(w&&!c) return chip(w); let h=''; try{ h=hubStChip(c?c[0]:'lagu'); }catch(e){ h='<span class="sc-st">—</span>'; }
+  h=h.replace(/>[^<>]*<\/span>$/,'>'+(c?c[1]:'—')+(sx||'')+'</span>'); return w?h:h.replace(/^<span /,'<span title="benchmark nahi bana" '); }
+// a row's status chip: the abs word on a screen row, else (a trigger, an older file) its own word; sx: a label after the word
+const stChip=(st,it,sx)=>{ const w=absW(st); return w!=null&&(w||it&&it[1]==='s')?achip(w,sx):chip(st&&st[0]); };
 // the line under it: the abs cause's first weak number (up to its ":"), the why of a word that is not judged, "" for OK
-// (N/A and Too early are the old judge's words, kept by the build with an empty [8]: their why is still [1])
-const stWhy=(st,it)=>{ const w=absW(st); if(w==null||!(w||it&&it[1]==='s')) return st&&st[1]?String(st[1]):''; if(!w) return 'benchmark nahi bana';
+// (N/A and Too early are the old judge's words, kept by the build with an empty [8]: their why is still [1]); wl: the status
+// window's label after a Low / Few ads number when the picked period is not W
+const stWhy=(st,it,wl)=>{ const w=absW(st); if(w==null||!(w||it&&it[1]==='s')) return st&&st[1]?String(st[1]):''; if(!w) return 'benchmark nahi bana';
   const f=String(st[8]||'').split('; ')[0], j=f.indexOf(': '); if(!f&&(w==='N/A'||w==='Too early')) return st[1]?String(st[1]):'';
-  return j>0&&(w==='Low'||w==='Few ads')?f.slice(0,j):f; };
+  return j>0&&(w==='Low'||w==='Few ads')?f.slice(0,j)+(wl?' · '+wl:''):f; };
+// the status window W ([first, last]) when the picked period is not W, else null: the chip + Cause are W's numbers (the
+// build's), the Ads / view, Fill and Show rate cells the period's
+const wOff=(x,lo,hi)=>{ const W=statWin(x).W; return lo===W[0]&&hi===W[1]?null:W; };
 // the rank: the abs word (Low first; inside it the weakest value ÷ median first), else the word an older file ships
 const arank=s=>{ const w=absW(s); return w==null||w===''?rankOf(s&&s[0])+10:w in ARANK?ARANK[w]:8; };
 const aweak=s=>{ let m=Infinity; for(const q of Array.isArray(s)&&Array.isArray(s[9])?s[9]:[]) if(ok(+q[2])&&+q[3]>0) m=Math.min(m,q[2]/q[3]); return m; };
@@ -8166,14 +8170,16 @@ function topSplit(rows){ const sc=rows.filter(z=>z.it[1]==='s'||z.it[1]==='o').s
   for(const z of sc){ if(tot>0&&c>=0.9*tot) break; top.add(z.i); c+=z.v||0; }
   for(const z of rows) if(!(z.it[1]==='s'||z.it[1]==='o')||(z.st&&(z.st[0]==='Worse'||z.st[0]==='Watch'||absW(z.st)==='Low'))) top.add(z.i);
   return top; }
-function czTd(st,jd,it){ if(!jd||!st) return '<td class="sc-cz">—</td>'; const w=absW(st);
+// (wl: the status window's label when the picked period is not W — a Low / Few ads cause quotes W's numbers)
+function czTd(st,jd,it,wl){ if(!jd||!st) return '<td class="sc-cz">—</td>'; const w=absW(st);
   if(w==null||!(w||it[1]==='s')) return `<td class="sc-cz">${st[3]?E(st[3]):'—'}</td>`;
   const own=st[0]==='Worse'||st[0]==='Watch'?`<small class="sc-own"${st[1]?` title="${E(st[1])}"`:''}>${chip(st[0])} vs own past: ${E(st[3]||st[1]||'')}</small>`:'';
-  return `<td class="sc-cz">${st[8]?E(st[8]):own?'':'—'}${own}</td>`; }
+  return `<td class="sc-cz">${st[8]?E(st[8])+(wl&&(w==='Low'||w==='Few ads')?' · '+E(wl):''):own?'':'—'}${own}</td>`; }
 function whyNull(x,it,lo,hi){ const id=it[1]==='fs'?'w':'a', cv=cover(x,[id],lo,hi); if(!cv.nd) return 'is period me din nahi';
   if(cv.c.w+cv.c.p===cv.nd) return it[1]==='fs'?'units ka data nahi':'format not split (GA4 ne sirf screen-wise diya)'; return covWhy(x,[id],cv); }
 // (#sc-tb is drawn again when file 2 brings the screens' users)
 function tableHtml(x,id,lo,hi){ const seg=SEG, all=PER==='all', a2=apPtr(id), f2=f2Of(id), f2e=!f2&&!!a2&&fErr(f2Name(a2)), fu=ftuOf(x);
+  const W=seg==='s'?wOff(x,lo,hi):null, wl=W?`last 10 days (${rg(W[0],W[1])})`:'';
   const rows=sortItems(tableRows(x,lo,hi,seg,f2)), top=seg==='s'?topSplit(rows):null, shown=top&&!MORE?rows.filter(z=>top.has(z.i)):rows, more=rows.length-shown.length;
   const th=(k,l,tt)=>`<th aria-sort="${TS.k===k?(TS.dir>0?'ascending':'descending'):'none'}"${tt?` title="${E(tt)}"`:''}><button type="button" data-sc-tsort="${k}">${l}</button></th>`;
   const uof=x.allf?'ads (saare formats — is app me screens ke ads ka format poora nahi milta)':'inline ads';
@@ -8189,7 +8195,10 @@ function tableHtml(x,id,lo,hi){ const seg=SEG, all=PER==='all', a2=apPtr(id), f2
     :th('st','Trigger')+th('r','Imp / app user / day','trigger ke ads ÷ app ke daily users (trigger ki koi screen nahi) · sirf final din')+th('n','Normal')+th('sc','vs own past','is period ÷ normal − 1')+thF('trigger ke units')+'<th>Cause</th>';
   const wt=f2e?'<b>—</b><small>data load nahi hua</small>':'⏳', w1=`<td title="${E(f2e?'data load nahi hua':'aa raha hai…')}">${f2e?'—':'⏳'}</td>`;
   const tr=z=>{ const it=z.it, p=z.ps.p, jd=judged(it), st=z.st, after=adsAfter(x,lo,hi,z.i), wait=!z.agg&&seg==='s'&&!f2;
-    const wy=jd&&st?stWhy(st,it):'', nm=`<td class="sc-nm" title="${E(itemTitle(it))}"><span class="sc-n">${itemName(it)}</span><span class="sc-stl">${jd&&st?stChip(st,it):`<small class="sc-faint">${jd?'—':'not judged'}</small>`}</span>${wy?`<small>${E(wy)}</small>`:''}</td>`;
+    // the abs word on W against the period's own marks (abLow, the build's rule): Low with no Fill / Show mark, Few ads with no
+    // Ads / view mark, OK with a mark → the chip says "(last 10 days)"; else W's label goes after the number under the chip
+    const aw0=W&&jd&&st&&it[1]==='s'?absW(st):'', lw=z.lw||[], dis=!!(aw0&&f2&&z.ab)&&(aw0==='Low'?!lw.some(q=>q[0]!=='av'):aw0==='Few ads'?!lw.some(q=>q[0]==='av'):aw0==='OK'&&lw.length>0);
+    const wy=jd&&st?stWhy(st,it,aw0&&!dis?'last 10 days':''):'', nm=`<td class="sc-nm" title="${E(itemTitle(it)+(aw0?` · status + Cause: ${wl} · cells: chuna hua period`:''))}"><span class="sc-n">${itemName(it)}</span><span class="sc-stl">${jd&&st?stChip(st,it,dis?' (last 10 days)':''):`<small class="sc-faint">${jd?'—':'not judged'}</small>`}</span>${wy?`<small>${E(wy)}</small>`:''}</td>`;
     let main;
     // (short, on one line: a phone's narrow column wrapped "of the screen ads" into 4 lines; the full words in its title)
     if(z.agg) main=`<td title="${E(AGGW)}"><b>—</b><small class="sc-nw" title="${P1(z.sh)} of the screen ads">${P1(z.sh)} of ads</small></td>`;
@@ -8198,7 +8207,7 @@ function tableHtml(x,id,lo,hi){ const seg=SEG, all=PER==='all', a2=apPtr(id), f2
       main=z.r!=null?`<td title="${E(tt)}"><b>${PQ(z.r)}</b>${p.n<p.nd&&lo<=fu?`<small>${p.n}/${p.nd} days</small>`:''}${waitAds(after)}</td>`
         :`<td><b>—</b>${lo>fu?waitAds(after):`<small>${E(z.si.n?(seg==='s'?puWhy(x,f2,z.i,lo,hi):auWhy(x,lo)):whyNull(x,it,lo,hi))}</small>`}</td>`; }
     const nrm=z.agg?'<td>—</td><td>—</td>':`<td>${PQ(z.n)}</td><td>${scoreTxt(z.sc,z.ps.muted,all,z.ps.low)}</td>`;
-    const cz=czTd(st,jd,it);
+    const cz=czTd(st,jd,it,wl);
     const fsr=z.agg?`<td title="kai screens ka jod">—</td><td title="kai screens ka jod">—</td>`:!f2?w1+w1:abTds(z.ab,it[1]==='fs'?'trigger ke units':'screen ka hissa (σ × unit)',z.lw);
     if(seg!=='s') return `<tr class="sc-clk${OPEN===z.i?' sc-on':''}" data-sc-open="${z.i}" aria-expanded="${OPEN===z.i}" tabindex="0">${nm}${main}${nrm}${fsr}${cz}</tr>`;
     const aw=(z.lw||[]).filter(q=>q[0]==='av'), avt=[z.si.n?`${N(z.si.a)} ${uof} ÷ ${N(z.si.v)} screen views × 100 · ${z.si.n} days`:''].concat(aw.map(q=>bTxt('av',q[1],q[3]))).filter(Boolean).join(' · ');
@@ -8209,7 +8218,7 @@ function tableHtml(x,id,lo,hi){ const seg=SEG, all=PER==='all', a2=apPtr(id), f2
       +ag(c(z.ud!=null?Math.round(z.ud):null,N))+ag(c(z.vu,PU))+c(z.tv,fmtT)+ag(c(z.tu,fmtT))+c(z.am,PU)+main+avc+fsr+cz+'</tr>'; };
   const nf=rows.length;
   return `<div class="sc-tw sc-x" id="sc-ttw"><table class="sc-t${seg==='s'?' sc-t10':''}"><thead><tr>${head}</tr></thead><tbody>${shown.map(tr).join('')||`<tr><td colspan="${seg==='f'?7:11}" class="sc-faint">${seg==='f'?'Is app ke full-screen units ka trigger data nahi':'Koi screen nahi'}</td></tr>`}</tbody></table></div>`
-    +(seg==='s'&&nf?'<p class="sc-note"><b>Imp / user / day</b> = Views / user / day × Time / view × Ads / min ÷ 60 (same din). Time = GA4 engagement time: app khuli aur ye screen saamne thi. <b>Ads / view</b> = ads ÷ screen views × 100 · <b>Fill</b> = AdMob matched ÷ requests · <b>Show rate</b> = impressions ÷ matched (screen ke units, screen ka hissa). Status = ye numbers usi format ke saare apps ke units ke saath (neeche 25% = Low) · vs own past = Cause me. Screen views aur ads row ki details me.</p>':'')
+    +(seg==='s'&&nf?'<p class="sc-note"><b>Imp / user / day</b> = Views / user / day × Time / view × Ads / min ÷ 60 (same din). Time = GA4 engagement time: app khuli aur ye screen saamne thi. <b>Ads / view</b> = ads ÷ screen views × 100 · <b>Fill</b> = AdMob matched ÷ requests · <b>Show rate</b> = impressions ÷ matched (screen ke units, screen ka hissa). Status = ye numbers usi format ke saare apps ke units ke saath (neeche 25% = Low)'+(W?`; status aur Cause ${E(wl)} ke numbers pe, cells chune hue period ke`:'')+' · vs own past = Cause me. Screen views aur ads row ki details me.</p>':'')
     +(seg==='s'&&(more>0||MORE)&&nf?`<button type="button" class="sc-more" data-sc-more="1">${MORE?'Show fewer screens':`Show ${more} more screens`}</button>`:''); }
 function segHtml(x,id,lo,hi){ const n=k=>(x.items||[]).filter(it=>k==='f'?it[1]==='fs':it[1]!=='fs').length;
   return `<div class="card sc-card" id="sc-tcard"><div class="sc-seg sc-x" role="group" aria-label="Table">${[['s','Screens'],['f','Full-screen']].map(([k,l])=>`<button type="button" data-sc-seg="${k}" aria-pressed="${SEG===k}">${l} <small>${n(k)}</small></button>`).join('')}</div>`
@@ -8220,14 +8229,15 @@ const SECS=[['ov','Overview'],['un','Units'],['ver','Versions'],['nvr','New vs r
 function ddHtml(x,id,lo,hi){ if(OPEN==null||!(x.items||[])[OPEN]) return ''; const it=x.items[OPEN], st=stOf(x,OPEN), f2=f2Of(id), ps=perScoreU(x,f2,OPEN,lo,hi,PER==='all');
   const rc=it[1]==='s'&&ps.p.reach!=null?` · reach <b>${P1(ps.p.reach)}</b> of the app's daily users${ps.q&&ps.q.reach!=null?` (normal ${P1(ps.q.reach)})`:''}`:'';
   return `<div class="card sc-card sc-dd" id="sc-dd"><div class="sc-ddh"><div class="sc-ddt"><b title="${E(itemTitle(it))}">${itemName(it)}</b><span class="sc-ddc">${it[1]==='s'?E(it[0]):''}</span></div>`
-    +`<span class="sc-dds">${judged(it)&&st?ddSt(st,it):'<small class="sc-faint">not judged</small>'} · ${it[1] in AGG?'<small>imp / user nahi (users jode nahi ja sakte)</small>':'<small>this period</small> '+scoreTxt(ps.score,ps.muted,PER==='all',ps.low)}${rc}</span>`
+    +`<span class="sc-dds">${judged(it)&&st?ddSt(st,it,it[1]==='s'&&wOff(x,lo,hi)?'last 10 days':''):'<small class="sc-faint">not judged</small>'} · ${it[1] in AGG?'<small>imp / user nahi (users jode nahi ja sakte)</small>':'<small>this period</small> '+scoreTxt(ps.score,ps.muted,PER==='all',ps.low)}${rc}</span>`
     +`<button type="button" class="sc-back" data-sc-close="1">✕ Close</button></div>`
     +`<div class="sc-seg sc-x" role="group" aria-label="Section">${SECS.map(([k,l])=>`<button type="button" data-sc-sec="${k}" aria-pressed="${SEC===k}">${l}</button>`).join('')}</div>`
     +`<div id="sc-ddb">${secHtml(x,id,OPEN,lo,hi)}</div></div>`; }
 // the drill-down's status: the abs word + its first weak number · vs own past (the word, the status window's change, its why);
-// a status without the abs word: its own word as before
-function ddSt(st,it){ const w=absW(st), own=(st[2]!=null?` <small>last 10 days vs own past ${vsP(+st[2])}</small>`:'')+(st[1]?` <small>${E(st[1])}</small>`:'');
-  if(w==null||!(w||it[1]==='s')) return chip(st[0])+own; const y=stWhy(st,it);
+// a status without the abs word, or the abs word = its own (N/A, Too early: the old judge's): its own word as before, once;
+// wl: W's label after the weak number when the picked period is not W
+function ddSt(st,it,wl){ const w=absW(st), own=(st[2]!=null?` <small>last 10 days vs own past ${vsP(+st[2])}</small>`:'')+(st[1]?` <small>${E(st[1])}</small>`:'');
+  if(w==null||!(w||it[1]==='s')||w===st[0]) return chip(st[0])+own; const y=stWhy(st,it,wl);
   return stChip(st,it)+(y?` <small>${E(y)}</small>`:'')+` · ${chip(st[0])}${own}`; }
 function waitHtml(n){ return fErr(n)?`<p class="sc-note">⚠️ Data load nahi hua. <button type="button" class="sc-lnk" data-sc-retry="${E(n)}">Try again</button></p>`:'<p class="sc-note">⏳ Loading data…</p>'; }
 // a section's file(s) not here: which = 'f2' (file 2) · 'l' (scr_l; file 2's failure shows while scr_l has not come) ·

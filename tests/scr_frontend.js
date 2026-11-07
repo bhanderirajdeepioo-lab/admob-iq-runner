@@ -921,6 +921,13 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
         // N/A and Too early (the old judge's words, an empty abs cause): the line under the chip is still their why; OK: none
         out.abs.naWhy = [['N/A', "Too few ads — 0.4% of the app's inline ads", 'N/A'], ['Too early', '21 ads expected (needs 30)', 'Too early'], ['Normal', 'imp/user 1.00 → 1.02 (+2%)', 'OK']]
           .map(([w, why, aw]) => _.stWhy([w, why, null, '', '', null, 10, aw, '', []], ['x.y.HomeActivity', 's', 'inline']));
+        // the details' status line of an N/A screen: its word and why once (the abs word is the old judge's)
+        out.abs.ddNa = _.ddSt(['N/A', "Too few ads — 0.4% of the app's inline ads", null, '', '', null, 10, 'N/A', '', []], ['x.y.HomeActivity', 's', 'inline']);
+        // the abs word on W against the period's own marks (30 days): Home OK on W with its cells marked, Rare Low on W with no
+        // Fill / Show mark → "(last 10 days)" on the chip; List Low with its marks → the plain chip
+        const xd = JSON.parse(JSON.stringify(ax)); xd.status['0'][7] = 'OK'; xd.status['0'][8] = ''; xd.status['0'][9] = [];
+        xd.status['2'][7] = 'Low'; xd.status['2'][8] = 'Fill 50% (banner median 90%): requests not filled'; xd.status['2'][9] = [['fill', 'banner', 0.5, 0.9, 0.8]];
+        out.abs.dis = [0, 1, 2].map(i => cm(_.tableHtml(xd, 'absy', ...P30), i).Screen);
         delete ALLF.bench; ctx.DATA.scr.fv = 'f12b'; SCR.paint(); await tick(); SCR.paint(); h = SCREEN.innerHTML;
         out.abs.nobench = [h.includes('data-sc-open="0"'), /class="sc-lo"/.test(h.slice(h.indexOf('id="sc-ttw"')))];
       } finally { delete ALLF.apps.absy; delete ALLF.bench; delete FILES[an2]; delete ctx.DATA.scr.apps.absy; ctx.DATA.scr.fv = 'f13'; ctx.APP = 'Alpha App';
