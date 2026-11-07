@@ -1718,6 +1718,45 @@ def test_dj_the_first_build_asks_every_settle_in_force_as_of_its_day_and_only_th
     assert json.dumps(mkt, sort_keys=True) == json.dumps(a["mkt"], sort_keys=True)
 
 
+def ix_of(d):
+    return (date.fromisoformat(d) - date.fromisoformat(AG0)).days
+
+
+def test_an_engine_settle_of_an_alarm_the_agent_kept_is_asked_and_blocked_one_nobody_answered_stands(tmp_path, agent_on):
+    # promise (2) for every family: an eCPM alarm the agent keeps (ads per user: the owner's lever) is never closed by the
+    # engine's own 56-day settle — the settle is asked as of its day and blocked; an ECPM settle nobody answered: as today
+    own = ag_series(1)
+    ag_mul(own, "imp", 150, AGN, 1.5)                                         # ads per user ×1.5 …
+    ag_mul(own, "rev", 150, AGN, 0.75)                                        # … eCPM ×0.5 from day 150
+    for d in range(150, 330):                                                 # waves: open 120+ days, then flat → settles
+        own["rev"][d] *= 1 + 0.25 * math.sin(2 * math.pi * (d - 150) / 56)
+    others = [ag_series(60 + i, sp=5.0, cpi=2.0, dau=2000.0) for i in range(3)]   # the other apps' eCPM flat
+    ents = ag_world(own, others)
+    e0 = app_eps(CA.run(ents, CA.P_PROD, ag_day(AGN - 1)), "ECPM")[0]
+    assert e0["why"] == "settled" and e0["suggest"][1] == "open"              # the engine alone: a new normal, no tap
+    p_ix, s_ix = ix_of(e0["suggest"][0]), ix_of(e0["closed"])
+    _, part = ag_build(tmp_path, ents, p_ix)
+    r = rows_of(part, "ECPM")[0]
+    assert (r["why"], r["dec"], r["branch"], r["short"]) == ("open", "keep", "app_side", "ads per user +50%")
+    res, part = ag_build(tmp_path, ents, s_ix + 2)
+    r = rows_of(part, "ECPM")[0]
+    assert [(a["d"], a["on"], a["dec"]) for a in r["asks"][1:]] == [(e0["closed"], "settle", "keep"),
+                                                                     (ag_day(s_ix + 2), "reask", "keep")]
+    assert r["applied"] == {"veto": {"since_t": ag_day(s_ix + 2)}, "accept": None} and r["end"] is None
+    ep = app_eps(res, "ECPM")[0]
+    assert (ep["opened"], ep["c"], ep["closed"]) == (e0["opened"], e0["c"], None)      # the alarm stays open
+    lv = cb.ship_levels(part["ledger"], A1, agent_on=True)["ECPM"]
+    assert [(x["from"], x["st"]) for x in lv if x["src"] == "accepted"] == [(e0["closed"], "blocked")]
+    assert [x["src"] for x in lv if x["st"] == "rest"] == ["first"]           # the old level stays the normal
+    ag = part["agent"]["ag"]
+    row = [x for x in ag.ship_data[A1]["rows"] if x["fam"] == "ECPM"][0]
+    assert row["st"] == "blocked" and row["next"] == LA.next_phase(ag_day(s_ix + 2))
+    assert ag.board["n"]["kept"] == 1 and ag.board["settle"]["blocked"] == 2  # (+ the GAP settle, D-j)
+    res2, part2 = ag_build(tmp_path / "b", ents, s_ix + 2)                    # the first agent build after the settle
+    assert app_eps(res2, "ECPM") == app_eps(CA.run(ents, CA.P_PROD, ag_day(s_ix + 2)), "ECPM")
+    assert rows_of(part2, "ECPM") == [] and [r["fam"] for r in rows_of(part2)] == ["GAP"]
+
+
 def settle_ix(res, fam):
     return (date.fromisoformat(app_eps(res, fam)[0]["closed"]) - date.fromisoformat(AG0)).days
 
@@ -1769,7 +1808,10 @@ def test_revert_r2_alone_reverts_an_engine_settle_nobody_asked(tmp_path, agent_o
     assert [c[2] for c in net["r2"]][:2] == [False, False] and net["r2"][-1][2] is True
     ep = app_eps(res, "SPEND")[0]
     assert ep["why"] is None and ep["c"] == r["ep"]["c"]                       # the alarm goes on from its change start
-    assert "back at the old level: two 28-day checks in a row" in r["cause"]
+    assert r["cause"] == "back at the old level: two 28-day checks in a row within one band of it — reverted"
+    shipped = [x for x in part["agent"]["ag"].ship_data[A1]["rows"] if x["id"] == r["id"]][0]
+    assert shipped["rev"] == {"by": "r2", "day": r["rev"]["day"], "old": net["old"], "v": r["rev"]["v"]}   # the page
+    assert shipped["rev"]["v"] > 0 and shipped["cause"] == r["cause"]           # prints the values in its own unit
 
 
 def test_revert_an_ecpm_settle_that_comes_back(tmp_path, agent_on):
@@ -1785,6 +1827,58 @@ def test_revert_an_ecpm_settle_that_comes_back(tmp_path, agent_on):
     assert (r["why"], r["rev"]["by"], r["branch"]) == ("revert", "r3", "revert_r3")
     assert (ep["opened"], ep["why"], ep["closed"]) == (e0["opened"], "recovered", r["rev"]["day"])
     assert ep["closed"] > e0["closed"] and r["short"] == "back at old level: reverted"
+    assert r["cause"] == "back at the old level: the alarm came back to it within 84 days of the acceptance — reverted"
+
+
+def test_a_revert_stands_when_a_later_build_of_the_same_data_day_runs_out_of_time(tmp_path, agent_on, monkeypatch,
+                                                                                 capsys):
+    # builds run every 30 min on one data day: a timeout takes back only what ITS build did — a revert (and a settle
+    # veto) an earlier build of that day made stays, never fired again, never re-accepted
+    s = ag_series(1)
+    ag_mul(s, "rev", 200, 290, 0.7)                                           # an eCPM settle that comes back (r3)
+    ents = ag_world(s, market_apps())
+    _, part = ag_build(tmp_path, ents, 330)
+    r0, g0 = rows_of(part, "ECPM")[0], rows_of(part, "GAP")[0]
+    assert (r0["why"], r0["rev"]["t"]) == ("revert", ag_day(330)) and g0["applied"]["veto"] == {"since_t": ag_day(330)}
+    real = cb._Agent.tick
+
+    def late(self):
+        raise cb.AgentTimeout()
+    monkeypatch.setattr(cb._Agent, "tick", late)
+    capsys.readouterr()
+    ag_build(tmp_path, ents, 330)
+    assert skipped(capsys.readouterr().err, "cpi agent") == ["cpi agent skipped: AgentTimeout"]
+    saved = json.load(open(cb.levels_path(str(tmp_path / "data"))))["agent"]
+    assert json.dumps(saved["rows"], sort_keys=True) == json.dumps(part["ledger"]["agent"]["rows"], sort_keys=True)
+    assert saved["net"] == part["ledger"]["agent"]["net"]
+    monkeypatch.setattr(cb._Agent, "tick", real)
+    for t_ix in (331, 337):
+        res, part = ag_build(tmp_path, ents, t_ix)
+        r = rows_of(part, "ECPM")[0]
+        ep = app_eps(res, "ECPM")[0]
+        assert r["rev"] == r0["rev"] and (r["vd"], r["ve"]) == ("wrong", "wrong")
+        assert (ep["why"], ep["closed"]) == ("recovered", r0["rev"]["day"])   # the revert in force
+        net = [x for x in part["ledger"]["agent"]["net"] if x["fam"] == "ECPM"][0]
+        assert net["fired"] == {"by": "r3", "day": r0["rev"]["day"]} and net["done"]
+        assert rows_of(part, "GAP")[0]["applied"]["veto"] == {"since_t": ag_day(330)}   # its first day kept
+    # an agent accept reverted, then a same-day timeout: the accept is never applied again
+    own, others = market_move()
+    for d in range(400, AGN):
+        own["inst"][d] *= 1.6                                                  # CPI back at the old level from day 400
+    ents = ag_world(own, others)
+    tmp = tmp_path / "acc"
+    s_ix = settle_ix(CA.run(ents, CA.P_PROD, ag_day(399)), "CPI")
+    first = s_ix + (7 - s_ix % 7)
+    for t_ix in (s_ix, first, first + 7, first + 14, 430):
+        ag_build(tmp, ents, t_ix)
+    monkeypatch.setattr(cb._Agent, "tick", late)
+    ag_build(tmp, ents, 430)
+    monkeypatch.setattr(cb._Agent, "tick", real)
+    res, part = ag_build(tmp, ents, 431)
+    r = rows_of(part, "CPI")[0]
+    ep = app_eps(res, "CPI")[0]
+    assert r["rev"]["by"] == "r3" and r["rev"]["t"] == ag_day(430) and r["applied"]["accept"]
+    assert (ep["why"], ep["closed"]) == ("recovered", r["rev"]["day"])         # not closed "agent" again
 
 
 def waves():
@@ -1938,10 +2032,120 @@ def test_trial_a_vintage_flip_a_parity_mismatch_or_a_rule_change_start_it_again(
     assert (blk["trial"]["why"], blk["trial"]["since"]) == ("rule", ag_day(p_ix + 42)) and blk["th"] != old_th[0]
     assert [a["th"] for a in asks[:-1]] == old_th and asks[-1]["th"] == blk["th"]   # old asks: not rewritten …
     new = sum(1 for r in blk["rows"] for a in r["asks"] if a["th"] == blk["th"])
-    assert 1 <= new and blk["parity"]["checked"] - checked == new             # … and not compared
+    assert 1 <= new and blk["parity"]["checked"] == checked                   # … and not compared (parity runs before
+    _, part2 = ag_build(tmp_path, ents2, p_ix + 43)                           # this build's asks: they are, from the next)
+    assert part2["ledger"]["agent"]["parity"]["checked"] - checked == new
     whys = [x[2] for x in blk["trial"]["log"]]
     assert all(x[1] == "trial" for x in blk["trial"]["log"]) and whys[0] == "start" and whys[-2:] == ["parity", "rule"]
     assert set(whys[1:-2]) == {"vintage"}                                     # (the +28 re-ask flipped again)
+
+
+def ecpm_p_ix(ents):
+    return ix_of(app_eps(CA.run(ents, CA.P_PROD, ag_day(AGN - 1)), "ECPM")[0]["suggest"][0])
+
+
+@pytest.mark.parametrize("change", ["rule", "parity"])
+def test_a_rule_change_or_a_mismatch_on_a_live_trial_makes_that_builds_own_accept_a_trial(tmp_path, agent_on,
+                                                                                          no_ecpm_settle,
+                                                                                          monkeypatch, change):
+    # the trial starts again BEFORE the build's asks: an accept decided by a changed rule (or by code that no longer
+    # repeats a past answer) is recorded as a trial and applies nothing
+    own, others = ecpm_world()
+    ents = ag_world(own, others)
+    p_ix = ecpm_p_ix(ents)
+    for t_ix in (p_ix, p_ix + 7, p_ix + 14, p_ix + 21, p_ix + 28):
+        _, part = ag_build(tmp_path, ents, t_ix)
+    assert part["ledger"]["agent"]["trial"]["st"] == "live"
+    if change == "rule":
+        monkeypatch.setattr(cb, "agent_cfg", lambda: dict(agent_on, engine_band=0.105))   # (this answer stays an accept)
+    else:
+        real = LA.decide
+
+        def off_by_one(ri, mkt, cfg, flags=None, **kw):
+            out = real(ri, mkt, cfg, flags, **kw)
+            return dict(out, branch="app_only") if ri["d"] == ag_day(p_ix) else out
+        monkeypatch.setattr(LA, "decide", off_by_one)
+    res, part = ag_build(tmp_path, ents, p_ix + 35)
+    tr = part["ledger"]["agent"]["trial"]
+    assert (tr["st"], tr["why"], tr["since"], tr["exit"]) == ("trial", change, ag_day(p_ix + 35), None)
+    r = rows_of(part, "ECPM")[0]
+    assert (r["asks"][-1]["d"], r["asks"][-1]["dec"], r["asks"][-1]["trial"]) == (ag_day(p_ix + 35), "accept", True)
+    assert r["applied"]["accept"] is None and app_eps(res, "ECPM")[0]["closed"] is None
+    assert part["agent"]["ag"].ship_data[A1]["tag"]["st"] == "trial"
+
+
+def test_a_vintage_flip_starts_the_trial_again_even_when_its_build_then_runs_out_of_time(tmp_path, agent_on,
+                                                                                        no_ecpm_settle, monkeypatch,
+                                                                                        capsys):
+    # a re-ask is made once: its accept flip restarts the trial where it is recorded, so a timeout later in that build
+    # cannot lose it (the trial would go live with a flip inside its window)
+    own, others = ecpm_world()
+    ents = ag_world(own, others)
+    p_ix = ecpm_p_ix(ents)
+    ag_build(tmp_path, ents, p_ix)
+    own2 = {k: list(v) for k, v in own.items()}
+    own2["rev"][p_ix - 5] *= 3.0                                              # a restated day inside the ask's window
+    ents2 = ag_world(own2, others)
+    real = cb._Agent.tick
+
+    def tick(self):                                                           # out of time right after the flip
+        if any(((a.get("vin") or {}).get("7") or {}).get("t") == self.ts for r in self.rows for a in r["asks"]):
+            raise cb.AgentTimeout()
+        return real(self)
+    monkeypatch.setattr(cb._Agent, "tick", tick)
+    capsys.readouterr()
+    ag_build(tmp_path, ents2, p_ix + 7)
+    assert skipped(capsys.readouterr().err, "cpi agent") == ["cpi agent skipped: AgentTimeout"]
+    blk = json.load(open(cb.levels_path(str(tmp_path / "data"))))["agent"]
+    a0 = [r for r in blk["rows"] if r["fam"] == "ECPM"][0]["asks"][0]
+    assert a0["vin"]["7"]["acc_flip"] and blk["vintage"]["accept_flips"] == 1
+    assert {k: blk["trial"][k] for k in ("st", "why", "since", "exit")} == {"st": "trial", "why": "vintage",
+                                                                            "since": ag_day(p_ix + 7), "exit": None}
+    monkeypatch.setattr(cb._Agent, "tick", real)
+    _, part = ag_build(tmp_path, ents2, p_ix + 8)                             # the next build: not re-asked, not lost
+    blk = part["ledger"]["agent"]
+    assert (blk["trial"]["since"], blk["trial"]["why"], blk["vintage"]["accept_flips"]) == (ag_day(p_ix + 7),
+                                                                                           "vintage", 1)
+
+
+def test_after_a_rule_change_the_old_rules_answers_are_never_re_asked_as_vintage(tmp_path, agent_on, no_ecpm_settle,
+                                                                                 monkeypatch):
+    # parity skips them already; a vintage re-ask would compare two rules on the same data and count it as a data flip
+    own, others = ecpm_world()
+    ents = ag_world(own, others)
+    p_ix = ecpm_p_ix(ents)
+    ag_build(tmp_path, ents, p_ix)
+    monkeypatch.setattr(cb, "agent_cfg", lambda: dict(agent_on, move_bands=50.0))   # a new rule; the same data
+    for t_ix in (p_ix + 1, p_ix + 7):
+        _, part = ag_build(tmp_path, ents, t_ix)
+    blk = part["ledger"]["agent"]
+    a0 = rows_of(part, "ECPM")[0]["asks"][0]
+    assert a0["th"] != blk["th"] and a0["vin"]["7"] is None
+    assert (blk["vintage"]["done7"], blk["vintage"]["accept_flips"]) == (0, 0)
+    assert (blk["trial"]["why"], blk["trial"]["since"]) == ("rule", ag_day(p_ix + 1))
+
+
+def test_a_lasting_parity_mismatch_logs_one_restart_per_data_day_not_one_per_build(tmp_path, agent_on, no_ecpm_settle,
+                                                                                    monkeypatch):
+    own, others = ecpm_world()
+    ents = ag_world(own, others)
+    p_ix = ecpm_p_ix(ents)
+    ag_build(tmp_path, ents, p_ix)
+    real = LA.decide
+
+    def reworded(ri, mkt, cfg, flags=None, **kw):                             # a cause worded anew, no rule change
+        out = real(ri, mkt, cfg, flags, **kw)
+        return dict(out, cause=out["cause"] + ".") if ri["d"] == ag_day(p_ix) else out
+    monkeypatch.setattr(LA, "decide", reworded)
+    bad = []
+    for _ in range(3):                                                        # three builds of one data day
+        _, part = ag_build(tmp_path, ents, p_ix + 7)
+        bad.append(part["ledger"]["agent"]["parity"]["bad"])
+    assert part["ledger"]["agent"]["trial"]["log"] == [[ag_day(p_ix), "trial", "start"],
+                                                       [ag_day(p_ix + 7), "trial", "parity"]]
+    assert bad[0] < bad[1] < bad[2]                                           # (every check still counted)
+    _, part = ag_build(tmp_path, ents, p_ix + 8)
+    assert part["ledger"]["agent"]["trial"]["log"][2:] == [[ag_day(p_ix + 8), "trial", "parity"]]
 
 
 def ag_act(n, kind, at, fam="CPI", **kw):
@@ -1973,7 +2177,54 @@ def test_owner_accept_on_a_kept_proposal_overrides_and_holds_the_family(tmp_path
         assert r["n"] == 1                                                     # never asked while the owner holds it
         row = [x for x in part["agent"]["ag"].ship_data[A1]["rows"] if x["fam"] == "CPI"][0]
         assert row["st"] == "overridden" and row["ovr"] == {"at": acts[0]["at"], "act": "accept"}
+        assert row["next"] is None and r["next"] is not None                 # no next check shipped (the saved one stays)
     assert part["agent"]["ag"].board["n"]["overridden"] == 1
+
+
+def test_an_owner_action_at_night_is_shown_on_its_ist_day(tmp_path, agent_on):
+    ents = ag_world(waves(), market_apps())
+    p_ix = ix_of(app_eps(CA.run(ents, CA.P_PROD, ag_day(AGN - 1)), "CPI")[0]["suggest"][0])
+    _, part = ag_build(tmp_path, ents, p_ix)
+    at = later_than(part)[:10] + "T20:10:00Z"                                 # 01:40 IST the next day
+    acts = [ag_act(1, "accept", at, proposal={"day": ag_day(p_ix), "days": [ag_day(p_ix - 27), ag_day(p_ix)]},
+                   **{"from": ag_day(p_ix + 7)})]
+    _, part = ag_build(tmp_path, ents, p_ix + 7, acts=acts)
+    row = [x for x in part["agent"]["ag"].ship_data[A1]["rows"] if x["fam"] == "CPI"][0]
+    ist = (date.fromisoformat(at[:10]) + timedelta(days=1)).isoformat()
+    assert row["st"] == "overridden" and row["_last"] == ist
+    assert cb._ag_tag([row], date.fromisoformat(ag_day(p_ix + 7)))["day"] == ist      # the tag's day as the page's
+    assert (cb._ist_day("2025-03-01T18:29:59Z"), cb._ist_day("2025-03-01T18:30:00Z")) == ("2025-03-01", "2025-03-02")
+    assert cb._ist_day(None) is None and cb._ist_day("soon") is None
+
+
+def test_a_decision_the_agent_no_longer_asks_ships_no_next_check_and_its_alarms_own_close_day(tmp_path, agent_on):
+    s = scale_up()
+    for k in ("sp_usd", "sp_inr", "inst", "d0_inr"):
+        ag_mul(s, k, 430, AGN, 0.0)                                           # spend stops: the re-opened alarm ends
+    ents = ag_world(s, market_apps())
+
+    def shipped(part):
+        return [x for x in part["agent"]["ag"].ship_data[A1]["rows"] if x["fam"] == "CPI"][0]
+
+    def marks(part):
+        return [x["ag"]["next"] for x in part["ledger"]["apps"][A1]["CPI"] if x.get("ag")]
+    _, part = ag_build(tmp_path, ents, 420)
+    nxt = shipped(part)["next"]
+    assert shipped(part)["st"] == "blocked" and nxt and marks(part) == [nxt]
+    res, part = ag_build(tmp_path, ents, AGN - 2)
+    ep = app_eps(res, "CPI")[0]
+    assert ep["why"] == "stopped" and ep["closed"] < ag_day(AGN - 10)
+    r = rows_of(part, "CPI")[0]                                               # the saved next stays (a re-open asks it)
+    assert r["end"] == {"t": ag_day(AGN - 2), "day": ep["closed"], "why": "stopped"} and r["next"] == nxt
+    x = shipped(part)
+    assert (x["st"], x["next"], x["end"]["day"]) == ("closed", None, ep["closed"]) and marks(part) == [None]
+    assert part["agent"]["ag"].ship_data[A1]["tag"] is None
+    led = json.load(open(cb.levels_path(str(tmp_path / "data"))))
+    for y in led["agent"]["rows"]:
+        y["end"].pop("day")                                                   # an end saved before the day was kept
+    json.dump(led, open(cb.levels_path(str(tmp_path / "data")), "w"))
+    _, part = ag_build(tmp_path, ents, AGN - 1)
+    assert rows_of(part, "CPI")[0]["end"] == {"t": ag_day(AGN - 2), "day": ep["closed"], "why": "stopped"}
 
 
 def test_owner_pin_holds_a_family_until_back_to_auto(tmp_path, agent_on):

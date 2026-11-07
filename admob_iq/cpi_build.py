@@ -41,9 +41,10 @@ engine.cpi_alarm (P_PROD) to the data day t, nothing trimmed:
   history row that cannot be read is dropped and counted (BadRow); a history FILE that cannot be read is kept as it
   is and ships no "lv" — the owner's set / accept / auto / undo still apply (rollback / reject: NoLedger).
 
-  The level agent (engine.level_agent, P_PROD levels.agent mode "on"; the owner does not tap): every proposal and every
-  engine settle of CPI / GAP is answered from the data as known on its day (accept / keep / wait, frozen in the
-  history's "agent" block, asked again on the weekly phase); keep / wait leave the alarm open with the cause written,
+  The level agent (engine.level_agent, P_PROD levels.agent mode "on"; the owner does not tap): every proposal, every
+  engine settle of CPI / GAP and the engine's settle of any alarm it answered already is answered from the data as
+  known on its day (accept / keep / wait, frozen in the history's "agent" block, asked again on the weekly phase);
+  keep / wait leave the alarm open with the cause written,
   a settle kept or waiting is blocked (agent_veto: the alarm goes on from its own change start, its old notices
   seeded), a money level is never lowered, an accept of a proposal applies only after a clean 28-day trial, and every
   acceptance is watched 84 days (back at the old level → reverted). It ships the app file's "ag" rows, each
@@ -1965,7 +1966,7 @@ class _Agent:
         self.th = LA.th_sha(cfg)
         self.rows = blk["rows"]
         self.used = {r["id"] for r in self.rows} | {x["id"] for x in blk["net"]}
-        self.n_asks, self.thin = 0, False
+        self.n_asks, self.thin, self.restarted = 0, False, False
         self.prims, self.runs = {}, {}
         self.ship_data, self.board = None, None
         self.set_world(res0)
@@ -2091,19 +2092,22 @@ class _Agent:
         return ids
 
     def sync(self):
-        """Each row follows its episode in the agent world (opened / c); it ends when that episode closed or is gone."""
+        """Each row follows its episode in the agent world (opened / c); it ends when that episode closed or is gone —
+        end = {t: the build day that first saw it, day: the episode's own close day (None when gone), why}."""
         for r in self.rows:
             if r["app"] not in self.apps:
                 continue
             ep = self.match(r["app"], r["fam"], r["ep"]["opened"])
             if ep is None:
-                end = {"t": self.ts, "why": "gone"}
+                end = {"t": self.ts, "day": None, "why": "gone"}
             else:
                 r["ep"] = {"opened": ep["opened"], "c": ep["c"]}
-                end = None if ep["closed"] is None else {"t": self.ts, "why": ep["why"]}
+                end = None if ep["closed"] is None else {"t": self.ts, "day": ep["closed"], "why": ep["why"]}
             old = r.get("end")
             if end is None or not (old and old.get("why") == end["why"]):
                 r["end"] = end
+            else:
+                old["day"] = end["day"]                        # (also on a row saved before the day was kept)
 
 
     # ── questions and frozen answers (D-d: first day, then the weekly phase; a missed day asks on the next build) ──
@@ -2112,9 +2116,11 @@ class _Agent:
                 and (not r["asks"] or r["asks"][-1]["d"] < self.ts))
 
     def questions(self):
-        """Due questions in the order they are answered: proposals as of t, the CPI / GAP settles in force as of their
-        settle day (oldest first), then the blocked / on-hold settles asked again as of t. A held family is never
-        asked: its due rows wait for the weekly phase after the hold ends."""
+        """Due questions in the order they are answered: proposals as of t, the engine's settles in force as of their
+        settle day (oldest first: every CPI / GAP settle, and a settle of any family whose alarm the agent answered
+        already — an ECPM / IPU / SPEND settle nobody answered stands as today), then the blocked / on-hold settles
+        asked again as of t. A held family is never asked: its due rows wait for the weekly phase after the hold
+        ends."""
         q1, q2, q3 = [], [], []
         for aid in self.order:
             for p in (self.world.get("proposals") or {}).get(("app", aid)) or []:
@@ -2136,13 +2142,15 @@ class _Agent:
         for aid in self.order:
             lv = (self.world.get("levels") or {}).get(("app", aid)) or {}
             for ep in self._by.get(aid, []):
-                if ep["fam"] not in fams or ep["why"] != "settled":
+                if ep["why"] != "settled":
                     continue
                 rows = lv.get(ep["fam"]) or []
                 last = rows[-1] if rows else None
                 if not last or last["src"] != "accepted" or (last.get("ep") or {}).get("opened") != ep["opened"]:
                     continue                                   # its level was replaced since: history, never asked
                 r = self.find(aid, ep["fam"], ep)
+                if ep["fam"] not in fams and (r is None or r["why"] not in ("money", "open")):
+                    continue                                   # D-j: an ECPM / IPU / SPEND settle nobody answered
                 if r is not None and (r.get("rev") or _settle_ask(r) is not None):
                     continue                                   # answered (or reverted: the owner's only)
                 if self.held(aid, ep["fam"]):
@@ -2315,13 +2323,14 @@ class _Agent:
         return fired
 
     def _revert_row(self, aid, ep, rev):
+        """A row for a revert of an engine settle nobody asked; its cause carries no value (the page prints rev's old
+        and v in the view's own unit and money)."""
         fam = ep["fam"]
         if rev["by"] == "r3":
-            cause = "back at the old level: the alarm came back to %s within %d days of the acceptance — reverted" % (
-                _fmt(fam, rev["old"]), self.cfg["net"]["days"])
+            cause = "back at the old level: the alarm came back to it within %d days of the acceptance — reverted" % (
+                self.cfg["net"]["days"])
         else:
-            cause = "back at the old level: two 28-day checks in a row within one band of %s (last %s) — reverted" % (
-                _fmt(fam, rev["old"]), _fmt(fam, rev["v"]))
+            cause = "back at the old level: two 28-day checks in a row within one band of it — reverted"
         r = {"id": _ag_id("D", "%s|%s|%s|r" % (aid, fam, ep["opened"]), self.used), "app": aid, "fam": fam,
              "why": "revert", "ep": {"opened": ep["opened"], "c": ep["c"]}, "seen": self.now_iso,
              "first": rev["day"], "last": rev["day"], "next": None, "n": 0, "dec": "revert",
@@ -2336,6 +2345,8 @@ class _Agent:
     # ── every stored answer checked again: parity (the same inputs give the same answer), vintage (the same day asked
     #    again on matured data), the accept trial, the verdicts ──
     def parity(self):
+        """Every stored ask made under the rule in force decided again from its own rule inputs → True when one differs
+        (run before this build's asks: it reads only the answers earlier builds froze)."""
         pr = self.blk["parity"]
         n, bad = 0, False
         for r in self.rows:
@@ -2354,22 +2365,23 @@ class _Agent:
         return bad
 
     def vintage(self):
-        """Each ask with its rule inputs asked again 7 and 28 days after its build: the same day, episode and new
-        days on this build's data. → True when an accept / not-accept answer flipped."""
+        """Each ask with its rule inputs, made under the rule in force, asked again 7 and 28 days after its build: the
+        same day, episode and new days on this build's data. An accept / not-accept flip starts the trial again right
+        where it is recorded (a timeout later in this build keeps both)."""
         vt = self.blk["vintage"]
-        n, acc_flip = 0, False
+        n = 0
         for r in self.rows:
             if r["app"] not in self.apps:
                 continue
             for a in r["asks"]:
-                if not a.get("ri") or a.get("mkt") is None:
+                if not a.get("ri") or a.get("mkt") is None or a.get("th") != self.th:
                     continue
                 vin = a.setdefault("vin", {"7": None, "28": None})
                 for key, k in (("7", 7), ("28", 28)):
                     if vin.get(key) is not None or (self.t - _d(a["t"])).days < k:
                         continue
                     if n >= self.cfg["max_asks"]:
-                        return acc_flip
+                        return
                     self.tick()
                     ri0 = a["ri"]
                     e = {"fam": ri0["fam"], "opened": ri0["ep"]["opened"], "c": ri0["ep"]["c"],
@@ -2389,26 +2401,35 @@ class _Agent:
                     vt["accept_flips"] += int(x["acc_flip"])
                     if err is not None and (vt["err_max"] is None or err > vt["err_max"]):
                         vt["err_max"], vt["err_f"] = err, f
-                    acc_flip = acc_flip or x["acc_flip"]
-        return acc_flip
+                    if x["acc_flip"]:
+                        self.restart("vintage")
 
-    def trial(self, bad, flip):
-        """D-c: accepts of proposals stay a trial until ≥ 28 days since it (re)started, with no parity mismatch, no
-        accept flip and no rule change since, and ≥ 1 vintage re-ask at +28 done since; any of those three events
-        starts the trial again from this day."""
-        tr = self.blk["trial"]
-        why = None
-        if self.blk.get("th") != self.th:
-            why = "rule"
-            self.blk["th"] = self.th
-        elif bad:
-            why = "parity"
-        elif flip:
-            why = "vintage"
-        if why:
-            tr.update(st="trial", since=self.ts, why=why, exit=None)
-            tr["log"].append([self.ts, "trial", why])
+    def restart(self, why):
+        """D-c: the accept trial starts again from this day — one why per build (the first of rule, parity, vintage);
+        a restart the block has already (an earlier build of this data day) is not logged again."""
+        if self.restarted:
             return
+        self.restarted = True
+        tr = self.blk["trial"]
+        if (tr["st"], tr["since"], tr["why"]) == ("trial", self.ts, why):
+            return
+        tr.update(st="trial", since=self.ts, why=why, exit=None)
+        tr["log"].append([self.ts, "trial", why])
+
+    def check(self):
+        """Before this build's asks (each freezes the trial state): a rule change or a parity mismatch starts the accept
+        trial again, then the vintage re-asks (an accept flip starts it again too)."""
+        if self.blk.get("th") != self.th:
+            self.blk["th"] = self.th
+            self.restart("rule")
+        if self.parity():
+            self.restart("parity")
+        self.vintage()
+
+    def trial(self):
+        """D-c: accepts of proposals stay a trial until ≥ 28 days since it (re)started (a rule change, a parity mismatch
+        or an accept flip starts it again: check) and ≥ 1 vintage re-ask at +28 was done since — then live."""
+        tr = self.blk["trial"]
         if tr["st"] != "trial" or (self.t - _d(tr["since"])).days < self.cfg["trial"]["days"]:
             return
         done28 = any(((a.get("vin") or {}).get("28") or {}).get("t", "") >= tr["since"]
@@ -2512,7 +2533,8 @@ class _Agent:
             if r["app"] not in self.apps:
                 continue
             m = out.setdefault((r["app"], r["fam"]), {"tag": [], "extra": []})
-            base = {"dec": r["id"], "short": r.get("short"), "cause": r.get("cause"), "next": r.get("next")}
+            base = {"dec": r["id"], "short": r.get("short"), "cause": r.get("cause"),
+                    "next": r.get("next") if self.status(r) in _STANDING else None}
             acc = r["applied"].get("accept")
             if self.passed(r) and not r.get("rev"):
                 m["tag"].append(("accepted", r["ep"]["opened"], dict(base, st="passed")))
@@ -2637,23 +2659,32 @@ def _ag_ship(ag, r, st, ovr, held):
                              CA._ix(e.day0, ep["closed"] or ag.ts), ep["base"])
             if m:
                 xp = {"inr": m["since_c_inr"], "usd": m["since_c_usd"], "from": r["first"]}
-    last = max(x for x in (r.get("last"), (rev or {}).get("day"), str((ovr or {}).get("at") or "")[:10],
+    last = max(x for x in (r.get("last"), (rev or {}).get("day"), _ist_day((ovr or {}).get("at")),
                            (acc or {}).get("day"), r.get("first")) if x)
     return {"id": r["id"], "fam": r["fam"], "why": r["why"], "st": st, "dec": r["dec"], "branch": r["branch"],
             "part": r["part"], "cause": r["cause"], "short": r["short"], "first": r["first"], "last": r["last"],
-            "next": r["next"], "n": r["n"], "ep": dict(r["ep"]),
+            "next": r["next"] if st in _STANDING else None, "n": r["n"], "ep": dict(r["ep"]),
             "applied": {"day": acc["day"], "days": list(acc["days"])} if acc else None,
             "trial": bool(asks and asks[-1].get("trial")), "level": r.get("level"), "h": h,
             "k": dict(asks[-1]["k"]) if asks else None, "k0": dict(asks[0]["k"]) if asks else None,
             "chk": copy.deepcopy(r.get("chk")), "vd": r.get("vd"), "ve": r.get("ve"),
-            "rev": {"by": rev["by"], "day": rev["day"]} if rev else None,
+            "rev": {k: rev.get(k) for k in ("by", "day", "old", "v")} if rev else None,
             "ovr": {"at": ovr["at"], "act": ovr["act"]} if ovr else None, "held": bool(held),
             "end": dict(r["end"]) if r.get("end") else None, "xp": xp, "_last": last}
 
 
 _TAG_RANK = {"reverted": 0, "accepted": 1, "trial": 2, "waiting": 3, "hold": 3, "kept": 4, "blocked": 4,
              "overridden": 5, "held": 6}
-_STANDING = ("trial", "waiting", "hold", "kept", "blocked")
+_STANDING = ("trial", "waiting", "hold", "kept", "blocked")     # the rows the agent asks again (only these ship a next)
+
+
+def _ist_day(at):
+    """An owner action's UTC time → its IST day (every day the owner reads is an IST day), else None."""
+    try:
+        x = datetime.fromisoformat(str(at).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (x if x.tzinfo else x.replace(tzinfo=timezone.utc)).astimezone(ZoneInfo(IST)).date().isoformat()
 
 
 def _ag_tag(rows, t):
@@ -2664,7 +2695,7 @@ def _ag_tag(rows, t):
         if st not in _TAG_RANK:
             continue
         day = {"reverted": (x["rev"] or {}).get("day"), "accepted": (x["applied"] or {}).get("day"),
-               "overridden": str((x["ovr"] or {}).get("at") or "")[:10] or None}.get(st)
+               "overridden": _ist_day((x["ovr"] or {}).get("at"))}.get(st)
         if st in ("waiting", "hold"):
             day = x["next"]
         if st in ("reverted", "accepted", "overridden") and (not day or (t - _d(day)).days > 28):
@@ -2728,18 +2759,19 @@ def _ag_trim(blk, t, cfg):
             break
 
 
-def _ag_undo(blk, ts, net0):
-    """A timeout: what this build applied or reverted is taken back (none of it shipped); its asks stay."""
+def _ag_undo(blk, rows0, net0):
+    """A timeout: what this build applied or reverted is taken back (none of it shipped). Each row gets back what it
+    applied, its revert and its verdicts as this build found them (rows0: what an earlier build of the same data day
+    did stays); a row this build made without an ask (a revert) goes; the net is as it was (net0). Its asks stay."""
     keep = []
     for r in blk["rows"]:
-        if r["why"] == "revert" and not r["asks"] and (r.get("rev") or {}).get("t") == ts:
+        was = rows0.get(r["id"])
+        if was is not None:
+            r.update(copy.deepcopy(was))
+        elif not r["asks"]:
             continue
-        for k in ("veto", "accept"):
-            if (r["applied"].get(k) or {}).get("since_t") == ts:
-                r["applied"][k] = None
-        if (r.get("rev") or {}).get("t") == ts:
-            r["rev"] = None
-            r["vd"] = r["ve"] = "pending"
+        else:
+            r.update(applied={"veto": None, "accept": None}, rev=None, vd="pending", ve="pending")
         keep.append(r)
     blk["rows"][:] = keep
     blk["net"][:] = net0
@@ -2781,20 +2813,24 @@ def load_backtest(data_dir):
 def agent_run(ents, res0, owner, la, led, t, now, extra):
     """The level agent's step (D-a … D-j) → (the agent world: the replay with the owner's and the agent's primitives,
     the agent part). A. the saved block (validated: bad → ValueError) or a new one; B. the world from the frozen rows;
-    C. ≤ 3 passes: the due questions answered (frozen), their primitives, the apps replayed again; D. the revert net;
-    E. parity, vintage re-asks, the trial, the verdicts. The part: {"blk", "ran", "marks", "quiet", "finish"}; finish
-    (after the history merge) names each row's level row, puts the block into the history and makes the ship data.
-    AgentTimeout (budget_s): the asks so far are kept (the exception carries the block), nothing is applied."""
+    C. parity and the vintage re-asks over the answers earlier builds froze (a rule change, a mismatch or an accept
+    flip starts the trial again: before the asks, which freeze it); D. ≤ 3 passes: the due questions answered
+    (frozen), their primitives, the apps replayed again; E. the revert net; F. the trial's exit, the verdicts. The
+    part: {"blk", "ran", "marks", "quiet", "finish"}; finish (after the history merge) names each row's level row, puts
+    the block into the history and makes the ship data. AgentTimeout (budget_s): the asks so far are kept (the
+    exception carries the block), nothing this build applied or reverted stays."""
     cfg = agent_cfg()
     ts = t.isoformat()
     raw = led.get("agent")
     blk = _check_block(copy.deepcopy(raw)) if raw is not None else _new_block(ts, gu._now_iso(now), cfg)
     net0 = copy.deepcopy(blk["net"])
+    rows0 = {r["id"]: {k: copy.deepcopy(r.get(k)) for k in ("applied", "rev", "vd", "ve")} for r in blk["rows"]}
     ag = _Agent(ents, res0, owner, la, blk, t, now, extra, cfg)
     try:
         ag.derive()
         ag.update(ag.derive_prims())
         ag.sync()
+        ag.check()
         for _ in range(3):
             qs = ag.questions()
             if not qs or ag.n_asks >= cfg["max_asks"]:
@@ -2809,12 +2845,10 @@ def agent_run(ents, res0, owner, la, led, t, now, extra):
         if ag.net():
             ag.update(ag.derive_prims())
             ag.sync()
-        bad = ag.parity()
-        flip = ag.vintage()
-        ag.trial(bad, flip)
+        ag.trial()
         ag.verdicts()
     except AgentTimeout:
-        _ag_undo(blk, ts, net0)
+        _ag_undo(blk, rows0, net0)
         _ag_trim(blk, t, cfg)
         raise AgentTimeout(blk)
     ms = int(round((_clock() - ag.start) * 1000))
