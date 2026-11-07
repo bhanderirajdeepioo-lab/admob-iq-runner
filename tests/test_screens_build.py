@@ -2578,3 +2578,33 @@ def test_v4_one_admob_unit_two_ga4_names_counts_once(tmp_path):
     f2 = gz(out / ("scr_%s.json.gz" % KEY))
     w = [x for x in f2["sig"]["2026-10-01_2026-10-31"]["s%d" % six[MAIN]] if x[0] == "w"]
     assert len(w) == 1 and w[0][1] in ("unit_a", "Unit_A") and w[0][4] == 3100 and w[0][5] == 1240   # 31 days, once
+
+
+def test_v4_unjudged_counts_old_unit_mix_and_a_failure_kept_to_its_app(tmp_path, monkeypatch, capsys):
+    data, out, dash = build(tmp_path, {"show_w": 0.6})
+    sb.run(dash, str(data), str(out), {}, NOW)
+    one = gz(out / "scr_all.json.gz")["apps"][AID]
+    assert one["sg"]["2026-08-01_2026-11-04"][2] is None                      # All time: 🔻 is never judged — "—"
+    assert one["sg"]["2026-11-04_2026-11-04"] == [None, None, None]           # Today: no final day, AdMob's not complete
+    assert one["sg"]["2026-10-27_2026-11-02"] == [0, 1, 1]
+    # a screen's unit mix from days before the period (none of its own): ⚠️ names those days
+    def day_fn(d):
+        r = core_recs(d, {"show_w": 0.6})
+        if d >= "2026-09-15":                                                 # GA4 stops splitting screens by unit
+            r["a"] = {"st": "w", "g": "c", "r": [[c, n] for c, n in
+                                                 ((c, sum(x[3] for x in r["a"]["r"] if x[0] == c)) for c in (MAIN, EDIT, ADACT, NS))]}
+        return r
+    data2, out2, dash2 = build(tmp_path / "b", {"show_w": 0.6}, day_fn=day_fn)
+    sb.run(dash2, str(data2), str(out2), {}, NOW)
+    f2 = gz(out2 / ("scr_%s.json.gz" % KEY))
+    six = {c: i for i, (c, _) in enumerate(f2["screens"])}
+    w = next(x for x in f2["sig"]["2026-10-27_2026-11-02"]["s%d" % six[MAIN]] if x[0] == "w")
+    assert f2["notes"]["allf"] == 2 and w[6:] == ["2026-08-18", "2026-09-14"]   # the newest SIG_N split days up to its end
+    # v 4 failing on an app: its files still written, ONE health line with the type
+    monkeypatch.setattr(sb, "signals4", lambda *a, **k: (_ for _ in ()).throw(ValueError("made-up")))
+    capsys.readouterr()
+    sb.run(dash, str(data), str(out), {}, NOW)
+    err = capsys.readouterr().err
+    assert "scr v4 skipped: ValueError\n" in err and "made-up" not in err
+    f2 = gz(out / ("scr_%s.json.gz" % KEY))
+    assert f2["v"] == sb.V and f2["sig"] == {} and f2["pw"] == [] and len(f2["days"]) == len(_days("2026-08-01", "2026-11-04"))

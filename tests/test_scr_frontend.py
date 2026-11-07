@@ -658,7 +658,7 @@ def test_v4_the_table_is_firebases_numbers(out):
     v = out["v4"]
     assert v["heads"] == ["Screen / Ad", "Users", "Views", "Time / user", "Ads", "Revenue", "%", "Signal"]
     r = v["rows"]
-    assert list(r) == ["Main", "Editor", "Back press", "App resume", "Other1", "Not recorded", "Other (GA4 grouped)",
+    assert list(r) == ["Main", "Editor", "Back press", "App resume", "Other1", "(not set)", "Other (GA4 grouped)",
                        "Total (app)"]                                               # by revenue, the total last
     m = r["Main"]
     assert (m["Users"], m["Views"], m["Time / user"], m["Ads"], m["Revenue"], m["%"]) == \
@@ -708,7 +708,7 @@ def test_v4_sorting_and_the_report(out):
     assert v["order_rev"][:4] == ["Main", "Editor", "Back press", "App resume"] and v["order_rev"][-1] == "Total (app)"
     assert v["order_views"][:3] == ["Main", "Editor", "Other1"] and v["order_views"][-3:] == ["Back press", "App resume",
                                                                                               "Total (app)"]
-    assert v["order_views_up"][:2] == ["Other (GA4 grouped)", "Not recorded"]
+    assert v["order_views_up"][:2] == ["Other (GA4 grouped)", "(not set)"]           # (GA4's own label, as Firebase)
     r = v["rep"]
     assert r.startswith("Screens report — Alpha App — 27 Feb – 28 Mar 2026")
     assert "1. Screen: x.y.MainActivity — Ads wasted" in r and "2. Screen: x.y.EditorActivity — Room for ads" in r

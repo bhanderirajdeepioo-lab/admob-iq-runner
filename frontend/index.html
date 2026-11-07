@@ -8606,8 +8606,8 @@ function repBody(id){ const x=ALL&&ALL.apps[id]; if(!x||!x.d0) return '<p class=
 function howBody(x){ const g=(typeof DATA!=='undefined'&&DATA&&DATA.generated_at)||''; let ist='';
   try{ if(g){ const t=new Date(Date.parse(g)+19800000); if(isFinite(t)) ist=fd(iso(t))+' '+String(t.getUTCHours()).padStart(2,'0')+':'+String(t.getUTCMinutes()).padStart(2,'0')+' IST'; } }catch(e){}
   return `<p class="sc-note">GA4 din = <b>5:30 AM IST se agle din 5:30 AM IST tak</b> (UTC din). GA4 data till <b>${fdy(x.ft)}</b>; Today / Yesterday abhi final nahi.${ist?` Build: ${ist}.`:''}</p>`
-    +'<p class="sc-note"><b>Table (Firebase jaisa)</b>: <b>Users</b> = GA4 Active users, chune hue period me unique (Firebase ka "Active users" — roz ka jod nahi; dashboard ke periods pe, Custom range pe nahi) · <b>Views</b> = screen views · <b>Time / user</b> = engagement time ÷ Users (Firebase ka "Average engagement time per active user") · <b>Ads</b> = ad impressions (screens: GA4, saare formats) · <b>Revenue</b> = GA4 revenue by screen (Firebase ka "Total revenue") · <b>%</b> = app ke GA4 revenue ka hissa. <b>Full-screen rows</b> (app open / interstitial / rewarded) = AdMob ke units, trigger ke naam se, AdMob ke apne din (IST) — GA4 inhe "AdActivity" pe dikhata hai.</p>'
-    +'<p class="sc-note"><b>Signals</b> (chune hue period pe, sirf final din): 💡 <b>Ads ki jagah</b> — screen pe app ke screen time ka 10%+, par ads per minute app ke 20% se kam · ⚠️ <b>Ads waste</b> — row ke AdMob units ke aadhe se kam fill hue ads dikhe, aur na dikhe ads app ke saare fill ka 20%+ (screen: har unit ka screen pe hissa; full-screen: uske units) · 🔻 <b>Gira</b> — Imp / user / day pichhle period se 20%+ kam (mahina: pichhla mahina; baaki: utne hi din pehle), row ke paas app ke 5%+ ads, dono taraf 7+ din; All time pe nahi.</p>'
+    +'<p class="sc-note"><b>Table (Firebase jaisa)</b>: <b>Users</b> = GA4 Active users, chune hue period me unique (Firebase ka "Active users" — roz ka jod nahi; dashboard ke periods pe, Custom range pe nahi) · <b>Views</b> = screen views · <b>Time / user</b> = engagement time ÷ Users (Firebase ka "Average engagement time per active user") · <b>Ads</b> = ad impressions (screens: GA4, saare formats) · <b>Revenue</b> = GA4 revenue by screen (Firebase ka "Total revenue") · <b>%</b> = screens: app ke GA4 revenue ka hissa, full-screen: AdMob total ka hissa. <b>Full-screen rows</b> (app open / interstitial / rewarded) = AdMob ke units, trigger ke naam se, AdMob ke apne din (IST) — GA4 inhe "AdActivity" pe dikhata hai.</p>'
+    +'<p class="sc-note"><b>Signals</b> (chune hue period pe, sirf final din): 💡 <b>Ads ki jagah</b> — screen pe app ke screen time ka 10%+, par ads per minute app ke 20% se kam · ⚠️ <b>Ads waste</b> — row ke AdMob units ke aadhe se kam fill hue ads dikhe, aur na dikhe ads app ke saare fill ka 20%+ (screen: har unit ka screen pe hissa; full-screen: uske units) · 🔻 <b>Gira</b> — Imp / user / day pichhle period se 20%+ kam (mahina: pichhla mahina; baaki: utne hi din pehle), row ke paas apni kism (screens / full-screen) ke 5%+ ads — is ya pichhle period me — aur dono taraf 7+ final din; All time pe nahi. Jo signal kisi period me judge nahi ho sakta, uski ginti "—".</p>'
     +'<p class="sc-note">Row pe tap = details: roz / mahine ke numbers, units (fill, show rate), versions, countries, new vs returning.</p>'; }
 // the format benchmark as measured (scr_all "bench"): per format p25 / median and how many units / screens it stands on
 function benchHtml(){ const b=ALL&&ALL.bench, F=b&&b.fmt&&typeof b.fmt==='object'?b.fmt:null; if(!F) return '<p class="sc-note">Format benchmark is build me nahi bana — status "—".</p>';
@@ -8639,7 +8639,8 @@ function sigShort(s){ const c=s&&s[0]; if(c==='b') return `${SIGI.b} ${PSH(s[1])
   if(c==='w') return `${SIGI.w} ${E(s[1])}: sirf ${PI(s[2])} dikhe`; if(c==='d') return `${SIGI.d} Imp / user ${PCH(s[1],s[2])}`; return ''; }
 function sigLong(s){ const c=s&&s[0];
   if(c==='b') return `${SIGN.b}: app ke screen time ka ${PSH(s[1])} yahan, par ads ka sirf ${PSH(s[2])} (ads per minute app ke 20% se kam)`;
-  if(c==='w') return `${SIGN.w}: ${s[1]} — ${N(s[4])} ads fill hue, ${N(s[5])} dikhe (${PI(s[2])}) · na dikhe ads = app ke saare fill ka ${PSH(s[3])}`;
+  if(c==='w') return `${SIGN.w}: ${s[1]} — ${N(s[4])} ads fill hue, ${N(s[5])} dikhe (${PI(s[2])}) · na dikhe ads = app ke saare fill ka ${PSH(s[3])}`
+    +(okD(s[6])&&okD(s[7])?` · screen pe units ka hissa ${rg(s[6],s[7],true)} ke din se (is period me GA4 ne screen × unit split nahi diya)`:'');
   if(c==='d') return `${SIGN.d}: Imp / user / day ${PU(s[1])} → ${PU(s[2])} (${PCH(s[1],s[2])}) vs ${rg(s[3],s[4],true)}`;
   return ''; }
 // the period's rows from file 2: every screen class (an ad screen's full-screen ads are the AdMob rows instead), each with
@@ -8661,8 +8662,9 @@ function v4Rows(x,f2,lo,hi){ let m=V4M.get(f2); if(!m||m.x!==x){ m={x,v:new Map(
   for(let i=0;i<n;i++){ const c=sc[i][0], k=sc[i][1]; tR+=R[i]; tV+=V[i]; tG+=G[i]; tA+=A[i];
     if(k==='ad'){ adR+=R[i]; continue; }
     if(!(V[i]||A[i]||R[i]||G[i]||us[i])) continue;
-    const u=pu&&pu.u&&i in us?us[i]:null;               // (no row: GA4 withheld it or never gave it — "—", never 0)
-    rows.push({t:'s',i,c,k,name:k==='s'?shortName(c):(KINDN[k]||c),nameH:k==='s'?dispName(c):E(KINDN[k]||c),users:u,views:V[i],eng:G[i],tu:u>0?G[i]/u:null,ads:A[i],rev:R[i],sig:sig?sig['s'+i]||[]:null,
+    const u=pu&&pu.u&&i in us?us[i]:k==='g'&&pu&&pu.fold!=null?+pu.fold:null;   // (GA4's grouped row: its fold; no row: "—", never 0)
+    const nm=k==='s'?shortName(c):k==='ns'?(c||'(blank)'):(KINDN[k]||c);       // ((not set) as Firebase shows it)
+    rows.push({t:'s',i,c,k,name:nm,nameH:k==='s'?dispName(c):E(nm),users:u,views:V[i],eng:G[i],tu:u>0?G[i]/u:null,ads:A[i],rev:R[i],sig:sig?sig['s'+i]||[]:null,
       open:k==='s'&&c in ix?ix[c]:(k==='ns'||k==='g')&&kdi(k)>=0?kdi(k):null}); }
   const fs=Array.isArray(f2.fs4)?f2.fs4:[], fd=Array.isArray(f2.fsd)?f2.fsd:[];
   let fsR=0, fsn=0;
@@ -8672,10 +8674,12 @@ function v4Rows(x,f2,lo,hi){ let m=V4M.get(f2); if(!m||m.x!==x){ m={x,v:new Map(
     // (a trigger that never served an ad is left out; one whose AdMob days are not complete yet stays, its "—" says why)
     if(!(rq||im||rv)&&!(dn<dd&&arr.some(v=>v&&(v[0]||v[2])))) return;
     const gi=items.findIndex(z=>z[1]==='fs'&&z[0]===t[1]&&fmtOf(z[2])===fmtOf(t[0]));
-    rows.push({t:'f',i:j,name:t[1],nameH:E(t[1]),fmt:t[0],units:Array.isArray(t[2])?t[2]:[],users:null,views:null,eng:null,tu:null,ads:dn?im:null,rev:dn?rv:null,rq,mt,dn,dd,sig:sig?sig['f'+j]||[]:null,open:gi>=0?gi:null}); });
+    const k1=arr.findIndex(v=>v!=null), late=k1>=0&&dIx({d0:f2.d0},lo)>=k1;
+    rows.push({t:'f',i:j,name:t[1],nameH:E(t[1]),fmt:t[0],units:Array.isArray(t[2])?t[2]:[],users:null,views:null,eng:null,tu:null,ads:dn?im:null,rev:dn?rv:null,rq,mt,dn,dd,sig:sig?sig['f'+j]||[]:null,open:gi>=0?gi:null,
+      why:dn?'':late?'AdMob ka din abhi poora nahi (~1–2 din baad)':'is period me AdMob ka data nahi'}); });
   let aR=0, an=0; fDays({d0:f2.d0,days:Array.isArray(f2.adt)?f2.adt:[]},x,lo,hi,v=>{ if(v){ aR+=+v[3]||0; an++; } });
   // no revenue day at all in the period (the m read's history still filling): GA4's revenue is unknown, never "$0"
-  const hasM=nm>0;
+  const hasM=nm>0&&!(f2.cur&&f2.cur!=='USD');      // (f2.cur: the property's currency, shipped when not USD)
   if(!hasM) for(const r of rows) if(r.t==='s') r.rev=null;
   const tot={users:pu&&pu.tot!=null?+pu.tot:null,views:tV,eng:tG,ads:tA,rev:hasM?tR:null,adm:an?aR:null,adR:hasM?adR:null,fsR};
   tot.tu=tot.users>0?tG/tot.users:null;
@@ -8698,7 +8702,7 @@ function topV4(rows){ const on=new Set(); rows.slice(0,15).forEach(z=>on.add(z))
 function v4Head(){ const th=(k,l,tt)=>`<th aria-sort="${TS4.k===k?(TS4.dir>0?'ascending':'descending'):'none'}"${tt?` title="${E(tt)}"`:''}><button type="button" data-sc-v4sort="${k}">${l}</button></th>`;
   return th('name','Screen / Ad')+th('users','Users','GA4 Active users — is period me unique (Firebase jaisa: roz ka jod nahi)')+th('views','Views','screen views (GA4)')
     +th('tu','Time / user','engagement time ÷ users (Firebase ka "Average engagement time per active user")')+th('ads','Ads','ad impressions: screens = GA4 (saare formats) · full-screen = AdMob')
-    +(devV()?'':th('rev','Revenue','screens = GA4 revenue (Firebase jaisa) · full-screen = AdMob (apne din)')+th('sh','%','app ke revenue (GA4) ka hissa'))+th('sig','Signal','💡 Ads ki jagah · ⚠️ Ads waste · 🔻 Gira'); }
+    +(devV()?'':th('rev','Revenue','screens = GA4 revenue (Firebase jaisa) · full-screen = AdMob (apne din)')+th('sh','%','screens: app ke GA4 revenue ka hissa · full-screen: AdMob total ka hissa'))+th('sig','Signal','💡 Ads ki jagah · ⚠️ Ads waste · 🔻 Gira'); }
 function v4Cell(v,f,why){ return v==null?`<td${why?` title="${E(why)}"`:''}>—</td>`:`<td>${f(v)}</td>`; }
 // a screen with no users of its own in a period GA4 gave: why (the period's own why first)
 const uWhy4=(z,uw)=>uw||(z.users==null&&z.t==='s'?'GA4 ne is period me is screen ke users nahi diye (chhote screens GA4 kabhi chhupata hai)':'');
@@ -8707,36 +8711,39 @@ function v4Tr(z,R,uw){ const nm=z.t==='f'?`<span class="sc-n">${z.nameH} <small 
   const sg=z.sig==null||!R.fin?`<td class="sc-cz" title="${E(R.fin?puWhy4(x4(),null,'','',R)||'':'abhi koi final din nahi')}">—</td>`:`<td class="sc-cz"${z.sig.length?` title="${E(z.sig.map(sigLong).join(' · '))}"`:''}>${z.sig.length?z.sig.map(sigShort).join('<br>'):'—'}</td>`;
   const ck=z.open!=null?` class="sc-clk${OPEN===z.open?' sc-on':''}" data-sc-open="${z.open}" aria-expanded="${OPEN===z.open}" tabindex="0"`:'';
   return `<tr${ck}><td class="sc-nm"${tt?` title="${E(tt)}"`:''}>${nm}</td>`
-    +(z.t==='f'?'<td>—</td><td>—</td><td>—</td>':v4Cell(z.users,N,uWhy4(z,uw))+v4Cell(z.views,N)+v4Cell(z.tu,fmtT,z.users==null?uWhy4(z,uw):''))
-    +v4Cell(z.ads,N,z.t==='f'&&!z.dn?'AdMob ka din abhi poora nahi (~1–2 din baad)':'')+(devV()?'':v4Cell(z.rev,MU,z.t==='f'&&!z.dn?'AdMob ka din abhi poora nahi (~1–2 din baad)':'')+v4Cell(z.sh,PSH,z.t==='f'?'AdMob total ka hissa':''))+sg+'</tr>'; }
+    +(z.t==='f'?'<td title="full-screen ad ki apni screen nahi — users / views / time screens pe">—</td>'.repeat(3):v4Cell(z.users,N,uWhy4(z,uw))+v4Cell(z.views,N)+v4Cell(z.tu,fmtT,z.users==null?uWhy4(z,uw):''))
+    +v4Cell(z.ads,N,z.why||'')+(devV()?'':v4Cell(z.rev,MU,z.why||(z.rev==null&&z.t==='s'?(R.nm?'':'is period ka revenue abhi GA4 se nahi aaya'):''))+(z.t==='f'&&z.sh!=null?`<td title="AdMob total ka hissa">${PSH(z.sh)}</td>`:v4Cell(z.sh,PSH,'')))+sg+'</tr>'; }
 function v4Table(x,id,lo,hi){ return `<div class="card sc-card" id="sc-tcard"><div id="sc-tb">${v4Body(x,id,lo,hi)}</div></div>`; }
-function v4Body(x,id,lo,hi){ const a2=apPtr(id), f2=f2Of(id);
-  if(!f2) return a2&&fErr(f2Name(a2))?waitHtml(f2Name(a2)):'<p class="sc-note">⏳ Screens aa rahe hain…</p>';
+function v4Body(x,id,lo,hi){ const a2=apPtr(id), f2=f2Of(id); if(!a2) return fileGate(id,'f2');
+  if(!f2) return fErr(f2Name(a2))?waitHtml(f2Name(a2)):'<p class="sc-note">⏳ Screens aa rahe hain…</p>';
   const R=v4Rows(x,f2,lo,hi), uw=puWhy4(x,f2,lo,hi,R), rows=sortV4(R.rows), top=topV4(rows), shown=MORE4?rows:rows.filter(z=>top.has(z)), more=rows.length-shown.length, T=R.tot;
   const dv=devV(), ttr=`<tr class="sc-tot"><td class="sc-nm"><span class="sc-n">Total (app)</span>${T.adm!=null&&!dv?`<small>AdMob ${MU(T.adm)}</small>`:''}</td>${v4Cell(T.users,N,uw)}${v4Cell(T.views,N)}${v4Cell(T.tu,fmtT,T.users==null?uw:'')}${v4Cell(T.ads,N)}${dv?'':`${v4Cell(T.rev,MU)}<td>${T.rev>0?'100%':'—'}</td>`}<td></td></tr>`;
-  const cov=[R.nv<R.nd?`Views ${R.nv}/${R.nd} din`:'',R.na<R.nd?`Ads ${R.na}/${R.nd} din`:'',R.nm<R.nd&&!dv?`Revenue ${R.nm}/${R.nd} din`:''].filter(Boolean);
+  const cov=[R.nv<R.nd?`Views ${R.nv}/${R.nd} din`:'',R.na<R.nd?`Ads ${R.na}/${R.nd} din`:'',R.nm<R.nd&&!dv?`Revenue ${R.nm}/${R.nd} din`:'',
+    R.fsn>0&&R.fsn<R.nd?`Full-screen (AdMob) ${R.fsn}/${R.nd} din`:''].filter(Boolean);
   return `<div class="ct"><h3>Screens · ${E(perName(PER))}</h3><span class="sc-faint">${rg(lo,hi)} · Firebase jaise numbers · row pe tap = details · column pe tap = sort</span></div>`
     +`<div class="sc-tw sc-x" id="sc-ttw"><table class="sc-t sc-t4"><thead><tr>${v4Head()}</tr></thead><tbody>${shown.map(z=>v4Tr(z,R,uw)).join('')||'<tr><td colspan="8" class="sc-faint">Is period me koi screen nahi</td></tr>'}${rows.length?ttr:''}</tbody></table></div>`
     +(more>0||MORE4?`<button type="button" class="sc-more" data-sc-v4more="1">${MORE4?'Show fewer':`Show ${more} more`}</button>`:'')
-    +`<p class="sc-note"><b>Users</b> = GA4 Active users, is period me unique (Firebase jaisa)${uw?` — ${E(uw)}`:''} · <b>Time / user</b> = engagement time ÷ users · <b>Ads</b> = ad impressions${dv?' (full-screen = AdMob)':` · <b>Revenue</b>: screens = GA4 (Firebase jaisa), full-screen = AdMob (AdMob ke apne din${T.adR!=null?`; GA4 me ye "AdActivity" pe ${MU(T.adR)} dikhte hain`:''}) · <b>%</b> = app ke GA4 revenue ka hissa`}.${cov.length?` Is period me: ${cov.join(' · ')}.`:''}</p>`; }
+    +`<p class="sc-note" id="sc-tnote">${uw?`Users: ${E(uw)}. `:''}${cov.length?`Is period me: ${cov.join(' · ')}. `:''}${!dv&&T.adR!=null?`Full-screen ads GA4 me "AdActivity" pe ${MU(T.adR)} dikhte hain — yahan AdMob ke units se. `:''}Column pe hover = matlab · ❓ How this works neeche.</p>`; }
 // the signals of the period, one line each (tap = that row's details)
 function sigCard(x,id,lo,hi){ return `<div class="card sc-card" id="sc-attn"><div id="sc-sgb">${sigBody(x,id,lo,hi)}</div></div>`; }
-function sigBody(x,id,lo,hi){ const f2=f2Of(id); if(!f2) return '<div class="ct"><h3>Signals</h3></div><p class="sc-note">⏳ aa rahe hain…</p>';
+function sigBody(x,id,lo,hi){ const f2=f2Of(id), a2=apPtr(id); if(!a2) return `<div class="ct"><h3>Signals</h3></div>${fileGate(id,'f2')}`; if(!f2) return `<div class="ct"><h3>Signals</h3></div>${a2&&fErr(f2Name(a2))?waitHtml(f2Name(a2)):'<p class="sc-note">⏳ aa rahe hain…</p>'}`;
   const R=v4Rows(x,f2,lo,hi), L=[];
   if(!R.pw) return `<div class="ct"><h3>Signals</h3></div><p class="sc-note">${E(puWhy4(x,f2,lo,hi,R))}</p>`;
   if(!R.fin) return `<div class="ct"><h3>Signals · ${E(perName(PER))}</h3></div><p class="sc-note">Is period me abhi koi final din nahi (GA4 ~2 din baad final hota hai) — signals final dino pe hi lagte hain.</p>`;
   for(const z of sortV4(R.rows)) for(const s of z.sig||[]) L.push({z,s});
   L.sort((a,b)=>'wdb'.indexOf(a.s[0])-'wdb'.indexOf(b.s[0])||(b.z.rev||0)-(a.z.rev||0));
   const c3=[0,0,0]; L.forEach(q=>{ c3['bwd'.indexOf(q.s[0])]++; });
-  const head=`<div class="ct"><h3>Signals · ${E(perName(PER))}</h3><span class="sc-faint">${SIGI.b} ${c3[0]} · ${SIGI.w} ${c3[1]} · ${SIGI.d} ${c3[2]}</span></div>`;
+  const sg0=((ALL&&ALL.apps[id]&&ALL.apps[id].sg)||{})[R.key], cv=j=>Array.isArray(sg0)&&sg0[j]==null?'—':c3[j];   // (— = not judged in it)
+  const head=`<div class="ct"><h3>Signals · ${E(perName(PER))}</h3><span class="sc-faint" title="— = is period me judge nahi hua (All time pe 🔻 nahi · AdMob data nahi · final din kam)">${SIGI.b} ${cv(0)} · ${SIGI.w} ${cv(1)} · ${SIGI.d} ${cv(2)}</span></div>`;
   if(!L.length) return R.na?`${head}<p class="sc-ok">✅ Is period me koi signal nahi</p>`
     :`${head}<p class="sc-note">Is period me screen-wise ads ka koi whole din nahi — signals judge nahi ho sake.</p>`;
   return `${head}${L.map(q=>{ const o=q.z.open; return `<div class="sc-at"><span class="sc-atn">${q.z.nameH}</span><span class="sc-atr">${sigShort(q.s)}</span>${o!=null?`<button type="button" class="sc-lnk" data-sc-open="${o}">Details ▸</button>`:''}<small>${E(sigLong(q.s))}</small></div>`; }).join('')}`
-    +`<p class="sc-note">${SIGI.b} <b>Ads ki jagah</b>: app ke screen time ka 10%+ yahan, par ads per minute app ke 20% se kam · ${SIGI.w} <b>Ads waste</b>: aadhe se kam fill hue ads dikhe, aur na dikhe ads app ke saare fill ka 20%+ · ${SIGI.d} <b>Gira</b>: Imp / user / day pichhle period se 20%+ kam (row ke paas app ke 5%+ ads).</p>`; }
+    +`<p class="sc-note">Line pe "Details ▸" = us row ki details · niyam: neeche ❓ How this works.</p>`; }
 // a display item → its v 4 row's signals for the period (the drill-down's header): a screen by its class, a trigger by
 // its label and format; none for an aggregate row
 function v4SigOf(x,f2,i,lo,hi){ const it=(x.items||[])[i]; if(!it||!f2) return ''; const R=v4Rows(x,f2,lo,hi);
   if(!R.pw) return `<small class="sc-faint">${E(puWhy4(x,f2,lo,hi,R))}</small>`;
+  if(!R.fin) return '<small class="sc-faint">abhi koi final din nahi — signals nahi</small>';
   const z=R.rows.find(r=>it[1]==='fs'?r.t==='f'&&r.name===it[0]&&fmtOf(r.fmt)===fmtOf(it[2]):r.t==='s'&&r.k==='s'&&r.c===it[0]);
   return z&&z.sig&&z.sig.length?z.sig.map(s=>`<span title="${E(sigLong(s))}">${sigShort(s)}</span>`).join(' · '):'<small class="sc-faint">is period me koi signal nahi</small>'; }
 // the developer report for the period (English, no money): every signal with what to check
@@ -8746,6 +8753,7 @@ const SIGCK={b:'Users spend a large share of their time on this screen but see a
 // (i: one display item's row only — its drill-down's Report; null when that row has no signal)
 function v4Report(x,id,lo,hi,i){ const f2=f2Of(id); if(!f2) return null; const R=v4Rows(x,f2,lo,hi), o=[`Screens report — ${nameOf(id)} — ${rg(lo,hi,true)}`];
   if(!R.pw){ o.push('Signals are judged on the dashboard periods only (not a custom range).'); return o.join('\n'); }
+  if(!R.fin){ if(i!=null) return null; o.push('No final day in this period yet (GA4 settles ~2 days later): no signals.'); return o.join('\n'); }
   const it=i==null?null:(x.items||[])[i], mine=z=>!it||(it[1]==='fs'?z.t==='f'&&z.name===it[0]&&fmtOf(z.fmt)===fmtOf(it[2]):z.t==='s'&&z.c===it[0]);
   let n=0; for(const z of sortV4(R.rows)) for(const s of (mine(z)?z.sig:null)||[]){ n++;
     const what=s[0]==='b'?`${PSH(s[1])} of the app's screen time, ${PSH(s[2])} of its ads`:s[0]==='w'?`${s[1]}: ${N(s[4])} filled, ${N(s[5])} shown (${PI(s[2])}); not shown = ${PSH(s[3])} of all the app's fills`:`impressions per user per day ${PU(s[1])} → ${PU(s[2])} (${PCH(s[1],s[2])}) vs ${rg(s[3],s[4],true)}`;
@@ -8754,20 +8762,20 @@ function v4Report(x,id,lo,hi,i){ const f2=f2Of(id); if(!f2) return null; const R
   return o.join('\n'); }
 // All apps: Users (the period's, the app), Views, Ads (GA4), Revenue (AdMob), the signals' counts
 function appRow4(r){ const x=r.x, z={r,users:null,views:null,ads:null,rev:null,sg:null,lo:'',hi:''}; if(!x.d0||!okD(x.ft)) return z;
-  const [lo,hi]=rng(x), key=pk(x,lo,hi); let v=0,a=0,rv=0,nv=0,nr=0;
+  const [lo,hi]=rng(x), key=pk(x,lo,hi); let v=0,a=0,rv=0,nv=0,nr=0,na=0;
   spanK(x,lo,hi,k=>{ const V=(x.V||[])[k]; if(Array.isArray(V)){ nv++; for(const q of V) if(q!=null) v+=+q||0; }
-    const t=(x.ta||[])[k]; if(Array.isArray(t)) a+=(+t[0]||0)+(+t[1]||0)+(+t[2]||0);
+    const t=(x.ta||[])[k]; if(Array.isArray(t)){ na++; a+=(+t[0]||0)+(+t[1]||0)+(+t[2]||0); }
     const m=(x.rv||[])[k]; if(Array.isArray(m)&&m[1]!=null){ rv+=+m[1]||0; nr++; } });
   const fin=finals(x,lo,hi), why=!(x.sg&&key in x.sg)?(PER==='cus'?'Custom period: users aur signals sirf dashboard ke periods pe':'is period me is app ka data nahi'):!fin?'abhi koi final din nahi':'';
-  return Object.assign(z,{lo,hi,users:x.pt&&key in x.pt?+x.pt[key]:null,views:nv?v:null,ads:a,rev:nr?rv:null,sg:fin&&x.sg&&Array.isArray(x.sg[key])?x.sg[key]:null,why,
+  return Object.assign(z,{lo,hi,users:x.pt&&key in x.pt?+x.pt[key]:null,views:nv?v:null,ads:na?a:null,rev:nr?rv:null,sg:fin&&x.sg&&Array.isArray(x.sg[key])?x.sg[key]:null,why,
     uwhy:x.pt&&key in x.pt?'':why||'is period ke users abhi GA4 se padhe nahi (agle run me)'}); }
 let SORT4={k:'rev',dir:-1};
-function allTable4(rows){ const k=devV()&&SORT4.k==='rev'?'ads':SORT4.k, d=SORT4.dir, val=z=>k==='name'?z.r.name:k==='sg'?(z.sg?z.sg[0]+z.sg[1]+z.sg[2]:null):z[k];
+function allTable4(rows){ const k=devV()&&SORT4.k==='rev'?'ads':SORT4.k, d=SORT4.dir, val=z=>k==='name'?z.r.name:k==='sg'?(z.sg?(+z.sg[0]||0)+(+z.sg[1]||0)+(+z.sg[2]||0):null):z[k];
   rows=rows.slice().sort((a,b)=>{ const va=val(a), vb=val(b); if(va==null&&vb==null) return 0; if(va==null) return 1; if(vb==null) return -1; return (typeof va==='string'?d*va.localeCompare(vb):d*(va-vb))||(b.rev||0)-(a.rev||0); });
   const cols=[['name','App'],['users','Users','GA4 Active users, is period me unique'],['views','Views'],['ads','Ads','GA4 ad impressions']].concat(devV()?[]:[['rev','Revenue','AdMob']],[['sg','Signals','💡 Ads ki jagah · ⚠️ Ads waste · 🔻 Gira']]);
   const head=cols.map(([c,l,t])=>`<th aria-sort="${k===c?(d>0?'ascending':'descending'):'none'}"${t?` title="${E(t)}"`:''}><button type="button" data-sc-v4asort="${c}">${l}</button></th>`).join('')+'<th>History</th>';
   const body=rows.map(z=>`<tr class="sc-clk" data-sc-app="${E(z.r.name)}" tabindex="0"><td class="sc-nm"><span class="sc-an">${appIconId(z.r.id,z.r.name,22)}<span>${E(z.r.name)}</span></span></td>`
-    +`<td${z.users==null&&z.uwhy?` title="${E(z.uwhy)}"`:''}>${N(z.users)}</td><td>${N(z.views)}</td><td>${N(z.ads)}</td>${devV()?'':`<td>${MU(z.rev)}</td>`}<td${!z.sg&&z.why?` title="${E(z.why)}"`:''}>${z.sg?`${SIGI.b} ${z.sg[0]} · ${SIGI.w} ${z.sg[1]} · ${SIGI.d} ${z.sg[2]}`:'—'}</td><td>${histCell(z.r.x)}</td></tr>`).join('')
+    +`<td${z.users==null&&z.uwhy?` title="${E(z.uwhy)}"`:''}>${N(z.users)}</td><td>${N(z.views)}</td><td>${N(z.ads)}</td>${devV()?'':`<td>${MU(z.rev)}</td>`}<td${!z.sg&&z.why?` title="${E(z.why)}"`:''}>${z.sg?`${SIGI.b} ${z.sg[0]==null?'—':z.sg[0]} · ${SIGI.w} ${z.sg[1]==null?'—':z.sg[1]} · ${SIGI.d} ${z.sg[2]==null?'—':z.sg[2]}`:'—'}</td><td>${histCell(z.r.x)}</td></tr>`).join('')
     ||'<tr><td colspan="7" class="sc-faint">Koi app nahi</td></tr>';
   return `<div class="sc-tw sc-x" id="sc-atw"><table class="sc-t"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`; }
 function appHtml(id){ const x=ALL.apps[id], a=Array.isArray(x.app)?x.app:[];

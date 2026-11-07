@@ -607,7 +607,7 @@ def lost_ids(meta, grp):
     """The reads of group `grp` a broken month file may have held: every one, but a read added to the fetch after the
     store began (LATE_READS) only once the meta holds it — never fetched, it wrote no record (its unknown oldest day
     must not stretch the history back to the month's 1st)."""
-    return tuple(i for i in GROUPS.get(grp, ()) if i not in LATE_READS or _read_of(meta, i))
+    return tuple(i for i in GROUPS.get(grp, ()) if i not in LATE_READS or _oldest(meta, i))
 
 
 def mark_lost(app, broken, st_of):
@@ -3546,7 +3546,7 @@ def adm_days(app, pids):
 def _prev(lo, hi, kd):
     """The period just before [lo, hi]: the month before for a month, else the same number of days before."""
     a, b = _d(lo), _d(hi)
-    if kd == "month" or (kd == "day" and a.day == 1 and b != a):
+    if kd == "month" or (kd == "day" and a.day == 1 and b != a) or (a.day == 1 and b == _mlast(a)):
         p = (a - timedelta(days=1)).replace(day=1)
         return _iso(p), _iso(_mlast(p))
     n = (b - a).days + 1
@@ -3626,8 +3626,8 @@ def signals4(app, allf, wins, fs4, fsd):
     fu, fuu, fug = [], {}, {}
     for d in app.days:
         a = app.ads.get(d)
-        if not a or a.get("g") != "fu" or d not in app.whole["a"]:
-            continue
+        if not a or a.get("g") != "fu" or d not in app.whole["a"] or d not in app.whole["w"] or d not in app.w:
+            continue                             # (σ's numerator and its denominator from the same days)
         fu.append(d)
         r = []
         for (c, u, f), n in a["cu"].items():
@@ -3680,7 +3680,10 @@ def signals4(app, allf, wins, fs4, fsd):
                     gc[ids] = gc.get(ids, 0) + n
                 for ids, n in fug[d].items():
                     G[ids] = G.get(ids, 0) + n
+            old_mix = [S[0], S[-1]] if S and S is not sw else None
             for c in sorted(g):
+                if c not in ci or not A[ci[c]]:
+                    continue
                 mt = im = 0.0
                 best, bw = None, -1.0
                 for ids, n in sorted(g[c].items()):
@@ -3696,7 +3699,7 @@ def signals4(app, allf, wins, fs4, fsd):
                 if mt > 0 and im / mt < SIG_SHOW and mt - im >= SIG_WASTE * fills and best is not None:
                     sig.setdefault("s%d" % app.six[c], []).append(
                         ["w", names.get(best) or app.adm.ids[best[0]]["name"], _r(im / mt, 4), _r((mt - im) / fills, 4),
-                         round(mt), round(im)])
+                         round(mt), round(im)] + (old_mix or []))       # (+ the unit mix's days when not the period's)
             for n_, (f, lab, ps) in enumerate(fs4):
                 mt, im = sum(X[p][1] for p in ps if p in X), sum(X[p][2] for p in ps if p in X)
                 if mt > 0 and im / mt < SIG_SHOW and mt - im >= SIG_WASTE * fills:
@@ -3737,6 +3740,14 @@ def signals4(app, allf, wins, fs4, fsd):
         for xs in sig.values():
             for x in xs:
                 c3["bwd".index(x[0])] += 1
+        # (not judged: no final whole day for 💡 · no AdMob fill for ⚠️ · All time, or under SIG_DAYS final days for 🔻)
+        days_f = PD.sum(lo, hi_f)[0] if lo <= hi_f else 0
+        if not days_f:
+            c3[0] = None
+        if fills <= 0:
+            c3[1] = None
+        if kd == "all" or days_f < SIG_DAYS:
+            c3[2] = None
         cnt[key] = c3
     return out, cnt
 
@@ -3784,12 +3795,19 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
     allf = app.allf()
     # v 4: the periods the page offers, their users (the fetch's), the full-screen rows from AdMob on its own days, the
     # app's AdMob total, and the three signals for every one of those periods
-    wins = pwin(app.td, app.d0)
-    fs4 = trig4(app)
-    fsd = [adm_days(app, ps) for _, _, ps in fs4]
-    adt = adm_days(app, sorted(app.adm.ids)) if app.adm else []
-    sig4, sg4 = signals4(app, allf, wins, fs4, fsd)
-    pu4 = pu_ship(app, period_users(data_dir, key), wins)
+    try:
+        wins = pwin(app.td, app.d0)
+        fs4 = trig4(app)
+        fsd = [adm_days(app, ps) for _, _, ps in fs4]
+        adt = adm_days(app, sorted(app.adm.ids)) if app.adm else []
+        sig4, sg4 = signals4(app, allf, wins, fs4, fsd)
+        uf4 = period_users(data_dir, key)
+        pu4 = pu_ship(app, uf4, wins)
+        cur4 = str(((uf4.get("prop") or {}).get("currency")) or "USD")
+    except Exception as e:                       # v 4's numbers never cost the app its files: counted, ONE health line
+        counts["v4"] = counts.get("v4", 0) + 1   # per build (run), the app ships without them ("—" with the why)
+        counts.setdefault("v4_err", type(e).__name__)
+        wins, fs4, fsd, adt, sig4, sg4, pu4, cur4 = [], [], [], [], {}, {}, {}, "USD"
     # the absolute numbers over W (every screen row; the words need every app's benchmark: run() after the app loop)
     side = ab_side(app, w, allf)
     abr = {rid: ab_row(app, side, row[1], w, allf) for rid, row, *_ in rows if row[0] == "s"}
@@ -3877,6 +3895,8 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
              "adm": adm, "rows": rows2, "notes": notes, "ufmt": side["ufmt"],
              "pw": [list(x) for x in wins], "pu": pu4, "sig": sig4,
              "fs4": [[f, lab, [app.adm.ids[p]["name"] for p in ps]] for f, lab, ps in fs4], "fsd": fsd, "adt": adt}
+    if cur4 != "USD":                                # GA4's revenue in another currency: shipped, the page says so
+        body2["cur"] = cur4
     # the users beside the ads: the top screens' users per final day ≤ ftU ("U", their screen indexes "Us": the screen
     # rows) and the app's daily active users per final day ≤ ftU ("au": GA4's own, the same stream; also in scr_all) —
     # or why the app has none ("auw": none · stream · cut)
@@ -4065,6 +4085,8 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             print("scr store skipped: %s" % bad[0][3], file=sys.stderr)
         if counts["stale"]:                         # ONE line too: an app's users are late or missing (its rows say
             print("scr users skipped: StaleUsersWarning", file=sys.stderr)      # "users not in yet")
+        if counts.get("v4"):                        # … and v 4's numbers failing on an app (its type only)
+            print("scr v4 skipped: %s" % counts["v4_err"], file=sys.stderr)
         bench = None
         if apps:                                    # the absolute words: every app's units make the benchmark
             try:

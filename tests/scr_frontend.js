@@ -1139,7 +1139,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       let hh = SCREEN.innerHTML;
       const T = cellsOf(hh, 'sc-ttw');
       out.v4 = { heads: T.hd, rows: T.rows, attn: hh.slice(hh.indexOf('id="sc-attn"'), hh.indexOf('id="sc-tcard"')),
-        note: (/<p class="sc-note"><b>Users<\/b>.*?<\/p>/.exec(hh) || [''])[0], crumb: (/<div class="sc-crumb">(.*?)<\/div>/.exec(hh) || [, ''])[1],
+        note: (/<p class="sc-note" id="sc-tnote">.*?<\/p>/.exec(hh) || [''])[0], crumb: (/<div class="sc-crumb">(.*?)<\/div>/.exec(hh) || [, ''])[1],
         old: ['Needs attention', 'App total', 'data-sc-seg', 'score', 'Normal'].filter(w => hh.includes(w)) };
       // the period's sums (the page's own, over file 2's days): the 30 days of Alpha's synthetic file
       const f2a = _.FILES['scr_' + KEY.a + '.json.gz'].raw, R30 = _.v4Rows(ALLF.apps[ID.a], f2a, '2026-02-27', '2026-03-28');
@@ -1150,7 +1150,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       // a Custom range that IS one of the build's periods: its users and signals
       _.set({ PER: 'cus', PF: '2026-02-27', PTO: '2026-03-28' }); SCR.paint(); out.v4.cus30 = cellsOf(SCREEN.innerHTML, 'sc-ttw').rows;
       // a month whose users GA4 sampled
-      _.set({ PER: 'mon:2026-02' }); SCR.paint(); hh = SCREEN.innerHTML; out.v4.feb = { rows: cellsOf(hh, 'sc-ttw').rows, note: (/<p class="sc-note"><b>Users<\/b>.*?<\/p>/.exec(hh) || [''])[0] };
+      _.set({ PER: 'mon:2026-02' }); SCR.paint(); hh = SCREEN.innerHTML; out.v4.feb = { rows: cellsOf(hh, 'sc-ttw').rows, note: (/<p class="sc-note" id="sc-tnote">.*?<\/p>/.exec(hh) || [''])[0] };
       // Today: no final day — no signals (said why), the full-screen rows kept with "—" (AdMob's day not complete)
       _.set({ PER: 'today' }); SCR.paint(); hh = SCREEN.innerHTML;
       out.v4.today = { attn: hh.slice(hh.indexOf('id="sc-attn"'), hh.indexOf('id="sc-tcard"')), rows: cellsOf(hh, 'sc-ttw').rows,
