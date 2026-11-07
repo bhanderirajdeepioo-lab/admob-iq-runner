@@ -1821,6 +1821,7 @@ AG_MAX_BYTES = 2000000    # the agent block of the history file: past this, the 
 NET_FAMS = ("CPI", "ECPM", "GAP", "IPU", "SPEND")     # the engine's own settles the revert net watches
 MARKED = ("blocked", "hold", "reverted")               # level rows the agent world no longer produces, kept visible
 BT_FILE = "agent_backtest.json"                        # data/cpi/: the backtest numbers (private repo, read only)
+BT_V = (1, 2)                                          # its settles: 1 the CPI / GAP ones, 2 every engine settle asked
 _clock = time.monotonic                                # the agent step's budget clock (tests replace it)
 
 
@@ -2783,7 +2784,8 @@ def backtest_path(data_dir):
 
 def load_backtest(data_dir):
     """data/cpi/agent_backtest.json (the private repo, committed once by hand; read only) → the scoreboard's
-    backtest line, or None (absent; or bad: one "cpi agent backtest skipped: <Type>" line, the agent still runs)."""
+    backtest line, or None (absent; or bad: one "cpi agent backtest skipped: <Type>" line, the agent still runs).
+    v 1 counts the CPI / GAP settles; v 2 every engine settle the agent asks (also of an alarm it answered)."""
     path = backtest_path(data_dir)
     if not os.path.exists(path):
         return None
@@ -2792,7 +2794,8 @@ def load_backtest(data_dir):
             b = json.load(f)
         keys = {"proposals": ("moments", "c1_accept", "c1_right", "c1_wrong", "accept"),
                 "settles": ("checked", "passed", "blocked", "hold", "level_held")}
-        if not isinstance(b, dict) or set(b) != {"v", "years", "proposals", "settles", "note"} or b["v"] != 1:
+        if not isinstance(b, dict) or set(b) != {"v", "years", "proposals", "settles", "note"} or \
+                isinstance(b["v"], bool) or b["v"] not in BT_V:
             raise ValueError("backtest")
         if not (_real(b["years"]) and 0 < b["years"] < 50):
             raise ValueError("backtest")

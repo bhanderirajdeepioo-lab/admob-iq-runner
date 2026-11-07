@@ -142,7 +142,8 @@ P_PROD.update({
         "agent": {
             "mode": "on",              # "off": the build runs no agent step (files exactly as without it)
             "every": 7,                # a standing question is asked again on the days (day − EPOCH) % 7 == 0
-            "settle_fams": ["CPI", "GAP"],   # the engine's own settles the agent checks; the others settle as before
+            "settle_fams": ["CPI", "GAP"],   # the engine's own settles the agent always checks; another family's
+                                             # settle only when the agent answered its alarm (else as before)
             "move_bands": 2.0,         # an accept needs old → new ≥ 2 bands and the last 28 days outside one band of old
             "engine_band": 0.10,       # … and on the eCPM-market branch the engine's own settle steadiness (56 d)
             "net": {"days": 84, "from": 28, "every": 7, "need": 2},   # the revert net (shadow replay + two checks)

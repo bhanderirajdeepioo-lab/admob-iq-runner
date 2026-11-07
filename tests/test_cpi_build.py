@@ -2368,7 +2368,8 @@ def test_no_history_file_and_a_bad_backtest_file(tmp_path, agent_on, capsys):
             "proposals": {"moments": 10, "c1_accept": 1, "c1_right": 1, "c1_wrong": 0, "accept": 0},
             "settles": {"checked": 4, "passed": 0, "blocked": 3, "hold": 1, "level_held": 1}, "note": "synthetic"}
     for i, bad in enumerate((dict(good, years=60), dict(good, note="x" * 201), dict(good, note="a\u202eb"),
-                             dict(good, settles=dict(good["settles"], hold=-1)), dict(good, extra=1), "[1")):
+                             dict(good, settles=dict(good["settles"], hold=-1)), dict(good, extra=1), dict(good, v=3),
+                             dict(good, v=True), "[1")):
         tmp = tmp_path / ("b%d" % i)
         (tmp / "data" / "cpi").mkdir(parents=True)
         open(cb.backtest_path(str(tmp / "data")), "w").write(bad if isinstance(bad, str) else json.dumps(bad))
@@ -2381,6 +2382,11 @@ def test_no_history_file_and_a_bad_backtest_file(tmp_path, agent_on, capsys):
     json.dump(good, open(cb.backtest_path(str(tmp / "data")), "w"))
     _, part = ag_build(tmp, ents, AGN - 1)
     assert part["agent"]["ag"].board["bt"] == good and capsys.readouterr().err == ""
+    tmp = tmp_path / "ok2"                                       # v 2: its settles = every engine settle the agent asks
+    (tmp / "data" / "cpi").mkdir(parents=True)
+    json.dump(dict(good, v=2), open(cb.backtest_path(str(tmp / "data")), "w"))
+    _, part = ag_build(tmp, ents, AGN - 1)
+    assert part["agent"]["ag"].board["bt"] == dict(good, v=2) and capsys.readouterr().err == ""
 
 
 def test_the_agent_block_keeps_rule_inputs_on_the_asks_that_matter_and_stays_bounded():

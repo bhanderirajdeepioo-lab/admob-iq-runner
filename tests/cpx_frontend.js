@@ -640,8 +640,8 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
       again: txt(bd({ trial: { st: 'trial', since: '2026-03-14', day: 14, need: 28, why: 'vintage', exit: null } })),
       parity: txt(bd({ trial: { st: 'trial', since: '2026-03-20', day: 8, need: 28, why: 'parity', exit: null } })),
       rule: txt(bd({ trial: { st: 'trial', since: '2025-12-20', day: 3, need: 28, why: 'rule', exit: null } })),
-      bt: txt(bd({ bt: BTK })),
-      bt_bad: [BTx({ years: 0 }), BTx({ v: 2 }), BTx({ proposals: { moments: 12 } }), BTx({ years: 80 }), BTx({ settles: Object.assign({}, BTK.settles, { hold: -1 }) }), 'x']
+      bt: txt(bd({ bt: BTK })), bt_v2: txt(bd({ bt: BTx({ v: 2 }) })),
+      bt_bad: [BTx({ years: 0 }), BTx({ v: 3 }), BTx({ v: '2' }), BTx({ proposals: { moments: 12 } }), BTx({ years: 80 }), BTx({ settles: Object.assign({}, BTK.settles, { hold: -1 }) }), 'x']
         .map(b => txt(bd({ bt: b })).includes('Backtest')),
       bt_nolh: txt(bd({ bt: BTx({ settles: { checked: 5, passed: 1, blocked: 3, hold: 1 } }) })),
       note: bd({ bt: BTx({ note: '<img src=x onerror=alert(7)> note' }) }),

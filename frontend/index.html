@@ -9133,9 +9133,10 @@ function lvActionsHtml(r,F,act){ const A=lvActs(r,F), ref=id=>A.find(a=>a.id===i
       const dn=a.act!=='undo'&&a.st!=='undone'&&!A.some(z=>z.act==='undo'&&z.ref===a.id);
       return `<tr><td>${E(istAt(a.at))}</td><td>${E(ACTW[a.act]||a.act)}${a.act==='undo'&&u.act?' · '+E(ACTW[u.act]||u.act):''}${a.note?`<small>${E(a.note)}</small>`:''}</td><td>${E(FAMW[u.fam]||u.fam||'—')}</td><td>${st}</td>${act?`<td>${dn?`<button type="button" class="cpx-lvb" data-cpx-lvundo="${E(a.id)}"${lvDis()}>Undo</button>`:''}</td>`:''}</tr>`; }).join('')}</tbody></table></div>`:''; }
 // ---- 🤖 the level agent (the build's agent step, rule C1): its answer to each new-level question — a proposal, or the engine's
-// own CPI / GAP settle — read only from what the build shipped: the pointer (apps[id].ag = the row tag, agent = the scoreboard)
-// and the app file (ag.rows = every decision; lp[i].ag; a level row's ag). Without those fields nothing of it shows (an older
-// file: the page as before). Its words never claim a cause: the build's sentences say what was SEEN with the move ----
+// own settle of CPI / GAP or of an alarm it answered — read only from what the build shipped: the pointer (apps[id].ag = the row
+// tag, agent = the scoreboard) and the app file (ag.rows = every decision; lp[i].ag; a level row's ag). Without those fields
+// nothing of it shows (an older file: the page as before). Its words never claim a cause: the build's sentences say what was
+// SEEN with the move ----
 const AGW={accepted:'Accepted',passed:'Passed',kept:'Kept',blocked:'Blocked',waiting:'Waiting',hold:'On hold',trial:'Accept — trial',
   reverted:'Reverted',overridden:'Overridden',held:'Held',closed:'Closed'};                                   // a decision row's status word
 const AGC={accepted:'cpx-good',passed:'cpx-good',kept:'cpx-wat',blocked:'cpx-wat',waiting:'cpx-fnt',hold:'cpx-fnt',trial:'cpx-fnt',reverted:'cpx-fnt',
@@ -9152,7 +9153,7 @@ const AGTW={parity:'a past decision did not repeat',vintage:'an accept changed o
 const AGPF={A1:'a fortnight without a value in the last 12 weeks',A2:'the move is under 4 bands',A3:'the 14-day level too far off its 56-day median',
   A4:'a recent fortnight is back toward the old level',A5:'the last 14 days moved back toward the old level',A6:'too noisy to tell old from new in 28 days',
   A7:'the change started less than 84 days ago',K1:'a year earlier the same move came back (seasonal)',K2:'returning toward the old level'};
-const AGHI='Agent khud decide karta hai: kaaran market ka ho aur number steady ho tabhi naya level; kaaran aapka apna lever ho (spend, campaigns, budget, ads per user) to alarm khula rehta hai — engine ka CPI / GAP accept bhi isi se check hota hai.';
+const AGHI='Agent khud decide karta hai: kaaran market ka ho aur number steady ho tabhi naya level; kaaran aapka apna lever ho (spend, campaigns, budget, ads per user) to alarm khula rehta hai — engine ka CPI / GAP accept, aur jis alarm ka agent jawab de chuka ho uska bhi, isi se check hota hai.';
 const has=(o,k)=>typeof k==='string'&&Object.prototype.hasOwnProperty.call(o,k);
 const nb=v=>typeof v==='number'&&isFinite(v)?v:null;                     // a shipped number (null / text / missing → none)
 const famW=f=>has(FAMW,f)?FAMW[f]:String(f||'—');
@@ -9234,13 +9235,14 @@ function agDetHtml(F,x){ const f=x.fam, o=[], n=nb(x.n), ep=x.ep&&typeof x.ep===
 function agListHtml(F){ const L=agRows(F); if(!L.length) return '';
   return `<h4 class="cpx-h4">Agent decisions</h4><div class="cpx-agl" id="cpx-agl">${L.map(x=>{ const on=AGD===x.id, d=agDay(x);
     return `<div class="cpx-agi"><button type="button" class="cpx-agr" data-cpx-agd="${E(x.id)}" aria-expanded="${on}">${E(d?fd(d):'—')} · ${E(famW(x.fam))} · <b class="${AGC[x.st]}">${E(AGW[x.st])}</b> · ${E(x.short||'—')}</button>${on?agDetHtml(F,x):''}</div>`; }).join('')}</div>`; }
-// the private backtest line (shipped as is): only when every number is there
-function agBt(b){ if(!b||typeof b!=='object'||b.v!==1) return ''; const P=b.proposals||{}, S=b.settles||{}, y=nb(b.years);
+// the private backtest line (shipped as is): only when every number is there; its settles: v 1 the CPI / GAP ones, v 2 every
+// engine settle the agent asks (CPI / GAP, and any alarm it answered)
+function agBt(b){ if(!b||typeof b!=='object'||(b.v!==1&&b.v!==2)) return ''; const P=b.proposals||{}, S=b.settles||{}, y=nb(b.years);
   const i=(o,k)=>{ const v=nb(o&&o[k]); return v!=null&&v>=0?Math.round(v):null; };
   const q=[i(P,'moments'),i(P,'c1_accept'),i(P,'c1_right'),i(P,'c1_wrong'),i(P,'accept'),i(S,'checked'),i(S,'passed'),i(S,'blocked'),i(S,'hold')], lh=i(S,'level_held');
   if(y==null||!(y>0&&y<50)||q.some(v=>v==null)) return ''; const note=typeof b.note==='string'?b.note.slice(0,200):'';
   return `Backtest on your history (${Math.round(y*10)/10} y): ${q[0]} proposals → ${q[1]} accept (${q[2]} right, ${q[3]} wrong); with the engine's steadiness test ${q[4]}`
-    +` · CPI / GAP settles ${q[5]} → ${q[6]} passed, ${q[7]} blocked, ${q[8]} on hold${lh!=null?` (${lh} of them held the new level)`:''}.${note?' '+E(note):''}`; }
+    +` · ${b.v===2?`Engine settles ${q[5]} checked`:`CPI / GAP settles ${q[5]}`} → ${q[6]} passed, ${q[7]} blocked, ${q[8]} on hold${lh!=null?` (${lh} of them held the new level)`:''}.${note?' '+E(note):''}`; }
 // the scoreboard on top of History · Levels (pointer agent; the counts by the build's strict verdicts) + the one Hinglish line
 function agBoard(){ const p=ptr(), g=p&&p.agent; if(!g||typeof g!=='object'||g.v!==1||g.mode!=='on') return '';
   const n=g.n||{}, s=g.settle||{}, tr=g.trial||{}, pa=g.parity||{}, vi=g.vintage||{}, c=(o,k)=>Math.max(0,Math.round(nb(o&&o[k])||0));

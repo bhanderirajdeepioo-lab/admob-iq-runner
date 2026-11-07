@@ -839,7 +839,8 @@ def test_agent_scoreboard_trial_live_again_and_the_backtest(out):
     head = ("🤖 Agent since 20 Jan: 2 accepted (0 right, 1 wrong, 1 pending) · 2 kept · 2 waiting · 1 reverted · 1 accept — trial · "
             "1 overridden by you · 1 held by you · Engine settles: 3 checked · 1 passed · 1 blocked · 1 on hold")
     hi = ("Agent khud decide karta hai: kaaran market ka ho aur number steady ho tabhi naya level; kaaran aapka apna lever ho "
-          "(spend, campaigns, budget, ads per user) to alarm khula rehta hai — engine ka CPI / GAP accept bhi isi se check hota hai.")
+          "(spend, campaigns, budget, ads per user) to alarm khula rehta hai — engine ka CPI / GAP accept, aur jis alarm ka agent "
+          "jawab de chuka ho uska bhi, isi se check hota hai.")
     chk = " · 40 decisions re-checked (0 differ) · 6 re-asks on later data (0 accept flips)"
     assert b["live"] == head + " Accepts: live since 17 Feb " + hi
     assert b["trial"] == head + " Accepts: trial, day 18 of 28 (not applied yet)" + chk + " " + hi
@@ -849,8 +850,10 @@ def test_agent_scoreboard_trial_live_again_and_the_backtest(out):
     assert b["bt"] == head + (" Accepts: live since 17 Feb Backtest on your history (1.8 y): 12 proposals → 2 accept (1 right, 0 wrong); "
                               "with the engine's steadiness test 0 · CPI / GAP settles 5 → 1 passed, 3 blocked, 1 on hold "
                               "(2 of them held the new level). Synthetic backtest note. ") + hi
+    # v 2: its settles are every engine settle the agent asks (CPI / GAP, and the settle of an alarm it answered)
+    assert b["bt_v2"] == b["bt"].replace("CPI / GAP settles 5 →", "Engine settles 5 checked →") != b["bt"]
     assert "1 on hold. Synthetic backtest note." in b["bt_nolh"]
-    assert b["bt_bad"] == [False] * 6                                                 # years 0 / v 2 / a number missing / 80 y / −1 / junk
+    assert b["bt_bad"] == [False] * 7                                       # years 0 / v 3 / v "2" / a number missing / 80 y / −1 / junk
     assert b["off"] == b["v2"] == b["none"] == ""                                     # mode off · another version · no block
     assert b["junk"].startswith("🤖 Agent since —: 0 accepted (0 right, 0 wrong, 0 pending)") and "Accepts: trial (not applied yet)" in b["junk"]
     assert b["html"].startswith('<div class="cpx-agb" id="cpx-agb"><p class="cpx-agb1">🤖 Agent since')

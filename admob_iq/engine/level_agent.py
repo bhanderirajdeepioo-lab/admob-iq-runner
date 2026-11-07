@@ -4,7 +4,8 @@ answered here, from the data as it was known on the ask day d (every series cut 
 look-ahead), and the build freezes each answer.
 
   questions  a proposal ("money": a money level steady 84 days going down; "open": an alarm open 120+ days) and the
-             engine's own CPI / GAP settle (56 days steady ±10 %): is the new level the new normal?
+             engine's own settle (56 days steady ±10 %) of CPI / GAP, or of any alarm whose proposal was answered: is
+             the new level the new normal?
   answers    accept (the move is market-wide and steady: the new level becomes the normal) · keep (a visible cause is
              the owner's own lever: the alarm stays open and the cause is written) · wait (not decided yet: asked again
              on the engine's weekly phase)
