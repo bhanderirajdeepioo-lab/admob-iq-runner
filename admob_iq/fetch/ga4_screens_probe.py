@@ -25,6 +25,13 @@ Apps: the workflow input `apps` (comma list of file keys / app ids / packages, r
 app whose Screens store holds a final "a" day that is not whole, plus CONTROL: of the others, the one with the most
 events on its newest whole final day (its EQ says whether another metric equals the fetch's at all).
 
+ROUND 4 (owner, 8 Nov 2026, Firebase's own "Pages and screens" export beside the tab: "Firebase jaise numbers … Revenue"):
+         revenue by screen (totalRevenue / totalAdRevenue by date × class or page path, 31 days and one day, against
+         their date totals — GA4 gives revenue as a decimal: kept here in micros) and the users of a whole PERIOD by
+         screen and of the app (no date dimension: unique within the period, as Firebase's "Active users"), 7 … 1000
+         days; plus each property's currency and time zone (Admin API). The workflow input `days` pins the ALT days to
+         ISO dates (a calendar month's last day: "31 days" = that month).
+
 Output: ga4/screens_probe.json in the PRIVATE repo only (dp.write_private). PUBLIC LOG: a counts-only heartbeat and ONE
 result line of counts — no names, ids, dates or numbers of the data. Quota: the Screens fetch's own App and floors
 (ga4_screens.quota_gate: a property stops when a token bucket is under 60 %, so the hourly builds keep theirs); one request
@@ -62,6 +69,8 @@ FMT, UNIT, EVN, IMP = gs.FMT, gs.UNIT, gs.EVN, gs.IMP
 NVR, VER, CTY = gs.NVR, gs.VER, gs.CTY
 EC, PUB, PV, EXP = "eventCount", "publisherAdImpressions", "screenPageViews", "adUnitExposure"
 ENG, USR, SES = "userEngagementDuration", "activeUsers", "sessions"
+REV_T, REV_A = "totalRevenue", "totalAdRevenue"
+REV = frozenset((REV_T, REV_A))         # GA4 answers these as decimals: kept in micros (int) here
 UNSET = frozenset(("(not set)", ""))
 INLINE = ("Banner", "Native advanced", "Native")          # GA4's ad format names (as the truth TA holds them)
 FULL = ("Interstitial", "App open", "Rewarded", "Rewarded interstitial")
@@ -136,6 +145,22 @@ KINDS = {
     "ppI31": (True, (PP,), EC, "pi", 31),
     "ppU": (True, (PP, UNIT), EC, "pe"),
     "ppU31": (True, (PP, UNIT), EC, "pe", 31),
+    # round 4 (8 Nov: Firebase's numbers beside the tab): revenue by screen against its date total, and a period's users
+    # (no date: unique in the period) by class and for the app
+    "t_rv31": (True, (), REV_T, "p", 31),
+    "t_rva31": (True, (), REV_A, "p", 31),
+    "rv_c31": (True, (SC,), REV_T, "p", 31),
+    "rva_c31": (True, (SC,), REV_A, "p", 31),
+    "rv_pp31": (True, (PP,), REV_T, "p", 31),
+    "t_rv": (True, (), REV_T, "p"),
+    "rv_c": (True, (SC,), REV_T, "p"),
+    "us_t31": (False, (), USR, "p", 31),
+    "us_c31": (False, (SC,), USR, "p", 31),
+    "us_c7": (False, (SC,), USR, "p", 7),
+    "us_c90": (False, (SC,), USR, "p", 90),
+    "us_c365": (False, (SC,), USR, "p", 365),
+    "us_c1000": (False, (SC,), USR, "p", 1000),
+    "us_t1000": (False, (), USR, "p", 1000),
 }
 SWEEP_KINDS = ("c", "u", "t_prop")
 # a split kind → the day total (a kind above) its rows must add up to: the same metric under the same filter
@@ -145,9 +170,11 @@ REF = {"c": "t", "cf": "t", "u": "t", "c_nodate": "t", "pp": "t", "ps": "t", "sn
        "cfu": "t", "ppf": "t", "ppfu": "t", "pp31": "t31", "ppf31": "t31", "ppk": "t_k", "ppe": "t_all", "ppx": "t_exp",
        "ppv": "t_views", "ppeng": "t_eng", "nppf": "t", "npp": "t", "nppv": "t_views", "rppf": "t", "rpp": "t",
        "rppv": "t_views", "cppf": "t", "cpp": "t", "cppv": "t_views", "ncf": "t",
-       "ppI": "tI", "ppFS": "tFS", "ppB": "tB", "ppI31": "tI31", "ppU": "t", "ppU31": "t31"}
+       "ppI": "tI", "ppFS": "tFS", "ppB": "tB", "ppI31": "tI31", "ppU": "t", "ppU31": "t31",
+       "rv_c31": "t_rv31", "rva_c31": "t_rva31", "rv_pp31": "t_rv31", "rv_c": "t_rv"}
 KEEP_KINDS = frozenset(k for k, v in KINDS.items() if v[1] and v[1][0] in (SC, PP, PS, SN))
 TAG_RE = re.compile(r"[a-z0-9]{1,12}")
+DAY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 def _i(v):
@@ -221,7 +248,7 @@ def measure(kind, j):
             key = (str(r.get(SC) if r.get(SC) is not None else ""),)
         else:
             key = tuple(str(r.get(d) if r.get(d) is not None else "") for d in dims)
-        v = _i(r.get(met))
+        v = int(round(float(r.get(met) or 0) * 1e6)) if met in REV else _i(r.get(met))
         if any(gs._isfold(x) for x in key):
             fold += v
         elif dims and any(x.strip().lower() in UNSET for x in key):
@@ -375,10 +402,16 @@ def probe_app(ga, run, it, data_dir, now, keep, opts=None):
     days = store_days(data_dir, key)
     fe = _final_end(it.get("tz"), now)
     alt, sweep = plan(days, fe, opts.get("back") or ALT_BACK)
+    if opts.get("days"):
+        alt = list(opts["days"])
     if opts.get("sweep") is False:
         sweep = []
     res = {"final_end": fe.isoformat(), "alt": alt, "sweep": sweep, "ans": [], "rows": {}, "days": {},
            "stopped": None}
+    try:                                                # the property's currency and time zone (round 4)
+        res["prop"] = ga4.property_meta(ga.token, ga.property_id)
+    except Exception as e:                              # noqa: BLE001 — a refusal is data here, never fatal
+        res["prop"] = {"http": _http_class(e)}
     for d in set(alt) | set(sweep):
         res["days"][d] = day_info(days.get(d) or {})
     kinds = [k for k in KINDS if not opts.get("only") or k in opts["only"]]
@@ -467,13 +500,22 @@ def line(out):
 
 def options(inp):
     """The workflow inputs → (opts, the private path): `only` a comma list of kinds (unknown ones dropped; none left =
-    every kind), `sweep` "0" / "no" = no SWEEP, `back` a comma list of day offsets for the ALT days, `tag` [a-z0-9]{1,12}
-    → ga4/screens_probe_<tag>.json (a new round never overwrites an earlier one's file)."""
+    every kind), `sweep` "0" / "no" = no SWEEP, `back` a comma list of day offsets for the ALT days, `days` a comma list
+    of ISO dates that ARE the ALT days (anything else dropped; newest first), `tag` [a-z0-9]{1,12} →
+    ga4/screens_probe_<tag>.json (a new round never overwrites an earlier one's file)."""
     inp = inp or {}
     only = {k.strip() for k in str(inp.get("only") or "").split(",") if k.strip() in KINDS}
     back = tuple(int(x) for x in str(inp.get("back") or "").split(",") if x.strip().isdigit())
+    days = []
+    for x in str(inp.get("days") or "").split(","):
+        x = x.strip()
+        if DAY_RE.fullmatch(x):
+            try:
+                days.append(date.fromisoformat(x).isoformat())
+            except ValueError:
+                pass
     opts = {"only": only or None, "sweep": str(inp.get("sweep") or "").strip().lower() not in ("0", "no", "false"),
-            "back": back or None}
+            "back": back or None, "days": tuple(sorted(set(days), reverse=True)) or None}
     tag = str(inp.get("tag") or "").strip().lower()
     return opts, ("ga4/screens_probe_%s.json" % tag) if TAG_RE.fullmatch(tag) else OUT
 

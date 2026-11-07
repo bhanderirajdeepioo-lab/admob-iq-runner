@@ -25,6 +25,10 @@ on:
         description: "ALT days as offsets from the newest final day: comma list (empty = 0,30,95,200)"
         required: false
         default: ""
+      days:
+        description: "ALT days as ISO dates, comma list (they replace back's; empty = back's)"
+        required: false
+        default: ""
       tag:
         description: "a-z0-9 tag: the result goes to ga4/screens_probe_<tag>.json (empty = ga4/screens_probe.json)"
         required: false

@@ -63,6 +63,8 @@ def _fake(monkeypatch, refuse=(), low_after=None):
     scr = (sp.SC, sp.PP, sp.PS, sp.SN)
 
     def call(method, url, token, body=None, params=None):
+        if body is None:                                # the Admin API's property (round 4: currency, time zone)
+            return {"timeZone": "UTC", "currencyCode": "USD"}
         pid = url.split("properties/")[1].split(":")[0]
         asked.append((pid, body))
         dims = [d["name"] for d in body["dimensions"]]
@@ -76,6 +78,10 @@ def _fake(monkeypatch, refuse=(), low_after=None):
         day = body["dateRanges"][0]["startDate"].replace("-", "")
         if met == sp.PV:
             base = [({"c": c}, 100) for c in (MAIN, LIST_)]
+        elif met in sp.REV:                             # a decimal, as GA4 gives revenue
+            base = [({"c": c}, 0.25) for c in (MAIN, LIST_)]
+        elif met == sp.USR:
+            base = [({"c": c}, 40) for c in (MAIN, LIST_)]
         elif met == sp.EXP:
             base = [({"c": c}, 9) for c in (MAIN, LIST_)]
         else:
@@ -117,12 +123,15 @@ def test_it_asks_every_kind_one_day_at_a_time_and_keeps_each_answer(monkeypatch,
     assert "error" not in out
     kb, kc = gu.file_key(BAD), gu.file_key(CTRL)
     assert set(out["apps"]) == {kb, kc} and out["control"] == kc
-    multi = {(tuple(sp.KINDS[k][1]), sp.KINDS[k][2]) for k in sp.KINDS if sp._kind(k)[4] > 1}
-    for _, b in asked:                                  # one day per request, but for the kinds asked over 31 days
+    span = {}                                           # (dims, metric) → the day counts its kinds ask
+    for k in sp.KINDS:
+        _, kd, km, _, kn = sp._kind(k)
+        span.setdefault((tuple(kd), km), set()).add(kn)
+    for _, b in asked:                                  # one day per request, but for the kinds asked over N days
         r = b["dateRanges"][0]
         key = (tuple(d["name"] for d in b["dimensions"] if d["name"] != "date"), b["metrics"][0]["name"])
         n = (date.fromisoformat(r["endDate"]) - date.fromisoformat(r["startDate"])).days + 1
-        assert b["returnPropertyQuota"] and (n == 1 or (n == 31 and key in multi)), (key, n)
+        assert b["returnPropertyQuota"] and n in span[key], (key, n)
     res = out["apps"][kb]
     assert res["final_end"] == FE.isoformat() and res["stopped"] is None
     assert res["alt"][0] == FE.isoformat()              # final_end − 0, then the nearest older days with a truth
@@ -199,10 +208,10 @@ def test_the_run_options_pick_kinds_days_and_the_private_path(monkeypatch, tmp_p
     data, cfg = _setup(monkeypatch, tmp_path)
     asked = _fake(monkeypatch)
     opts, path = sp.options({"only": "ppf,pp31,ppk,nope", "sweep": "0", "back": "0,20", "tag": "r2"})
-    assert opts == {"only": {"ppf", "pp31", "ppk"}, "sweep": False, "back": (0, 20)}
+    assert opts == {"only": {"ppf", "pp31", "ppk"}, "sweep": False, "back": (0, 20), "days": None}
     assert path == "ga4/screens_probe_r2.json"
     assert sp.options({"tag": "../x"})[1] == sp.OUT and sp.options({})[0] == {"only": None, "sweep": True,
-                                                                              "back": None}
+                                                                              "back": None, "days": None}
     out = sp.run_all(cfg, data, {gu.file_key(BAD)}, now=NOW, workers=1, opts=opts)
     res = out["apps"][gu.file_key(BAD)]
     assert res["sweep"] == [] and len(res["alt"]) == 2
@@ -217,7 +226,7 @@ def test_the_run_options_pick_kinds_days_and_the_private_path(monkeypatch, tmp_p
         if sp.EVN in dims:                                                        # ppk: the click events, in a list
             ex = b["dimensionFilter"]["andGroup"]["expressions"]
             assert {"inListFilter": {"values": list(gs.CLICKS)}, "fieldName": "eventName"} in [x["filter"] for x in ex]
-    assert out["opts"] == {"only": ["pp31", "ppf", "ppk"], "sweep": False, "back": (0, 20)}
+    assert out["opts"] == {"only": ["pp31", "ppf", "ppk"], "sweep": False, "back": (0, 20), "days": None}
 
 
 def test_a_format_filter_rides_the_pin_and_the_event():
@@ -229,3 +238,32 @@ def test_a_format_filter_rides_the_pin_and_the_event():
     assert [d["name"] for d in b["dimensions"]] == ["date", sp.PP]
     b = sp.request("ppU31", FE, "777")
     assert b["dateRanges"] == [{"startDate": (FE - timedelta(days=30)).isoformat(), "endDate": FE.isoformat()}]
+
+
+def test_round_4_revenue_in_micros_period_users_pinned_days_and_the_currency(monkeypatch, tmp_path):
+    """Round 4 (8 Nov 2026): revenue by screen kept in micros and tied to its date total, a period's users by screen with
+    no date dimension over the kind's own days, the ALT days pinned to ISO dates, the property's currency kept."""
+    data, cfg = _setup(monkeypatch, tmp_path)
+    asked = _fake(monkeypatch)
+    opts, _ = sp.options({"only": "t_rv31,rv_c31,rv_pp31,us_c31,us_t31,us_c1000", "sweep": "0",
+                          "days": "2026-10-31,bad,2026-02-30,2026-09-30,2026-10-31"})
+    assert opts["days"] == ("2026-10-31", "2026-09-30")          # bad and impossible dates dropped, once each
+    out = sp.run_all(cfg, data, {gu.file_key(BAD)}, now=NOW, workers=1, opts=opts)
+    res = out["apps"][gu.file_key(BAD)]
+    assert res["alt"] == ["2026-10-31", "2026-09-30"] and res["sweep"] == []
+    assert res["prop"] == {"time_zone": "UTC", "currency": "USD"}
+    rv = next(a for a in res["ans"] if a["k"] == "rv_c31" and a["d"] == "2026-10-31")
+    assert rv["sum"] == 500000                                    # 2 screens × 0.25 → micros
+    assert res["rows"]["rv_c31|2026-10-31"] == {MAIN: 250000, LIST_: 250000}
+    assert res["rows"]["us_c31|2026-10-31"] == {MAIN: 40, LIST_: 40}
+    assert out["summary"]["rv_c31"]["tie"] == out["summary"]["rv_c31"]["tie_n"] == 2
+    assert out["summary"]["rv_pp31"]["tie"] == 2
+    seen = set()
+    for _, b in asked:
+        dims = [d["name"] for d in b["dimensions"]]
+        r = b["dateRanges"][0]
+        n = (date.fromisoformat(r["endDate"]) - date.fromisoformat(r["startDate"])).days + 1
+        if b["metrics"][0]["name"] == sp.USR:
+            assert "date" not in dims and n in (31, 1000)         # a period: unique users, never per day
+            seen.add((tuple(dims), n, r["endDate"]))
+    assert ((sp.SC,), 31, "2026-10-31") in seen and ((), 31, "2026-09-30") in seen and ((sp.SC,), 1000, "2026-10-31") in seen
