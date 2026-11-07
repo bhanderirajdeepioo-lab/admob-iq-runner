@@ -9,6 +9,9 @@
     write next to its GA4 reads (ga4_iday);
   * the PUBLIC lines: "stage <name> <sec>s" only, allow-listed names, no digit but the seconds;
   * the helper never fails the build, and the build's outputs are byte-identical with it on;
+  * the open stage, live (STAGE_NOW_FILE, for the runner's resource probe): the file holds the open stage's path
+    (allow-listed names), written atomically, by the run's own process only, nothing when unset; the profile and
+    every output stay the same, and a write that fails is skipped;
   * every stage name the code uses is on the allow-list; the workflow prints the lines and keeps the build's redaction.
 All synthetic: no network, no real names or figures."""
 
@@ -281,6 +284,127 @@ def test_another_thread_is_never_timed():
     t.join()
     prof = sc.finish(None)
     assert [e["name"] for e in prof["stages"]] == ["ga4"]
+
+
+# ── the open stage, live (STAGE_NOW_FILE) ───────────────────────────────────────────────────────────────────────────
+def _now(path):
+    with open(str(path), encoding="utf-8") as f:
+        return f.read()
+
+
+def _stages(c, look):
+    """A build in miniature — nested, repeated, an unlisted name, an exception — with look() after each move."""
+    sc.step("setup")
+    look()
+    with sc.stage("site_snapshot"):
+        c.tick(1)
+        look()
+    look()
+    sc.step("ga4")
+    with sc.stage("roi_apps"):
+        for _ in range(2):                               # once per app
+            with sc.stage("roi_device"):
+                c.tick(2)
+                look()
+            look()
+        with sc.stage("not_a_listed_name"):              # timed into the private profile, never written
+            c.tick(1)
+            look()
+    with pytest.raises(ValueError):
+        with sc.stage("roi_country"):
+            look()
+            raise ValueError("synthetic")
+    look()
+    sc.step("tabs")
+    look()
+
+
+def test_the_open_stage_path_is_kept_in_stage_now_file(tmp_path, monkeypatch):
+    """The file holds the open stage's path — allow-listed names joined by "/": the new one at each start, the
+    parent's again at each end (after an exception too), "" before the first stage and after finish."""
+    now = tmp_path / "stage_now"
+    monkeypatch.setenv(sc.NOW_ENV, str(now))
+    seen = []
+    c = Clock()
+    sc.begin(clock=c)
+    assert _now(now) == ""                               # the run, no stage open yet
+    _stages(c, lambda: seen.append(_now(now)))
+    sc.finish(None)
+    assert seen == ["setup", "setup/site_snapshot", "setup",
+                    "ga4/roi_apps/roi_device", "ga4/roi_apps", "ga4/roi_apps/roi_device", "ga4/roi_apps",
+                    "ga4/roi_apps",                      # inside the unlisted one: its listed path only
+                    "ga4/roi_country", "ga4", "tabs"]
+    assert _now(now) == "" and os.listdir(str(tmp_path)) == ["stage_now"]     # no tmp file left behind
+    for p in seen:
+        assert all(n in sc.STAGES and sc.NAME_RE.match(n) for n in p.split("/")), p
+
+
+def test_stage_now_file_changes_nothing_else_and_unset_writes_nothing(tmp_path, monkeypatch):
+    """The profile (so build_profile.json.gz) is the same with the file on, off, or failing to be written (no folder,
+    a folder in its place): never an exception, no tmp file left. Unset: nothing written anywhere."""
+    def prof(target):
+        if target is None:
+            monkeypatch.delenv(sc.NOW_ENV, raising=False)
+        else:
+            monkeypatch.setenv(sc.NOW_ENV, target)
+        c = Clock()
+        sc.begin(clock=c)
+        _stages(c, lambda: None)
+        p = sc.finish(str(tmp_path / "data"))
+        p.pop("at")                                      # (the wall-clock start: the only field that may differ)
+        p["history"] = [{k: v for k, v in h.items() if k != "at"} for h in p["history"][-1:]]
+        return p
+
+    monkeypatch.chdir(tmp_path)
+    off = prof(None)
+    assert os.listdir(str(tmp_path)) == ["data"] and os.listdir(str(tmp_path / "data")) == [sc.FILE]
+    assert prof(str(tmp_path / "stage_now")) == off
+    blocked = tmp_path / "blocked"
+    blocked.write_text("a file where a folder should be")
+    (tmp_path / "a_dir").mkdir()
+    for bad in (str(blocked / "stage_now"), str(tmp_path / "a_dir")):
+        assert prof(bad) == off
+    assert sorted(os.listdir(str(tmp_path))) == ["a_dir", "blocked", "data", "stage_now"]
+    assert os.listdir(str(tmp_path / "a_dir")) == [] and _now(tmp_path / "stage_now") == ""
+
+
+def test_write_now_replaces_the_file_in_one_step_and_never_raises(tmp_path, monkeypatch):
+    p = str(tmp_path / "stage_now")
+    moves = []
+    real = os.replace
+    monkeypatch.setattr(sc.os, "replace", lambda a, b: moves.append((a, b)) or real(a, b))
+    assert sc.write_now(p, "ga4/roi_apps") is True and _now(p) == "ga4/roi_apps"
+    assert sc.write_now(p, "") is True and _now(p) == ""
+    assert moves == [(p + ".%d.tmp" % os.getpid(), p)] * 2            # a whole tmp file beside it, then os.replace
+    assert sc.write_now(str(tmp_path / "missing" / "f"), "x") is False
+    assert os.listdir(str(tmp_path)) == ["stage_now"]
+
+
+def test_only_the_runs_own_process_and_main_thread_write_the_file(tmp_path, monkeypatch):
+    import threading
+    now = tmp_path / "stage_now"
+    monkeypatch.setenv(sc.NOW_ENV, str(now))
+    sc.begin(clock=Clock())
+    sc.step("setup")
+    sc._RUN.pid = -1                                     # as in a forked worker: the run is shared, the file is not
+    sc.step("ga4")
+    with sc.stage("roi_apps"):
+        assert _now(now) == "setup"
+    sc._RUN.pid = os.getpid()
+    sc.step("tabs")
+    assert _now(now) == "tabs"
+    seen = []
+
+    def work():                                          # another thread is never timed, so never written
+        with sc.stage("scr_tab"):
+            seen.append(_now(now))
+
+    t = threading.Thread(target=work)
+    t.start()
+    t.join()
+    assert seen == ["tabs"] and _now(now) == "tabs"
+    sc.finish(None)
+    assert _now(now) == ""
 
 
 # ── local disk / JSON time: its own rows ───────────────────────────────────────────────────────────────────────────
@@ -567,6 +691,29 @@ def test_a_build_makes_the_same_outputs_with_the_clock_on(tmp_path):
     assert all(e["ok"] for e in prof["stages"]) and prof["ok"] is True
     assert prof["unmeasured_sec"] <= 0.1 + 0.01 * prof["total_sec"]
     _check_public(sc.public_lines(prof, min_sec=0))
+
+
+def test_a_build_makes_the_same_outputs_with_the_live_stage_file_on(tmp_path, monkeypatch):
+    """The mock build with the clock AND its live file on: every site / data file as with the clock off; the file held
+    only allow-listed paths along the way and is empty at the end."""
+    a, b = tmp_path / "a", tmp_path / "b"
+    build_static.build(out_dir=str(a / "site"), data_dir=str(a / "data"), today=date(2026, 7, 23), mode="mock")
+    now = tmp_path / "stage_now"
+    monkeypatch.setenv(sc.NOW_ENV, str(now))
+    written = []
+    real = sc.write_now
+    monkeypatch.setattr(sc, "write_now", lambda path, text: written.append(text) or real(path, text))
+    sc.begin()
+    build_static.build(out_dir=str(b / "site"), data_dir=str(b / "data"), today=date(2026, 7, 23), mode="mock")
+    sc.finish(str(b / "data"))
+    assert _tree(str(a / "site")) == _tree(str(b / "site"))
+    assert _tree(str(a / "data")) == _tree(str(b / "data"), skip=(sc.FILE,))
+    assert sorted(os.listdir(str(b / "data"))) == sorted(os.listdir(str(a / "data")) + [sc.FILE])
+    assert written[0] == written[-1] == "" == _now(now)
+    assert "setup" in written and "admob_fetch/admob_network" in written and "tabs" in written
+    for p in written:
+        assert p == "" or all(n in sc.STAGES for n in p.split("/")), p
+    assert sorted(os.listdir(str(tmp_path))) == ["a", "b", "stage_now"]
 
 
 def _bytes(root):

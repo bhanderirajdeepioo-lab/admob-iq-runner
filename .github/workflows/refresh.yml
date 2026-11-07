@@ -297,18 +297,45 @@ jobs:
           AC_ACCOUNT_WORKERS:   ${{ vars.AC_ACCOUNT_WORKERS }}
           ZONE_CHECK_OUT:       /tmp/zone_check.json      # admob_iq/tz_check.py's counts (the zone check step prints them)
           HEALTH_OUT:           /tmp/health.json          # admob_iq/health.py: the failed steps' names (the health step)
+          STAGE_NOW_FILE:       /tmp/stage_now            # admob_iq/stage_clock.py: the open stage (res_probe prints it)
         run: |
           # PRIVACY: Actions logs on a PUBLIC repo are world-readable and the build prints
           # app ids and revenue totals. So its output goes to a file, never to the log. On
           # failure we show only the tail with long digit runs masked, which keeps the error
           # text readable ("OAuth fail", "PERMISSION_DENIED") while hiding ids and figures.
+          # Resource probe (admob_iq/res_probe.py): builds have died mid-way on "The runner has received a shutdown
+          # signal" (exit 143) with nothing in this log to say where, or whether memory or disk ran out. While the
+          # build runs it prints one "res" line at once and every 10 s (the machine's memory, swap, memory pressure,
+          # OOM-kill count and free disk, the build's own memory and swap, and the stage it is in: the stage clock
+          # keeps $STAGE_NOW_FILE). When it is stopped, and also when a runner shutdown kills this shell first (the
+          # build runs on under another parent and the probe still finds it by its pids), it prints one last sample,
+          # the state at that moment, then a peak line. PUBLIC LOG: numbers and fixed stage names only, never a
+          # process name, command line, path, env or host; its stderr is dropped.
+          # --parent $$: the build stays in the foreground below (its exit status, signals and stdin as before), so
+          # the probe counts every process under this shell except itself. It can never fail this step (set -e is
+          # on): it always exits 0 and every stop command ends in || true.
+          python -m admob_iq.res_probe --parent $$ 2>/dev/null &
+          res_pid=$!
+          res_stop() {
+            kill -TERM "$res_pid" 2>/dev/null || true      # → its last sample and the peak line, then it exits
+            wait "$res_pid" 2>/dev/null || true
+            # the kernel's OOM kills on this machine: the COUNT only (dmesg lines name processes); ? = unreadable.
+            # Only a build that returns gets here; the probe's machine and sample lines carry /proc/vmstat's count too
+            if k=$(sudo -n dmesg 2>/dev/null); then
+              echo "res oom_kills=$(printf '%s\n' "$k" | grep -ci 'killed process' || true)"
+            else
+              echo "res oom_kills=?"
+            fi
+          }
           # /tmp/build_wall: this step's own wall clock around the build (the stage-time step below compares it)
           date +%s.%N > /tmp/build_wall
           if python -m admob_iq.build_static > /tmp/build.log 2>&1; then
             date +%s.%N >> /tmp/build_wall
+            res_stop
             echo "build complete"
           else
             date +%s.%N >> /tmp/build_wall
+            res_stop
             echo "::error::build failed — tail below, digits masked for privacy"
             # mask decimals FIRST (a revenue figure like 89.43 has no 4-digit run),
             # then any long digit run (publisher ids, app ids, counts).

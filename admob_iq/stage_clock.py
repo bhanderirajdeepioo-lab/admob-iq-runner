@@ -25,6 +25,13 @@ file>]` prints only "stage <name> <sec>s" lines: the total, one line per stage o
 from STAGES / META, which are fixed code identifiers, and the numbers are whole seconds only. No app, account, file
 name or amount is ever printed.
 
+The open stage, live (for the runner's resource probe, admob_iq/res_probe.py): with STAGE_NOW_FILE set, the file it
+names always holds the path of the stage open right now — its allow-listed names joined by "/", e.g.
+"ga4/roi_apps/roi_device"; "" when none is open. It is rewritten at each stage start (the new path) and end (the
+parent's again), atomically (a tmp file + os.replace: a reader sees the old path or the new one, never half), so the
+probe's last line before a runner death says where the build was. Only the process that began the run writes it, and
+a write that fails is skipped. Unset (tests, probes, the Mac): nothing is written. It is never part of the profile.
+
 The total covers the python process from its start (python_start: interpreter start-up up to this module's import,
 read from /proc on Linux) through the module imports (imports) and the whole build to the profile write. Outside it
 (the outside_build line): the shell, printing the result and interpreter shutdown. pip runs in its own earlier step.
@@ -46,6 +53,7 @@ HISTORY_KEEP = 48              # builds kept in the rolling history
 HISTORY_MIN_SEC = 1.0          # a history row keeps the stages that took at least this long (small file)
 PUBLIC_MIN_SEC = 20            # the public log shows a stage from this many seconds
 WALL_SLACK_SEC = 5             # a profile that started before the build step (less this) is an older run's
+NOW_ENV = "STAGE_NOW_FILE"     # env: the file that holds the open stage's path (the docstring's "open stage, live")
 
 # Every stage name the build uses, in build order. ONLY these can reach the public log (an allow-list of code
 # identifiers). A name used in code but missing here is still timed into the private profile, never printed.
@@ -134,6 +142,20 @@ class _Run:
         back = max(0.0, clock() - t0) + pre
         self.at = (datetime.now(timezone.utc) - timedelta(seconds=back)).strftime("%Y-%m-%dT%H:%M:%SZ")
         self.rows, self.order, self.stack = {}, [], []
+        self.now_file, self.now, self.pid = os.environ.get(NOW_ENV) or None, None, os.getpid()
+
+    def mark(self):
+        """NOW_ENV's file ← the open stage's path (its allow-listed names joined by "/", "" when none is open), when it
+        changed. Only in the process that began the run (a forked worker shares the run, never the file). Never
+        raises."""
+        try:
+            if self.now_file is None or os.getpid() != self.pid:
+                return
+            path = "/".join(f.key[1] for f in self.stack if f.key[1] in _ALLOWED)
+            if path != self.now and write_now(self.now_file, path):
+                self.now = path
+        except Exception:
+            pass
 
     def row(self, name, parent):
         key = (parent, name)
@@ -210,6 +232,7 @@ def begin(clock=None, imports=False):
         else:
             run = _Run(clk, clk(), 0.0)
         _RUN = run
+        run.mark()                                      # (NOW_ENV's file: "", no stage open yet)
     except Exception:
         _RUN = None
 
@@ -225,6 +248,7 @@ def step(name):
         while run.stack:
             run.close(run.stack[-1], True)
         run.open(name, True)
+        run.mark()
     except Exception:
         pass
 
@@ -243,6 +267,7 @@ class stage:
             if run is not None and _main_thread():
                 self.f = run.open(self.name, False)
                 self.run = run
+                run.mark()
         except Exception:
             self.run = self.f = None
         return self
@@ -251,6 +276,7 @@ class stage:
         try:
             if self.f is not None and self.run is _RUN:
                 self.run.close(self.f, et is None)
+                self.run.mark()                         # (the parent's path again)
         except Exception:
             pass
         return False
@@ -277,6 +303,7 @@ def finish(data_dir, ok=True):
     try:
         while run.stack:
             run.close(run.stack[-1], ok)
+        run.mark()                                      # (NOW_ENV's file: "", no stage open)
         prof = run.profile(ok)
     except Exception:
         return None
@@ -321,6 +348,23 @@ def write(data_dir, prof):
     os.makedirs(data_dir, exist_ok=True)
     from .db import write_json_gz_stable
     write_json_gz_stable(path, prof)
+
+
+def write_now(path, text):
+    """text → path, atomically: a tmp file beside it, then os.replace (a reader sees the old text or the new one, never
+    half of it). → True when written; an OSError is swallowed (→ False, its tmp file removed)."""
+    tmp = "%s.%d.tmp" % (path, os.getpid())
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, path)
+        return True
+    except OSError:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        return False
 
 
 # ── the public log ──────────────────────────────────────────────────────────────────────────────────────────────────
