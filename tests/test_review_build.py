@@ -709,6 +709,8 @@ def _site_files(out):
             if rel == "dashboard.json.gz":
                 d = load_gz(p)
                 d.pop("generated_at", None)
+                # the intraday sample carries the build's IST minute: two builds a minute apart differ there by design
+                d.pop("ecpm_intraday", None)
                 got[rel] = json.dumps(d, sort_keys=True)
             else:
                 got[rel] = raw_of(p)
