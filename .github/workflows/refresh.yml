@@ -74,6 +74,24 @@ jobs:
           cp -a _private/config/. config/ 2>/dev/null || true
           echo "pulled: $(ls -1 data 2>/dev/null | wc -l) data file(s)"
 
+      - name: Extra swap for the build (memory headroom)
+        # The build's peak memory (the AdMob history it keeps loaded plus the biggest app's Devices step) is above this
+        # runner's RAM + swap: the resource probe's lines showed swap full and a kernel OOM kill in roi_device, then
+        # "The runner has received a shutdown signal". Until the build's own peak comes down, an extra swap file on the
+        # runner's disk keeps it alive (slower while it swaps, never killed). Added only when the disk has room to spare,
+        # and it can never fail the job. The probe's "res machine" line shows the swap total the build then has.
+        continue-on-error: true
+        run: |
+          free_mb=$(df --output=avail -m / 2>/dev/null | tail -1 | tr -d ' ')
+          if [ "${free_mb:-0}" -gt 30000 ] 2>/dev/null; then
+            { sudo -n fallocate -l 8G /swapfile_extra && sudo -n chmod 600 /swapfile_extra \
+              && sudo -n mkswap /swapfile_extra > /dev/null && sudo -n swapon /swapfile_extra \
+              && echo "extra swap: added 8 GB"; } || echo "extra swap: not added"
+          else
+            echo "extra swap: skipped (disk)"
+          fi
+          free -m | awk '/^Swap:/ {print "swap total MB:", $2}' || true
+
       - name: Build dashboard + send alerts
         env:
           FETCH_MODE: live
