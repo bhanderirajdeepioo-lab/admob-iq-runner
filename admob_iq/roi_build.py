@@ -2243,7 +2243,8 @@ def _dev(dst, P, pre, spend, sids, rows, data_dir, aid, key, out_dir, info=None)
     qmap = _appk_q(P, months)
     curve = dvb.curve_of(rows, list(T))
     return dvb.build_app(data_dir, gu.file_key(aid), cost_usd, unk, lambda X: kmap.get(_mkey(X)),
-                         lambda X: qmap.get(_mkey(X)), curve, first, out_dir, info, fkey=key)
+                         lambda X: qmap.get(_mkey(X)), curve, first, out_dir, info, fkey=key,
+                         view=dst)                      # (the store as app_step read it: never read a second time)
 
 
 def _dev_last(out_dir, key):
@@ -2350,6 +2351,7 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
             if got:
                 dev, dfiles = got
                 acc.dvf.update(dfiles)
+        dst = None                                      # the device store is read by nothing below: freed here
         body = {"v": V, "app_id": aid, "app": a["app_name"], "key": key, "tz": P["tz"], "cur": "USD",
                 "ccy": spend["ccy"] if spend else None, "S": _iso(P["S"]), "hs": _iso(P["hs"]),
                 "newest": co.get("read_today") if co else None, "spend_till": spend.get("till") if spend else None,

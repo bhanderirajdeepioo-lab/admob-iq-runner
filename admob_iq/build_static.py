@@ -776,9 +776,14 @@ def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, to
     """The uninstall step with the exact AdMob revenue per app per day (the update-impact card's ARPDAU) from the
     network report already in `repo` — no extra report call (tz_by_account: account_tzs). A revenue failure only costs
     that one row."""
+    # every reader below takes the history's own rows, never the app-name wrapper's (_DisambiguatedRepo copies each
+    # row of a renamed app on every fetch, and adcfg.Source would hold those copies through the whole ROI step): none
+    # of them reads "app_name" or changes a row, so their numbers are the same either way
+    # (tests/test_build_static_memory.py)
+    raw = repo._r if isinstance(repo, _DisambiguatedRepo) else repo
     with _sc.stage("ga4_revenue_prep"):                 # the AdMob revenue inputs (no report call)
         try:
-            revenue = admob_revenue(repo.fetch_network(), report_tz, s["report_currency"], today, tz_by_account)
+            revenue = admob_revenue(raw.fetch_network(), report_tz, s["report_currency"], today, tz_by_account)
         except Exception as e:
             revenue = None
             print(f"ga4 uninstall revenue skipped: {type(e).__name__}", file=sys.stderr)
@@ -786,32 +791,32 @@ def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, to
             try:                                       # every mediation source (Active users' other-network share; the
                                                        # Install value tab's money truth — with Active off it falls back
                                                        # to the network report and says so: scale.src "network")
-                every = mediation_revenue(repo.fetch_mediation(), revenue["till"])
+                every = mediation_revenue(raw.fetch_mediation(), revenue["till"])
                 if every:
                     revenue["all_apps"] = every
             except Exception as e:
                 print(f"ga4 active mediation skipped: {type(e).__name__}", file=sys.stderr)
         if revenue is not None:
             try:                                       # the 🔮 forecast's "why" split (country mix × country eCPM)
-                revenue["country"] = admob_country(repo.fetch_country(), revenue["till"])
+                revenue["country"] = admob_country(raw.fetch_country(), revenue["till"])
             except Exception as e:
                 print(f"ga4 forecast country skipped: {type(e).__name__}", file=sys.stderr)
             try:                                       # 📈 ROI's country filter: every month (each country's AdMob ÷ GA4)
-                revenue["country_m"] = admob_country_months(repo.fetch_country(), revenue["till"])
+                revenue["country_m"] = admob_country_months(raw.fetch_country(), revenue["till"])
             except Exception as e:
                 print(f"roi country months skipped: {type(e).__name__}", file=sys.stderr)
             try:                                       # 📅 the forecast's eCPM calendar: each past season's week / event
                 from .engine import fc_calendar        # effects, like for like per ad unit (the unit report already read)
                 till = date.fromisoformat(str(revenue["till"])[:10])
-                revenue["cal"] = fc_calendar.seasons(getattr(repo, "fetch_mediation_unit", list)(), till)
-                revenue["cal"]["hol"] = fc_calendar.holidays(repo.fetch_country(), till)   # (measured, page only)
-                revenue["cal"]["wk"] = fc_calendar.trigger_days(getattr(repo, "fetch_mediation_unit", list)(),
+                revenue["cal"] = fc_calendar.seasons(getattr(raw, "fetch_mediation_unit", list)(), till)
+                revenue["cal"]["hol"] = fc_calendar.holidays(raw.fetch_country(), till)   # (measured, page only)
+                revenue["cal"]["wk"] = fc_calendar.trigger_days(getattr(raw, "fetch_mediation_unit", list)(),
                                                                 (till - timedelta(days=140)).isoformat(), till.isoformat())
             except Exception as e:
                 print(f"forecast calendar skipped: {type(e).__name__}", file=sys.stderr)
             try:                                       # ⚙️ the ad setting changes: the unit + country reports already
                 from .engine import adcfg              # read (indexed once, never copied; per app inside the ROI step)
-                revenue["adsrc"] = adcfg.Source(getattr(repo, "fetch_mediation_unit", list)(), repo.fetch_country(),
+                revenue["adsrc"] = adcfg.Source(getattr(raw, "fetch_mediation_unit", list)(), raw.fetch_country(),
                                                 revenue["till"])
             except Exception as e:
                 print(f"ad settings skipped: {type(e).__name__}", file=sys.stderr)
@@ -1518,6 +1523,28 @@ def _deploy_guard_step(out_dir, prev_dir):
         deploy_guard.discard(prev_dir)
 
 
+def _daily_prep(frepo):
+    """The Mediation and Deductions daily files' contents (live builds), computed right after build_from_db while the
+    whole history is still loaded: the same functions on the same rows as at their own steps (nothing writes the
+    history after repo_flush, and no step in between changes a mediation, network or snapshot row), so the snapshot
+    history can be freed for the rest of the build. → {step: (contents, None) or (None, its "… skipped:" line)}: the
+    file is written — or the line printed — at its own step, where the health banner has always read it."""
+    pre = {}
+    with _sc.stage("mediation_daily"):
+        try:
+            from .api.dataservice import build_mediation_daily
+            pre["mediation_daily"] = (build_mediation_daily(frepo), None)
+        except Exception as e:
+            pre["mediation_daily"] = (None, f"mediation daily ship skipped: {e}")
+    with _sc.stage("deductions_daily"):
+        try:
+            from .api.dataservice import build_deductions_daily
+            pre["deductions_daily"] = (build_deductions_daily(frepo), None)
+        except Exception as e:
+            pre["deductions_daily"] = (None, f"deductions daily ship skipped: {e}")
+    return pre
+
+
 def build(out_dir="site", data_dir="data", today=None, mode=None):
     _sc.step("setup")  # ⏱ the top-level stages, each up to the next (measure only: stage_clock)
     guard_prev = _guard_snapshot(out_dir)
@@ -1659,6 +1686,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
 
     _sc.step("dashboard_build")
     baseline_payload = None
+    daily_files = None                                     # (live) the Mediation / Deductions daily files: _daily_prep
     if repo.has_data():
         # Hide the user's UNSELECTED apps from EVERY built view (one choke point) — the real repo
         # still holds the data; the picker/catalog below still lists every app.
@@ -1668,6 +1696,14 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         hidden = _hidden_app_ids(repo, data_dir)
         frepo = _AppFilteredRepo(repo, hidden) if hidden else repo
         dashboard = build_from_db(frepo, today=today)   # real data (today = the live/partial day)
+        # 🧠 Memory: the two daily files are computed now (written at their own steps below), then the history tables
+        # nothing reads any more are freed for the rest of the build (FileRepo.release; a late read would re-read the
+        # file): the snapshots (their last readers: build_from_db and the two daily files) and placement × country
+        # (build_from_db only). The monthly rollup goes after the baseline report, its only reader.
+        if mode == "live":
+            daily_files = _daily_prep(frepo)
+        repo.release("snap")
+        repo.release("pc")
         # Build the ad-unit×country baseline report (standard ranges + market eCPM trend), but ship
         # it as a SEPARATE baseline.json the UI lazy-loads only when the Baseline tab opens — so it
         # never weighs down the always-fetched dashboard.json. Focus on placements active in the
@@ -1690,6 +1726,8 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                 dashboard["has_baseline"] = True
         except Exception as e:
             print(f"baseline report skipped: {e}", file=sys.stderr)
+        acm = None                                      # (this view shares the rollup's inner dicts: freed with it)
+        repo.release("acm")
     elif mode == "mock":
         dashboard = build_dashboard()                   # rich demo preview (no creds yet)
     else:
@@ -2083,28 +2121,34 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # Daily-by-source mediation (date × app × ad_source) — ALREADY fetched daily-by-source
     # (upsert_mediation), so NO extra AdMob call. Shipped as its own lazy file (hidden apps
     # excluded via frepo) so the Mediation screen can window to the SELECTED period.
+    # (Both daily files were computed at dashboard_build — _daily_prep — and are written, or their
+    # "… skipped:" line printed, here as always.)
     if mode == "live" and repo.has_data():
         _sc.step("mediation_daily")
-        try:
-            from .api.dataservice import build_mediation_daily
-            med_daily = build_mediation_daily(frepo)
-            if med_daily.get("by_app"):
-                with open(os.path.join(out_dir, "mediation_daily.json"), "w", encoding="utf-8") as f:
-                    json.dump(med_daily, f, ensure_ascii=False, separators=(",", ":"))
-        except Exception as e:
-            print(f"mediation daily ship skipped: {e}", file=sys.stderr)
+        med_daily, skipped = daily_files.pop("mediation_daily")
+        if skipped:
+            print(skipped, file=sys.stderr)
+        else:
+            try:
+                if med_daily.get("by_app"):
+                    with open(os.path.join(out_dir, "mediation_daily.json"), "w", encoding="utf-8") as f:
+                        json.dump(med_daily, f, ensure_ascii=False, separators=(",", ":"))
+            except Exception as e:
+                print(f"mediation daily ship skipped: {e}", file=sys.stderr)
 
         _sc.step("deductions_daily")
         # Per-unit estimate DECAY (deductions) — 'pehle itna, ab itna' — from the already-stored
         # snapshots (zero new fetch). Lazy file; the Deductions screen windows it to any period.
-        try:
-            from .api.dataservice import build_deductions_daily
-            ded_daily = build_deductions_daily(frepo)
-            if ded_daily.get("data"):
-                with open(os.path.join(out_dir, "deductions_daily.json"), "w", encoding="utf-8") as f:
-                    json.dump(ded_daily, f, ensure_ascii=False, separators=(",", ":"))
-        except Exception as e:
-            print(f"deductions daily ship skipped: {e}", file=sys.stderr)
+        ded_daily, skipped = daily_files.pop("deductions_daily")
+        if skipped:
+            print(skipped, file=sys.stderr)
+        else:
+            try:
+                if ded_daily.get("data"):
+                    with open(os.path.join(out_dir, "deductions_daily.json"), "w", encoding="utf-8") as f:
+                        json.dump(ded_daily, f, ensure_ascii=False, separators=(",", ":"))
+            except Exception as e:
+                print(f"deductions daily ship skipped: {e}", file=sys.stderr)
 
     _sc.step("static_files")
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

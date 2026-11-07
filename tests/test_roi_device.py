@@ -2,11 +2,16 @@
 country world (tests/test_roi_build.py: install days from 1 Aug, Google Ads split by country from 1 Sep): the ROI file
 carries only the stub, the Devices files sit beside it with the app's key, their cost comes from the 🌍 Countries cost
 (by country × install day), a month with no AdMob behind its scale is counted, finish() keeps the app's Devices files
-and removes another app's, the counts-only line, and a failure costs only the block. No real data."""
+and removes another app's, the counts-only line, and a failure costs only the block. Memory: the store is read once
+(build_app works on app_step's own copy, every file as when it read the store again) and build_app frees its cell
+caches before it writes. No real data."""
 import gzip
 import json
 import os
+import sys
 from datetime import timedelta
+
+import pytest
 
 from admob_iq import device_build as dvb
 from admob_iq import roi_build as rb
@@ -156,3 +161,109 @@ def test_too_big_is_said_even_when_no_devices_block_was_built(tmp_path, monkeypa
     capsys.readouterr()
     rb.finish(acc, {}, str(out))
     assert "devices skipped: TooBigError" in capsys.readouterr().err and "devices:" not in rb.LINE
+
+
+# ── 🧠 memory: build_app works on app_step's own copy of the store (never read twice) and frees its cells early ──────
+def _bytes(d):
+    """Every file of a folder → its decompressed bytes."""
+    return {n: gzip.decompress(open(os.path.join(str(d), n), "rb").read()) for n in sorted(os.listdir(str(d)))}
+
+
+def test_the_devices_block_reads_the_store_once_and_writes_the_same_files(tmp_path, monkeypatch):
+    real_build, real_view, real_load = dvb.build_app, gd.Store.view, gd.load_store
+    seen, views = {}, []
+
+    def view(self):
+        views.append(self.key)
+        return real_view(self)
+
+    def load_store(path):
+        seen["dst"] = real_load(path)
+        return seen["dst"]
+
+    def build_app(*a, **k):
+        seen["view"] = k.get("view")
+        return real_build(*a, **k)
+    monkeypatch.setattr(gd.Store, "view", view)
+    monkeypatch.setattr(gd, "load_store", load_store)
+    monkeypatch.setattr(dvb, "build_app", build_app)
+    once, _, out1 = _run(tmp_path, monkeypatch, "once")
+    assert seen["view"] is seen["dst"] and views == [gu.file_key(AID)]     # one read of the store: app_step's own
+    # as before this change: build_app read the same store again itself
+    monkeypatch.setattr(dvb, "build_app", lambda *a, **k: real_build(*a, **{x: v for x, v in k.items() if x != "view"}))
+    views.clear()
+    twice, _, out2 = _run(tmp_path, monkeypatch, "twice")
+    assert views == [gu.file_key(AID)] * 2
+    assert once == twice and "dev" in once and _bytes(out1) == _bytes(out2)
+    sd = os.path.join(gd.DIR, gu.file_key(AID))
+    assert _bytes(tmp_path / "once" / "data" / sd) == _bytes(tmp_path / "twice" / "data" / sd)
+
+
+def _long_store(data, v1=False):
+    """A store whose older install days sit in their month files (more than KEEP_DAYS back), or (v1) the one-file
+    store of before 6 Nov 2026 → the first install day."""
+    today = trb.CTODAY
+    f = today - timedelta(days=5)
+    first = today - timedelta(days=gd.KEEP_DAYS + 60)
+    xs, x = {}, first
+    while x <= today:
+        xs[x.isoformat()] = _day(x, f)
+        x += timedelta(days=1)
+    view = {"app_id": AID, "stream_id": "222", "F": f.isoformat(), "today": today.isoformat(), "x": xs,
+            "names": {"XM-1": ["XBrand", "Phone One"]}}
+    if v1:
+        from admob_iq.db import write_json_gz_stable
+        os.makedirs(os.path.join(str(data), gd.DIR), exist_ok=True)
+        write_json_gz_stable(gd.store_path(str(data), AID), dict(view, v=gd.V1))
+    else:
+        gd.Store(os.path.join(str(data), gd.DIR), gu.file_key(AID)).save_view(view)
+    return first
+
+
+def _build(data, out, first, **kw):
+    cost = {}
+    X = first
+    while X <= trb.CTODAY:
+        cost.setdefault("AA", {})[X] = 2.0
+        cost.setdefault("BB", {})[X] = 0.5 if X.day % 3 else 0.0
+        X += timedelta(days=1)
+    return dvb.build_app(str(data), gu.file_key(AID), cost, {first}, lambda X: 1.2, lambda X: X.month == 9, {}, first,
+                         str(out), {}, **kw)
+
+
+@pytest.mark.parametrize("v1", [False, True])
+def test_build_app_on_the_callers_copy_of_the_store_writes_the_same_files(tmp_path, v1):
+    runs = {}
+    for how in ("own", "given"):
+        data, out = tmp_path / how / "data", tmp_path / how / "out"
+        out.mkdir(parents=True)
+        first = _long_store(data, v1)
+        got = []
+        for _ in range(2):                              # a full build, then a warm one (its cold months cached)
+            kw = {"view": gd.load_store(gd.store_path(str(data), AID))} if how == "given" else {}
+            got.append(_build(data, out, first, **kw))
+        runs[how] = (got, _bytes(out), _bytes(data / gd.DIR / gu.file_key(AID)))
+    assert runs["own"] == runs["given"]
+    assert len(runs["own"][1]) > 7                      # the stub + both files of every month (not vacuous)
+    st = gd.Store(os.path.join(str(tmp_path / "own" / "data"), gd.DIR), gu.file_key(AID))
+    assert (st.meta is None) == v1 and (v1 or len(st.months()) >= 2)    # (v2: months read from their files)
+
+
+def test_build_app_frees_its_cell_caches_before_writing(tmp_path):
+    data, out = tmp_path / "data", tmp_path / "out"
+    out.mkdir()
+    first = _long_store(data)
+    names = ("dcache", "mcells", "allc", "sums", "run_c", "recent")
+    at = {}
+
+    def prof(frame, event, arg):                        # build_app's names at its first site write (the stub's)
+        if event == "call" and frame.f_code is dvb.put_file.__code__ and not at:
+            up = frame.f_back
+            if up is not None and up.f_code is dvb.build_app.__code__:
+                at.update({k: up.f_locals.get(k, "missing") for k in names + ("W",)})
+    sys.setprofile(prof)
+    try:
+        got = _build(data, out, first)
+    finally:
+        sys.setprofile(None)
+    assert got and at and all(at[k] is None for k in names) and at["W"]     # the verdict windows stay

@@ -906,6 +906,10 @@ class FileRepo:
     O(n²) and choked on real volume). Callers persist by calling `flush()` when
     done (build_static does; tests do). Dates are stored as ISO strings, which the
     dataservice reads via `str(...)`, so reads are drop-in identical to the others.
+
+    Memory (the build holds the whole AdMob history): the key maps serve only writes, so flush() drops them and a
+    write after it builds its table's map again from the rows (_pos_of: the same map). release(name) frees a table
+    nothing reads any more; a later fetch of it reads it back from its file.
     """
 
     NET_PK = ["report_date", "account_id", "app_id", "ad_unit_id", "country",
@@ -944,7 +948,8 @@ class FileRepo:
         self._pk = {"net": self.NET_PK, "med": self.MED_PK, "snap": self.SNAP_PK,
                     "country": self.COUNTRY_PK, "pc": self.PC_PK, "mu": self.MU_PK}
         self._rows = {}   # name -> list (lazy-loaded)
-        self._pos = {}    # name -> {key: index}
+        self._pos = {}    # name -> {key: index} (built with the rows, dropped by flush(), built again by _pos_of)
+        self._dirty = set()   # the tables changed since the last flush() (release() keeps them: not on disk yet)
         # ad-unit×country baseline: compact NESTED structures, own files (not the flat model)
         self._ac_path = {"acm": os.path.join(data_dir, "adunit_country_monthly.json"),
                          "acd": os.path.join(data_dir, "adunit_country_daily.json")}
@@ -976,14 +981,23 @@ class FileRepo:
                                    for i, r in enumerate(self._rows[name])}
         return self._rows[name]
 
+    def _pos_of(self, name):
+        """A loaded table's key→index map — after flush() dropped it, built again from the rows exactly as _load
+        builds it (the rows change only through _upsert / append_snapshot, which keep the map in step)."""
+        pos = self._pos.get(name)
+        if pos is None:
+            pos = self._pos[name] = {self._key(r, self._pk[name]): i for i, r in enumerate(self._rows[name])}
+        return pos
+
     def _upsert(self, name, row):
         row = _jsonable(row)
-        rows = self._load(name); pos = self._pos[name]
+        rows = self._load(name); pos = self._pos_of(name)
         k = self._key(row, self._pk[name])
         if k in pos:
             rows[pos[k]] = row          # refresh existing (e.g. today's estimate)
         else:
             pos[k] = len(rows); rows.append(row)
+        self._dirty.add(name)
 
     def upsert_network(self, row):
         row.setdefault("is_finalized", False)
@@ -1023,6 +1037,7 @@ class FileRepo:
     def merge_adunit_country_monthly(self, rows):
         cur = self._load_ac("acm", {"units": {}, "data": {}})
         self._ac["acm"] = nest_monthly(cur, [_jsonable(r) for r in rows])
+        self._dirty.add("acm")
 
     def fetch_adunit_country_monthly(self):
         return self._load_ac("acm", {"units": {}, "data": {}})
@@ -1031,16 +1046,29 @@ class FileRepo:
         """The daily table holds ONLY the current month — replace it wholesale each run
         (completed months live in the monthly rollup, so old daily rows are dropped)."""
         self._ac["acd"] = nest_daily([_jsonable(r) for r in rows])
+        self._dirty.add("acd")
 
     def fetch_adunit_country_daily(self):
         return self._load_ac("acd", {"month": "", "dates": [], "units": {}, "data": {}})
 
     def append_snapshot(self, row):
         row = _jsonable(row)
-        rows = self._load("snap"); pos = self._pos["snap"]
+        rows = self._load("snap"); pos = self._pos_of("snap")
         k = self._key(row, self.SNAP_PK)
         if k not in pos:                # append-only; never overwrite a snapshot
             pos[k] = len(rows); rows.append(row)
+            self._dirty.add("snap")
+
+    def release(self, name):
+        """Free one loaded history table ("snap", "pc", … or the nested "acm" / "acd") once nothing more in this run
+        reads it: its rows and key map go, and a later fetch_*() of it reads it back from its file. Only what is
+        already on disk is ever dropped — a table changed since the last flush() is kept as it is (→ False).
+        → True when something was freed."""
+        if name in self._dirty:
+            return False
+        self._pos.pop(name, None)
+        freed = self._rows.pop(name, None) is not None
+        return (self._ac.pop(name, None) is not None) or freed
 
     def _load_snapshots(self):
         """The snapshot history as ONE list in its stored order, from whichever layout is on disk: the parts (index
@@ -1107,7 +1135,7 @@ class FileRepo:
               f"single file, the part files left in place", file=sys.stderr)
 
     def _snap_has_key(self, row):
-        return self._key(row, self.SNAP_PK) in self._pos.get("snap", ())
+        return "snap" in self._rows and self._key(row, self.SNAP_PK) in self._pos_of("snap")
 
     def _flush_snapshots(self, rows, compare, fast):
         """Write the snapshot history: as parts (SNAPSHOT_PARTS, default on), else as the single file. Either way
@@ -1155,6 +1183,8 @@ class FileRepo:
                 w = _write_json_gz(self._ac_path[name], nested, compare=compare, fast=fast,
                                    ensure_ascii=False, default=str, separators=(",", ":"))
             wrote, kept = wrote + bool(w), kept + (not w)
+        self._pos.clear()      # the key maps serve only writes (a write after this builds its map again: _pos_of)
+        self._dirty.clear()    # everything held is on disk now
         print(f"repo flush: {wrote} file(s) written, {kept} unchanged", file=sys.stderr)
 
     def fetch_network(self):

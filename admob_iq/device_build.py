@@ -729,18 +729,22 @@ def agg_path(data_dir, key):
     return _os.path.join(data_dir, gd.DIR, key, "agg.json.gz")
 
 
-def build_app(data_dir, key, cost, unk, kmon, kq, curve, first, out_dir, info=None, fkey=None):
+def build_app(data_dir, key, cost, unk, kmon, kq, curve, first, out_dir, info=None, fkey=None, view=None):
     """The app's device store (v2 or v1; key: its file key) + Google Ads cost {cc: {X: USD}} (unk: days without a
     country split) + kmon(X) (AdMob ÷ GA4 of the install month) + kq(X) (that month has no AdMob match) + the app's
     curve + first (its first install day) → (the "dev" stub of the ROI file, the files written), or None (nothing read
     yet). fkey: the site files' key (the ROI file's; default key). info: counts gathered ({"rows", "months",
-    "cached", "kb", "toobig", "changed"})."""
+    "cached", "kb", "toobig", "changed"}). view: the caller's ga4_device.load_store() dict of this same store (roi_build
+    reads it first): used as it is instead of reading the same files a second time (the month files are still listed
+    from the store)."""
     from datetime import date as _date
     info = info if isinstance(info, dict) else {}
     skey, key = key, (fkey or key)
     root = _os.path.join(data_dir, gd.DIR)
     st = gd.Store(root, skey, strict=False)
-    if st.meta is not None:
+    if view is not None:                                # (load_store takes the same v2 / v1 branch as below)
+        mfiles = st.months() if st.meta is not None else []
+    elif st.meta is not None:
         view, mfiles = st.view(), st.months()
     else:
         view, mfiles = gd.load_v1(_os.path.join(root, skey + ".json.gz")) or {}, []
@@ -993,6 +997,7 @@ def build_app(data_dir, key, cost, unk, kmon, kq, curve, first, out_dir, info=No
     Vc = {cc: {md: v for md, v in vs.items() if md in used} for cc, vs in verdicts_cc(W, ccs, curve).items()}
     names = view.get("names") or {}
     every = {md for md, _ in allc}
+    dcache = mcells = allc = sums = run_c = recent = None    # read by nothing below: their cells go before the writes
     bf = (view.get("bf") or {}) if isinstance(view.get("bf"), dict) else {}
     hist = {"on": bool(bf) and not ((bf.get("A") or {}).get("done") and (bf.get("B") or {}).get("done")),
             "at": bf.get("at"), "stale": gd.bf_stalled(bf)}
