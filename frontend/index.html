@@ -8927,7 +8927,7 @@ function chart(id,title,P,f,L,cls,F,line){ const pts=P.map((p,i)=>[i,p.v]).filte
   o.push(`<line class="cpx-rule" x1="0" x2="0" y1="${Tp-6}" y2="${H-Bm}" visibility="hidden"/><text x="6" y="16" class="cpx-tt">${E(title)}</text></svg>`);
   CHD[id]={P,f,W,Lm,Rm,N,F};
   return `<div class="cpx-chw">${o.join('')}<div class="cpx-tip" hidden></div></div>`; }
-function tipHtml(c,i){ const p=c.P[i]; if(!p) return ''; const x=c.F?lvAt(c.F,c.f,p.x):null;
+function tipHtml(c,i,day){ const p=c.P[i]||(day?{x:day,v:null,n:null}:null); if(!p) return ''; const x=c.F?lvAt(c.F,c.f,p.x):null;   // (day: a window the chart has no point for → "—")
   return `<b>${E(perDates(addD(p.x,-13),p.x))}</b> <span class="cpx-nv">(14 din ka jod)</span><br><b>${E(fmtF(c.f,p.v))}</b>${p.n!=null?` · normal ${E(fmtF(c.f,p.n))}`:''}${p.v!=null&&p.n?` (${fP(p.v/p.n-1)})`:''}`
     +(x?`<br><span class="cpx-nv">Level: ${E(HOWW[x.src]||x.src)} · ${E(fd(x.from))} se${x.days?' · measured '+E(rg(x.days[0],x.days[1])):''}</span>`:''); }
 // ---- 📅 Day-wise: newest first (Today / Yesterday on top from DATA, marked ⏳), 30 rows + Show 30 more ----
@@ -9396,12 +9396,24 @@ function onChange(e){ const t=e.target; if(!t||!t.closest) return;
     if(!F||(v&&!(Array.isArray(F.ctys)&&F.ctys.some(c=>c&&c.cc===v)))) return; const id=OPEN; keep('[data-cpx-cty]',()=>{ ctySet(id,v); paint(); }); return; }
   const f=t.closest('[data-cpx-pf]'), to=t.closest('[data-cpx-pto]'); if(!f&&!to) return; const v=String(t.value||''); if(!okD(v)) return;
   keep(f?'[data-cpx-pf]':'[data-cpx-pto]',()=>{ const [lo,hi]=rng(); PF=f?v:lo; PTO=to?v:hi; PER='cus'; perSave(); paint(); }); }
+// the pointer over (a tap on) a chart: its rule + tooltip AND those of every chart of its set (.cpx-chs: CPI · eCPM · D0 ROAS)
+// at the SAME 14-day window — matched by the window's end date, never the index (a series may start later); a chart whose days
+// hold that date but no number: its rule there + "—"; a date outside its days: nothing. A move inside the same day touches
+// nothing (HOV) and a tip is rebuilt only when its day changed (its _d)
+let HOV=null;
+const tipOff=x=>{ if(x.hidden) return; x.hidden=true; const rl=x.parentNode&&x.parentNode.querySelector('.cpx-rule'); if(rl) rl.setAttribute('visibility','hidden'); };
+function tipOn(svg,day,r){ const c=CHD[svg.getAttribute('data-cpx-ch')], tip=svg.parentNode&&svg.parentNode.querySelector('.cpx-tip'), rule=svg.querySelector('.cpx-rule'); if(!c||!tip) return null;
+  const P=c.P, N=c.N; if(!N||day<P[0].x||day>P[N-1].x){ tipOff(tip); return null; }
+  const i=P.findIndex(p=>p.x===day); let k=i; if(i<0){ k=P.findIndex(p=>p.x>day); k=k-1+(t0(day)-t0(P[k-1].x))/(t0(P[k].x)-t0(P[k-1].x)); }   // (no point that day: between its neighbours)
+  const X=c.Lm+(c.W-c.Lm-c.Rm)*(N>1?k/(N-1):0.5); if(rule){ rule.setAttribute('x1',X); rule.setAttribute('x2',X); rule.setAttribute('visibility','visible'); }
+  if(tip._d!==day){ tip.innerHTML=tipHtml(c,i,day); tip._d=day; } tip.hidden=false; return [tip,X*r.width/c.W,r.width]; }
 function onMove(e){ const t=e.target, s=EL; if(!s||!s.querySelectorAll) return; const svg=t&&t.closest?t.closest('svg[data-cpx-ch]'):null;
-  s.querySelectorAll('.cpx-tip').forEach(x=>{ if(!svg||x.parentNode!==svg.parentNode){ x.hidden=true; const rl=x.parentNode&&x.parentNode.querySelector('.cpx-rule'); if(rl) rl.setAttribute('visibility','hidden'); } });
-  if(!svg) return; const c=CHD[svg.getAttribute('data-cpx-ch')], tip=svg.parentNode.querySelector('.cpx-tip'), rule=svg.querySelector('.cpx-rule'); if(!c||!tip) return;
-  const r=svg.getBoundingClientRect(); if(!r.width) return; const x=(e.clientX-r.left)*c.W/r.width, i=Math.max(0,Math.min(c.N-1,Math.round((x-c.Lm)/((c.W-c.Lm-c.Rm)||1)*(c.N-1))));
-  const X=c.Lm+(c.W-c.Lm-c.Rm)*(c.N>1?i/(c.N-1):0.5); if(rule){ rule.setAttribute('x1',X); rule.setAttribute('x2',X); rule.setAttribute('visibility','visible'); }
-  tip.innerHTML=tipHtml(c,i); tip.hidden=false; const px=X*r.width/c.W; tip.style.left=Math.max(0,Math.min(r.width-tip.offsetWidth,px-tip.offsetWidth/2))+'px'; }
+  const set=svg&&svg.closest('.cpx-chs'), on=set?[...set.querySelectorAll('svg[data-cpx-ch]')]:svg?[svg]:[], c=svg&&CHD[svg.getAttribute('data-cpx-ch')], r=c&&svg.getBoundingClientRect();
+  const i=r&&r.width?Math.max(0,Math.min(c.N-1,Math.round(((e.clientX-r.left)*c.W/r.width-c.Lm)/((c.W-c.Lm-c.Rm)||1)*(c.N-1)))):-1, day=i>=0?c.P[i].x:null;
+  if(day&&HOV&&HOV[0]===(set||svg)&&HOV[1]===day&&HOV[2]===r.width) return; HOV=day?[set||svg,day,r.width]:null;
+  s.querySelectorAll('.cpx-tip').forEach(x=>{ if(!day||!on.some(v=>v.parentNode===x.parentNode)) tipOff(x); });
+  if(!day) return;   // (every chart's box read before the first write, every tip's width before the first move: one forced layout for the three)
+  on.map(v=>[v,v.getBoundingClientRect()]).map(([v,b])=>tipOn(v,day,b)).filter(Boolean).map(([tip,px,w])=>[tip,px,w,tip.offsetWidth]).forEach(([tip,px,w,ow])=>{ tip.style.left=Math.max(0,Math.min(w-ow,px-ow/2))+'px'; }); }
 function wire(){ const s=EL; if(!s||!s.dataset||s.dataset.cpxWired) return; s.dataset.cpxWired='1';
   if(s.addEventListener){ s.addEventListener('click',onClick); s.addEventListener('change',onChange); s.addEventListener('pointermove',onMove); s.addEventListener('click',onMove);
     s.addEventListener('input',e=>{ const t=e.target; if(!LVSET||!t||!t.closest) return; if(t.closest('[data-cpx-lvval]')) LVSET.val=String(t.value||''); else if(t.closest('[data-cpx-lvnote]')) LVSET.note=String(t.value||''); });

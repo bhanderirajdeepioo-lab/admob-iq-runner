@@ -12,6 +12,9 @@
 //   * the details: the verdict, the money line, every tab (Chart printed numbers, Day-wise paging, Countries + Rest,
 //     Campaigns' tROAS, eCPM kyun, Loss math, History) and the file states (⏳ Loading… / ⚠️ + Try again / no file);
 //   * keep(): the tapped row back to its place at 375 and 1280 px; one row open at a time;
+//   * 📈 the Chart tab's three charts move together (the screen's HTML in a small DOM, miniDom): the pointer over / a tap on any
+//     chart of a set → the rule + tooltip on every chart of it at the same 14-day window (by its end date; "—" / nothing where a
+//     chart has no number / no such day), leaving → none, a chart outside a set as before, nothing touched inside one day;
 //   * the developer copy renders nothing; a hostile app name escaped; the hub card + the Alerts note + the nav count;
 //   * 🤖 the level agent (cpx_fixture.js agent(): AGENT SPEC §6.3–§6.6 ship fields): the row tag per status word, the lines
 //     under the verdict, History · Levels (scoreboard, the blocked / on-hold / reverted level rows, Agent decisions with the
@@ -33,6 +36,48 @@ function el(screen) {
     addEventListener(t, f) { (e._on[t] = e._on[t] || []).push(f); }, _on: {}, querySelectorAll: () => [], querySelector: () => null };
   return e;
 }
+// a small DOM of the screen's HTML for the charts' pointer: tags + attributes; one compound selector (tag, .class, [attr],
+// [attr="v"]) for closest / querySelector(All); hidden; a tip's innerHTML writes counted (_n); every DOM write and read logged in
+// OPS — w a write, b a box read, o a tip's width read (each tip 200 px wide); a box per chart from lay()
+const OPS = [];
+function miniDom(h) {
+  const VOID = new Set(['BR', 'IMG', 'INPUT', 'HR', 'META', 'LINK', 'WBR', 'COL', 'SOURCE']);
+  const one = s => { const re = /([a-zA-Z][\w-]*)|\.([\w-]+)|\[([\w-]+)(?:="([^"]*)")?\]/y, ps = []; let p = 0;
+    while (p < s.length) { re.lastIndex = p; const m = re.exec(s); if (!m) throw new Error('selector not modelled: ' + s); ps.push(m); p = re.lastIndex; }
+    return e => ps.every(m => m[1] ? e.tagName === m[1].toUpperCase() : m[2] ? e.cls().includes(m[2]) : (v => v != null && (m[4] === undefined || v === m[4]))(e.getAttribute(m[3]))); };
+  class N {
+    constructor(tag, a) { this.tagName = tag; this._a = a; this.children = []; this.parentNode = null; this._html = ''; this._n = 0; this._r = null;
+      this.style = new Proxy({}, { set(o, k, v) { OPS.push('w'); o[k] = v; return true; } }); }
+    getAttribute(k) { const x = this._a.find(p => p[0] === k); return x ? x[1] : null; }
+    setAttribute(k, v) { OPS.push('w'); const x = this._a.find(p => p[0] === k); if (x) x[1] = String(v); else this._a.push([k, String(v)]); }
+    removeAttribute(k) { OPS.push('w'); this._a = this._a.filter(p => p[0] !== k); }
+    cls() { return String(this.getAttribute('class') || '').split(/\s+/); }
+    get classList() { return { contains: c => this.cls().includes(c) }; }
+    get dataset() { const d = {}; for (const [k, v] of this._a) if (k.startsWith('data-')) d[k.slice(5).replace(/-([a-z])/g, (m, c) => c.toUpperCase())] = v; return d; }
+    get hidden() { return this.getAttribute('hidden') != null; }
+    set hidden(v) { if (v) this.setAttribute('hidden', ''); else this.removeAttribute('hidden'); }
+    get innerHTML() { return this._html; }
+    set innerHTML(v) { OPS.push('w'); this._html = String(v); this._n++; }
+    get offsetWidth() { OPS.push('o'); return this.hidden ? 0 : 200; }
+    getBoundingClientRect() { OPS.push('b'); return this._r || { left: 0, top: 0, width: 0, height: 0 }; }
+    closest(s) { const f = one(s); for (let x = this; x && x.tagName !== '#R'; x = x.parentNode) if (f(x)) return x; return null; }
+    querySelectorAll(s) { const f = one(s), o = [], w = e => e.children.forEach(c => { if (f(c)) o.push(c); w(c); }); w(this); return o; }
+    querySelector(s) { return this.querySelectorAll(s)[0] || null; }
+  }
+  const root = new N('#R', []), st = [root], re = /<!--[^]*?-->|<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:[^>"']|"[^"]*"|'[^']*')*)>|[^<]+/g; let m;
+  while ((m = re.exec(h))) { if (!m[2]) continue; const tag = m[2].toUpperCase();
+    if (m[1]) { for (let i = st.length - 1; i > 0; i--) if (st[i].tagName === tag) { st.length = i; break; } continue; }
+    const a = [], ar = /([^\s="'\/]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g, self = /\/\s*$/.test(m[3]); let x;
+    while ((x = ar.exec(m[3].replace(/\/\s*$/, '')))) a.push([x[1], x[2] ?? x[3] ?? x[4] ?? '']);
+    const e = new N(tag, a); e.parentNode = st[st.length - 1]; st[st.length - 1].children.push(e); if (!VOID.has(tag) && !self) st.push(e); }
+  return root;
+}
+// the boxes: each set's charts side by side as .cpx-chs lays them (cols across, 8 px gaps, cw px wide in all), a chart outside a
+// set one box of its own below
+function lay(R, cw, cols) { const W = (cw - (cols - 1) * 8) / cols, H = W * 176 / 360;
+  R.querySelectorAll('.cpx-chs').forEach((s, j) => s.querySelectorAll('.cpx-chw').forEach((w, k) => { const v = w.querySelector('svg');
+    if (v) v._r = { left: 16 + (k % cols) * (W + 8), top: 400 + j * 900 + Math.floor(k / cols) * (H + 8), width: W, height: H }; }));
+  R.querySelectorAll('svg').forEach(v => { if (!v._r) v._r = { left: 16, top: 2400, width: W, height: H }; }); }
 const SCREEN = el('cpx');
 let ON = 'cpx', LOADS = [], FAIL = new Set(), SCROLL = [], LS = null, LS_THROW = false, PUSHED = [], DROPPED = [], CURV = 'INR', SHOWN = [];
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -297,6 +342,50 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     // an app whose file has no country: no picker, the three charts as before
     reset(); _.set({ OPEN: ID.a, TAB: 'ch' }); CPX.paint(); await tick(); await tick(); const Fn = _.FILES['cpi_' + KEY.a + '.json.gz'].raw; Fn.ctys = []; CPX.paint(); out.cty.none = chOf();
     _.set({ CTY: {} });   // the blocks below start from All countries (the picker remembered US above)
+    // ── 📈 the three charts move together (owner, 7 Nov: "koi ak chart pe arrow kru to vo data baki ke dono chart me bhi same
+    // period ka data selct ho"): the pointer over / a tap on ANY chart of a set → the rule + the tooltip on every chart of that set
+    // at the SAME 14-day window, matched by its end date; leaving → none; a chart outside a set as before; nothing touched while
+    // the pointer stays inside one day, and a tip rebuilt only when its day changed ──
+    const PM = SCREEN._on.pointermove[0], PL = SCREEN._on.pointerleave[0], CK = SCREEN._on.click;
+    const dom = (cw, cols) => { const R = miniDom(SCREEN.innerHTML); lay(R, cw, cols); SCREEN.querySelectorAll = s => R.querySelectorAll(s); SCREEN.querySelector = s => R.querySelector(s); return R; };
+    const chs = R => R.querySelectorAll('svg[data-cpx-ch]');
+    const snap = R => chs(R).map(v => { const tp = v.parentNode.querySelector('.cpx-tip'), rl = v.querySelector('.cpx-rule');
+      return { id: v.getAttribute('data-cpx-ch'), on: !tp.hidden, win: tp.hidden ? null : ((tp._html.match(/^<b>([^<]*)<\/b>/) || [])[1] || ''), text: tp.hidden ? null : strip(tp._html),
+        left: tp.hidden ? null : parseFloat(tp.style.left), w: v._r.width, rule: rl.getAttribute('visibility'), x: Math.round(+rl.getAttribute('x1') * 100) / 100, n: tp._n }; });
+    // the pointer at a fraction f of chart k's width (its line the target); exp: each chart's own tooltip of that window (found by date)
+    const at = (R, k, f) => { const v = chs(R)[k], r = v._r, c = _.CHD[v.getAttribute('data-cpx-ch')]; OPS.length = 0;
+      PM({ target: v.querySelector('.cpx-ln') || v, clientX: r.left + f * r.width, clientY: r.top + 20 });
+      const ops = OPS.join(''), i = Math.max(0, Math.min(c.N - 1, Math.round((f * c.W - c.Lm) / (c.W - c.Lm - c.Rm) * (c.N - 1)))), day = c.P[i].x;
+      return { k, f, from: c.P[0].x, N: c.N, day, ops, s: snap(R), exp: chs(R).map(w => { const q = _.CHD[w.getAttribute('data-cpx-ch')], j = q.P.findIndex(p => p.x === day); return j < 0 ? null : strip(_.tipHtml(q, j)); }) }; };
+    const sweep = R => chs(R).flatMap((v, k) => [0.25, 0.6, 0.95].map(f => at(R, k, f)));
+    const syncSet = async cc => { reset(); _.set({ OPEN: ID.a, TAB: 'ch', CTY: cc ? { [ID.a]: cc } : {} }); CPX.paint(); await tick(); await tick(); CPX.paint(); };
+    out.sync = {};
+    for (const [cc, tag] of [['', 'all'], ['US', 'us'], ['BR', 'br']]) { await syncSet(cc);
+      for (const [cw, cols, wt] of [[1000, 3, 'd'], [343, 1, 'm']]) { const R = dom(cw, cols); out.sync[tag + '_' + wt] = sweep(R);
+        out.sync[tag + '_' + wt + '_titles'] = R.querySelectorAll('.cpx-tt').length; PL({}); out.sync[tag + '_' + wt + '_leave'] = snap(R); } }
+    // a phone's tap: the finger lifted (pointerleave) and then the click (the screen's two click listeners); the details stay open
+    await syncSet(''); { const R = dom(343, 1), v = chs(R)[1], r = v._r; PL({ pointerType: 'touch' });
+      const ev = { target: v.querySelector('.cpx-ln'), clientX: r.left + 0.4 * r.width, clientY: r.top + 30 }; CK.forEach(f => f(ev));
+      out.sync.tap = { s: snap(R), open: _.get().OPEN, tab: _.get().TAB, det: SCREEN.innerHTML.includes('class="cpx-det"') }; }
+    // leaving onto a non-chart area of the screen (the gap of the set, the note under it) hides all of them
+    { const R = dom(1000, 3); at(R, 0, 0.5); PM({ target: R.querySelector('.cpx-chs'), clientX: 500 }); out.sync.gap = snap(R);
+      at(R, 2, 0.5); PM({ target: R.querySelector('.cpx-fn'), clientX: 40 }); out.sync.fn = snap(R); }
+    // cheap: the pointer inside one day (the same chart, another chart of the set) touches nothing; the next day rebuilds the three
+    // tips once, every box read before the first write and every tip's width before the first move; back after leaving: no rebuild
+    { const R = dom(1000, 3), m1 = at(R, 0, 0.6), same = at(R, 0, 0.601), other = at(R, 1, 0.6), n1 = snap(R).map(z => z.n), next = at(R, 2, 0.7), n2 = snap(R).map(z => z.n);
+      PL({}); const back = at(R, 0, 0.7);
+      out.sync.cheap = { first: m1.ops, same: same.ops, other: other.ops, next: next.ops, back: back.ops, days: [m1.day, same.day, other.day, next.day, back.day], n1, n2, n3: snap(R).map(z => z.n), on: snap(R).map(z => z.on) }; }
+    // made-up series that do NOT share their days: s2 starts 20 days later (no number in its first 14 days), s3 ends 20 days
+    // earlier and has no point on its 11th day; a lone chart outside any set
+    const S0 = '2026-01-05', ser = (a, b, v0, skip, nul) => { const o = []; for (let x = a; x <= b; x = addD(x, 1)) if (x !== skip) o.push({ x, v: nul && x <= nul ? null : v0 * (1 + (Date.parse(x) / 864e5 % 5) / 50), n: v0 }); return o; };
+    const P1 = ser(S0, addD(S0, 59), 20), P2 = ser(addD(S0, 20), addD(S0, 59), 4, null, addD(S0, 33)), P3 = ser(S0, addD(S0, 39), 0.4, addD(S0, 10));
+    SCREEN.innerHTML = `<div class="cpx-det"><div class="cpx-chs">${_.chart('cpx-s1', 'S1', P1, 'CPI', [], 'cpx-l1', null, 1)}${_.chart('cpx-s2', 'S2', P2, 'ECPM', [], 'cpx-l2', null, 1)}${_.chart('cpx-s3', 'S3', P3, 'ROAS_G', [], 'cpx-l3', null, 1)}</div>`
+      + `<div class="cpx-x">${_.chart('cpx-o1', 'Lone', P1, 'CPI', [], 'cpx-l1', null, 1)}</div></div>`;
+    { const R = dom(1000, 3), fx = (id, i) => { const c = _.CHD[id]; return (c.Lm + (c.W - c.Lm - c.Rm) * i / (c.N - 1)) / c.W; };
+      const g = {}; for (const [nm, k, id, i] of [['s1_5', 0, 'cpx-s1', 5], ['s1_10', 0, 'cpx-s1', 10], ['s1_25', 0, 'cpx-s1', 25], ['s1_50', 0, 'cpx-s1', 50], ['s2_0', 1, 'cpx-s2', 0], ['s3_last', 2, 'cpx-s3', 38], ['lone_7', 3, 'cpx-o1', 7], ['s1_after_lone', 0, 'cpx-s1', 12]])
+        g[nm] = at(R, k, fx(id, i));
+      g.lone_tip = strip(_.tipHtml(_.CHD['cpx-o1'], 7)); g.N = ['cpx-s1', 'cpx-s2', 'cpx-s3', 'cpx-o1'].map(id => [_.CHD[id].P[0].x, _.CHD[id].N]); out.sync.syn = g; }
+    SCREEN.querySelectorAll = () => []; SCREEN.querySelector = () => null; PL({}); reset();
     // ── 🕘 History · Levels (a synthetic level history on Alpha's file: sums from the fixture's closed forms) ──
     const T = FX.T;
     const FA = FX.FILES['cpi_' + KEY.a + '.json.gz'], sumOf = (f, a, b) => { const s = {}; for (const x of require(path.join(__dirname, 'cpx_fixture.js')).days(a, b)) { const m = FX.M.a(x);

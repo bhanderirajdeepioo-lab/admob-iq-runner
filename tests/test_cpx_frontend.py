@@ -6,8 +6,8 @@ the alarm's data day t; Custom swapped / clamped; the saved choice); the "now" s
 rate) against hand math, CPI judged in ₹; normal / status / since / money of SPEC §1.2 for the default view (the pointer,
 no file) and other periods (cpi.json.gz); the list's order, the summary and the footer; the file states (⏳ Loading… /
 ⚠️ + Try again / a refused file); the details (verdict, money line, every tab); one app; keep() — no page jump — at 375 and
-1280 px; the developer copy; a hostile app name escaped; cpx- classes only; and the wiring into the page (gated on
-DATA.cpi). The level agent's part (AGENT SPEC §7, tests T-P1 … T-P9): its answer in the row tag, the lines under the verdict,
+1280 px; the Chart tab's three charts moving together (one 14-day window on all three, matched by its end date); the
+developer copy; a hostile app name escaped; cpx- classes only; and the wiring into the page (gated on DATA.cpi). The level agent's part (AGENT SPEC §7, tests T-P1 … T-P9): its answer in the row tag, the lines under the verdict,
 the scoreboard, the level rows it marks, the Agent decisions list, the owner's buttons; nothing of it without its fields.
 Skipped where node is not installed. No real data."""
 import json
@@ -440,6 +440,105 @@ def test_country_picker_wiring_literals():
     assert "CTY_LS='cpx_cty_v1'" in m and "data-cpx-cty" in m and "keep('[data-cpx-cty]'" in m
     assert m.count("try{ localStorage.setItem(CTY_LS") == 1 and "localStorage.getItem(CTY_LS)" in m
     assert ".cpx-ctyp{" in src and "class=\"chip" not in m
+
+
+# ── 📈 the three charts move together (owner, 7 Nov 2026: "koi ak chart pe arrow kru to vo data baki ke dono chart me bhi same
+# period ka data selct ho — tino chart sath me same time ka data dikhayega") ──
+MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _win(end):                     # the tooltip's window: the 14 days ending `end` (the year at its end; on both across a year)
+    end = date.fromisoformat(end)
+    lo, d = end - timedelta(13), (lambda x: "%d %s" % (x.day, MON[x.month - 1]))
+    return "%s %d – %s %d" % (d(lo), lo.year, d(end), end.year) if lo.year != end.year else "%s – %s %d" % (d(lo), d(end), end.year)
+
+
+def _day_at(frm, n, f):            # a chart's own day under the pointer at a fraction f of its width (viewBox 360, margins 10 / 12)
+    i = max(0, min(n - 1, int((f * 360 - 10) / 338 * (n - 1) + 0.5)))
+    return (date.fromisoformat(frm) + timedelta(i)).isoformat()
+
+
+def test_charts_move_together_on_every_set_at_both_widths(out):
+    s = out["sync"]
+    for key, n in (("all", 3), ("us", 3), ("br", 2)):              # All countries · a country · a country without its D0 (2 + a note)
+        for wt in ("d", "m"):                                      # 3 across (desktop) · one under the other (phone)
+            moves = s[key + "_" + wt]
+            assert len(moves) == 3 * n and s[key + "_" + wt + "_titles"] == n
+            for mv in moves:                                       # over chart 1 / 2 / 3 at 25 / 60 / 95 % of its width
+                day = _day_at(mv["from"], mv["N"], mv["f"])
+                tips = mv["s"]
+                assert mv["day"] == day and len(tips) == n
+                assert all(t["on"] and t["rule"] == "visible" for t in tips), (key, wt, mv["k"], mv["f"])
+                assert [t["win"] for t in tips] == [_win(day)] * n           # the SAME 14-day window on every chart of the set
+                assert [t["text"] for t in tips] == mv["exp"]                # … each with its own numbers of that window
+                assert len({t["x"] for t in tips}) == 1                      # (the same days: each rule at the same x)
+                assert all(0 <= t["left"] <= t["w"] - 200 for t in tips)     # each tip inside its own chart
+            assert all(not t["on"] and t["rule"] == "hidden" for t in s[key + "_" + wt + "_leave"])   # the pointer gone: none
+    # the numbers printed on each tip; the country's D0 ROAS has no number on its last 3 days (not matured): "—" + its normal
+    mid = next(m for m in s["all_d"] if m["k"] == 1 and m["f"] == 0.6)
+    assert [t["text"].split("(14 din ka jod) ")[1] for t in mid["s"]] == ["₹20.0 · normal ₹20.0 (±0%)", "$6.00 · normal $6.00 (±0%)",
+                                                                          "40.0% · normal 40.0% (±0%)"]
+    for m in s["us_d"] + s["us_m"]:
+        cpi, ecpm, roas = (t["text"].split("(14 din ka jod) ")[1] for t in m["s"])
+        assert cpi.startswith("₹") and ecpm.startswith("$") and "—" not in cpi + ecpm
+        assert (roas == "— · normal 43.2%") == (m["f"] == 0.95) and (m["f"] == 0.95 or roas[0].isdigit())
+    assert all("—" not in t["text"] for m in s["all_d"] + s["all_m"] for t in m["s"])
+
+
+def test_charts_move_together_on_a_phone_tap_and_leaving_hides_them(out):
+    s = out["sync"]
+    t = s["tap"]                                                   # the finger lifted, then the click: all three, one window
+    assert [z["on"] for z in t["s"]] == [True] * 3 and len({z["win"] for z in t["s"]}) == 1 and t["s"][0]["win"]
+    assert t["open"] == A and t["tab"] == "ch" and t["det"]          # (a tap on a chart never folds the details)
+    for k in ("gap", "fn"):                                        # onto the gap of the set / the note under it: none
+        assert all(not z["on"] and z["rule"] == "hidden" for z in s[k])
+
+
+def test_charts_pointer_is_cheap(out):
+    c = out["sync"]["cheap"]
+    assert c["days"][0] == c["days"][1] == c["days"][2] != c["days"][3] == c["days"][4]
+    assert c["same"] == "b" and c["other"] == "b"                  # inside one day (this chart or another of the set): no write
+    # a new day: every chart's box read before the first write, every tip's width before the first move (one forced layout)
+    for k in ("first", "next", "back"):
+        assert re.fullmatch(r"b{4}w+o{3}w{3}", c[k]), (k, c[k])
+    assert c["n1"] == [1, 1, 1] and c["n2"] == [2, 2, 2]            # each tip rebuilt once per new day …
+    assert c["n3"] == [2, 2, 2] and c["on"] == [True] * 3           # … and not again for the same day after leaving
+
+
+def test_charts_match_by_date_never_by_index(out):
+    g = out["sync"]["syn"]
+    D = lambda k: (date(2026, 1, 5) + timedelta(k)).isoformat()
+    assert g["N"] == [[D(0), 60], [D(20), 40], [D(0), 39], [D(0), 60]]   # s2 starts 20 days later; s3 ends 20 days earlier, no day 10
+    tip = lambda nm: {z["id"]: z for z in g[nm]["s"]}
+    t = tip("s1_5")                                                # s1 day 5: s3 its day 5; s2 (from day 20) nothing; the lone chart none
+    assert t["cpx-s1"]["win"] == t["cpx-s3"]["win"] == _win(D(5)) and t["cpx-s3"]["text"] == g["s1_5"]["exp"][2]
+    assert not t["cpx-s2"]["on"] and t["cpx-s2"]["rule"] == "hidden" and not t["cpx-o1"]["on"]
+    t = tip("s1_10")                                               # s3 has no point on day 10: its rule between days 9 and 11 + "—"
+    assert t["cpx-s3"]["on"] and t["cpx-s3"]["rule"] == "visible" and t["cpx-s3"]["x"] == 94.5
+    assert t["cpx-s3"]["text"] == _win(D(10)) + " (14 din ka jod) —" and g["s1_10"]["exp"][2] is None
+    t = tip("s1_25")                                               # s2 without a number in its first 14 days: "—" + its normal
+    assert t["cpx-s2"]["text"] == _win(D(25)) + " (14 din ka jod) — · normal $4.00" and t["cpx-s3"]["win"] == _win(D(25))
+    t = tip("s1_50")                                               # s3 ends on day 39: nothing there
+    assert not t["cpx-s3"]["on"] and t["cpx-s3"]["rule"] == "hidden" and t["cpx-s2"]["win"] == _win(D(50))
+    for nm, k in (("s2_0", 1), ("s3_last", 2)):                    # s2's 1st point = s1's 21st, s3's 20th; s3's last = s1's 40th, s2's 20th
+        t, day = tip(nm), g[nm]["day"]
+        assert day == (D(20) if k == 1 else D(39)) and all(t[i]["win"] == _win(day) for i in ("cpx-s1", "cpx-s2", "cpx-s3"))
+        assert [t[i]["text"] for i in ("cpx-s1", "cpx-s2", "cpx-s3")] == g[nm]["exp"][:3]
+    t = tip("lone_7")                                              # a chart outside a set: its own tooltip only, as before
+    assert t["cpx-o1"]["on"] and t["cpx-o1"]["text"] == g["lone_tip"] and t["cpx-o1"]["x"] == round(10 + 338 * 7 / 59, 2)
+    assert not any(t[i]["on"] for i in ("cpx-s1", "cpx-s2", "cpx-s3"))
+    t = tip("s1_after_lone")                                       # … and hidden again when the pointer is on the set
+    assert not t["cpx-o1"]["on"] and t["cpx-s1"]["on"] and t["cpx-s3"]["on"] and not t["cpx-s2"]["on"]
+
+
+def test_charts_move_together_wiring_literals():
+    m = _page()
+    m = m[m.index("const CPX=(()=>{"):m.index("function renderCpx(){")]
+    assert "set=svg&&svg.closest('.cpx-chs')" in m and "set.querySelectorAll('svg[data-cpx-ch]')" in m
+    assert "P.findIndex(p=>p.x===day)" in m and "if(tip._d!==day)" in m        # by the window's end date · rebuilt on a new day only
+    assert "s.addEventListener('pointermove',onMove); s.addEventListener('click',onMove);" in m
+    assert "s.addEventListener('pointerleave',()=>onMove({target:null}));" in m
+    assert ".cpx-tip{position:absolute;" in _page()                                # (a tip never moves the page)
 
 
 # ── 🕘 History · Levels: the level history, the ✓ recompute, the owner's actions ──
