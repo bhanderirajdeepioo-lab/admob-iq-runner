@@ -961,3 +961,112 @@ def test_level_of_is_the_ratio_of_the_plain_sums_for_every_family():
         assert E.level_of(fam, m["sums"], m["n"], E.P_PROD) == pytest.approx(m["v"], rel=1e-9), fam
     assert E.measure(e, E.P_PROD, "CPI", day_of(10), day_of(5)) is None
     assert E.level_of("CPI", {"sp_inr": 1.0, "inst": 0.0}, 1, E.P_PROD) is None
+
+
+# ── the level agent's two primitives (engine.level_agent decides; the build passes them as owner primitives) ────────
+def early_step():
+    s = synth()
+    mul(s, "inst", 150, N, 1 / 1.4)                                           # CPI +40 % from day 150, held
+    return s
+
+
+def agent_acc(day, days, value, ep_open, fam="CPI", aid="D-0000000001"):
+    return {(APP, fam): [{"act": "agent", "day": day, "days": days, "value": value, "ep_open": ep_open, "id": aid}]}
+
+
+def test_agent_accept_closes_the_alarm_on_its_day_with_the_exact_level():
+    s = early_step()
+    for d in range(330, N):
+        s["inst"][d] /= 1.4                                                   # a second rise later: a new alarm
+    _, _, eps = lv_run(s)
+    ep = [x for x in eps if x["fam"] == "CPI"][0]
+    d = ix(ep["opened"]) + 30
+    days = [day_of(d - 27), day_of(d)]
+    v = E.measure(ent(s), E.P_PROD, "CPI", *days)["v"]
+    r, L, eps = lv_run(s, owner=agent_acc(day_of(d), days, v, ep["opened"]))
+    cp = [x for x in eps if x["fam"] == "CPI"]
+    assert (cp[0]["opened"], cp[0]["closed"], cp[0]["why"]) == (ep["opened"], day_of(d), "agent")
+    row = [x for x in L["CPI"] if x["src"] == "accepted_agent"][0]
+    assert (row["day"], row["days"], row["act"]) == (day_of(d), days, "D-0000000001")
+    assert row["ep"] == {"opened": ep["opened"], "old": ep["base"]} and abs(row["v"] / v - 1) < 1e-12
+    assert exact(ent(s), "CPI", row)
+    H = r["healthy"][("app", APP)]["CPI"]
+    assert H[d] == v and H[d + 10] == v                                       # R from its day, no exclusion span
+    later = cp[1]                                                             # the second rise opens against R
+    assert ix(later["opened"]) > 330 and later["base"] == pytest.approx(v, rel=0.03)
+    # a 4-weekly re-check moves R after the accept (here: a +10 % step that no alarm takes)
+    t = synth()
+    mul(t, "inst", 150, N, 1 / 1.4)
+    mul(t, "inst", 260, N, 1 / 1.1)
+    _, L2, _ = lv_run(t, owner=agent_acc(day_of(d), days, E.measure(ent(t), E.P_PROD, "CPI", *days)["v"],
+                                         ep["opened"]))
+    srcs = [x["src"] for x in L2["CPI"]]
+    assert "accepted_agent" in srcs and srcs[-1] == "auto" and ix(L2["CPI"][-1]["day"]) - d >= 28
+
+
+def test_agent_accept_without_a_matching_open_alarm_changes_nothing():
+    s = early_step()
+    base = E.run([ent(s)], E.P_PROD, T)
+    ep = [x for x in base["episodes"] if x["fam"] == "CPI"][0]
+    days = [day_of(100), day_of(127)]
+    v = E.measure(ent(s), E.P_PROD, "CPI", *days)["v"]
+    for day, op in ((day_of(127), ep["opened"]),                             # before the alarm opened
+                    (day_of(ix(ep["opened"]) + 20), day_of(ix(ep["opened"]) + 40)),     # another episode
+                    (day_of(N - 5), ep["opened"])):                          # after it closed
+        assert E.run([ent(s)], E.P_PROD, T, owner=agent_acc(day, days, v, op)) == base
+
+
+def test_agent_veto_keeps_one_episode_open_never_settled_never_held():
+    for fam, s in (("CPI", early_step()), ("GAP", early_step())):
+        _, _, eps = lv_run(s)
+        ep = [x for x in eps if x["fam"] == fam][0]
+        assert ep["why"] == "settled", fam
+        veto = {(APP, fam): [{"act": "agent_veto", "ep_open": day_of(ix(ep["opened"]) + 2), "id": "D-1"}]}
+        r, L, eps = lv_run(s, owner=veto)
+        v = [x for x in eps if x["fam"] == fam][0]
+        assert (v["opened"], v["closed"], v["why"]) == (ep["opened"], None, None), fam
+        assert v["suggest"] == [day_of(ix(v["opened"]) + 120), "open"], fam          # proposed at 120 days, not held
+        assert "accepted" not in [x["src"] for x in L[fam]]
+        assert [p["why"] for p in r["proposals"][("app", APP)] if p["fam"] == fam] == ["open"]
+        # the metric comes back: it closes recovered (what the revert net's shadow replay reads)
+        b = early_step()
+        mul(b, "inst", 330, N, 1.4)
+        _, _, eb = lv_run(b, owner=veto)
+        x = [y for y in eb if y["fam"] == fam][0]
+        assert x["why"] == "recovered" and ix(x["closed"]) > 330, fam
+        # the owner's veto alongside: an owner-only proposal ("held")
+        both = {(APP, fam): veto[(APP, fam)] + [{"act": "veto", "ep_open": ep["opened"]}]}
+        _, _, eh = lv_run(s, owner=both)
+        assert [y["suggest"][1] for y in eh if y["fam"] == fam][0] == "held", fam
+
+
+def test_the_owners_pin_on_the_agents_day_wins():
+    s = early_step()
+    _, _, eps = lv_run(s)
+    ep = [x for x in eps if x["fam"] == "CPI"][0]
+    d = ix(ep["opened"]) + 30
+    days = [day_of(d - 27), day_of(d)]
+    v = E.measure(ent(s), E.P_PROD, "CPI", *days)["v"]
+    own = agent_acc(day_of(d), days, v, ep["opened"])
+    own[(APP, "CPI")].append({"act": "pin", "day": day_of(d), "value": 30.0, "src": "manual", "days": None,
+                              "id": "a-000000000009"})
+    _, L, eps = lv_run(s, owner=own)
+    cp = [x for x in eps if x["fam"] == "CPI"][0]
+    assert (cp["closed"], cp["why"]) == (day_of(d), "owner")
+    assert "accepted_agent" not in [x["src"] for x in L["CPI"]] and L["CPI"][-1]["src"] == "manual"
+    pin = {(APP, "CPI"): [{"act": "pin", "day": day_of(d - 10), "value": 30.0, "src": "manual", "days": None,
+                           "id": "a-000000000009"}] + agent_acc(day_of(d), days, v, ep["opened"])[(APP, "CPI")]}
+    _, L, eps = lv_run(s, owner=pin)                                          # a pin in force: the agent's day: no-op
+    assert "accepted_agent" not in [x["src"] for x in L["CPI"]]
+
+
+def test_without_agent_primitives_the_engine_is_as_before():
+    for name in ("A", "C", "F", "I1", "R"):
+        s = CASES[name][0]
+        r = E.run([ent(s)], E.P_PROD, T)
+        assert E.run([ent(s)], E.P_PROD, T, owner={}) == r
+        P = copy.deepcopy(E.P_PROD)
+        del P["levels"]["agent"]                                              # the engine never reads the agent's config
+        assert E.run([ent(s)], P, T) == r
+    assert E.P_PARITY["levels"] is None and "agent" in E.P_PROD["levels"]
+    assert E.P_PROD["levels"]["agent"]["mode"] in ("on", "off")

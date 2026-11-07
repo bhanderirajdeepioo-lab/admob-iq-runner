@@ -35,7 +35,11 @@ past day is exactly what the alarm said on that day. One alarm (episode) per ent
     only upward (downward: a proposal after 84 steady days, money_down "propose"). A settled alarm sets R = the exact
     value of its last 28 data days. An alarm open 120+ days is proposed too. Every episode baseline names its days
     (bspan). The owner's pin (set / roll back / accept) overrides R from its day and closes an alarm open that day
-    ('owner', no span); "auto" ends it; a veto keeps an automatically accepted alarm open (retroactive).
+    ('owner', no span); "auto" ends it; a veto keeps an automatically accepted alarm open (retroactive). The level
+    agent (engine.level_agent, run by the build) has two primitives of its own: "agent" accepts the exact value of
+    named days on its day (the matching open alarm closes 'agent', no span, a level row "accepted_agent"; the
+    automatic rules go on from it) and "agent_veto" keeps one episode open (it never settles and never becomes
+    "held"; it still closes recovered / stopped / no_paid / owner and is proposed at 120 days).
 
 P_PARITY reproduces the investigation's chosen run exactly (its legacy behaviour kept on purpose); P_PROD is
 P_PARITY plus the production changes, each one switchable (see P_PROD below). The build uses P_PROD.
@@ -134,6 +138,20 @@ P_PROD.update({
                                     # accepts ("auto": accepted after money_days steady days, as the others' settle)
         "accept_days": 28,          # an accepted level = the exact value of the last 28 data days
         "propose": {"money_days": 84, "money_band": 0.10, "open_days": 120},
+        # the level agent (engine.level_agent, run by the build; this engine never reads it)
+        "agent": {
+            "mode": "on",              # "off": the build runs no agent step (files exactly as without it)
+            "every": 7,                # a standing question is asked again on the days (day − EPOCH) % 7 == 0
+            "settle_fams": ["CPI", "GAP"],   # the engine's own settles the agent checks; the others settle as before
+            "move_bands": 2.0,         # an accept needs old → new ≥ 2 bands and the last 28 days outside one band of old
+            "engine_band": 0.10,       # … and on the eCPM-market branch the engine's own settle steadiness (56 d)
+            "net": {"days": 84, "from": 28, "every": 7, "need": 2},   # the revert net (shadow replay + two checks)
+            "checks": [28, 56, 84],    # the verdict's 28-day checkpoints after the ask
+            "trial": {"days": 28, "vintage": [7, 28]},   # accepts on proposals apply only after this clean trial
+            "keep_ri": 35,             # days an ask keeps its full rule inputs (the vintage re-asks compare them)
+            "max_asks": 40,            # asks per build (the rest wait for the next build); vintage re-asks: their own 40
+            "budget_s": 20.0,          # wall time of the whole agent step (the build's clock; the engine reads none)
+        },
     },
 })
 
@@ -644,7 +662,7 @@ def _settled(V14, t, sh, days, band):
 def _run_family(e, ser, fam, P, t0, t1, own=()):
     """Replay one family on one entity over data days t0..t1 → (episodes as internal dicts, the state on t1, the level
     rows: [{"t", "v", "src", "span", …}] — empty without P["levels"]). own: the owner's primitives of this family
-    (pin / auto / veto, day indexes), sorted by day."""
+    (pin / auto / veto, and the level agent's agent / agent_veto; day indexes), sorted by day."""
     sh = FAMILIES[fam]["shift"]
     V7, V14, SIG = ser.series(fam)
     thr_s, thr_d = P["thr_s"].get(fam), P["thr_d"].get(fam)
@@ -869,6 +887,16 @@ def _run_family(e, ser, fam, P, t0, t1, own=()):
                             "act": pin.get("id")})
                 state = "ok"
                 continue
+            ag = _agent_at(own, t, cur)
+            if ag is not None and cur["open"] < t and pin is None:
+                cur["close"], cur["why"] = t, "agent"          # the agent accepted the new level: no span, the
+                eps.append(cur)                                # automatic rules go on from R
+                lev.append({"t": t, "v": ag["value"], "src": "accepted_agent", "span": ag.get("span"),
+                            "ep": cur["open"], "old": cur["base"], "act": ag.get("id")})
+                cur = None
+                R, R_used = ag["value"], []
+                state = "ok"
+                continue
         lw7 = lworse(fam, V7[t - sh], cur["base"])
         if lw7 is not None:
             cur["max_worse"] = max(cur["max_worse"], _rel(fam, lw7))
@@ -890,6 +918,8 @@ def _run_family(e, ser, fam, P, t0, t1, own=()):
             elif settle and t - cur["open"] >= settle["days"] and _settled(V14, t, sh, settle["days"], settle["band"]):
                 if LV and (_pin_at(own, t) is not None or _vetoed(own, cur)):
                     cur.setdefault("suggest", (t, "held"))     # pinned / rejected by the owner: a proposal only
+                elif LV and _agent_vetoed(own, cur):
+                    pass                                       # the agent kept it open: no settle, never "held"
                 else:
                     closed = "settled"
             if LV and not closed and "suggest" not in cur:
@@ -938,6 +968,17 @@ def _pin_at(own, t):
 def _vetoed(own, cur):
     """The owner rejected the automatic acceptance of THIS episode (matched by its opening day, ±7 days)."""
     return any(a["act"] == "veto" and abs(a["ep_open"] - cur["open"]) <= 7 for a in own or ())
+
+
+def _agent_vetoed(own, cur):
+    """The agent kept THIS episode open (its settle was blocked, or the agent reverted an acceptance), ±7 days."""
+    return any(a["act"] == "agent_veto" and abs(a["ep_open"] - cur["open"]) <= 7 for a in own or ())
+
+
+def _agent_at(own, t, cur):
+    """The agent's acceptance of THIS episode on day t, else None."""
+    return next((a for a in own or () if a["act"] == "agent" and a["day"] == t
+                 and abs(a["ep_open"] - cur["open"]) <= 7), None)
 
 
 def _steady(V14, t, spans, sh, h, cfg):
@@ -1012,8 +1053,11 @@ def run(ents, P, t, owner=None):
     country line the eligibility rule leaves out is not replayed (no episode, no level, state "na") but still gets its
     healthy level H from the median rule (no span to leave out: its normal = H). owner (P["levels"] only):
     {(app id, fam): [{"act": "pin", "day", "value", "src", "days": [a, b] | None, "id"} | {"act": "auto", "day"} |
-    {"act": "veto", "ep_open"}]} with ISO days — the owner's level from its day (an open alarm closes "owner"), back to
-    the automatic rule, an automatic acceptance that never happened. Inputs are never modified."""
+    {"act": "veto", "ep_open"} | {"act": "agent", "day", "days": [a, b], "value", "ep_open", "id"} | {"act":
+    "agent_veto", "ep_open", "id"}]} with ISO days — the owner's level from its day (an open alarm closes "owner"),
+    back to the automatic rule, an automatic acceptance that never happened; the level agent's acceptance of the open
+    episode matching ep_open (±7) on its day (closes "agent", level row "accepted_agent"; the owner's pin wins) and
+    its veto of one episode (never settled, never "held"). Inputs are never modified."""
     episodes, normal, healthy, state, levels, props = [], {}, {}, {}, {}, {}
     apps = {e.id: e for e in ents if e.kind == "app"}
     LV = P.get("levels")
