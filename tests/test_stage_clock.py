@@ -449,9 +449,9 @@ def test_a_history_files_first_read_is_its_own_row_under_the_stage_that_touched_
     c = Clock()
     orig = db._read_json_any
 
-    def slow_read(path):                                 # a read that takes 2 s on the fake clock
+    def slow_read(path, **kw):                           # a read that takes 2 s on the fake clock
         c.tick(2)
-        return orig(path)
+        return orig(path, **kw)
 
     monkeypatch.setattr(db, "_read_json_any", slow_read)
     orig_parts = db._snap_load_parts

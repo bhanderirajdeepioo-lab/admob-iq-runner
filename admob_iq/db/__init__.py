@@ -21,6 +21,8 @@ import hashlib
 import itertools
 import re
 import datetime as _dt
+from array import array
+from collections.abc import Mapping
 
 from .. import stage_clock as _sc
 
@@ -312,18 +314,53 @@ class PgRepo:
         pass          # Postgres commits per write
 
 
-def _read_json_any(path):
+def _read_json_any(path, **load_kw):
     """Read <path>.gz (gzipped) if present, else the legacy plain <path> (one-time migration),
     else None. Data files are stored GZIPPED because uncompressed history outgrew GitHub's 100 MB
-    per-file push limit (JSON compresses ~15x)."""
+    per-file push limit (JSON compresses ~15x). load_kw: json.load's own keywords (FileRepo: _shared_rows /
+    _same_numbers)."""
     gz = path + ".gz"
     if os.path.exists(gz):
         with gzip.open(gz, "rt", encoding="utf-8") as f:
-            return json.load(f)
+            return json.load(f, **load_kw)
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
-            return json.load(f)
+            return json.load(f, **load_kw)
     return None
+
+
+# ── 🧠 Memory: the loaded history, compact — the same values in a fraction of the memory ──────────────────────────────
+# The build holds the whole AdMob history from its first report pull to its end (the runner has 16 GB). As a plain
+# json.load makes it, every row carries its own copy of every text value (the same dates, ids, names and countries
+# millions of times over) and the monthly rollup its own copy of every number. FileRepo reads them with ONE object per
+# distinct value instead. A str or number object never changes, so sharing one changes nothing any reader or writer
+# sees: the same dicts with the same keys, order, values and types — every file written stays byte for byte the same.
+
+def _shared_rows(memo):
+    """json.load's object_pairs_hook: each object built with one shared object per distinct str value (`memo`: value →
+    that object, kept by the repo). Only str values are shared, never numbers (1, 1.0 and True are equal dict keys).
+    The keys, their order and a key given twice come out exactly as in a plain load (the later value wins)."""
+    sd = memo.setdefault
+    return lambda pairs: {k: sd(v, v) if v.__class__ is str else v for k, v in pairs}
+
+
+class _SameNumber(dict):
+    """json.load's parse_float / parse_int: one object per distinct number TEXT — `make(text)` is exactly what a plain
+    load parses each number with (float / int), so the values are the same (-0.0 stays apart from 0.0)."""
+    __slots__ = ("make",)
+
+    def __init__(self, make):
+        super().__init__()
+        self.make = make
+
+    def __missing__(self, text):
+        v = self[text] = self.make(text)
+        return v
+
+
+def _same_numbers():
+    """json.load keywords for the monthly rollup (its numbers repeat: about half its memory)."""
+    return {"parse_float": _SameNumber(float).__getitem__, "parse_int": _SameNumber(int).__getitem__}
 
 
 # ── Fast history writer (⏱ speed only: the decompressed bytes are exactly what json.dump wrote) ─────────────────────
@@ -653,18 +690,19 @@ def _snap_part_text(snap_dir, entry):
         return gzip.decompress(f.read())
 
 
-def _snap_load_parts(snap_dir, idx, rebuilt=False):
+def _snap_load_parts(snap_dir, idx, rebuilt=False, hook=None):
     """(rows, entries): every part in index order, concatenated — the history exactly as it was written. Each entry
     carries what is REALLY on disk (rows, sha256 of the decompressed bytes); a part that differs from its index entry
     is still loaded as it is (it is then simply rewritten at the next flush). rebuilt (an index rebuilt from the part
     names): every part must match the hash in its name and every part but the last hold SNAP_PART_ROWS rows (the
-    positional layout the writer makes), else ValueError."""
+    positional layout the writer makes), else ValueError. hook: json's object_pairs_hook for each part (FileRepo:
+    _shared_rows — a part is shared as it is read, so the history is never held twice)."""
     rows, entries, odd = [], [], 0
     parts = idx["parts"]
     for i, e in enumerate(parts):
         raw = _snap_part_text(snap_dir, e)
         sha, size = hashlib.sha256(raw).hexdigest(), len(raw)
-        part = json.loads(raw.decode("utf-8"))
+        part = json.loads(raw.decode("utf-8"), object_pairs_hook=hook)
         del raw
         if not isinstance(part, list):
             raise ValueError("snapshot part is not a JSON list: %s" % e["file"])
@@ -897,6 +935,79 @@ def write_gz_stable(path, raw):
     return True
 
 
+class _KeyIndex(Mapping):
+    """A loaded table's key → row index map (FileRepo._pos: what the writes look keys up in), kept a BUCKET at a time.
+    🧠 Memory only: one {key: index} map over the whole history held the key text of every row, while a run's writes
+    touch a few days. A key's bucket is one of its "|" fields (`field`; 0 = the first: the report date of a dated
+    table); it is a function of the key text, so equal keys always share a bucket. Built with the rows: each row's
+    bucket (an array of row indices, 4 bytes a row). A bucket's {key: index} map is made the first time a lookup lands
+    in it, from that bucket's rows in row order — a key stored twice maps to its later row, as in the one map. So every
+    lookup gives exactly what that map gave, as long as a stored row's key fields and place change only through the
+    repo's own writes (the rule _pos_of's rebuild after a flush already relies on; nothing else changes them). A new
+    key comes in as with a dict: `index[key] = i` (its row appended at i). A table whose every row is written each run
+    (placement x country: no date in its key) ends up with every bucket's map made — the one map again, nothing saved
+    there."""
+    __slots__ = ("_rows", "_pk", "_key", "_field", "_at", "_maps")
+
+    def __init__(self, rows, pk, key, field=0):
+        self._rows, self._pk, self._key, self._field, self._maps = rows, pk, key, field, {}
+        at = self._at = {}
+        bucket = self._row_bucket
+        for i, r in enumerate(rows):
+            b = bucket(r)
+            a = at.get(b)
+            if a is None:
+                a = at[b] = array("I")
+            a.append(i)
+
+    def _row_bucket(self, r):
+        # field f of key(r, pk) = "|".join(str(r.get(c, "")) …): it lies within the joined first f + 1 parts
+        pk, f = self._pk, self._field
+        if not f:
+            return str(r.get(pk[0], "")).partition("|")[0]
+        return "|".join([str(r.get(c, "")) for c in pk[:f + 1]]).split("|", f + 1)[f]
+
+    def _bucket(self, key):
+        if not isinstance(key, str):
+            return None                  # (not a key text: no row's key is there, as with a dict)
+        parts = key.split("|", self._field + 1)
+        return parts[self._field] if len(parts) > self._field else None   # (too few fields: no row's key either)
+
+    def _map(self, b):
+        m = self._maps.get(b)
+        if m is None:
+            rows, pk, key = self._rows, self._pk, self._key
+            m = self._maps[b] = {key(rows[i], pk): i for i in self._at.get(b, ())}
+        return m
+
+    def __getitem__(self, key):
+        return self._map(self._bucket(key))[key]
+
+    def __contains__(self, key):
+        return key in self._map(self._bucket(key))
+
+    def get(self, key, default=None):
+        return self._map(self._bucket(key)).get(key, default)
+
+    def __bool__(self):              # a key at all, as with a dict — without making every bucket's map
+        return bool(self._at)
+
+    def __setitem__(self, key, i):
+        b = self._bucket(key)
+        self._map(b)[key] = i
+        a = self._at.get(b)
+        if a is None:
+            a = self._at[b] = array("I")
+        a.append(i)
+
+    def __iter__(self):          # every key, all buckets' maps made (tests; the build only looks keys up)
+        for b in list(self._at):
+            yield from self._map(b)
+
+    def __len__(self):
+        return sum(len(self._map(b)) for b in list(self._at))
+
+
 class FileRepo:
     """History as flat JSON files (GZIPPED on disk) — no database. Same interface as the others.
 
@@ -907,9 +1018,11 @@ class FileRepo:
     done (build_static does; tests do). Dates are stored as ISO strings, which the
     dataservice reads via `str(...)`, so reads are drop-in identical to the others.
 
-    Memory (the build holds the whole AdMob history): the key maps serve only writes, so flush() drops them and a
-    write after it builds its table's map again from the rows (_pos_of: the same map). release(name) frees a table
-    nothing reads any more; a later fetch of it reads it back from its file.
+    Memory (the build holds the whole AdMob history): the rows hold one shared object per distinct text value, the
+    monthly rollup one per distinct number (_shared_rows / _same_numbers: the same values), and a table's key map is
+    kept a bucket at a time (_KeyIndex). The key maps serve only writes, so flush() drops them and a write after it
+    builds its table's map again from the rows (_pos_of: the same map). release(name) frees a table nothing reads any
+    more; a later fetch of it reads it back from its file.
     """
 
     NET_PK = ["report_date", "account_id", "app_id", "ad_unit_id", "country",
@@ -921,7 +1034,8 @@ class FileRepo:
     COUNTRY_PK = ["report_date", "account_id", "app_id", "country"]
     PC_PK = ["account_id", "app_id", "ad_unit_id", "country"]
     MU_PK = ["report_date", "account_id", "app_id", "ad_unit_id", "format", "platform"]
-    # ⏱ measure only (stage_clock): each history file's FIRST read (gunzip + JSON parse + key map) is its own child
+    # ⏱ measure only (stage_clock): each history file's FIRST read (gunzip + JSON parse + key index; a bucket's key
+    # map is made by the first write that looks a key up in it) is its own child
     # stage of whichever stage touches the file first (e.g. admob_network), so local disk / JSON time is never booked
     # as the report call's time. Later reads of the loaded rows are not timed.
     LOAD_STAGES = {"net": "repo_load_network", "med": "repo_load_mediation", "snap": "repo_load_snapshots",
@@ -934,6 +1048,9 @@ class FileRepo:
                     "country": "repo_write_country", "pc": "repo_write_placement_country",
                     "mu": "repo_write_mediation_unit", "acm": "repo_write_adunit_country_monthly",
                     "acd": "repo_write_adunit_country_daily"}
+    # 🧠 the key field a table's key map is bucketed by (_KeyIndex; default 0: the first — the report date): a run
+    # appends ONE snapshot day, so the snapshot history goes by its snapshot date
+    KEY_FIELD = {"snap": 1}
 
     def __init__(self, data_dir: str = "data"):
         self.dir = data_dir
@@ -948,7 +1065,10 @@ class FileRepo:
         self._pk = {"net": self.NET_PK, "med": self.MED_PK, "snap": self.SNAP_PK,
                     "country": self.COUNTRY_PK, "pc": self.PC_PK, "mu": self.MU_PK}
         self._rows = {}   # name -> list (lazy-loaded)
-        self._pos = {}    # name -> {key: index} (built with the rows, dropped by flush(), built again by _pos_of)
+        self._pos = {}    # name -> _KeyIndex (built with the rows, dropped by flush(), built again by _pos_of)
+        # 🧠 one object per distinct text value over every table this repo reads (kept with the repo — release() frees a
+        # table's rows, not its few distinct dates / ids / names / codes)
+        self._share = _shared_rows({})
         self._dirty = set()   # the tables changed since the last flush() (release() keeps them: not on disk yet)
         # ad-unit×country baseline: compact NESTED structures, own files (not the flat model)
         self._ac_path = {"acm": os.path.join(data_dir, "adunit_country_monthly.json"),
@@ -974,27 +1094,34 @@ class FileRepo:
                 if name == "snap":
                     data = self._load_snapshots()
                 else:
-                    data = _read_json_any(self._path[name])
+                    data = _read_json_any(self._path[name], object_pairs_hook=self._share)
                     self._disk_rows[name] = len(data) if isinstance(data, list) else None
                 self._rows[name] = data if data is not None else []
-                self._pos[name] = {self._key(r, self._pk[name]): i
-                                   for i, r in enumerate(self._rows[name])}
+                self._pos[name] = self._index(name)
         return self._rows[name]
+
+    def _index(self, name):
+        return _KeyIndex(self._rows[name], self._pk[name], self._key, self.KEY_FIELD.get(name, 0))
 
     def _pos_of(self, name):
         """A loaded table's key→index map — after flush() dropped it, built again from the rows exactly as _load
         builds it (the rows change only through _upsert / append_snapshot, which keep the map in step)."""
         pos = self._pos.get(name)
         if pos is None:
-            pos = self._pos[name] = {self._key(r, self._pk[name]): i for i, r in enumerate(self._rows[name])}
+            pos = self._pos[name] = self._index(name)
         return pos
 
+    def _row(self, row):
+        """A row as stored: _jsonable's flat copy (dates as ISO text), its text values the repo's shared ones."""
+        return self._share((k, v.isoformat() if isinstance(v, (_dt.date, _dt.datetime)) else v) for k, v in row.items())
+
     def _upsert(self, name, row):
-        row = _jsonable(row)
+        row = self._row(row)
         rows = self._load(name); pos = self._pos_of(name)
         k = self._key(row, self._pk[name])
-        if k in pos:
-            rows[pos[k]] = row          # refresh existing (e.g. today's estimate)
+        i = pos.get(k)
+        if i is not None:
+            rows[i] = row               # refresh existing (e.g. today's estimate)
         else:
             pos[k] = len(rows); rows.append(row)
         self._dirty.add(name)
@@ -1030,7 +1157,7 @@ class FileRepo:
     def _load_ac(self, name, default):
         if name not in self._ac:
             with _sc.stage(self.LOAD_STAGES.get(name, "repo_load")):
-                data = _read_json_any(self._ac_path[name])
+                data = _read_json_any(self._ac_path[name], **(_same_numbers() if name == "acm" else {}))
                 self._ac[name] = data if data is not None else default
         return self._ac[name]
 
@@ -1052,7 +1179,7 @@ class FileRepo:
         return self._load_ac("acd", {"month": "", "dates": [], "units": {}, "data": {}})
 
     def append_snapshot(self, row):
-        row = _jsonable(row)
+        row = self._row(row)
         rows = self._load("snap"); pos = self._pos_of("snap")
         k = self._key(row, self.SNAP_PK)
         if k not in pos:                # append-only; never overwrite a snapshot
@@ -1095,7 +1222,7 @@ class FileRepo:
                 except ValueError as err:
                     self._snap_orphans_unusable(len(orphans), err, has_legacy)
             if idx is None:
-                data = _read_json_any(legacy)
+                data = _read_json_any(legacy, object_pairs_hook=self._share)
                 self._disk_rows["snap"] = len(data) if isinstance(data, list) else None
                 return data
             print(f"snapshot history: index.json missing — rebuilt from {len(orphans)} part file name(s)",
@@ -1105,20 +1232,21 @@ class FileRepo:
             print("snapshot history: the single file holds every part row (a switch back to it did not finish) "
                   "— read from the single file", file=sys.stderr)
             self._snap_known = {e["file"] for e in idx["parts"]}
-            return _read_json_any(legacy)
+            return _read_json_any(legacy, object_pairs_hook=self._share)
         try:
-            rows, parts = _snap_load_parts(self._snap_dir, idx, rebuilt=rebuilt)
+            rows, parts = _snap_load_parts(self._snap_dir, idx, rebuilt=rebuilt, hook=self._share)
         except ValueError as err:
             if not rebuilt:
                 raise
             self._snap_orphans_unusable(len(idx["parts"]), err, has_legacy)
-            data = _read_json_any(legacy)
+            data = _read_json_any(legacy, object_pairs_hook=self._share)
             self._disk_rows["snap"] = len(data) if isinstance(data, list) else None
             return data
         self._snap_parts, self._snap_known = parts, {e["file"] for e in idx["parts"]}
         if rel == "other":
             seen = {self._key(r, self.SNAP_PK) for r in rows}
-            extra = [r for r in (_read_json_any(legacy) or []) if self._key(r, self.SNAP_PK) not in seen]
+            extra = [r for r in (_read_json_any(legacy, object_pairs_hook=self._share) or [])
+                     if self._key(r, self.SNAP_PK) not in seen]
             print(f"snapshot history: a separate single file next to the parts — {len(extra)} row(s) of it the "
                   f"parts lack added after the parts' rows", file=sys.stderr)
             rows.extend(extra)

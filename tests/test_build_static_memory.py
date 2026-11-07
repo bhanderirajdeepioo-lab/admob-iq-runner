@@ -73,7 +73,7 @@ def test_flush_drops_the_key_maps_and_a_write_after_it_matches_a_repo_that_kept_
         r.append_snapshot(_snap("2026-07-05", "2026-07-06", "u1", 900))
         r.upsert_mediation_unit(dict(_net("2026-07-02", "u1"), ad_requests=12))
     assert a._pos["net"] == b._pos["net"] and a._pos["net"]["2026-07-01|%s|app~one|u1|US|banner|ANDROID" % PUB] == 2
-    kept = copy.deepcopy(b._pos)
+    kept = {n: dict(m.items()) for n, m in b._pos.items()}   # (as plain {key: index} dicts: the code before)
     a.flush()
     b.flush()
     assert a._pos == {}                                 # the maps go with the flush …
@@ -137,7 +137,7 @@ def test_release_frees_a_table_and_a_later_read_reads_it_back_from_its_file(tmp_
     reads = []
     real_parts, real_any = db._snap_load_parts, db._read_json_any
     monkeypatch.setattr(db, "_snap_load_parts", lambda *a, **k: reads.append("snap parts") or real_parts(*a, **k))
-    monkeypatch.setattr(db, "_read_json_any", lambda p: reads.append(os.path.basename(p)) or real_any(p))
+    monkeypatch.setattr(db, "_read_json_any", lambda p, **k: reads.append(os.path.basename(p)) or real_any(p, **k))
     assert r.fetch_snapshots() == before["snap"]
     assert r.fetch_placement_country() == before["pc"]
     assert r.fetch_adunit_country_monthly() == before["acm"]
