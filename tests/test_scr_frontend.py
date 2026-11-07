@@ -832,7 +832,9 @@ def test_the_columns_run_users_views_time_ads_then_imp(out):
         "fl": "AdMob matched ÷ requests, screen ke units (screen ka hissa σ) · sirf poore AdMob din (final)",
         "sr": "AdMob impressions ÷ matched, screen ke units (screen ka hissa σ) · sirf poore AdMob din (final)", None: None}
     assert {h[1]: h[2] for h in T["all 30"]["heads"]} == {
-        "rank": None, "dau": None, "r": "GA4 ke saare ad impressions ÷ app ke daily users (GA4 Active users, wahi stream) · chhota: inline"
+        "rank": "App ka status = uske screens ka (pichhle 10 final din, usi format ke saare apps ke units ke saath): koi screen Low = Low"
+                " · N screens, warna Few ads · N, warna OK · chhoti line = vs own past (pichhle 10 final din vs 28 pehle)",
+        "dau": None, "r": "GA4 ke saare ad impressions ÷ app ke daily users (GA4 Active users, wahi stream) · chhota: inline"
                                         " · full-screen",
         "lo": "Low status wali screens: Fill / Show rate / Ads / view usi format ke saare apps ke units ke neeche 25% me (pichhle 10 final din)",
         "wn": "vs own past: Worse screens (pichhle 10 final din vs 28 pehle)",
@@ -1014,3 +1016,59 @@ def test_v3_check_texts_are_the_builds():
     p = _page()
     for k, lab in (("show", "Lower show rate"), ("fill", "Lower fill"), ("av", "Fewer ad requests")):
         assert "%s:'%s'" % (k, CHECK[lab].replace("per visit", "per screen view").replace("'", "\\'")) in p, k
+
+
+def test_v3_a_screen_without_ads_in_the_period_has_no_fill_or_show(out):
+    # Rare shows no ads from 22 Mar (its views go on) and the period has no unit-split day: σ would come from the split days
+    # up to 21 Mar, when it still had ban_b's ads — the page never lends it its unit's rates ("—" + the why, as the build)
+    n = out["abs"]["noads"]
+    assert n["ctl"]["fill"] is not None and n["ctl"]["sig"][0] == "new"           # with its ads: rated from those days
+    assert (n["z"]["fill"], n["z"]["show"], n["z"]["p"], n["z"]["sig"]) == (None, None, {}, None)
+    assert n["z"]["why"] == "is period me is screen pe koi ad nahi"
+    assert n["cells"]["Fill"] == n["cells"]["Show rate"] == "<b>—</b><small>is period me is screen pe koi ad nahi</small>"
+    assert n["cells"]["Ads / view"] == "<b>0.0%</b>" and n["home"]["fill"] is not None   # a screen with its ads: as before
+
+
+def test_v3_the_app_status_is_absolute_and_vs_own_past_a_labelled_line(out):
+    # owner, 7 Nov 2026: "ye normal nahi he — ye kam he" — the app's chip = its screens' absolute words; its own past (the App
+    # row's word + score) goes to a labelled second line, never the main word
+    a = out["abs"]["app"]
+    assert a["low"] == ['<span class="hub-st st-bigda">🔴 Low · 2 screens</span>', '<small class="sc-own">vs own past: same</small>']
+    assert a["few"][0] == '<span class="hub-st st-dhyan">🟡 Few ads · 1 screen</span>' and a["ok"][0] == '<span class="hub-st st-behtar">🟢 OK</span>'
+    # nothing judged: the App row's own N/A / Too early with its why, as before — else N/A, said why; the benchmark failed: "—"
+    assert a["noneNa"] == ['<span class="hub-st st-lagu">lagu</span>', '<small>Not whole — 3 whole days</small>']
+    assert a["noneOwn"] == ['<span class="hub-st st-lagu">lagu</span>',
+                            '<small>koi screen judge nahi hui</small><small class="sc-own">vs own past: same</small>']
+    assert a["failed"][0] == '<span title="benchmark nahi bana" class="hub-st st-lagu">—</span>' and a["older"] is None
+    assert a["own"] == ['<small class="sc-own" title="App imp/user 1.00 → 1.31 (+31%)">vs own past: <b class="sc-up">Better +31%</b></small>',
+                        '<small class="sc-own" title="AdMob imp/user −35%">vs own past: <b class="sc-dn">Worse (AdMob) −35%</b></small>',
+                        '<small class="sc-own" title="App imp/user 3.53 → 3.42 (−3%)">vs own past: same</small>',
+                        '<small class="sc-own" title="x">vs own past: <b class="sc-dn">Watch −12%</b></small>',
+                        '<small class="sc-own" title="y">vs own past: Too early</small>']
+    # All apps by status: absolute first — Low by its Low screens (most first), Few ads, OK, —, Too early, N/A
+    assert out["abs"]["appSort"] == ["low3", "low1", "few", "ok", "dash", "early", "na"]
+    # the app page's top line, the All apps cell, the notes saying what the status is
+    # (the line is the build's alone — the same on every period: a period tap never re-wraps it; the App total is the card below)
+    assert out["abs"]["appCrumb"].endswith('<span><span class="hub-st st-bigda">🔴 Low · 2 screens</span> · history from 1 Jan 2026</span>'
+                                           '<small class="sc-own">vs own past: same</small>')
+    assert out["abs"]["appCrumbYday"] == out["abs"]["appCrumb"]
+    assert out["abs"]["allCell"].endswith('<span class="sc-stl"><span class="hub-st st-bigda">🔴 Low · 2 screens</span></span>'
+                                          '<small class="sc-own">vs own past: same</small>')
+    assert "status = screens ka, usi format ke saare apps ke units ke saath (pichhle 10 final din) · vs own past" in out["abs"]["allNote"]
+    assert out["abs"]["howApp"].startswith("<b>App ka status</b> = uske screens ka: koi screen Low = ")
+    # Needs attention: a Worse App row is labelled "vs own past" and comes after the absolute lines; all screens OK: "Sab OK"
+    w, ok_ = out["abs"]["attnApp"]
+    assert '<span class="sc-atn">vs own past · App total</span>' in w and w.index("🟡 Few ads") < w.index("vs own past · App total")
+    assert '<p class="sc-ok">✅ Sab OK</p>' in ok_ and "Sab normal" not in ok_
+
+
+def test_v3_the_reader_stays_put_at_the_page_end_and_when_file_2_comes_late(out):
+    # "Show N more screens" at the page's end with a held height bigger than the content: the held height grows by what the
+    # page below the window lacks — the button moves 0 px; the reader's scroll lets the blank go (none left)
+    k = out["abs"]["keepEnd"]
+    assert k["moved"] == 0 and k["held"] == "3300px" and k["wait"] and k["after"] == "" and k["blank"] == 0
+    assert k["margin"] == 0                     # a raise that gives the page a few px less than it says: measured again
+    assert k["small"] == ["1000px", "1000px", "1070px"]                  # roomBelow: only a scroll down past the page's end
+    # file 2 grows the ⏳ cells of the rows above the reading line: the row being read moves 0 px (and, with every row above
+    # the line, what follows the table; a stuck period bar never anchors, the reading line goes below it)
+    assert out["abs"]["lateRow"] == {"row": 0, "below": 0, "sticky": 0}

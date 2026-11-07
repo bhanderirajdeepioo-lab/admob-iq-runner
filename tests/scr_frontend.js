@@ -268,7 +268,7 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
     out.sort_rank = out.all_rows;
     _.set({ SORT: { k: 'dau', dir: -1 } }); SCR.paint(); out.sort_v = names(SCREEN.innerHTML); _.set({ SORT: { k: 'rank', dir: 1 } });
     // All time: no score
-    _.set({ PER: 'all' }); SCR.paint(); out.all_time = SCREEN.innerHTML.includes('All time pe normal nahi') && !/score <b/.test(SCREEN.innerHTML); _.set({ PER: '30' });
+    _.set({ PER: 'all' }); SCR.paint(); out.all_time = SCREEN.innerHTML.includes('All time pe own past nahi — vs own past ke liye koi aur period chunein') && !SCREEN.innerHTML.includes('normal nahi') && !/score <b/.test(SCREEN.innerHTML); _.set({ PER: '30' });
     // a row tap opens the app
     SCREEN.onclick({ target: { closest: s => s === 'tr[data-sc-app]' ? { dataset: { scApp: 'Gamma App' } } : null } });
     out.row_tap = ctx.APP;
@@ -928,6 +928,83 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
         const xd = JSON.parse(JSON.stringify(ax)); xd.status['0'][7] = 'OK'; xd.status['0'][8] = ''; xd.status['0'][9] = [];
         xd.status['2'][7] = 'Low'; xd.status['2'][8] = 'Fill 50% (banner median 90%): requests not filled'; xd.status['2'][9] = [['fill', 'banner', 0.5, 0.9, 0.8]];
         out.abs.dis = [0, 1, 2].map(i => cm(_.tableHtml(xd, 'absy', ...P30), i).Screen);
+        // a screen with NO ads of its own in the period (Rare from 22 Mar; its views go on) — the period has no unit-split day, so
+        // σ falls back to the split days up to 21 Mar, when Rare still had ban_b's ads: no Fill / Show from them, "—" + the why
+        { const xz = JSON.parse(JSON.stringify(ax)); for (let k = 80; k < ND; k++) xz.A[k][2] = 0;
+          const rz = (xx, i) => { const e = _.abRates(xx, f2, i, '2026-03-22', FT); return { fill: e.fill, show: e.show, why: e.why, p: e.p, sig: e.sig }; };
+          _.set({ MORE: true }); out.abs.noads = { z: rz(xz, 2), ctl: rz(ax, 2), cells: cm(_.tableHtml(xz, 'absy', '2026-03-22', FT), 2), home: rz(xz, 0) }; }
+        // the app's ABSOLUTE state (owner: "ye normal nahi he — ye kam he"): its screens' abs words, vs own past a labelled second line
+        { const vx = (st, lo, app) => { const y = JSON.parse(JSON.stringify(ax)); for (const k in st) y.status[k][7] = st[k]; y.lo = lo; if (app) y.app = app; return y; };
+          const one = y => { const z = _.appAbs(y); return z ? [_.absAppChip(z), _.appSub(z, y.app)] : null; };
+          out.abs.app = { low: one(ax), few: one(vx({ 0: 'OK', 1: 'OK' }, 0)), ok: one(vx({ 0: 'OK', 1: 'OK', 2: 'OK' }, 0)),
+            noneNa: one(vx({ 0: 'N/A', 1: 'Too few ads', 2: 'No ads' }, 0, AP('N/A', 'Not whole — 3 whole days', 0, 0))),
+            noneOwn: one(vx({ 0: 'N/A', 1: 'Too few ads', 2: 'No ads' }, 0)), failed: one(vx({ 0: '', 1: '', 2: '' }, null)),
+            older: (() => { const y = JSON.parse(JSON.stringify(ax)); for (const k in y.status) y.status[k] = y.status[k].slice(0, 7); return _.appAbs(y); })(),
+            own: [AP('Better', 'App imp/user 1.00 → 1.31 (+31%)', 0, 0, [131, '', null, null, null]), AP('Worse', 'AdMob imp/user −35%', 1, 0, [65, 'GA4 logging changed', null, null, { st: 'admob' }]),
+              AP('Normal', 'App imp/user 3.53 → 3.42 (−3%)', 0, 0, [97, '', null, null, null]), AP('Watch', 'x', 0, 1, [88, '', null, null, null]), AP('Too early', 'y', 0, 0)].map(_.ownLine) };
+          // the All apps sort by status: absolute first (Low by its Low screens, most first · Few ads · OK · — · N/A), then the old keys
+          const zr = (name, w, n, st, dau) => ({ r: { name }, ab: w == null ? null : { w, n }, st, low: w === 'Low' ? n : 0, wn: st === 'Worse' ? 1 : 0, an: 0, dau });
+          _.set({ SORT: { k: 'rank', dir: 1 } });
+          out.abs.appSort = _.sortApps([zr('ok', 'OK', 3, 'Worse', 9), zr('na', 'N/A', 0, 'Normal', 99), zr('low1', 'Low', 1, 'Better', 50), zr('few', 'Few ads', 2, 'Normal', 5),
+            zr('low3', 'Low', 3, 'Normal', 1), zr('dash', '', 0, 'Worse', 7), zr('early', 'Too early', 0, 'Too early', 3)]).map(z => z.r.name);
+          // the app page's top line, All apps, Needs attention (a Worse App row: labelled, after the absolute lines; all OK: "Sab OK")
+          ctx.APP = 'absy'; SCR.paint(); h = SCREEN.innerHTML; out.abs.appCrumb = (/<div class="sc-crumb">(.*?)<\/div>/.exec(h) || [])[1] || '';
+          _.set({ PER: 'yday' }); SCR.paint(); out.abs.appCrumbYday = (/<div class="sc-crumb">(.*?)<\/div>/.exec(SCREEN.innerHTML) || [])[1] || ''; _.set({ PER: '30' });
+          const xw = JSON.parse(JSON.stringify(ax)); xw.app = AP('Worse', 'App imp/user 1.00 → 0.70 (−30%)', 1, 0, [70, 'Lower show rate', null, null, null]);
+          const xo = vx({ 0: 'OK', 1: 'OK', 2: 'OK' }, 0); xo.status['1'][0] = 'Normal';
+          out.abs.attnApp = [_.attnHtml(xw, 'absy'), _.attnHtml(xo, 'absy')];
+          ctx.APP = ''; SCR.paint(); h = SCREEN.innerHTML; out.abs.allCell = am(h, 'absy')['App · status']; out.abs.allNote = h.slice(h.indexOf('<h3>All apps</h3>'), h.indexOf('id="sc-atw"'));
+          ctx.APP = 'absy'; SCR.paint(); h = SCREEN.innerHTML; out.abs.howApp = (/<b>App ka status<\/b>[^<]*/.exec(h) || [''])[0]; }
+        // keep() at the page's end (a held height bigger than the content — the "Show N more screens" tap): the held height grows
+        // by what the page below the window lacks, so the tapped button moves 0 px; the reader's scroll lets the blank go
+        { const W = ctx.window, D = ctx.document, sv = { sb: W.scrollBy, ae: W.addEventListener, re: W.removeEventListener, se: D.scrollingElement, qs: SCREEN.querySelector, ch: SCREEN.children, oh: Object.getOwnPropertyDescriptor(SCREEN, 'offsetHeight') };
+          const P = { y: 2200, vh: 800, content: 2500, bt: 2400 }, on = {}, btn = { getBoundingClientRect: () => ({ top: P.bt - P.y, bottom: P.bt - P.y + 40, height: 40 }) };
+          try {
+            Object.defineProperty(SCREEN, 'offsetHeight', { configurable: true, get: () => Math.max(P.content, parseFloat(SCREEN.style.minHeight) || 0) });
+            SCREEN.getBoundingClientRect = () => ({ top: -P.y, height: SCREEN.offsetHeight, bottom: SCREEN.offsetHeight - P.y });
+            SCREEN.children = [{ hidden: false, getBoundingClientRect: () => ({ top: -P.y, bottom: P.content - P.y, height: P.content }) }];
+            SCREEN.querySelector = q => q === '[data-sc-more]' ? btn : null; SCREEN.style.minHeight = '3000px';
+            D.scrollingElement = { get scrollHeight() { return SCREEN.offsetHeight; } }; Object.defineProperty(W, 'scrollY', { configurable: true, get: () => P.y });
+            W.scrollBy = (x, dy) => { P.y = Math.max(0, Math.min(P.y + dy, SCREEN.offsetHeight - P.vh)); }; W.innerHeight = P.vh;
+            W.addEventListener = (t, f) => { on[t] = f; }; W.removeEventListener = t => { delete on[t]; };
+            const y0 = btn.getBoundingClientRect().top;
+            _.keep('[data-sc-more]', () => { P.content += 300; P.bt += 300; });
+            const r = { moved: btn.getBoundingClientRect().top - y0, held: SCREEN.style.minHeight, wait: !!on.scroll };
+            P.y -= 600; if (on.scroll) on.scroll(); r.after = SCREEN.style.minHeight; r.blank = SCREEN.offsetHeight - P.content;
+            // a held height that gives the page 8 px less than it adds (its last block's margin): room() measures again
+            // (the page at its end, no hold; the rows add 300 px, the button moves 300.5: a first raise of 1 px loses 8)
+            SCREEN.style.minHeight = ''; P.content = 2500; P.y = 1700; P.bt = 1900; const sh0 = Object.getOwnPropertyDescriptor(D.scrollingElement, 'scrollHeight');
+            Object.defineProperty(D.scrollingElement, 'scrollHeight', { configurable: true, get: () => { const m = parseFloat(SCREEN.style.minHeight) || 0; return m > P.content ? m - 8 : Math.max(m, P.content); } });
+            W.scrollBy = (x, dy) => { P.y = Math.max(0, Math.min(P.y + dy, D.scrollingElement.scrollHeight - P.vh)); };
+            const y1 = btn.getBoundingClientRect().top; _.keep('[data-sc-more]', () => { P.content += 300; P.bt += 300.5; }); r.margin = btn.getBoundingClientRect().top - y1;
+            Object.defineProperty(D.scrollingElement, 'scrollHeight', sh0); if (on.scroll) { P.y = 0; on.scroll(); }
+            // room() alone: only a scroll DOWN past the page's end raises the held height
+            SCREEN.style.minHeight = '1000px'; P.content = 900; P.y = 150; r.small = [(_.roomBelow(SCREEN, 40), SCREEN.style.minHeight), (_.roomBelow(SCREEN, -300), SCREEN.style.minHeight), (_.roomBelow(SCREEN, 120), SCREEN.style.minHeight)];
+            out.abs.keepEnd = r;
+          } finally { W.scrollBy = sv.sb; W.addEventListener = sv.ae; W.removeEventListener = sv.re; D.scrollingElement = sv.se; SCREEN.querySelector = sv.qs; SCREEN.children = sv.ch; delete SCREEN.getBoundingClientRect;
+            delete SCREEN.offsetHeight; if (sv.oh) Object.defineProperty(SCREEN, 'offsetHeight', sv.oh); delete W.scrollY; W.scrollY = 0; W.innerHeight = 800; SCREEN.style.minHeight = ''; } }
+        // late() inside the table: file 2 grows the ⏳ cells of the rows above the reading line — the row being read stays put
+        { const W = ctx.window, D = ctx.document, sv = { sb: W.scrollBy, qs: D.querySelector, ch: SCREEN.children };
+          const P = { y: 1000, card: 900, head: 100, h: Array(10).fill(40) };
+          const rowAt = i => { let t = P.card + P.head; for (let j = 0; j < i; j++) t += P.h[j]; return { dataset: { scOpen: String(i) }, getBoundingClientRect: () => ({ top: t - P.y, bottom: t + P.h[i] - P.y, height: P.h[i] }) }; };
+          const tbl = () => ({ getBoundingClientRect: () => ({ top: P.card + P.head - P.y, bottom: P.card + P.head + P.h.reduce((a, b) => a + b, 0) - P.y }), querySelectorAll: () => P.h.map((_h, i) => rowAt(i)) });
+          const card = { getBoundingClientRect: () => ({ top: P.card - P.y, bottom: P.card + 2000 - P.y, height: 2000 }), querySelector: q => q === '#sc-ttw' ? tbl() : null };
+          const res = {};
+          try {
+            SCREEN.children = [{ getBoundingClientRect: () => ({ top: -P.y, bottom: P.card - P.y, height: P.card }) }, card]; Object.defineProperty(W, 'scrollY', { configurable: true, get: () => P.y });
+            ctx.getComputedStyle = e => ({ position: e && e.sticky ? 'sticky' : 'static' });
+            W.scrollBy = (x, dy) => { P.y += dy; };
+            D.querySelector = q => { const m = /^#sc-ttw tbody tr\[data-sc-open="(\d+)"\]$/.exec(q); return m ? rowAt(+m[1]) : sv.qs(q); };
+            // the reading line (30 % of 800 = 240 px): row 6 (its top at 240) is the first at or below it; rows 0–5 grow by 23 px each
+            let y0 = rowAt(6).getBoundingClientRect().top; _.late(() => { for (let j = 0; j < 6; j++) P.h[j] += 23; }); res.row = rowAt(6).getBoundingClientRect().top - y0;
+            // every row above the line (the note under the table being read): the last row's bottom stays
+            P.y = 1900; P.h = Array(10).fill(40); y0 = rowAt(9).getBoundingClientRect().bottom; _.late(() => { for (let j = 0; j < 10; j++) P.h[j] += 23; }); res.below = rowAt(9).getBoundingClientRect().bottom - y0;
+            // the period bar stuck at the top (sticky, down to 280 px): it never anchors (it does not move with the page) and the
+            // reading line goes below it — row 7 (its top at 280) is the one being read
+            P.y = 1000; P.h = Array(10).fill(40); SCREEN.children.splice(1, 0, { sticky: true, getBoundingClientRect: () => ({ top: 0, bottom: 280, height: 280 }) });
+            y0 = rowAt(7).getBoundingClientRect().top; _.late(() => { for (let j = 0; j < 7; j++) P.h[j] += 23; }); res.sticky = rowAt(7).getBoundingClientRect().top - y0;
+            out.abs.lateRow = res;
+          } finally { W.scrollBy = sv.sb; D.querySelector = sv.qs; SCREEN.children = sv.ch; delete W.scrollY; W.scrollY = 0; delete ctx.getComputedStyle; } }
         delete ALLF.bench; ctx.DATA.scr.fv = 'f12b'; SCR.paint(); await tick(); SCR.paint(); h = SCREEN.innerHTML;
         out.abs.nobench = [h.includes('data-sc-open="0"'), /class="sc-lo"/.test(h.slice(h.indexOf('id="sc-ttw"')))];
       } finally { delete ALLF.apps.absy; delete ALLF.bench; delete FILES[an2]; delete ctx.DATA.scr.apps.absy; ctx.DATA.scr.fv = 'f13'; ctx.APP = 'Alpha App';

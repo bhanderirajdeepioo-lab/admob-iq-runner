@@ -3154,7 +3154,8 @@ def ab_row(app, side, c, w, allf):
     min(1, g_u ÷ G_u): a unit shared by screens gives each its share, the rates stay the unit's) → Fill = matched ÷
     requests, Show rate = impressions ÷ matched; per AdMob format p [share of the class's unit ads (unmatched in the
     whole), req, matched, imp]; unm the unmatched share (no AdMob id, or G 0: never in a rate); why "" or the reason a
-    number is "—" (never a silent 0); nm: not measurable (no matched unit, or no complete AdMob day in W)."""
+    number is "—" (never a silent 0); nm: not measurable (no matched unit, or no complete AdMob day in W). No ads of
+    its own in W: no Fill / Show rate and no parts (σ from older split days would lend it its units' rates)."""
     v = a = 0
     for d in w:
         vd, ad = app.views.get(d), app.ads.get(d)
@@ -3163,6 +3164,9 @@ def ab_row(app, side, c, w, allf):
             continue
         v += vd.get(c, (0, 0))[0]
         a += q.get(c, 0) if allf else q.get(c, (0,))[0]
+    if not a:
+        return {"ads": a, "views": v, "av": 100 * a / v if v > 0 else None, "fill": None, "show": None, "p": {},
+                "unm": None, "why": "is period me is screen pe koi ad nahi", "nm": True}
     gc = side["g"].get(c) or {}
     tot = sum(gc.values())
     parts, unm = {}, 0

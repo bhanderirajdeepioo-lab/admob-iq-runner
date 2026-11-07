@@ -2177,6 +2177,39 @@ def test_absolute_sigma_falls_back_to_the_newest_split_days_and_unmatched_units_
     assert sb.ab_judge("Normal", ab2, {"fmt": {}}, s2["sig"]) == ["Not measurable", "AdMob data nahi", []]
 
 
+def test_absolute_a_screen_without_ads_in_w_has_no_fill_or_show(tmp_path):
+    # EditActivity shows no ads in W (its views go on) and W's ads by screen come without the unit on 8 of 10 days: σ falls
+    # back to the newest 28 split days, most of them before W, when EDIT still had its native unit — they never lend it its
+    # unit's rates: no Fill / Show rate, no parts, "—" with the reason; the judge's word stays "No ads"
+    def day_fn(d):
+        r = core_recs(d, {})
+        if d >= W0:
+            ar = [x for x in r["a"]["r"] if x[0] != EDIT]
+            w, t = {}, {}
+            for c, f, u, n in ar:
+                w[(f, u)] = w.get((f, u), 0) + n
+                t[f] = t.get(f, 0) + n
+            r["a"]["r"], r["w"]["r"], r["t"]["a"] = ar, [[f, u, n] for (f, u), n in w.items()], [[f, n] for f, n in t.items()]
+            if d <= "2026-10-31":
+                tot = {}
+                for c, f, u, n in ar:
+                    tot[c] = tot.get(c, 0) + n
+                r["a"] = {"st": "w", "g": "c", "r": [[c, n] for c, n in tot.items()]}
+        return r
+    app = app_of(tmp_path, day_fn=day_fn)
+    w = app.windows()[0]
+    side = sb.ab_side(app, w, app.allf())
+    assert side["sig"][0] == "new" and side["g"].get(EDIT)              # the older split days carry EDIT's native ads
+    ab = sb.ab_row(app, side, EDIT, w, app.allf())
+    assert (ab["ads"], ab["av"], ab["fill"], ab["show"], ab["p"], ab["unm"]) == (0, 0, None, None, {}, None)
+    assert ab["why"] == "is period me is screen pe koi ad nahi" and ab["views"] > 0
+    sh = sb.ab_ship(ab, side["sig"])
+    assert (sh["fill"], sh["show"], sh["p"], sh["why"]) == (None, None, {}, "is period me is screen pe koi ad nahi")
+    assert sb.ab_judge("Normal", ab, {"fmt": {}}, side["sig"])[0] == "No ads"
+    m = sb.ab_row(app, side, MAIN, w, app.allf())                      # a screen with its ads: rated as before
+    assert m["ads"] > 0 and abs(m["fill"] - 0.9) < 0.01 and abs(m["show"] - 0.6) < 0.01 and m["why"] == ""
+
+
 def test_absolute_benchmark_quantiles_one_vote_per_unit_and_none_under_20():
     # banner: 25 units (req ≥ 1000) fill 0.50 … 0.98, one small unit left out of the sample, a unit seen by two apps
     # votes once; native: 19 → no benchmark

@@ -2814,7 +2814,7 @@ body[data-screen="scr"] #smp-pick{display:inline-flex}
 .sc-sub{color:var(--faint);font-size:11.5px;margin:2px 0 10px}.sc-faint{color:var(--faint);font-size:11.5px;font-weight:500}
 .sc-ok{margin:0 0 8px;color:var(--good);font-weight:700}
 .sc-x{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.sc-crumb{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 12px;color:var(--muted);font-size:12px}.sc-crumb small{color:var(--faint)}
+.sc-crumb{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 12px;color:var(--muted);font-size:12px}.sc-crumb small{color:var(--faint)}.sc-crumb>.sc-own{flex-basis:100%;margin-top:-4px;color:var(--muted)}
 .sc-back{min-height:36px;padding:4px 12px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
 .sc-back[disabled]{opacity:.55;cursor:default}
 .sc-lnk{background:none;border:0;padding:0 2px;min-height:32px;color:var(--cyan);font:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
@@ -7830,7 +7830,7 @@ const judged=it=>it&&(it[1]==='s'||it[1]==='o'||it[1]==='fs');
 // a period against its own past (100 × period ÷ its normal) as printed: "vs own past −12%" (owner, 7 Nov 2026: a "Score" read
 // as a grade — "score ka logic hi sahi nahi he"; it only says this row against its own past, the status is the absolute one)
 const vsP=s=>(s>=100?'+':'−')+Math.abs(Math.round(s)-100)+'%';
-function scoreTxt(s,muted,all,low){ if(all) return '<span class="sc-mut" title="All time pe normal nahi">vs own past —</span>';
+function scoreTxt(s,muted,all,low){ if(all) return '<span class="sc-mut" title="All time pe own past nahi">vs own past —</span>';
   if(low) return '<span class="sc-mut" title="kam ads: app ke ads ka 1% se kam">vs own past —</span>'; if(s==null) return '<span class="sc-mut">vs own past —</span>';
   if(muted) return `<span class="sc-mut" title="7 se kam final din: sirf ishaara">vs own past ${vsP(s)} · short period</span>`;
   return `vs own past <b class="${s<90?'sc-dn':s>110?'sc-up':''}">${vsP(s)}</b>`; }
@@ -7887,9 +7887,17 @@ function keep(sel,fn){ const s=EL; let b0=null; try{ b0=s&&s.querySelector?s.que
   const y0=b0&&b0.getBoundingClientRect?b0.getBoundingClientRect().top:null, r0=boxOf(b0), sx=r0?+r0.scrollLeft||0:0;
   hold(s); KEEPING=true; try{ fn(); }finally{ KEEPING=false; }
   const s2=EL; let b=null; try{ b=y0==null||!s2||!s2.querySelector?null:s2.querySelector(sel); }catch(e){}
-  if(b){ const r=boxOf(b); if(r&&sx) r.scrollLeft=sx; const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1) quiet(()=>window.scrollBy(0,dy)); }
+  if(b){ const r=boxOf(b); if(r&&sx) r.scrollLeft=sx; const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1){ roomBelow(s2,dy); quiet(()=>window.scrollBy(0,dy)); } }
   unholdLater(s2); }
 function hold(r){ if(r&&r.style) r.style.minHeight=Math.max(+r.offsetHeight||0,parseFloat(r.style.minHeight)||0)+'px'; }
+// a scroll down by dy near the page's end: the page below the window is shorter than dy (a held height bigger than the new
+// content, "Show N more screens" at the end) and the browser would clamp it — the held height grows by what is missing
+// first, measured again (a held height can change the page by a few px more or less — its last block's margin), up to 4
+// times; unholdLater lets it go as the reader scrolls, as the hold itself
+function roomBelow(r,dy){ const se=typeof document!=='undefined'&&(document.scrollingElement||document.documentElement);
+  if(!(dy>0)||!r||!r.style||!se||typeof window==='undefined') return;
+  for(let i=0;i<4;i++){ const left=(+se.scrollHeight||0)-(+window.innerHeight||0)-(+window.scrollY||0); if(!(dy>left)) return;
+    r.style.minHeight=(Math.max(+r.offsetHeight||0,parseFloat(r.style.minHeight)||0)+Math.ceil(dy-left))+'px'; } }
 // the held height down to the content's own as far as the page below the window can give it back; the rest as the reader
 // scrolls (the ROI pattern)
 function unhold(r,scroll){ const se=typeof document!=='undefined'&&(document.scrollingElement||document.documentElement), ks=r&&r.children;
@@ -7906,12 +7914,22 @@ function unholdLater(r){ if(!unhold(r)||UNW||typeof window==='undefined'||!windo
   const on=()=>{ const x=EL; if(x&&x.style&&x.style.minHeight&&unhold(x,true)) return; UNW=false; window.removeEventListener('scroll',on); };
   window.addEventListener('scroll',on,{passive:true}); }
 // a late file fills its slots: the block being read stays where it is (the FO hold: the first block reaching below the
-// reading line; nothing scrolls at the very top of the page)
-function late(fn){ const s=EL; let an=null, y0=0;
-  try{ if((+window.scrollY||0)>0&&s&&s.children){ const tb=document.querySelector('.topbar'), H=+window.innerHeight||0, top=Math.max(0,tb?tb.getBoundingClientRect().bottom:0);
-    for(const c of Array.from(s.children)){ const r=c.getBoundingClientRect(); if(r.height>0&&r.bottom>Math.max(top,H*0.3)){ an=c; y0=r.top; break; } } } }catch(e){}
+// reading line; nothing scrolls at the very top of the page). A stuck sticky block (the period bar) never anchors — it does
+// not move with the page — and the reading line goes below it. Inside the screens table the ROW being read stays: the first
+// row at or below the reading line (found again by its index — the table is drawn anew, the ⏳ cells above it grow by their
+// small lines); all rows above the line: what follows the table stays (the last row's bottom)
+function late(fn){ const s=EL; let an=null, y0=0, ks='', k0=0, kb=false;
+  try{ if((+window.scrollY||0)>0&&s&&s.children){ const tb=document.querySelector('.topbar'), H=+window.innerHeight||0, cs=Array.from(s.children);
+    let top=Math.max(0,tb?tb.getBoundingClientRect().bottom:0); const sty=c=>{ let p=''; try{ p=getComputedStyle(c).position; }catch(e){} return p==='sticky'||p==='fixed'; };
+    for(const c of cs) if(sty(c)){ const r=c.getBoundingClientRect(); if(r.height>0&&r.top<=top+1&&r.bottom>top) top=r.bottom; }
+    const line=Math.max(top,H*0.3);
+    for(const c of cs){ if(sty(c)) continue; const r=c.getBoundingClientRect(); if(r.height>0&&r.bottom>line){ an=c; y0=r.top; break; } }
+    const tw=an&&an.querySelector?an.querySelector('#sc-ttw'):null, trs=tw?Array.from(tw.querySelectorAll('tbody tr[data-sc-open]')):[];
+    for(const tr of trs){ const r=tr.getBoundingClientRect(); if(r.height>0&&r.bottom>line){ ks=tr.dataset.scOpen; k0=r.top; break; } }
+    if(!ks&&trs.length&&tw.getBoundingClientRect().bottom<=line){ const tr=trs[trs.length-1]; ks=tr.dataset.scOpen; k0=tr.getBoundingClientRect().bottom; kb=true; } } }catch(e){}
   fn();
-  try{ if(an&&an.isConnected!==false){ const d=an.getBoundingClientRect().top-y0; if(Math.abs(d)>1) quiet(()=>window.scrollBy(0,d)); } }catch(e){} }
+  try{ let a=null, t=y0; if(ks){ try{ a=document.querySelector(`#sc-ttw tbody tr[data-sc-open="${ks}"]`); }catch(e){} if(a) t=k0; } if(!a) a=an;
+    if(a&&a.isConnected!==false){ const q=a.getBoundingClientRect(), d=(a!==an&&kb?q.bottom:q.top)-t; if(Math.abs(d)>1) quiet(()=>window.scrollBy(0,d)); } }catch(e){} }
 // ---- the period: saved per viewer (scr_per_v1 = {k, f, t}), read once on the first paint ----
 function perRestore(raw,d0,T){ let o=raw; try{ if(typeof raw==='string') o=JSON.parse(raw); }catch(e){ return null; }
   if(!o||typeof o!=='object') return null; const k=String(o.k==null?'':o.k);
@@ -7926,7 +7944,7 @@ function perCtl(x){ const [lo,hi]=rng(x), T=x.td, d0=x.d0||x.ft, all=PER==='all'
   const b=(k,l,on,dis,ar)=>`<button type="button" class="sc-pb" data-sc-per="${E(k)}" aria-pressed="${!!on}"${dis?' disabled':''}${ar?` aria-label="${E(ar)}"`:''}>${E(l)}</button>`;
   return `<div class="sc-per sc-x" role="group" aria-label="Period">${PERS.map(([k,l])=>b(k,l,PER===k)).join('')}${monMover(PER,T,d0,b)}</div>`
     +`<div class="sc-cus"><label><span class="sc-cl">From</span> <input type="date" data-sc-pf="1" aria-label="From" value="${lo}" min="${d0}" max="${T}"></label><span class="sc-cd">–</span><label><span class="sc-cl">To</span> <input type="date" data-sc-pto="1" aria-label="To" value="${hi}" min="${d0}" max="${T}"></label><span class="sc-faint sc-ch">${PER==='cus'?'Custom':'tarikh badlein = Custom'}</span></div>`
-    +`<div class="sc-pl">${perLine(x,lo,hi)}${all?' · <span class="sc-faint">All time pe normal nahi — score ke liye koi aur period chunein</span>':''}</div>`; }
+    +`<div class="sc-pl">${perLine(x,lo,hi)}${all?' · <span class="sc-faint">All time pe own past nahi — vs own past ke liye koi aur period chunein</span>':''}</div>`; }
 // ---- All apps ----
 function apps(){ return ALL?Object.keys(ALL.apps).filter(vis).map(id=>({id,x:ALL.apps[id],name:nameOf(id)})).filter(r=>r.x&&typeof r.x==='object'):[]; }
 function refCal(L){ let ft='', td='', d0=''; for(const r of L){ if(!okD(r.x.ft)) continue; if(r.x.ft>ft) ft=r.x.ft; if((r.x.td||'')>td) td=r.x.td; if(r.x.d0&&(!d0||r.x.d0<d0)) d0=r.x.d0; } return {ft,td:td||(ft?addD(ft,2):''),d0:d0||ft}; }
@@ -7943,16 +7961,35 @@ const scMute=a=>dataNA(a)?'App row N/A: '+String(a[1]||''):admW(a)?'GA4 logging 
 const muteTxt=t=>`<span class="sc-mut" title="${E(t)}">vs own past —</span>`;
 // the App row's word as printed: "Worse (AdMob)" when the build judged it on AdMob per daily user (GA4 ≠ AdMob)
 const appChip=a=>chip(a&&a[0])+(admW(a)?' <small class="sc-adm">(AdMob)</small>':'');
+// the app's ABSOLUTE state (owner, 7 Nov 2026: "ye normal nahi he — ye kam he"), from its screens' abs words (status [7], the
+// status window): Low · N (scr_all "lo") when a screen is Low, else Few ads · N, else OK when a screen was judged OK; none
+// judged: the App row's own N/A / Too early (own: its why), else N/A; the benchmark failed: "—"; a file without the abs
+// words: null (the App row's own word, as before). The App row's own word is "vs own past", a labelled second line
+function appAbs(x){ const its=x&&x.items||[], a=Array.isArray(x&&x.app)?x.app:[]; let has=false, bl=false, lo=0, few=0, okn=0;
+  its.forEach((it,i)=>{ if(!it||it[1]!=='s') return; const w=absW(stOf(x,i)); if(w==null) return; has=true; if(!w) bl=true; else if(w==='Low') lo++; else if(w==='Few ads') few++; else if(w==='OK') okn++; });
+  if(!has) return null; const n=typeof x.lo==='number'&&isFinite(x.lo)?x.lo:lo;
+  if(n>0) return {w:'Low',n,why:''}; if(few) return {w:'Few ads',n:few,why:''}; if(okn) return {w:'OK',n:okn,why:''}; if(bl) return {w:'',n:0,why:'benchmark nahi bana'};
+  const own=a[0]==='N/A'||a[0]==='Too early'; return {w:own?a[0]:'N/A',n:0,why:own?String(a[1]||''):'koi screen judge nahi hui',own}; }
+const absAppChip=s=>s.w==='Low'||s.w==='Few ads'?achip(s.w,` · ${s.n} screen${s.n>1?'s':''}`):achip(s.w);
+// the App row's own word against its past (the last 10 final days vs the 28 before, the build's score): "Better +31%",
+// "Worse (AdMob) −35%", "same" (Normal), N/A / Too early as they are; its why in the title
+function ownLine(a){ const w=a&&a[0]; if(!w) return ''; const s=+a[4], p=ok(a[4])&&s>0?' '+vsP(s):'', f=w==='Worse'||w==='Watch', t=w==='Normal'?'same':f||w==='Better'?w+(admW(a)?' (AdMob)':'')+p:w;
+  return `<small class="sc-own"${a[1]?` title="${E(a[1])}"`:''}>vs own past: ${f?`<b class="sc-dn">${E(t)}</b>`:w==='Better'?`<b class="sc-up">${E(t)}</b>`:E(t)}</small>`; }
+// the lines under the app's chip: its why (the App row's own N/A / Too early, as before), else the absolute state's why + vs own past
+const appSub=(s,a)=>!s||s.own?(a&&a[1]?`<small>${E(a[1])}</small>`:''):(s.why?`<small>${E(s.why)}</small>`:'')+ownLine(a);
 function appRow(r){ const a=Array.isArray(r.x.app)?r.x.app:[], all=PER==='all';
-  const z={r,lo:'',hi:'',all,a,st:a[0]||null,why:a[1]||'',wn:+a[2]||0,an:+a[3]||0,low:typeof r.x.lo==='number'&&isFinite(r.x.lo)?r.x.lo:null,p:{},q:null,ru:null,n:null,sc:null,dau:null,muted:true,mute:scMute(a)};
+  const z={r,lo:'',hi:'',all,a,ab:appAbs(r.x),st:a[0]||null,why:a[1]||'',wn:+a[2]||0,an:+a[3]||0,low:typeof r.x.lo==='number'&&isFinite(r.x.lo)?r.x.lo:null,p:{},q:null,ru:null,n:null,sc:null,dau:null,muted:true,mute:scMute(a)};
   if(!r.x.d0||!okD(r.x.ft)) return z;
   const [lo,hi]=rng(r.x), p=appU(r.x,lo,hi), nw=all?null:normWinU(r.x,lo,hi), q=nw?appU(r.x,nw[0],nw[1]):null;
   return Object.assign(z,{lo,hi,p,q,ru:p.r,n:q?q.r:null,dau:p.ud,muted:p.n<7,sc:!all&&!z.mute&&p.r!=null&&q&&q.r>0?Math.round(100*p.r/q.r):null}); }
-// sort: rank (the App row's word, then Low screens, then Worse rows, then Watch rows, then daily users) · name · daily users
-// · imp / user · Low screens · Worse · Watch
+// sort: rank (the app's absolute state — Low by its Low screens, most first · Few ads by its screens · OK · — · Too early ·
+// N/A — then the App row's own word, Low screens, Worse rows, Watch rows, then daily users) · name · daily users · imp /
+// user · Low screens · Worse · Watch
 const AK={r:'ru',n:'n',sc:'sc',dau:'dau',lo:'low',wn:'wn',an:'an'};
+const AAR={Low:0,'Few ads':1,OK:2,'':3,'Too early':4,'N/A':5};
+const aark=z=>z.ab?(z.ab.w in AAR?AAR[z.ab.w]:5):9, aarn=z=>z.ab&&(z.ab.w==='Low'||z.ab.w==='Few ads')?z.ab.n:0;
 function sortApps(rows){ const k=SORT.k, d=SORT.dir, val=z=>k==='rank'?null:k==='name'?z.r.name:z[AK[k]||k];
-  return rows.slice().sort((a,b)=>{ if(k==='rank') return d*(rankOf(a.st)-rankOf(b.st)||(b.low||0)-(a.low||0)||b.wn-a.wn||b.an-a.an)||(b.dau||0)-(a.dau||0)||a.r.name.localeCompare(b.r.name);
+  return rows.slice().sort((a,b)=>{ if(k==='rank') return d*(aark(a)-aark(b)||aarn(b)-aarn(a)||rankOf(a.st)-rankOf(b.st)||(b.low||0)-(a.low||0)||b.wn-a.wn||b.an-a.an)||(b.dau||0)-(a.dau||0)||a.r.name.localeCompare(b.r.name);
     const va=val(a), vb=val(b); if(va==null&&vb==null) return (b.dau||0)-(a.dau||0); if(va==null) return 1; if(vb==null) return -1;
     return (typeof va==='string'?d*va.localeCompare(vb):d*(va-vb))||(b.dau||0)-(a.dau||0); }); }
 function histCell(x){ const h=histFrom(x,['v','a']); const t=Object.keys(x.bf||{}).map(k=>`${k}: ${(x.bf[k]||[])[0]||'—'}${(x.bf[k]||[])[1]?' ✓':''}`).join(' · ');
@@ -7968,11 +8005,11 @@ function impCell(z){ const p=z.p||{}, x=z.r.x;
   if(!z.lo) return '—'; return z.lo>ftuOf(x)?'<b>—</b>'+waitAds(adsAfter(x,z.lo,z.hi)):`<b>—</b><small>${E(auWhy(x,z.lo))}</small>`; }
 // the columns in the owner's order ("pehle user hota he fir screen view hota he fir ads impression hota he"): Daily users,
 // then the Imp / user / day the row is judged on, its Normal and Score
-const ATT={r:'GA4 ke saare ad impressions ÷ app ke daily users (GA4 Active users, wahi stream) · chhota: inline · full-screen',lo:'Low status wali screens: Fill / Show rate / Ads / view usi format ke saare apps ke units ke neeche 25% me (pichhle 10 final din)',
+const ATT={rank:'App ka status = uske screens ka (pichhle 10 final din, usi format ke saare apps ke units ke saath): koi screen Low = Low · N screens, warna Few ads · N, warna OK · chhoti line = vs own past (pichhle 10 final din vs 28 pehle)',r:'GA4 ke saare ad impressions ÷ app ke daily users (GA4 Active users, wahi stream) · chhota: inline · full-screen',lo:'Low status wali screens: Fill / Show rate / Ads / view usi format ke saare apps ke units ke neeche 25% me (pichhle 10 final din)',
   wn:'vs own past: Worse screens (pichhle 10 final din vs 28 pehle)',an:'vs own past: Watch screens (pichhle 10 final din vs 28 pehle)'};
 function allTable(rows){ const cols=[['rank','App · status'],['dau','Daily users'],['r','Imp / user / day'],['lo','Low screens'],['wn','Worse'],['an','Watch']];
   const head=cols.map(([k,l])=>`<th aria-sort="${SORT.k===k?(SORT.dir>0?'ascending':'descending'):'none'}"${ATT[k]?` title="${E(ATT[k])}"`:''}><button type="button" data-sc-sort="${k}">${l}</button></th>`).join('')+'<th>History</th>';
-  const body=rows.map(z=>`<tr class="sc-clk" data-sc-app="${E(z.r.name)}" tabindex="0"><td class="sc-nm"><span class="sc-an">${appIconId(z.r.id,z.r.name,22)}<span>${E(z.r.name)}</span></span><span class="sc-stl">${appChip(z.a)}</span>${z.why?`<small>${E(z.why)}</small>`:''}</td>`
+  const body=rows.map(z=>`<tr class="sc-clk" data-sc-app="${E(z.r.name)}" tabindex="0"><td class="sc-nm"><span class="sc-an">${appIconId(z.r.id,z.r.name,22)}<span>${E(z.r.name)}</span></span><span class="sc-stl">${z.ab?absAppChip(z.ab):appChip(z.a)}</span>${appSub(z.ab,z.a)}</td>`
     +`<td>${N(z.dau)}</td><td>${impCell(z)}</td><td${z.low==null?' title="file me nahi"':''}>${z.low==null?'—':z.low?`<b class="sc-dn">${z.low}</b>`:'0'}</td><td>${z.wn||'—'}</td><td>${z.an||'—'}</td><td>${histCell(z.r.x)}</td></tr>`).join('')
     ||'<tr><td colspan="7" class="sc-faint">Koi app nahi</td></tr>';
   return `<div class="sc-tw sc-x" id="sc-atw"><table class="sc-t"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`; }
@@ -7981,8 +8018,8 @@ function allHtml(){ const L=apps(); if(!L.length) return '<div class="card sc-ca
   perLoad(ref.d0,ref.td); const rows=sortApps(L.map(appRow));
   return `<div class="card sc-card sc-stk" id="sc-stk">${perCtl(ref)}</div>`
     +`<div class="card sc-card"><div class="ct"><h3>Data coverage</h3><span class="sc-faint">har piece kitne apps pe poora (whole) aaya</span></div>${covHtml(L)}</div>`
-    +`<div class="card sc-card"><div class="ct"><h3>All apps</h3><span class="sc-faint">status = pichhle 10 final din vs usse pehle ke 28 · app pe tap = us app ke screens · column pe tap = sort</span></div>${allTable(rows)}</div>`
-    +`<p class="sc-note">GA4 data till ${fdy(ref.ft)} (aakhri 2 din GA4 me abhi badalte hain). <b>Imp / user / day</b> = GA4 ke saare ad impressions ÷ app ke daily users · <b>Low screens</b> = jin screens ka Fill / Show rate / Ads / view usi format ke saare apps ke units ke neeche 25% me · <b>Worse / Watch</b> = vs own past (pichhle 10 final din vs 28 pehle).</p>`; }
+    +`<div class="card sc-card"><div class="ct"><h3>All apps</h3><span class="sc-faint">status = screens ka, usi format ke saare apps ke units ke saath (pichhle 10 final din) · vs own past = usse pehle ke 28 · app pe tap = us app ke screens · column pe tap = sort</span></div>${allTable(rows)}</div>`
+    +`<p class="sc-note">GA4 data till ${fdy(ref.ft)} (aakhri 2 din GA4 me abhi badalte hain). <b>Imp / user / day</b> = GA4 ke saare ad impressions ÷ app ke daily users · <b>App · status</b> = koi screen Low to Low · N screens, warna Few ads · N, warna OK (chhoti line: vs own past) · <b>Low screens</b> = jin screens ka Fill / Show rate / Ads / view usi format ke saare apps ke units ke neeche 25% me · <b>Worse / Watch</b> = vs own past (pichhle 10 final din vs 28 pehle).</p>`; }
 // ---- one app ----
 function tile(l,v,sub,cls,tt){ return `<div class="sc-k${cls?' '+cls:''}"${tt?` title="${E(tt)}"`:''}><div class="sc-kl">${l}</div><div class="sc-kv">${v}</div><div class="sc-ks">${sub}</div></div>`; }
 // the App total (3 rows, from scr_all alone — no ⏳, no late redraw): Daily users, Views / user / day, Imp / user / day (+ the
@@ -8031,19 +8068,23 @@ function attnHtml(x,id){ const items=x.items||[], w=statWin(x), a=Array.isArray(
   items.forEach((it,i)=>{ const s=stOf(x,i); if(s&&judged(it)) rows.push({i,it,s}); });
   const bad=rows.filter(r=>r.s[0]==='Worse'||r.s[0]==='Watch'), nv=x.nvr, L=[], ab=rows.filter(r=>r.it[1]==='s'&&(absW(r.s)==='Low'||absW(r.s)==='Few ads'));
   const mix=nv&&!ga4Off(a)?` <small>ads / view: new-user mix ${sg1(nv.mix/100)}, within ${sg1(nv.within/100)}${nv.vpu!=null?` · views / user ${sg1(nv.vpu/100)}`:''} (split nahi: GA4 me new / returning users nahi)</small>`:'';
-  if(a[0]==='Worse'||a[0]==='Watch'||a[0]==='Better') L.push(`<div class="sc-at sc-ata">${appChip(a)}<span class="sc-atn">App total</span><span class="sc-atr">${E(a[1])}</span>${a[5]&&!String(a[1]).includes(a[5])?`<span class="sc-atc">${E(a[5])}</span>`:''}${a[0]!=='Better'?mix:''}</div>`);
-  else if(a[0]==='N/A'&&/^Not measurable \(GA4/.test(String(a[1]||''))) L.push(`<div class="sc-at sc-ata">⚠️ <span class="sc-atn">App total</span><span class="sc-atr">${E(a[1])}</span></div>`);
+  // the App row's own word (vs own past): first on a file without the abs words; else labelled, after the absolute lines
+  const aa=appAbs(x); let appL='';
+  if(a[0]==='Worse'||a[0]==='Watch'||a[0]==='Better') appL=`<div class="sc-at sc-ata">${appChip(a)}<span class="sc-atn">${aa?'vs own past · ':''}App total</span><span class="sc-atr">${E(a[1])}</span>${a[5]&&!String(a[1]).includes(a[5])?`<span class="sc-atc">${E(a[5])}</span>`:''}${a[0]!=='Better'?mix:''}</div>`;
+  else if(a[0]==='N/A'&&/^Not measurable \(GA4/.test(String(a[1]||''))) appL=`<div class="sc-at sc-ata">⚠️ <span class="sc-atn">App total</span><span class="sc-atr">${E(a[1])}</span></div>`;
+  if(appL&&!aa) L.push(appL);
   const G=new Map(); for(const r of bad){ const g=String(r.s[4]||r.s[3]||'No single cause'), k=r.s[0]+'|'+g; if(!G.has(k)) G.set(k,{w:r.s[0],g,rows:[],imp:0}); const e=G.get(k); e.rows.push(r); e.imp+=ok(+r.s[5])?+r.s[5]:0; }
   // the absolute lines (the build's weakest number per screen: [k, format, value, median, p25]), weakest group first
   const AG=new Map(), fv=(k,v)=>k==='av'?PCT(v):PI(v);
   for(const r of ab){ const q=(Array.isArray(r.s[9])?r.s[9]:[]).slice().sort((u,v)=>(u[2]/u[3])-(v[2]/v[3]))[0]||['','',null,null,null], kk=absW(r.s)+'|'+q[0]+'|'+q[1];
     if(!AG.has(kk)) AG.set(kk,{w:absW(r.s),q,rows:[],m:Infinity}); const e=AG.get(kk); e.rows.push({r,q}); if(+q[3]>0) e.m=Math.min(e.m,q[2]/q[3]); }
   const ags=[...AG.values()].sort((p,q)=>ARANK[p.w]-ARANK[q.w]||p.m-q.m);
-  const gs0=[...G.values()].sort((p,q)=>rankOf(p.w)-rankOf(q.w)||p.imp-q.imp), room=Math.max(0,5-L.length), ags1=ags.slice(0,room), gs=gs0.slice(0,Math.max(0,room-ags1.length)), cut=ags.length-ags1.length+gs0.length-gs.length;
+  const gs0=[...G.values()].sort((p,q)=>rankOf(p.w)-rankOf(q.w)||p.imp-q.imp), room=Math.max(0,5-L.length-(appL&&aa?1:0)), ags1=ags.slice(0,room), gs=gs0.slice(0,Math.max(0,room-ags1.length)), cut=ags.length-ags1.length+gs0.length-gs.length;
   for(const g of ags1){ const n=g.rows.length, q=g.q, nm=g.rows.slice(0,3).map(z=>itemName(z.r.it)).join(', ')+(n>3?` +${n-3}`:'');
     const lab=q[0]?`${ABKN[q[0]]||q[0]} under ${fmtNm(q[1])} p25 (${fv(q[0],q[4])})`:'Absolute';
     L.push(`<details class="sc-at sc-atg"><summary>${achip(g.w)}<span class="sc-atn">${E(lab)}</span><span class="sc-atr">${n} screen${n>1?'s':''} (${nm})</span><span class="sc-chev">▸</span></summary>`
       +g.rows.sort((u,v)=>(u.q[2]/u.q[3])-(v.q[2]/v.q[3])).map(z=>`<div class="sc-atl"><span class="sc-atn" title="${E(itemTitle(z.r.it))}">${itemName(z.r.it)}</span><span class="sc-atr">${z.q[0]?`${ABKN[z.q[0]]} ${fv(z.q[0],z.q[2])} · ${fmtNm(z.q[1])} median ${fv(z.q[0],z.q[3])}`:E(z.r.s[8]||'')}</span><button type="button" class="sc-lnk" data-sc-open="${z.r.i}">Details ▸</button></div>`).join('')+'</details>'); }
+  if(appL&&aa) L.push(appL);
   for(const g of gs){ const n=g.rows.length, nm=g.rows.slice(0,3).map(r=>itemName(r.it)).join(', ')+(n>3?` +${n-3}`:'');
     // the row's whole days of the last 10: scr_all's status [6], here on the first paint (never file 2's, which comes later
     // and never redraws this card — that would close an open line); a file without it: none
@@ -8053,9 +8094,11 @@ function attnHtml(x,id){ const items=x.items||[], w=statWin(x), a=Array.isArray(
   if(cut>0) L.push(`<p class="sc-note">+${cut} aur line${cut>1?'s':''} — table me (status se sort)</p>`);
   const hd=`<div class="ct"><h3>Needs attention</h3><span class="sc-faint">pichhle 10 final din (${rg(w.W[0],w.W[1])})${ab.length?' · Low = usi format ke saare apps ke units ke neeche 25%':''} · vs own past = usse pehle ke 28</span></div>`;
   if(bad.length||ab.length||L.length&&a[0]!=='Better') return `<div class="card sc-card" id="sc-attn">${hd}${L.join('')}</div>`;
-  const fine=rows.some(r=>r.s[0]==='Normal'||r.s[0]==='Better'||absW(r.s)==='OK')||a[0]==='Normal'||a[0]==='Better';
+  // fine: a screen judged OK (its abs word; a trigger / an aggregate row / an older file: its own Normal / Better) — the App
+  // row's own word only on a file without the abs words
+  const fine=rows.some(r=>{ const w=r.it[1]==='s'?absW(r.s):null; return w!=null?w==='OK':r.s[0]==='Normal'||r.s[0]==='Better'; })||!aa&&(a[0]==='Normal'||a[0]==='Better');
   if(!fine) return `<div class="card sc-card" id="sc-attn"><div class="ct"><h3>Needs attention</h3></div><p class="sc-note">Abhi koi screen judge nahi ho saki${a[1]?': '+E(a[1]):' (data kam ya din whole nahi)'} — numbers neeche hain, status nahi.</p></div>`;
-  return `<div class="card sc-card" id="sc-attn">${hd}<p class="sc-ok">✅ Sab normal</p>${L.join('')}</div>`; }
+  return `<div class="card sc-card" id="sc-attn">${hd}<p class="sc-ok">✅ ${aa?'Sab OK':'Sab normal'}</p>${L.join('')}</div>`; }
 // the Screens / Full-screen tables: status chip + its score under the name (sticky column), then the period's numbers.
 // Screens, in the owner's order ("pehle user hota he fir screen view hota he fir ads impression hota he": the chain read left
 // to right): Users / day · Views / user / day · Time / view · Time / user / day · Ads / min · Imp / user / day (one day set: the
@@ -8089,13 +8132,15 @@ const abFin=e=>{ for(const f in e.p){ const P=e.p[f]; e.req+=P[1]; e.mt+=P[2]; e
 // to the period's end — sig names them) × the unit's AdMob on the complete days → Fill = Σσ·matched ÷ Σσ·req, Show rate =
 // Σσ·imp ÷ Σσ·matched; per AdMob format part: [share of the screen's ads, req, matched, imp]. A unit with no AdMob id (or no
 // GA4 ads anywhere) stays out of the rates (unm = its share); a shared unit (σ < 95 %) is named. Basis = Imp / user / day's
-// (inline; all formats when allf). why: "" or why there is no number (never a silent 0)
+// (inline; all formats when allf). why: "" or why there is no number (never a silent 0). No ads of its own in the period
+// (its Ads / view's ads): no Fill / Show rate — σ from older split days would lend it its units' rates
 // (kept per file 2 and scr_all entry — a build's own objects — and the row / dates: a tap's repaint never sums the days again)
 const ABM=new WeakMap();
 function abMemo(f2,x,k,fn){ let m=ABM.get(f2); if(!m||m.x!==x){ m={x,v:new Map()}; ABM.set(f2,m); } if(!m.v.has(k)) m.v.set(k,fn()); return m.v.get(k); }
 function abRates(x,f2,i,lo,hi){ return f2&&typeof f2==='object'?abMemo(f2,x,'r'+i+'|'+lo+'|'+hi,()=>abRates0(x,f2,i,lo,hi)):abRates0(x,f2,i,lo,hi); }
 function abRates0(x,f2,i,lo,hi){ const it=(x.items||[])[i], e={fill:null,show:null,req:0,mt:0,imp:0,p:{},sig:null,unm:0,sh:[],nK:0,why:''};
   if(!it||it[1]!=='s'||!f2) return e;
+  if(!(sumItem(x,i,lo,hi).a>0)){ e.why='is period me is screen pe koi ad nahi'; return e; }
   const adm=f2.adm||{}, U=f2.units||[], ds=f2.days||[], S=clsSet(f2,x,i), d0=f2.d0||x.d0, ix=d=>dIx({d0},d), b=hi<x.ft?hi:x.ft;
   if(!Object.keys(adm).length){ e.why='AdMob data nahi'; return e; }
   if(lo>b){ e.why=admWhy(x,lo); return e; }
@@ -8499,7 +8544,7 @@ function howBody(x){ const g=(typeof DATA!=='undefined'&&DATA&&DATA.generated_at
     +'<p class="sc-note"><b>Screen views</b> = screen_view (har Activity). <b>Chain</b>: Views / user / day × Time / view × Ads / min ÷ 60 = Imp / user / day (same din). <b>Users / day</b> = us screen ke users ka jod ÷ din; <b>Views / user / day</b> = screen views ÷ users ka jod (100 users, 300 views → 3; 200 ads → Imp / user 2).</p>'
     +'<p class="sc-note"><b>Status</b> (screen row, period se alag, fixed: pichhle 10 final din): is screen ka <b>Fill</b> (AdMob matched ÷ requests), <b>Show rate</b> (impressions ÷ matched) aur <b>Ads / view</b> usi AdMob format ke saare apps ke units ke saath — kisi format (screen ke ads ka ≥ 20%) ka Fill ya Show rate us format ke p25 se kam = <b>Low</b>; Ads / view kam (format ≥ 80%) = <b>Few ads</b>; baaki <b>OK</b>. Screen ka hissa σ = unit ke GA4 ads is screen pe ÷ unit ke saare GA4 ads.</p>'+benchHtml()
     +'<p class="sc-note"><b>vs own past</b> (Cause me, fixed): pichhle 10 final din vs usse pehle ke 28. Worse = 80% se kam, Watch = 90% se kam, Better = 110% se upar. Ye tab lagta hai jab: farq rozana ke utaar-chadhaav se bada ho (z 3); dono 5-din hisson me dikhe; app ke imp / user ka ≥ 1% ho; aur 2 din lagatar ho. Aadhe se zyada gira to z 2 kaafi. Poore app me users kam screens kholein to wo trigger pe nahi, App total pe ek baar dikhega. Kam data = Too early; whole din kam / logging badli / ads nahi / users nahi aaye / ads bahut kam = N/A.</p>'
-    +'<p class="sc-note"><b>App total ka status</b>: GA4 aur AdMob alag kahani bataayein to App total AdMob ke per daily user pe judge hota hai ("Worse (AdMob)"); AdMob ka data kam ho to "Not measurable". <b>vs own past ±x%</b> (picked period) = period ÷ normal (period se pehle ke max(28, period) final din) − 1; 7 se kam din = "short period". <b>Ads / 100 views</b> row ki details me.</p>'; }
+    +'<p class="sc-note"><b>App ka status</b> = uske screens ka: koi screen Low = <b>Low · N screens</b>, warna Few ads · N, warna OK; koi screen judge nahi hui = N/A / Too early. Uske neeche chhoti line <b>vs own past</b> = App total, pichhle 10 final din vs usse pehle ke 28 (Better / Worse ±x%, Normal = same); GA4 aur AdMob alag kahani bataayein to wo AdMob ke per daily user pe judge hota hai ("Worse (AdMob)"); AdMob ka data kam ho to "Not measurable". <b>vs own past ±x%</b> (picked period) = period ÷ normal (period se pehle ke max(28, period) final din) − 1; 7 se kam din = "short period". <b>Ads / 100 views</b> row ki details me.</p>'; }
 // the format benchmark as measured (scr_all "bench"): per format p25 / median and how many units / screens it stands on
 function benchHtml(){ const b=ALL&&ALL.bench, F=b&&b.fmt&&typeof b.fmt==='object'?b.fmt:null; if(!F) return '<p class="sc-note">Format benchmark is build me nahi bana — status "—".</p>';
   const c=(k,f)=>{ const v=bOf(f,k); return v?(k==='av'?`${PCT(v[1])} / ${PCT(v[2])} <small>${v[3]} screens</small>`:`${PI(v[1])} / ${PI(v[2])} <small>${v[4]} units</small>`):'—'; };
@@ -8511,7 +8556,11 @@ function foldsHtml(x,id,lo,hi){ return fold('src','🗂 Ad sources','format-wise
 function appHtml(id){ const x=ALL.apps[id], a=Array.isArray(x.app)?x.app:[];
   let tot=''; if(x.d0&&okD(x.ft)){ perLoad(x.d0,x.td); const [lo,hi]=rng(x), P=appU(x,lo,hi), nw=PER==='all'?null:normWinU(x,lo,hi), q=nw?appU(x,nw[0],nw[1]):null;
     if(P.r!=null) tot=` · App total <b>${PQ(P.r)}</b>${q&&q.r!=null&&!scMute(a)?` vs ${PQ(q.r)}`:''}`; }   // no GA4 "vs" next to a data N/A / an AdMob-judged row (S3)
-  const crumb=`<div class="sc-crumb"><button type="button" class="sc-back" data-sc-all="1">← All apps</button><span>${appChip(a)}${tot}${a[1]?` <small>${E(a[1])}</small>`:''} · history ${x.d0?'from '+fdy(x.d0):'not yet'}</span></div>`;
+  // the app's absolute state first, vs own past on its own labelled line under it — both the build's, so the line is the same
+  // on every period (the period's App total is the card below: a period tap never re-wraps this line and moves the bar); a
+  // file without the abs words: its own word + the period's App total, as before
+  const ab=appAbs(x), sub=!ab||ab.own?(a[1]?` <small>${E(a[1])}</small>`:''):(ab.why?` <small>${E(ab.why)}</small>`:'');
+  const crumb=`<div class="sc-crumb"><button type="button" class="sc-back" data-sc-all="1">← All apps</button><span>${ab?absAppChip(ab):appChip(a)+tot}${sub} · history ${x.d0?'from '+fdy(x.d0):'not yet'}</span>${ab&&!ab.own?ownLine(a):''}</div>`;
   if(!x.d0||!(x.vis||[]).length){ const h=histFrom(x,['v'])||{}; return crumb+`<div class="card sc-card"><p class="sc-note">Is app ka Screens data abhi aa raha hai — history bhar rahi hai: ${fdy(x.ft||h.from||'')} tak.</p></div>`; }
   const [lo,hi]=rng(x);
   return crumb+`<div class="card sc-card sc-stk" id="sc-stk">${perCtl(x)}</div>`+totalHtml(x,id,lo,hi)+attnHtml(x,id)+segHtml(x,id,lo,hi)+ddHtml(x,id,lo,hi)
@@ -8655,7 +8704,7 @@ function left(){ let has=false; try{ has=typeof HB!=='undefined'&&HB.st.some(z=>
   Promise.resolve().then(()=>{ if(onScreen()) return; OPEN=null; try{ hbDrop('scr-dd'); }catch(e){} }); }
 return {ptr, ensure, render, paint, show, left, ready:()=>!!ALL&&!!ptr(), fold:(k,o)=>{ FOLD[k]=!!o; },
   _:{rng, normWin, normWinU, finals, sumItem, itemShare, perScore, perScoreU, sumScr, sumTrig, appU, chainOf, ftuOf, perTime, fmtT, endSnap, bannerSec, addUp, appSum, appScore, cover, coverAll, covWhy, dayState, apps, topSplit, tableRows, sortItems, sortApps, appRow, dispName, itemName, fmtOf,
-    chartModel, perLine, tipText, drawChart, rg, fd, copy, perRestore, perLoad, keep, arrive, allHtml, appHtml, secHtml, ddHtml, foldsHtml, totalHtml, attnHtml, tableHtml, userDays, layerPeriod, WDK, RANK, PIECES, SECS, FILES, chip, PU, PQ, abRates, abPool, abLow, admDays, absW, achip, arank, stChip, stWhy, czTd, ddSt, absHtml, benchHtml, totTable, PCT, PI, vsP, ABCHK, AWD, ARANK,
+    chartModel, perLine, tipText, drawChart, rg, fd, copy, perRestore, perLoad, keep, arrive, allHtml, appHtml, secHtml, ddHtml, foldsHtml, totalHtml, attnHtml, tableHtml, userDays, layerPeriod, WDK, RANK, PIECES, SECS, FILES, chip, PU, PQ, abRates, abPool, abLow, admDays, absW, achip, arank, stChip, stWhy, czTd, ddSt, absHtml, benchHtml, totTable, PCT, PI, vsP, ABCHK, AWD, ARANK, appAbs, absAppChip, ownLine, appSub, late, roomBelow,
     get:()=>({PER,PF,PTO,OPEN,SEC,SEG,MORE,COVP,SORT,TS,CH,OPENAPP}), set:o=>{ if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o){ OPEN=o.OPEN; OPENAPP=OPEN==null?null:appIdNow(); } if('SEC' in o) SEC=o.SEC;
       if('SEG' in o) SEG=o.SEG; if('MORE' in o) MORE=o.MORE; if('COVP' in o) COVP=o.COVP; if('PREAD' in o) PREAD=o.PREAD; if('TS' in o) TS=o.TS; if('SORT' in o) SORT=o.SORT; if('CH' in o) CH=o.CH; }}};
 })();
