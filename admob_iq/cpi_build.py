@@ -41,6 +41,17 @@ engine.cpi_alarm (P_PROD) to the data day t, nothing trimmed:
   history row that cannot be read is dropped and counted (BadRow); a history FILE that cannot be read is kept as it
   is and ships no "lv" — the owner's set / accept / auto / undo still apply (rollback / reject: NoLedger).
 
+  The level agent (engine.level_agent, P_PROD levels.agent mode "on"; the owner does not tap): every proposal and every
+  engine settle of CPI / GAP is answered from the data as known on its day (accept / keep / wait, frozen in the
+  history's "agent" block, asked again on the weekly phase); keep / wait leave the alarm open with the cause written,
+  a settle kept or waiting is blocked (agent_veto: the alarm goes on from its own change start, its old notices
+  seeded), a money level is never lowered, an accept of a proposal applies only after a clean 28-day trial, and every
+  acceptance is watched 84 days (back at the old level → reverted). It ships the app file's "ag" rows, each
+  proposal's answer, the level rows' marks, the list row's tag and the scoreboard dashboard["cpi"]["agent"]. Any
+  failure prints "cpi agent skipped: <ErrorType>" (no history file: NoLedger; past its time budget: AgentTimeout,
+  the answers so far kept) and ships the automatic-only result; "cpi agent decision skipped: ThinLevel" costs one
+  acceptance this build, "cpi agent backtest skipped: <ErrorType>" only the scoreboard's backtest line.
+
 run(dashboard, data_dir, out_dir, s) → the _headers no-store paths (["/cpi*"], ONE splat rule) or [] (no Google Ads
 data: the files removed, no pointer). off(out_dir): the switch (CPI_TAB=false). Failure-isolated; ONE counts-only line.
 mark_notified_cpi: send_alerts' ledger (each notice ONCE).
@@ -52,12 +63,15 @@ import json
 import os
 import re
 import sys
+import time
+import unicodedata
 import zlib
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from .db import write_json_gz_stable
 from .engine import cpi_alarm as CA
+from .engine import level_agent as LA
 from .fetch import ga4_uninstall as gu
 
 FILE = "cpi.json.gz"
@@ -838,6 +852,8 @@ def gather(dashboard, data_dir, out_dir, s, t, counts=None):
         extra["clock"] = {}
         print("cpi clock skipped: %s" % type(e).__name__, file=sys.stderr)
     counts["camps"], counts["ctys"] = len(camps), sum(len(v) for v in ctys.values())
+    extra["geo"], extra["cd"] = geo, cd                  # (the level agent's candidate countries; levels_run drops them)
+    extra["names"] = {a["app_id"]: a["name"] for a in apps}
     return D, apps, camps, ctys, extra
 
 
@@ -1093,14 +1109,31 @@ def _app_file(a, D, lo, res, camps, ctys, eps_by, extra, t):
             "ep": [_ep_full(ep) for ep in eps_by.get(key, [])], "notes": notes}
     lvl = extra.get("lv")
     if lvl is not None:                                  # the levels part ran (else: the automatic file as before)
+        ag = _ag_part(lvl)
         if lvl["ledger"] is not None:                    # (None: the history file could not be read: none shipped)
             try:
-                body["lv"] = ship_levels(lvl["ledger"], aid)
+                body["lv"] = ship_levels(lvl["ledger"], aid, agent_on=True) if ag is not None else \
+                    ship_levels(lvl["ledger"], aid)
             except Exception as e:                       # a row nobody foresaw costs this app's history block only
                 print("cpi levels skipped: %s" % type(e).__name__, file=sys.stderr)
         body["lp"] = lvl["props"].get(aid, [])
         body["la"] = lvl["la"].get(aid, [])
+        if ag is not None:                               # the agent part ran: its rows and each proposal's answer
+            rows = [{k: v for k, v in x.items() if k != "_last"}
+                    for x in (ag.ship_data.get(aid) or {}).get("rows") or []]
+            body["ag"] = {"rows": rows}
+            lp = []
+            for p in body["lp"]:
+                x = next((x for x in rows if x["fam"] == p["fam"] and _near(x["ep"]["opened"], p["opened"])), None)
+                lp.append(dict(p, ag={k: x[k] for k in ("id", "st", "short", "cause", "next")} if x else None))
+            body["lp"] = lp
     return body
+
+
+def _ag_part(lvl):
+    """The agent part of this build when it ran and finished (the ship data is ready), else None."""
+    a = (lvl or {}).get("agent")
+    return a["ag"] if (a and a.get("ran") and getattr(a.get("ag"), "ship_data", None) is not None) else None
 
 
 def build_files(dashboard, D, apps, camps, ctys, extra, res, now):
@@ -1161,6 +1194,10 @@ def build_files(dashboard, D, apps, camps, ctys, extra, res, now):
                          "lost": ({k: lost[k] for k in ("inr", "usd", "from", "sc")} if lost else None)}
         if extra.get("lv") is not None:
             ptr_apps[aid]["lp"] = len(extra["lv"]["props"].get(aid) or [])
+            ag = _ag_part(extra["lv"])
+            tag = (ag.ship_data.get(aid) or {}).get("tag") if ag is not None else None
+            if tag:
+                ptr_apps[aid]["ag"] = tag
         off = (D.d0 + timedelta(days=g0) - e0).days
         h = {}
         for fam in ("CPI", "ECPM", "ROAS_G"):
@@ -1175,6 +1212,9 @@ def build_files(dashboard, D, apps, camps, ctys, extra, res, now):
            "day0": _iso(D.d0, g0), "file": FILE, "apps": ptr_apps, "counts": counts, "unlinked": unl}
     if extra.get("lv") is not None:
         ptr["la"] = extra["lv"]["seen"]                  # the newest owner action this build has read (page: pending)
+        ag = _ag_part(extra["lv"])
+        if ag is not None:
+            ptr["agent"] = copy.deepcopy(ag.board)       # the agent's scoreboard
     return ptr, allb, files, big
 
 
@@ -1271,6 +1311,8 @@ def load_ledger(data_dir):
     if not isinstance(raw, dict) or raw.get("v") != LV_V or not isinstance(raw.get("apps"), dict):
         raise ValueError("levels")
     led.update({k: raw[k] for k in ("apps", "proposals", "log", "rule") if k in raw})
+    if "agent" in raw:
+        led["agent"] = raw["agent"]                      # the level agent's block: validated by the agent, not here
     apps, bad = {}, 0
     for aid, fams in led["apps"].items():
         if not isinstance(fams, dict):
@@ -1441,7 +1483,7 @@ def _resolve_one(a, ents, rows, by_id, undone, ts):
         r = hit[2]
         if act == "reject":
             ep = r.get("ep") if isinstance(r.get("ep"), dict) else {}
-            if r.get("src") != "accepted" or not ep.get("opened"):
+            if r.get("src") not in ("accepted", "accepted_agent") or not ep.get("opened"):
                 return "NotAccepted", None
             return None, {"act": "veto", "ep_open": ep["opened"]}
         if r.get("days"):
@@ -1513,15 +1555,20 @@ def _lv_id(aid, fam, src, frm, used):
         k += 1
 
 
-def merge_ledger(old, res, ents, rej, now):
+def merge_ledger(old, res, ents, rej, now, agent=None):
     """The replay's levels merged into the saved history → (the new ledger, {app id: proposals}). A row matches a saved
     one of the same family and kind when its day moved ≤ MATCH_DAYS (restated data): it keeps its id and first-seen,
     a changed value is recorded under "restated" (the last RESTATED_MAX kept); a saved row no longer produced is kept
     as gone (or rejected: the owner's reject). An app whose levels are not exact, or whose merge fails for any other
-    reason, keeps its saved history untouched (one skipped line) — the other apps still merge."""
+    reason, keeps its saved history untouched (one skipped line) — the other apps still merge. The saved agent block
+    is carried as it is; agent = the level agent's part when it ran: its marks go onto the rows it names (passed /
+    agent / blocked / hold / reverted) and the rows the agent world no longer makes are added from it."""
     now_iso = gu._now_iso(now)
     led = {"v": LV_V, "rule": LV_RULE, "apps": copy.deepcopy(old.get("apps") or {}),
            "proposals": copy.deepcopy(old.get("proposals") or {}), "log": list(old.get("log") or [])}
+    if "agent" in old:
+        led["agent"] = copy.deepcopy(old["agent"])
+    marks = (agent or {}).get("marks") or {}
     used = {r.get("id") for fams in led["apps"].values() for lst in fams.values() for r in lst}
     eps_by = {}
     for ep in res["episodes"]:
@@ -1536,6 +1583,8 @@ def merge_ledger(old, res, ents, rej, now):
         n_log, used0 = len(led["log"]), set(used)
         try:
             fresh = _fresh(ent, key, res, [ep for (i, _), lst in eps_by.items() if i == aid for ep in lst])
+            if agent is not None:
+                _ag_marks(ent, aid, fresh, marks)
             pl = []
             for p in (res.get("proposals") or {}).get(key) or []:
                 row = {"v": p["v"], "days": p["days"]}
@@ -1545,7 +1594,7 @@ def merge_ledger(old, res, ents, rej, now):
             mine = {}
             for fam in sorted(set(fresh) | set(saved)):
                 mine[fam] = _merge_fam(aid, fam, saved.get(fam) or [], fresh.get(fam) or [], rej, now_iso, used,
-                                       led["log"])
+                                       led["log"], agent is not None)
         except Exception as e:                           # one app costs only itself (LevelMismatch, a zero, anything)
             print("cpi levels skipped: %s" % type(e).__name__, file=sys.stderr)
             del led["log"][n_log:]                       # … and leaves no half-merged trace behind
@@ -1559,7 +1608,41 @@ def merge_ledger(old, res, ents, rej, now):
     return led, props
 
 
-def _merge_fam(aid, fam, saved, fresh, rej, now_iso, used, log):
+def _ag_marks(ent, aid, fresh, marks):
+    """The agent's marks onto this replay's level rows (by src and episode), and the rows it keeps visible that the
+    agent world no longer makes (a blocked / on-hold settle, a reverted acceptance) — each exact like any other."""
+    for (a, fam), m in marks.items():
+        if a != aid:
+            continue
+        lst = fresh.setdefault(fam, [])
+        for src, opened, mark in m["tag"]:
+            for row in lst:
+                if row["src"] == src and (row.get("ep") or {}).get("opened") and _near(row["ep"]["opened"], opened):
+                    row["ag"] = dict(mark)
+                    break
+        for x in m["extra"]:
+            row = {k: x[k] for k in ("from", "v", "days", "src", "ep", "act")}
+            row["sums"] = _exact(ent, fam, row) if row["days"] else None
+            row["ag"] = dict(x["ag"])
+            lst.append(row)
+    for fam in [f for f, lst in fresh.items() if not lst]:
+        del fresh[fam]
+
+
+def _ag_mark(r, mark, log, now_iso, aid, fam):
+    """A history row takes the agent's mark of this build (or loses an old one); blocked / hold / reverted are logged
+    once per change."""
+    old = (r.get("ag") or {}).get("st")
+    if mark:
+        r["ag"] = dict(mark)
+    else:
+        r.pop("ag", None)
+    st = (mark or {}).get("st")
+    if st in MARKED and st != old:
+        log.append({"at": now_iso, "app": aid, "fam": fam, "id": r["id"], "what": st, "v_old": None, "v_new": r["v"]})
+
+
+def _merge_fam(aid, fam, saved, fresh, rej, now_iso, used, log, agent_ran=False):
     out, taken = [], set()
     for row in sorted(fresh, key=lambda r: (r["from"], r["src"])):
         best = None
@@ -1579,11 +1662,16 @@ def _merge_fam(aid, fam, saved, fresh, rej, now_iso, used, log):
                             "v_new": row["v"]})
             r.update({k: row.get(k) for k in ("from", "v", "days", "sums", "src", "ep", "act")})
             r["gone"] = None
+            if agent_ran:
+                _ag_mark(r, row.get("ag"), log, now_iso, aid, fam)
         else:
             r = dict(row, id=_lv_id(aid, fam, row["src"], row["from"], used), seen=now_iso, restated=[], gone=None)
+            r.pop("ag", None)
             used.add(r["id"])
             log.append({"at": now_iso, "app": aid, "fam": fam, "id": r["id"], "what": "new", "v_old": None,
                         "v_new": row["v"]})
+            if agent_ran:
+                _ag_mark(r, row.get("ag"), log, now_iso, aid, fam)
         if row["src"] == "alarm":
             r["to"] = row.get("to")
         out.append(r)
@@ -1591,6 +1679,8 @@ def _merge_fam(aid, fam, saved, fresh, rej, now_iso, used, log):
         if j in taken:
             continue
         r = dict(r)
+        if agent_ran:
+            r.pop("ag", None)                            # a mark the agent no longer gives (when it did not run: kept)
         if not r.get("gone") and r.get("id") not in rej:
             r["gone"] = now_iso
             log.append({"at": now_iso, "app": aid, "fam": fam, "id": r["id"], "what": "gone", "v_old": r.get("v"),
@@ -1602,8 +1692,8 @@ def _merge_fam(aid, fam, saved, fresh, rej, now_iso, used, log):
         if r["rejected"] and not was:
             log.append({"at": now_iso, "app": aid, "fam": fam, "id": r["id"], "what": "rejected", "v_old": r.get("v"),
                         "v_new": None})
-    live = sorted((r for r in out if r["src"] != "alarm" and not r.get("gone") and not r.get("rejected")),
-                  key=lambda r: r["from"])
+    live = sorted((r for r in out if r["src"] != "alarm" and not r.get("gone") and not r.get("rejected")
+                   and not (agent_ran and (r.get("ag") or {}).get("st") in MARKED)), key=lambda r: r["from"])
     for i, r in enumerate(live):                         # a resting level holds until the next one forms
         r["to"] = (_d(live[i + 1]["from"]) - timedelta(days=1)).isoformat() if i + 1 < len(live) else None
     out.sort(key=lambda r: (r["from"], r["src"], r["id"]))
@@ -1612,14 +1702,19 @@ def _merge_fam(aid, fam, saved, fresh, rej, now_iso, used, log):
     return out
 
 
-def ship_levels(led, aid):
+def ship_levels(led, aid, agent_on=False):
     """The app's level history as the page reads it: {fam: [row, newest first]} with a status word per row — now (the
     level in force: the open alarm's baseline, else the resting level), rest (the resting level while an alarm is
-    open), earlier, rejected, gone."""
+    open), earlier, rejected, gone; agent_on (the agent part ran): blocked / hold / reverted (rows the agent world
+    no longer makes: never the level in force) and each row's "ag" mark."""
     out = {}
+
+    def mk(r):
+        return (r.get("ag") or {}).get("st") if agent_on else None
     for fam, lst in sorted(((led.get("apps") or {}).get(aid) or {}).items()):
         open_alarm = any(r["src"] == "alarm" and r.get("to") is None and not r.get("gone") for r in lst)
-        live = [r for r in lst if r["src"] != "alarm" and not r.get("gone") and not r.get("rejected")]
+        live = [r for r in lst if r["src"] != "alarm" and not r.get("gone") and not r.get("rejected")
+                and mk(r) not in MARKED]
         last = max(live, key=lambda r: r["from"]) if live else None
         rows = []
         for r in lst:
@@ -1627,6 +1722,8 @@ def ship_levels(led, aid):
                 st = "rejected"
             elif r.get("gone"):
                 st = "gone"
+            elif mk(r) in MARKED:
+                st = mk(r)
             elif r["src"] == "alarm":
                 st = "now" if r.get("to") is None else "earlier"
             elif r is last:
@@ -1638,17 +1735,23 @@ def ship_levels(led, aid):
                          "sums": r.get("sums"), "src": r["src"], "ep": r.get("ep"), "act": r.get("act"), "st": st,
                          "seen": r.get("seen"), "rs": rs[-1] if rs else None, "gone": r.get("gone"),
                          "rejected": r.get("rejected")})
+            if agent_on:
+                m = r.get("ag")
+                rows[-1]["ag"] = {k: m.get(k) for k in ("st", "dec", "short", "cause", "next")} if m else None
         rows.sort(key=lambda r: (r["from"], r["src"] != "alarm", r["id"]), reverse=True)
         out[fam] = rows
     return out
 
 
-def levels_run(ents, data_dir, t, now):
+def levels_run(ents, data_dir, t, now, extra=None):
     """The replay with the owner's levels → (engine result, the levels part or None). Any failure of the levels part
     prints "cpi levels skipped: <ErrorType>" and gives the automatic replay (the tab stays). A history file that cannot
     be read is never overwritten and ships no history, but it does not stop the owner's levels: every action that
     needs no saved level (set, accept, auto, undo) is resolved against no history and still applies; a rollback /
-    reject names a saved level and is listed bad (NoLedger). The part then has "ledger": None (nothing to save)."""
+    reject names a saved level and is listed bad (NoLedger). The part then has "ledger": None (nothing to save).
+    With extra (the build's inputs) and P_PROD levels.agent mode "on", the level agent runs on the history (agent_run):
+    the result is then the agent world; any failure prints "cpi agent skipped: <ErrorType>" (no history: NoLedger)
+    and ships the replay without it, the saved agent block written back unchanged (a timeout: with its new asks)."""
     ts = t.isoformat()
     apps_e = {e.id: e for e in ents if e.kind == "app"}
     try:
@@ -1673,12 +1776,1053 @@ def levels_run(ents, data_dir, t, now):
             raise
         print("cpi levels skipped: %s" % type(e).__name__, file=sys.stderr)
         return CA.run(ents, CA.P_PROD, ts), None
+    res0, part = res, None
+    if extra is not None and agent_cfg().get("mode") == "on":     # mode "off": no agent code runs at all
+        if led is None:
+            print("cpi agent skipped: NoLedger", file=sys.stderr)
+        else:
+            extra["bt"] = load_backtest(data_dir)
+            try:
+                res, part = agent_run(ents, res0, owner, la, led, t, now, extra)
+            except AgentTimeout as e:
+                print("cpi agent skipped: AgentTimeout", file=sys.stderr)
+                res, part = res0, {"blk": e.blk, "ran": False}
+            except Exception as e:
+                print("cpi agent skipped: %s" % type(e).__name__, file=sys.stderr)
+                res, part = res0, None
+    if extra is not None:
+        for k in ("geo", "cd", "names"):
+            extra.pop(k, None)
     try:
-        new, props = merge_ledger(led if led is not None else _new_ledger(), res, apps_e, rej, now)
+        ran = part is not None and part.get("ran")
+        base = led if led is not None else _new_ledger()
+        new, props = merge_ledger(base, res, apps_e, rej, now, agent=part if ran else None)
+        if ran:
+            try:
+                part["finish"](new)
+            except Exception as e:                       # the agent's last step failed: the replay without it
+                print("cpi agent skipped: %s" % type(e).__name__, file=sys.stderr)
+                res, part = res0, None
+                new, props = merge_ledger(base, res, apps_e, rej, now)
+        elif part is not None and part.get("blk") is not None:
+            new["agent"] = part["blk"]                   # a timeout: the asks made so far are kept
     except Exception as e:
         print("cpi levels skipped: %s" % type(e).__name__, file=sys.stderr)
-        return res, None
-    return res, {"ledger": new if led is not None else None, "props": props, "la": la, "seen": seen}
+        return res0, None
+    return res, {"ledger": new if led is not None else None, "props": props, "la": la, "seen": seen,
+                 "agent": part if (part is not None and part.get("ran")) else None}
+
+
+# ── the level agent (engine.level_agent): the owner's questions answered without a tap ──────────────────────────────
+
+AG_V = 1
+AG_MAX_BYTES = 2000000    # the agent block of the history file: past this, the oldest asks lose their rule inputs
+NET_FAMS = ("CPI", "ECPM", "GAP", "IPU", "SPEND")     # the engine's own settles the revert net watches
+MARKED = ("blocked", "hold", "reverted")               # level rows the agent world no longer produces, kept visible
+BT_FILE = "agent_backtest.json"                        # data/cpi/: the backtest numbers (private repo, read only)
+_clock = time.monotonic                                # the agent step's budget clock (tests replace it)
+
+
+class AgentTimeout(Exception):
+    """The agent step ran past budget_s: the asks frozen so far are kept, nothing of this build is applied."""
+
+    def __init__(self, blk=None):
+        super().__init__("budget")
+        self.blk = blk
+
+
+class AgentMoneyError(Exception):
+    """An agent acceptance on a money family (never made: the agent never lowers a money level)."""
+
+
+def agent_cfg():
+    return CA.P_PROD["levels"]["agent"]
+
+
+def _ag_id(pre, key, used):
+    k = 0
+    while True:
+        x = pre + "-" + hashlib.sha1(("%s|%d" % (key, k)).encode("utf-8")).hexdigest()[:10]
+        if x not in used:
+            return x
+        k += 1
+
+
+def _new_block(ts, now_iso, cfg):
+    return {"v": AG_V, "rule": LA.RULE, "th": LA.th_sha(cfg), "first_t": ts, "seen": now_iso,
+            "trial": {"st": "trial", "since": ts, "why": "start", "exit": None, "log": [[ts, "trial", "start"]]},
+            "parity": {"checked": 0, "bad": 0, "last_bad": None},
+            "vintage": {"done7": 0, "done28": 0, "flips": 0, "accept_flips": 0, "err_max": None, "err_f": None},
+            "rows": [], "net": []}
+
+
+def _check_block(b):
+    """The saved agent block as this build can use it, else ValueError (the agent step is skipped, the block kept)."""
+    bad = ValueError("agent")
+    if not isinstance(b, dict) or b.get("v") != AG_V or b.get("rule") != LA.RULE or not _is_day(b.get("first_t")):
+        raise bad
+    for k, kind in (("rows", list), ("net", list), ("trial", dict), ("parity", dict), ("vintage", dict)):
+        if not isinstance(b.get(k), kind):
+            raise bad
+    tr = b["trial"]
+    if tr.get("st") not in ("trial", "live") or not _is_day(tr.get("since")) or not isinstance(tr.get("log"), list):
+        raise bad
+    for r in b["rows"]:
+        if not (isinstance(r, dict) and isinstance(r.get("id"), str) and isinstance(r.get("app"), str)
+                and r.get("fam") in CA.FAMILIES and r.get("why") in ("money", "open", "settle", "revert")
+                and isinstance(r.get("ep"), dict) and _is_day(r["ep"].get("opened")) and _is_day(r["ep"].get("c"))
+                and isinstance(r.get("asks"), list) and isinstance(r.get("applied"), dict)):
+            raise bad
+        for a in r["asks"]:
+            if not (isinstance(a, dict) and _is_day(a.get("d")) and _is_day(a.get("t"))
+                    and a.get("dec") in ("accept", "keep", "wait")):
+                raise bad
+    for x in b["net"]:
+        if not (isinstance(x, dict) and isinstance(x.get("id"), str) and _is_day(x.get("acc"))
+                and isinstance(x.get("app"), str) and isinstance(x.get("ep"), dict)):
+            raise bad
+    return b
+
+
+def _pin_on(prims, d):
+    """The owner's pin in force on day d (ISO) among one family's primitives, else None."""
+    cur = None
+    for a in sorted((a for a in prims or () if a.get("day")), key=lambda a: a["day"]):
+        if a["day"] > d:
+            break
+        if a["act"] == "pin":
+            cur = a
+        elif a["act"] == "auto":
+            cur = None
+    return cur
+
+
+def _near(a, b, k=MATCH_DAYS):
+    return abs((_d(a) - _d(b)).days) <= k
+
+
+def _cty_ents(aid, extra):
+    """Every geo country of the app as an engine entity, built exactly as entities() builds a selected one (the
+    agent's country tests read every candidate as of the ask day, not the file's top 12)."""
+    D = extra["D"]
+    cd = (extra.get("cd") or {}).get((extra.get("names") or {}).get(aid)) or {}
+    out = []
+    for cc, c in sorted(((extra.get("geo") or {}).get(aid) or {}).items()):
+        lo = _lead(c["sp_usd"])
+        if lo is None:
+            continue
+        s = {"sp_usd": c["sp_usd"], "sp_inr": c["sp_inr"], "inst": c["dl"]}
+        rv, im = _cty_admob(D, cd.get(cc))
+        if im and any(im):
+            s["rev"], s["imp"] = rv, im
+        out.append(_ent("country", aid + "|" + cc, aid, cc, D, s, lo))
+    return out
+
+
+def splice(res0, runs, ents):
+    """A NEW engine result: res0 with the app entities of runs ({app id: that app's own replay}) replaced — its
+    episodes (in ents order, each entity's own order kept) and its normal / healthy / state / levels / proposals.
+    Countries and campaigns are untouched by app primitives; res0 is never modified."""
+    by = {}
+    for ep in res0["episodes"]:
+        by.setdefault((ep["kind"], ep["id"]), []).append(ep)
+    for aid, r in runs.items():
+        by[("app", aid)] = [ep for ep in r["episodes"] if ep["kind"] == "app" and ep["id"] == aid]
+    eps, done = [], set()
+    for e in ents:
+        k = (e.kind, e.id)
+        if k not in done:
+            done.add(k)
+            eps.extend(by.get(k, []))
+    out = {"episodes": eps}
+    for key in ("normal", "healthy", "state", "levels", "proposals"):
+        if key not in res0:
+            continue
+        d = dict(res0[key])
+        for aid, r in runs.items():
+            if ("app", aid) in (r.get(key) or {}):
+                d[("app", aid)] = r[key][("app", aid)]
+        out[key] = d
+    return out
+
+
+class _Agent:
+    """One build's agent step (agent_run): the questions of the agent world, their frozen answers, the primitives
+    they make, the revert net, the trial and the checks of every stored answer."""
+
+    def __init__(self, ents, res0, owner, la, blk, t, now, extra, cfg):
+        self.ents, self.res0, self.owner, self.la, self.blk, self.cfg = ents, res0, owner or {}, la or {}, blk, cfg
+        self.t, self.ts, self.now_iso, self.extra = t, t.isoformat(), gu._now_iso(now), extra
+        self.start = _clock()
+        self.apps = {e.id: e for e in ents if e.kind == "app"}
+        self.order = [e.id for e in ents if e.kind == "app"]
+        self.pos = {a: i for i, a in enumerate(self.order)}
+        self.camps = {}
+        for e in ents:
+            if e.kind == "camp":
+                self.camps.setdefault(e.app, []).append(e)
+        self._ctys, self._ser = {}, {}
+        self.th = LA.th_sha(cfg)
+        self.rows = blk["rows"]
+        self.used = {r["id"] for r in self.rows} | {x["id"] for x in blk["net"]}
+        self.n_asks, self.thin = 0, False
+        self.prims, self.runs = {}, {}
+        self.ship_data, self.board = None, None
+        self.set_world(res0)
+
+    def tick(self):
+        if _clock() - self.start > self.cfg["budget_s"]:
+            raise AgentTimeout()
+
+    def ctys(self, aid):
+        if aid not in self._ctys:
+            self._ctys[aid] = _cty_ents(aid, self.extra)
+        return self._ctys[aid]
+
+    def others(self, aid):
+        return [self.apps[x] for x in self.order if x != aid]
+
+    def full_ser(self, aid):
+        """The app's whole series to t (the revert checks and the verdicts read matured data)."""
+        if aid not in self._ser:
+            e = self.apps[aid]
+            self._ser[aid] = CA._Ser(e, CA._ix(e.day0, self.ts) + 1, CA.P_PROD)
+        return self._ser[aid]
+
+    # ── the owner (D-i: the owner's action wins from its day; a held family is never asked) ──
+    def pin(self, aid, fam, d):
+        return _pin_on(self.owner.get((aid, fam)), d)
+
+    def oveto(self, aid, fam, opened):
+        return any(a.get("act") == "veto" and a.get("ep_open") and _near(a["ep_open"], opened)
+                   for a in self.owner.get((aid, fam)) or ())
+
+    def held(self, aid, fam):
+        if self.pin(aid, fam, self.ts) is not None:
+            return True
+        if any(ep["closed"] is None and self.oveto(aid, fam, ep["opened"]) for ep in self.eps(aid, fam)):
+            return True
+        return any(p["fam"] == fam and p["why"] == "held"
+                   for p in (self.world.get("proposals") or {}).get(("app", aid)) or [])
+
+    def ovr(self, r):
+        """The earliest owner action on the row's app × family after the row was first seen (an undone one is gone)."""
+        hit = [x for x in self.la.get(r["app"]) or [] if x.get("fam") == r["fam"] and x.get("st") == "applied"
+               and x.get("act") in ("set", "rollback", "reject", "accept") and str(x.get("at")) > r["seen"]]
+        if not hit:
+            return None
+        x = min(hit, key=lambda z: (str(z["at"]), str(z.get("id"))))
+        return {"id": x.get("id"), "at": x["at"], "act": x["act"], "from": x.get("from")}
+
+    # ── the agent world ──
+    def set_world(self, world):
+        self.world = world
+        self._by = {}
+        for ep in world["episodes"]:
+            if ep["kind"] == "app":
+                self._by.setdefault(ep["id"], []).append(ep)
+
+    def eps(self, aid, fam):
+        return [ep for ep in self._by.get(aid, []) if ep["fam"] == fam]
+
+    def match(self, aid, fam, opened):
+        best = None
+        for ep in self.eps(aid, fam):
+            gap = abs((_d(ep["opened"]) - _d(opened)).days)
+            if gap <= MATCH_DAYS and (best is None or gap < best[0]):
+                best = (gap, ep)
+        return best[1] if best else None
+
+    def find(self, aid, fam, ep):
+        """The decision row of this world episode: the nearest row (±7 days) whose own nearest episode it is."""
+        cand = sorted(((abs((_d(r["ep"]["opened"]) - _d(ep["opened"])).days), i) for i, r in enumerate(self.rows)
+                       if r["app"] == aid and r["fam"] == fam), key=lambda z: z)
+        for gap, i in cand:
+            if gap <= MATCH_DAYS and self.match(aid, fam, self.rows[i]["ep"]["opened"]) is ep:
+                return self.rows[i]
+        return None
+
+    def derive_prims(self):
+        """The rows → the engine primitives: agent_veto for a blocked / on-hold settle and every revert, agent for an
+        applied accept that is not reverted (the owner's pin span or veto drops it: the owner wins)."""
+        out = {}
+        for r in self.rows:
+            aid, fam, op = r["app"], r["fam"], r["ep"]["opened"]
+            if aid not in self.apps:
+                continue
+            ap = r.get("applied") or {}
+            lst = out.setdefault((aid, fam), [])
+            if ap.get("veto") or r.get("rev"):
+                lst.append({"act": "agent_veto", "ep_open": op, "id": r["id"]})
+            acc = ap.get("accept")
+            if not acc or r.get("rev"):
+                continue
+            if fam in CA.MONEY_FAMS:
+                raise AgentMoneyError(fam)                 # the agent never lowers a money level
+            if self.pin(aid, fam, acc["day"]) is not None or self.oveto(aid, fam, op):
+                continue
+            m = _measured(self.apps[aid], fam, acc["days"])
+            if m is None or not m["v"] > 0:
+                if not self.thin:
+                    self.thin = True
+                    print("cpi agent decision skipped: ThinLevel", file=sys.stderr)
+                continue
+            lst.append({"act": "agent", "day": acc["day"], "days": list(acc["days"]), "value": m["v"], "ep_open": op,
+                        "id": r["id"]})
+        return {k: v for k, v in out.items() if v}
+
+    def owner_of(self, aid, prims):
+        keys = sorted({k for k in self.owner if k[0] == aid} | {k for k in prims if k[0] == aid})
+        return {k: list(self.owner.get(k) or []) + list(prims.get(k) or []) for k in keys}
+
+    def update(self, prims):
+        """Replay the apps whose primitives changed (each app alone: app primitives touch nothing else)."""
+        ids = sorted({k[0] for k in set(prims) | set(self.prims) if prims.get(k) != self.prims.get(k)},
+                     key=lambda a: self.pos.get(a, 10 ** 6))
+        for aid in ids:
+            self.tick()
+            if any(k[0] == aid for k in prims):
+                self.runs[aid] = CA.run([self.apps[aid]], CA.P_PROD, self.ts, owner=self.owner_of(aid, prims))
+            else:
+                self.runs.pop(aid, None)
+        self.prims = prims
+        if ids:
+            self.set_world(splice(self.res0, self.runs, self.ents))
+        return ids
+
+    def sync(self):
+        """Each row follows its episode in the agent world (opened / c); it ends when that episode closed or is gone."""
+        for r in self.rows:
+            if r["app"] not in self.apps:
+                continue
+            ep = self.match(r["app"], r["fam"], r["ep"]["opened"])
+            if ep is None:
+                end = {"t": self.ts, "why": "gone"}
+            else:
+                r["ep"] = {"opened": ep["opened"], "c": ep["c"]}
+                end = None if ep["closed"] is None else {"t": self.ts, "why": ep["why"]}
+            old = r.get("end")
+            if end is None or not (old and old.get("why") == end["why"]):
+                r["end"] = end
+
+
+    # ── questions and frozen answers (D-d: first day, then the weekly phase; a missed day asks on the next build) ──
+    def due(self, r):
+        return (not r.get("rev") and r.get("end") is None and r.get("next") is not None and r["next"] <= self.ts
+                and (not r["asks"] or r["asks"][-1]["d"] < self.ts))
+
+    def questions(self):
+        """Due questions in the order they are answered: proposals as of t, the CPI / GAP settles in force as of their
+        settle day (oldest first), then the blocked / on-hold settles asked again as of t. A held family is never
+        asked: its due rows wait for the weekly phase after the hold ends."""
+        q1, q2, q3 = [], [], []
+        for aid in self.order:
+            for p in (self.world.get("proposals") or {}).get(("app", aid)) or []:
+                if p["why"] not in ("money", "open"):
+                    continue
+                ep = self.match(aid, p["fam"], p["opened"])
+                if ep is None or ep["closed"] is not None:
+                    continue
+                r = self.find(aid, p["fam"], ep)
+                if self.held(aid, p["fam"]):
+                    if r is not None and self.due(r):
+                        r["next"] = LA.next_phase(self.ts)
+                    continue
+                if r is None:
+                    q1.append(("new", aid, p["fam"], ep, p, None))
+                elif self.due(r):
+                    q1.append(("row", aid, p["fam"], ep, p, r))
+        fams = set(self.cfg["settle_fams"])
+        for aid in self.order:
+            lv = (self.world.get("levels") or {}).get(("app", aid)) or {}
+            for ep in self._by.get(aid, []):
+                if ep["fam"] not in fams or ep["why"] != "settled":
+                    continue
+                rows = lv.get(ep["fam"]) or []
+                last = rows[-1] if rows else None
+                if not last or last["src"] != "accepted" or (last.get("ep") or {}).get("opened") != ep["opened"]:
+                    continue                                   # its level was replaced since: history, never asked
+                r = self.find(aid, ep["fam"], ep)
+                if r is not None and (r.get("rev") or _settle_ask(r) is not None):
+                    continue                                   # answered (or reverted: the owner's only)
+                if self.held(aid, ep["fam"]):
+                    continue
+                q2.append(("settle", aid, ep["fam"], ep, last, r))
+        q2.sort(key=lambda q: (q[3]["closed"], self.pos[q[1]], q[2]))
+        asked = {q[5]["id"] for q in q1 if q[5] is not None}
+        for r in self.rows:
+            if r["id"] in asked or r["app"] not in self.apps or not self.due(r):
+                continue
+            if not r["applied"].get("veto") or r["applied"].get("accept"):
+                continue
+            ep = self.match(r["app"], r["fam"], r["ep"]["opened"])
+            if ep is None or ep["closed"] is not None:
+                continue
+            if self.held(r["app"], r["fam"]):
+                r["next"] = LA.next_phase(self.ts)
+                continue
+            q3.append(("row", r["app"], r["fam"], ep, None, r))
+        q3.sort(key=lambda q: (q[5]["next"], self.pos[q[1]], q[2]))
+        return q1 + q2 + q3
+
+    def ask(self, q):
+        """One frozen answer: the evidence as of its day, the market, the rule."""
+        kind, aid, fam, ep, x, r = q
+        sh = CA.FAMILIES[fam]["shift"]
+        if kind == "settle":
+            d, days, why, on, origin = ep["closed"], list(x["days"]), "settle", "settle", "s"
+        elif kind == "new":
+            d, days, why, on, origin = self.ts, list(x["days"]), x["why"], "proposal", "p"
+        else:
+            d, why, origin = self.ts, r["why"], None
+            on = "reask" if (r["why"] == "settle" or r["applied"].get("veto")) else "proposal"
+            days = list(x["days"]) if x else [(self.t - timedelta(days=sh + 27)).isoformat(),
+                                              (self.t - timedelta(days=sh)).isoformat()]
+        self.tick()
+        app = self.apps[aid]
+        e = {"fam": fam, "opened": ep["opened"], "c": ep["c"], "base": ep["base"], "bspan": ep.get("bspan"),
+             "base_src": ep.get("base_src")}
+        ri = LA.evidence(app, self.camps.get(aid, []), self.ctys(aid), e, days, d, why, CA.P_PROD)
+        mkt = LA.market(ri, app, self.others(aid))
+        fl = {"reverted": bool(r is not None and r.get("rev"))}
+        out = LA.decide(ri, mkt, self.cfg, fl)
+        if r is None:
+            r = {"id": _ag_id("D", "%s|%s|%s|%s" % (aid, fam, ep["opened"], origin), self.used), "app": aid,
+                 "fam": fam, "why": why, "ep": {"opened": ep["opened"], "c": ep["c"]}, "seen": self.now_iso,
+                 "first": d, "last": d, "next": None, "n": 0, "dec": None, "branch": None, "part": None,
+                 "cause": None, "short": None, "asks": [], "applied": {"veto": None, "accept": None}, "level": None,
+                 "chk": None, "vd": "pending", "ve": "pending", "rev": None, "end": None}
+            self.used.add(r["id"])
+            self.rows.append(r)
+        trial = on == "proposal" and out["decision"] == "accept" and self.blk["trial"]["st"] == "trial"
+        sha = hashlib.sha1(json.dumps([ri, mkt], sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        a = {"d": d, "t": self.ts, "at": self.now_iso, "on": on, "days": days, "dec": out["decision"],
+             "branch": out["branch"], "part": out["part"], "cause": out["cause"], "short": out["short"],
+             "trial": trial, "th": self.th, "fl": fl, "sha": sha[:12], "ri": ri, "mkt": mkt,
+             "k": LA.key_numbers(ri, mkt, out), "vin": {"7": None, "28": None}}
+        r["asks"].append(a)
+        r["last"], r["n"] = d, len(r["asks"])
+        for k in ("dec", "branch", "part", "cause", "short"):
+            r[k] = a[k]
+        r["next"] = None if (a["dec"] == "accept" and not trial) else LA.next_phase(d)
+        self.n_asks += 1
+        return r
+
+    def derive(self):
+        """The frozen answers → what the rows apply (once, from the build day that first applies it): a settle-day
+        keep / wait vetoes the engine's settle (for good); a later accept of a settle, or a proposal accept out of the
+        trial, accepts the new level on its ask day. A money family is never accepted."""
+        for r in self.rows:
+            ap = r["applied"]
+            if r.get("rev") or not r["asks"] or r["why"] == "revert":
+                continue
+            sa = _settle_ask(r)
+            if sa is not None and ap.get("veto") is None and sa["dec"] in ("keep", "wait"):
+                ap["veto"] = {"since_t": self.ts}
+            if sa is not None:                                 # after a blocked settle: any later accept applies
+                later = r["asks"][r["asks"].index(sa) + 1:] if sa["dec"] != "accept" else []
+            else:
+                later = [a for a in r["asks"] if not a.get("trial")]
+            if ap.get("accept") is None and r["fam"] not in CA.MONEY_FAMS:
+                a = next((a for a in later if a["dec"] == "accept"), None)
+                if a is not None:
+                    ap["accept"] = {"day": a["d"], "days": list(a["days"]), "since_t": self.ts}
+
+
+    # ── the revert net (D-b): every acceptance watched 84 days; the old level back → the acceptance reverted ──
+    def _net_entry(self, aid, ep):
+        acc = ep["closed"]
+        for x in self.blk["net"]:
+            if x["app"] == aid and x.get("fam") == ep["fam"] and _near(x["ep"]["opened"], ep["opened"]) \
+                    and _near(x["acc"], acc):
+                return x
+        own = self.find(aid, ep["fam"], ep)
+        x = {"id": _ag_id("N", "%s|%s|%s|%s" % (aid, ep["fam"], ep["opened"], acc), self.used), "app": aid,
+             "fam": ep["fam"], "ep": {"opened": ep["opened"], "c": ep["c"]}, "acc": acc,
+             "src": "agent" if ep["why"] == "agent" else "settle", "row": own["id"] if own else None,
+             "old": ep["base"], "r2": [], "r3": None, "fired": None, "done": False}
+        self.used.add(x["id"])
+        self.blk["net"].append(x)
+        return x
+
+    def net(self):
+        """R2: weekly 28-day values from acceptance + 28 to + 84, two in a row back within one band of the OLD level;
+        R3: the alarm replayed with the acceptance vetoed closes 'recovered' within 84 days. The first to fire
+        reverts: the acceptance becomes an agent_veto (the alarm continues from its own c) and the row is wrong.
+        → True when anything fired."""
+        nc = self.cfg["net"]
+        fired = False
+        for aid in self.order:
+            for ep in list(self._by.get(aid, [])):
+                if ep["closed"] is None or not (ep["why"] == "agent" or
+                                                (ep["why"] == "settled" and ep["fam"] in NET_FAMS)):
+                    continue
+                acc = ep["closed"]
+                age = (self.t - _d(acc)).days
+                if age < 0 or age > nc["days"]:
+                    continue
+                x = self._net_entry(aid, ep)
+                if x["done"] or x.get("fired"):
+                    continue
+                self.tick()
+                fam, e = ep["fam"], self.apps[aid]
+                sh = CA.FAMILIES[fam]["shift"]
+                ser = self.full_ser(aid)
+                ia = CA._ix(e.day0, acc)
+                checks = []
+                for k in range(nc["from"], min(nc["days"], age) + 1, nc["every"]):
+                    v = ser.value(fam, ia + k - sh - 27, ia + k - sh)
+                    checks.append([k, LA.fin(v), LA.back_at_old(fam, v, x["old"], CA.P_PROD)])
+                x["r2"] = checks
+                k2 = LA.revert_due([(k, b) for k, _, b in checks], self.cfg)
+                prims = {k: list(v) for k, v in self.prims.items() if k[0] == aid}
+                lst = [p for p in prims.get((aid, fam), []) if not (p["act"] == "agent"
+                                                                    and _near(p["ep_open"], ep["opened"]))]
+                lst.append({"act": "agent_veto", "ep_open": ep["opened"], "id": "shadow"})
+                prims[(aid, fam)] = lst
+                sr = CA.run([e], CA.P_PROD, self.ts, owner=self.owner_of(aid, prims))
+                best = None
+                for y in sr["episodes"]:
+                    if y["kind"] == "app" and y["fam"] == fam:
+                        gap = abs((_d(y["opened"]) - _d(ep["opened"])).days)
+                        if gap <= MATCH_DAYS and (best is None or gap < best[0]):
+                            best = (gap, y)
+                sx = best[1] if best else None
+                x["r3"] = {"t": self.ts, "closed": sx["closed"] if sx else None, "why": sx["why"] if sx else None}
+                hit = []
+                if sx and sx["why"] == "recovered" and acc <= sx["closed"] <= (_d(acc) + timedelta(
+                        days=nc["days"])).isoformat():
+                    hit.append((sx["closed"], 0, "r3"))
+                if k2 is not None:
+                    hit.append(((_d(acc) + timedelta(days=k2)).isoformat(), 1, "r2"))
+                if not hit:
+                    continue
+                day, _, by = min(hit)
+                i = CA._ix(e.day0, day) - sh
+                v = ser.value(fam, i - 27, i) if i - 27 >= 0 else None
+                rev = {"by": by, "day": day, "t": self.ts, "at": self.now_iso, "v": LA.fin(v), "old": x["old"]}
+                row = next((r for r in self.rows if r["id"] == x["row"]), None) if x["row"] else None
+                if row is None:
+                    row = self._revert_row(aid, ep, rev)
+                    x["row"] = row["id"]
+                row["rev"] = rev
+                row["vd"] = row["ve"] = "wrong"
+                x["fired"], x["done"] = {"by": by, "day": day}, True
+                fired = True
+        for x in self.blk["net"]:
+            if not x["done"] and (self.t - _d(x["acc"])).days > nc["days"]:
+                x["done"] = True
+        return fired
+
+    def _revert_row(self, aid, ep, rev):
+        fam = ep["fam"]
+        if rev["by"] == "r3":
+            cause = "back at the old level: the alarm came back to %s within %d days of the acceptance — reverted" % (
+                _fmt(fam, rev["old"]), self.cfg["net"]["days"])
+        else:
+            cause = "back at the old level: two 28-day checks in a row within one band of %s (last %s) — reverted" % (
+                _fmt(fam, rev["old"]), _fmt(fam, rev["v"]))
+        r = {"id": _ag_id("D", "%s|%s|%s|r" % (aid, fam, ep["opened"]), self.used), "app": aid, "fam": fam,
+             "why": "revert", "ep": {"opened": ep["opened"], "c": ep["c"]}, "seen": self.now_iso,
+             "first": rev["day"], "last": rev["day"], "next": None, "n": 0, "dec": "revert",
+             "branch": "revert_" + rev["by"], "part": None, "cause": cause, "short": "back at old level: reverted",
+             "asks": [], "applied": {"veto": None, "accept": None}, "level": None, "chk": None, "vd": "wrong",
+             "ve": "wrong", "rev": None, "end": None}
+        self.used.add(r["id"])
+        self.rows.append(r)
+        return r
+
+
+    # ── every stored answer checked again: parity (the same inputs give the same answer), vintage (the same day asked
+    #    again on matured data), the accept trial, the verdicts ──
+    def parity(self):
+        pr = self.blk["parity"]
+        n, bad = 0, False
+        for r in self.rows:
+            for a in r["asks"]:
+                if not a.get("ri") or a.get("mkt") is None or a.get("th") != self.th:
+                    continue
+                out = LA.decide(a["ri"], a["mkt"], self.cfg, a.get("fl") or {})
+                n += 1
+                if (out["decision"], out["branch"], out["part"], out["cause"]) != \
+                        (a["dec"], a["branch"], a.get("part"), a.get("cause")):
+                    pr["bad"] += 1
+                    bad = True
+        pr["checked"] += n
+        if bad:
+            pr["last_bad"] = self.ts
+        return bad
+
+    def vintage(self):
+        """Each ask with its rule inputs asked again 7 and 28 days after its build: the same day, episode and new
+        days on this build's data. → True when an accept / not-accept answer flipped."""
+        vt = self.blk["vintage"]
+        n, acc_flip = 0, False
+        for r in self.rows:
+            if r["app"] not in self.apps:
+                continue
+            for a in r["asks"]:
+                if not a.get("ri") or a.get("mkt") is None:
+                    continue
+                vin = a.setdefault("vin", {"7": None, "28": None})
+                for key, k in (("7", 7), ("28", 28)):
+                    if vin.get(key) is not None or (self.t - _d(a["t"])).days < k:
+                        continue
+                    if n >= self.cfg["max_asks"]:
+                        return acc_flip
+                    self.tick()
+                    ri0 = a["ri"]
+                    e = {"fam": ri0["fam"], "opened": ri0["ep"]["opened"], "c": ri0["ep"]["c"],
+                         "base": ri0["old"]["v"], "bspan": ri0["old"]["days"], "base_src": None}
+                    app = self.apps[r["app"]]
+                    ri = LA.evidence(app, self.camps.get(r["app"], []), self.ctys(r["app"]), e, ri0["new"]["days"],
+                                     ri0["d"], ri0["why"], CA.P_PROD)
+                    out = LA.decide(ri, LA.market(ri, app, self.others(r["app"])), self.cfg, a.get("fl") or {})
+                    err, f = _leaf_err(ri0, ri)
+                    x = {"t": self.ts, "dec": out["decision"], "branch": out["branch"],
+                         "flip": out["decision"] != a["dec"] or out["branch"] != a["branch"],
+                         "acc_flip": (a["dec"] == "accept") != (out["decision"] == "accept"), "err": err, "f": f}
+                    vin[key] = x
+                    n += 1
+                    vt["done" + key] += 1
+                    vt["flips"] += int(x["flip"])
+                    vt["accept_flips"] += int(x["acc_flip"])
+                    if err is not None and (vt["err_max"] is None or err > vt["err_max"]):
+                        vt["err_max"], vt["err_f"] = err, f
+                    acc_flip = acc_flip or x["acc_flip"]
+        return acc_flip
+
+    def trial(self, bad, flip):
+        """D-c: accepts of proposals stay a trial until ≥ 28 days since it (re)started, with no parity mismatch, no
+        accept flip and no rule change since, and ≥ 1 vintage re-ask at +28 done since; any of those three events
+        starts the trial again from this day."""
+        tr = self.blk["trial"]
+        why = None
+        if self.blk.get("th") != self.th:
+            why = "rule"
+            self.blk["th"] = self.th
+        elif bad:
+            why = "parity"
+        elif flip:
+            why = "vintage"
+        if why:
+            tr.update(st="trial", since=self.ts, why=why, exit=None)
+            tr["log"].append([self.ts, "trial", why])
+            return
+        if tr["st"] != "trial" or (self.t - _d(tr["since"])).days < self.cfg["trial"]["days"]:
+            return
+        done28 = any(((a.get("vin") or {}).get("28") or {}).get("t", "") >= tr["since"]
+                     for r in self.rows for a in r["asks"])
+        if done28:
+            tr.update(st="live", exit=self.ts)
+            tr["log"].append([self.ts, "live", "clean"])
+
+    def verdicts(self):
+        """§5.11: the 28-day values 28 / 56 / 84 days after the reference ask, final (then frozen) at + 84."""
+        for r in self.rows:
+            if r["app"] not in self.apps or (r.get("chk") or {}).get("final"):
+                continue
+            ref = self.ref_ask(r)
+            if ref is None:
+                continue
+            fam, e = r["fam"], self.apps[r["app"]]
+            sh = CA.FAMILIES[fam]["shift"]
+            ser = self.full_ser(r["app"])
+            p = ref["d"]
+            ip = CA._ix(e.day0, p)
+            vals = []
+            v = {}
+            for k in self.cfg["checks"]:
+                if (self.t - _d(p)).days < k:
+                    v[str(k)] = None
+                    continue
+                x = ser.value(fam, ip - sh + k - 27, ip - sh + k) if ip - sh + k - 27 >= 0 else None
+                v[str(k)] = x
+                vals.append((k, x))
+            final = (self.t - _d(p)).days >= max(self.cfg["checks"])
+            old, new = (ref.get("k") or {}).get("old"), (ref.get("k") or {}).get("new")
+            r["chk"] = {"p": p, "old": old, "new": new, "v": v, "final": final}
+            dec = "accept" if (r["applied"].get("accept") or self.passed(r)) else ref["dec"]
+            vd = LA.verdict(dec, LA.label(fam, old, new, vals, CA.P_PROD)) if final and old and new else (
+                "unclear" if final else "pending")
+            ep = self.match(r["app"], fam, r["ep"]["opened"])
+            back = bool(ep and ep["why"] == "recovered" and ep["closed"] and
+                        ep["closed"] <= (_d(p) + timedelta(days=max(self.cfg["checks"]))).isoformat())
+            if r.get("rev"):
+                vd = ve = "wrong"
+            elif dec == "accept":
+                ve = vd
+            else:
+                ve = "came_back" if back else vd
+            r["vd"], r["ve"] = vd, ve
+
+    def passed(self, r):
+        sa = _settle_ask(r)
+        return sa is not None and sa["dec"] == "accept"
+
+    def ref_ask(self, r):
+        """The verdict's reference: the applied accept's ask (or a passed settle's), else the row's first ask."""
+        acc = r["applied"].get("accept")
+        if acc:
+            return next((a for a in r["asks"] if a["d"] == acc["day"] and a["dec"] == "accept"), r["asks"][-1])
+        return r["asks"][0] if r["asks"] else None
+
+
+    # ── what the build keeps and ships ──
+    def status(self, r, held=None):
+        """The row's status word (first match): held · overridden · reverted · accepted · passed · closed · trial ·
+        blocked · hold · waiting · kept."""
+        held = self.held(r["app"], r["fam"]) if held is None else held
+        if held and r.get("end") is None and not r.get("rev"):
+            return "held"
+        if self.ovr(r):
+            return "overridden"
+        if r.get("rev"):
+            return "reverted"
+        if r["applied"].get("accept"):
+            return "accepted"
+        if self.passed(r):
+            return "passed"
+        if r.get("end") is not None:
+            return "closed"
+        if r["asks"] and r["asks"][-1].get("trial"):
+            return "trial"
+        if r["applied"].get("veto"):
+            return "blocked" if r["dec"] == "keep" else "hold"
+        return "waiting" if r["dec"] == "wait" else "kept"
+
+    def quiet(self):
+        """(app, fam, opened) → the build day an agent veto or revert first re-opened it (its older notices: seeded)."""
+        out = {}
+        for r in self.rows:
+            days = [x for x in ((r["applied"].get("veto") or {}).get("since_t"), (r.get("rev") or {}).get("t")) if x]
+            if days:
+                out[(r["app"], r["fam"], r["ep"]["opened"])] = max(days)
+        return out
+
+    def _res0_accepted(self, r):
+        rows = ((self.res0.get("levels") or {}).get(("app", r["app"])) or {}).get(r["fam"]) or []
+        return next((x for x in rows if x["src"] == "accepted" and (x.get("ep") or {}).get("opened")
+                     and _near(x["ep"]["opened"], r["ep"]["opened"])), None)
+
+    def marks(self):
+        """{(app, fam): {"tag": [(src, ep opened, mark)], "extra": [level rows the agent world no longer makes]}}."""
+        out = {}
+        for r in self.rows:
+            if r["app"] not in self.apps:
+                continue
+            m = out.setdefault((r["app"], r["fam"]), {"tag": [], "extra": []})
+            base = {"dec": r["id"], "short": r.get("short"), "cause": r.get("cause"), "next": r.get("next")}
+            acc = r["applied"].get("accept")
+            if self.passed(r) and not r.get("rev"):
+                m["tag"].append(("accepted", r["ep"]["opened"], dict(base, st="passed")))
+            if acc and not r.get("rev"):
+                m["tag"].append(("accepted_agent", r["ep"]["opened"], dict(base, st="agent")))
+            if r["applied"].get("veto"):
+                x = self._res0_accepted(r)
+                dec = (_settle_ask(r) or {}).get("dec") if acc else r["dec"]
+                if x is not None:
+                    st = "reverted" if (r.get("rev") and not acc) else ("blocked" if dec == "keep" else "hold")
+                    m["extra"].append(_lv_fresh(x, dict(base, st=st)))
+            elif r.get("rev") and not acc:                      # an engine settle reverted
+                x = self._res0_accepted(r)
+                if x is not None:
+                    m["extra"].append(_lv_fresh(x, dict(base, st="reverted")))
+            if acc and r.get("rev"):                            # an agent accept reverted: rebuilt from what it applied
+                mv = _measured(self.apps[r["app"]], r["fam"], acc["days"])
+                old = (self.ref_ask(r) or {}).get("k", {}).get("old")
+                if mv is not None and mv["v"] > 0:
+                    m["extra"].append({"from": acc["day"], "v": mv["v"], "days": list(acc["days"]),
+                                       "src": "accepted_agent", "ep": {"opened": r["ep"]["opened"], "old": old},
+                                       "act": r["id"], "ag": dict(base, st="reverted")})
+        return out
+
+    def finish(self, led):
+        """After the history merge: each row names its level row; the block goes into the history; the ship data."""
+        lid = {}
+        for fams in (led.get("apps") or {}).values():
+            for lst in fams.values():
+                for x in lst:
+                    m = x.get("ag") or {}
+                    if m.get("dec"):
+                        lid.setdefault(m["dec"], {})[m.get("st")] = x["id"]
+        for r in self.rows:
+            ids = lid.get(r["id"]) or {}
+            r["level"] = next((ids[k] for k in ("agent", "passed", "reverted", "blocked", "hold") if k in ids), None)
+        _ag_trim(self.blk, self.t, self.cfg)
+        led["agent"] = self.blk
+        self.ship_data = self.ship()
+
+    def ship(self):
+        apps, board = {}, {"accepted": 0, "right": 0, "wrong": 0, "unclear": 0, "pending": 0, "kept": 0, "waiting": 0,
+                           "trial": 0, "reverted": 0, "overridden": 0, "held": 0}
+        st_n = {"checked": 0, "passed": 0, "blocked": 0, "hold": 0, "later": 0}
+        for r in self.rows:
+            if r["app"] not in self.apps:
+                continue
+            held = self.held(r["app"], r["fam"])
+            st, ovr = self.status(r, held), self.ovr(r)
+            row = _ag_ship(self, r, st, ovr, held)
+            apps.setdefault(r["app"], []).append(row)
+            board["reverted"] += 1 if r.get("rev") else 0
+            if r["why"] in ("money", "open"):
+                if r["applied"].get("accept"):
+                    board["accepted"] += 1
+                    vd, ve = r.get("vd"), r.get("ve")
+                    k = "wrong" if "wrong" in (vd, ve) else ("unclear" if "unclear" in (vd, ve) else (
+                        "right" if vd == ve == "right" else "pending"))
+                    board[k] += 1
+                elif st == "trial":
+                    board["trial"] += 1
+                elif r["dec"] == "keep":
+                    board["kept"] += 1
+                elif r["dec"] == "wait":
+                    board["waiting"] += 1
+                board["overridden"] += 1 if ovr else 0
+                board["held"] += 1 if st == "held" else 0
+            if _settle_ask(r) is not None:
+                st_n["checked"] += 1
+                if self.passed(r):
+                    st_n["passed"] += 1
+                elif r["applied"].get("accept"):
+                    st_n["later"] += 1
+                elif r["applied"].get("veto"):
+                    st_n["blocked" if r["dec"] == "keep" else "hold"] += 1
+        out = {}
+        for aid, rows in apps.items():
+            rows.sort(key=lambda x: (x["_last"], x["id"]), reverse=True)
+            out[aid] = {"rows": rows, "tag": _ag_tag(rows, self.t)}
+        tr = self.blk["trial"]
+        vt = self.blk["vintage"]
+        self.board = {"v": 1, "mode": "on", "rule": LA.RULE, "th": self.th, "since": self.blk["first_t"], "ms": 0,
+                      "trial": {"st": tr["st"], "since": tr["since"], "day": (self.t - _d(tr["since"])).days,
+                                "need": self.cfg["trial"]["days"], "why": tr["why"], "exit": tr.get("exit")},
+                      "n": board, "settle": st_n,
+                      "parity": {"checked": self.blk["parity"]["checked"], "bad": self.blk["parity"]["bad"]},
+                      "vintage": {"done": vt["done7"] + vt["done28"], "flips": vt["flips"],
+                                  "accept_flips": vt["accept_flips"]},
+                      "bt": self.extra.get("bt")}
+        return out
+
+
+def _settle_ask(r):
+    """The row's answer to the engine's own settle of its episode (asked as of the settle day), else None."""
+    return next((a for a in r["asks"] if a.get("on") == "settle"), None)
+
+
+def _lv_fresh(x, mark):
+    """An engine level row → the history merge's fresh-row shape, with the agent's mark."""
+    return {"from": x["day"], "v": x["v"], "days": x["days"], "src": x["src"], "ep": x.get("ep"), "act": x.get("act"),
+            "ag": mark}
+
+
+def _ag_ship(ag, r, st, ovr, held):
+    """One decision row as the app file carries it (§6.3); "_last" (the newest activity) only sorts."""
+    asks = r["asks"]
+    h = []
+    for a in asks:
+        if h and (h[-1][3], h[-1][4], h[-1][5]) == (a["dec"], a["branch"], a.get("part")):
+            h[-1][1], h[-1][6] = a["d"], a.get("short")
+            h[-1][2] += 1
+        else:
+            h.append([a["d"], a["d"], 1, a["dec"], a["branch"], a.get("part"), a.get("short")])
+    h.reverse()
+    acc, rev = r["applied"].get("accept"), r.get("rev")
+    xp = None
+    if r["fam"] == "CPI" and st not in ("accepted", "passed") and asks:
+        ep = ag.match(r["app"], "CPI", r["ep"]["opened"])
+        if ep is not None and ep.get("base"):
+            e = ag.apps[r["app"]]
+            m = CA._ep_money(e, ag.full_ser(r["app"]), "CPI", CA._ix(e.day0, r["first"]),
+                             CA._ix(e.day0, ep["closed"] or ag.ts), ep["base"])
+            if m:
+                xp = {"inr": m["since_c_inr"], "usd": m["since_c_usd"], "from": r["first"]}
+    last = max(x for x in (r.get("last"), (rev or {}).get("day"), str((ovr or {}).get("at") or "")[:10],
+                           (acc or {}).get("day"), r.get("first")) if x)
+    return {"id": r["id"], "fam": r["fam"], "why": r["why"], "st": st, "dec": r["dec"], "branch": r["branch"],
+            "part": r["part"], "cause": r["cause"], "short": r["short"], "first": r["first"], "last": r["last"],
+            "next": r["next"], "n": r["n"], "ep": dict(r["ep"]),
+            "applied": {"day": acc["day"], "days": list(acc["days"])} if acc else None,
+            "trial": bool(asks and asks[-1].get("trial")), "level": r.get("level"), "h": h,
+            "k": dict(asks[-1]["k"]) if asks else None, "k0": dict(asks[0]["k"]) if asks else None,
+            "chk": copy.deepcopy(r.get("chk")), "vd": r.get("vd"), "ve": r.get("ve"),
+            "rev": {"by": rev["by"], "day": rev["day"]} if rev else None,
+            "ovr": {"at": ovr["at"], "act": ovr["act"]} if ovr else None, "held": bool(held),
+            "end": dict(r["end"]) if r.get("end") else None, "xp": xp, "_last": last}
+
+
+_TAG_RANK = {"reverted": 0, "accepted": 1, "trial": 2, "waiting": 3, "hold": 3, "kept": 4, "blocked": 4,
+             "overridden": 5, "held": 6}
+_STANDING = ("trial", "waiting", "hold", "kept", "blocked")
+
+
+def _ag_tag(rows, t):
+    """The list row's tag (§6.4) from the app's shipped rows (newest first)."""
+    cands = []
+    for x in rows:
+        st = x["st"]
+        if st not in _TAG_RANK:
+            continue
+        day = {"reverted": (x["rev"] or {}).get("day"), "accepted": (x["applied"] or {}).get("day"),
+               "overridden": str((x["ovr"] or {}).get("at") or "")[:10] or None}.get(st)
+        if st in ("waiting", "hold"):
+            day = x["next"]
+        if st in ("reverted", "accepted", "overridden") and (not day or (t - _d(day)).days > 28):
+            continue
+        cands.append((_TAG_RANK[st], x, day))
+    if not cands:
+        return None
+    _, best, day = min(cands, key=lambda z: z[0])
+    more = sum(1 for x in rows if x["st"] in _STANDING and x is not best)
+    return {"st": best["st"], "fam": best["fam"], "short": best["short"], "day": day, "more": more}
+
+
+def _leaves(x, path=""):
+    if isinstance(x, dict):
+        for k in sorted(x):
+            yield from _leaves(x[k], (path + "." + k) if path else k)
+    elif isinstance(x, list):
+        for i, v in enumerate(x):
+            yield from _leaves(v, "%s[%d]" % (path, i))
+    elif x is None or (isinstance(x, (int, float)) and not isinstance(x, bool)):
+        yield path, x
+
+
+def _leaf_err(a, b):
+    """The largest relative change between two rule inputs over their numeric leaves (absolute when the first is
+    ~0; a leaf known in one and not the other counts 1.0) → (that change, its path)."""
+    A, B = dict(_leaves(a)), dict(_leaves(b))
+    err, f = None, None
+    for p in sorted(set(A) | set(B)):
+        x, y = A.get(p), B.get(p)
+        if x is None and y is None:
+            continue
+        e = 1.0 if (x is None or y is None) else (abs(y - x) if abs(x) < 1e-9 else abs(y - x) / abs(x))
+        if err is None or e > err:
+            err, f = e, p
+    return LA.fin(err), f
+
+
+def _ag_trim(blk, t, cfg):
+    """Rule inputs stay on a row's first ask, every ask that changed the answer, the last 5 and the last keep_ri days;
+    past AG_MAX_BYTES the oldest asks lose theirs first (rows, asks and key numbers are never dropped)."""
+    since = (t - timedelta(days=cfg["keep_ri"])).isoformat()
+    for r in blk["rows"]:
+        asks = r["asks"]
+        for i, a in enumerate(asks):
+            changed = i == 0 or (a["dec"], a["branch"], a.get("part")) != \
+                (asks[i - 1]["dec"], asks[i - 1]["branch"], asks[i - 1].get("part"))
+            if not (changed or i >= len(asks) - 5 or a["t"] >= since):
+                a["ri"] = a["mkt"] = None
+    size = len(json.dumps(blk, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    if size <= AG_MAX_BYTES:
+        return
+    olds = sorted((a["t"], a["d"], i, j) for i, r in enumerate(blk["rows"]) for j, a in enumerate(r["asks"])
+                  if a.get("ri") is not None or a.get("mkt") is not None)
+    for _, _, i, j in olds:
+        a = blk["rows"][i]["asks"][j]
+        size -= len(json.dumps([a.get("ri"), a.get("mkt")], ensure_ascii=False, sort_keys=True,
+                               separators=(",", ":")).encode("utf-8")) - len("[null,null]")
+        a["ri"] = a["mkt"] = None
+        if size <= AG_MAX_BYTES:
+            break
+
+
+def _ag_undo(blk, ts, net0):
+    """A timeout: what this build applied or reverted is taken back (none of it shipped); its asks stay."""
+    keep = []
+    for r in blk["rows"]:
+        if r["why"] == "revert" and not r["asks"] and (r.get("rev") or {}).get("t") == ts:
+            continue
+        for k in ("veto", "accept"):
+            if (r["applied"].get(k) or {}).get("since_t") == ts:
+                r["applied"][k] = None
+        if (r.get("rev") or {}).get("t") == ts:
+            r["rev"] = None
+            r["vd"] = r["ve"] = "pending"
+        keep.append(r)
+    blk["rows"][:] = keep
+    blk["net"][:] = net0
+
+
+def backtest_path(data_dir):
+    return os.path.join(data_dir, STATE_DIR, BT_FILE)
+
+
+def load_backtest(data_dir):
+    """data/cpi/agent_backtest.json (the private repo, committed once by hand; read only) → the scoreboard's
+    backtest line, or None (absent; or bad: one "cpi agent backtest skipped: <Type>" line, the agent still runs)."""
+    path = backtest_path(data_dir)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            b = json.load(f)
+        keys = {"proposals": ("moments", "c1_accept", "c1_right", "c1_wrong", "accept"),
+                "settles": ("checked", "passed", "blocked", "hold", "level_held")}
+        if not isinstance(b, dict) or set(b) != {"v", "years", "proposals", "settles", "note"} or b["v"] != 1:
+            raise ValueError("backtest")
+        if not (_real(b["years"]) and 0 < b["years"] < 50):
+            raise ValueError("backtest")
+        for k, ks in keys.items():
+            x = b[k]
+            if not isinstance(x, dict) or set(x) != set(ks) or \
+                    any(not (isinstance(x[j], int) and not isinstance(x[j], bool) and x[j] >= 0) for j in ks):
+                raise ValueError("backtest")
+        n = b["note"]
+        if not isinstance(n, str) or len(n) > 200 or any(unicodedata.category(c) in ("Cc", "Cf") for c in n):
+            raise ValueError("backtest")
+        return copy.deepcopy(b)
+    except Exception as e:
+        print("cpi agent backtest skipped: %s" % type(e).__name__, file=sys.stderr)
+        return None
+
+
+def agent_run(ents, res0, owner, la, led, t, now, extra):
+    """The level agent's step (D-a … D-j) → (the agent world: the replay with the owner's and the agent's primitives,
+    the agent part). A. the saved block (validated: bad → ValueError) or a new one; B. the world from the frozen rows;
+    C. ≤ 3 passes: the due questions answered (frozen), their primitives, the apps replayed again; D. the revert net;
+    E. parity, vintage re-asks, the trial, the verdicts. The part: {"blk", "ran", "marks", "quiet", "finish"}; finish
+    (after the history merge) names each row's level row, puts the block into the history and makes the ship data.
+    AgentTimeout (budget_s): the asks so far are kept (the exception carries the block), nothing is applied."""
+    cfg = agent_cfg()
+    ts = t.isoformat()
+    raw = led.get("agent")
+    blk = _check_block(copy.deepcopy(raw)) if raw is not None else _new_block(ts, gu._now_iso(now), cfg)
+    net0 = copy.deepcopy(blk["net"])
+    ag = _Agent(ents, res0, owner, la, blk, t, now, extra, cfg)
+    try:
+        ag.derive()
+        ag.update(ag.derive_prims())
+        ag.sync()
+        for _ in range(3):
+            qs = ag.questions()
+            if not qs or ag.n_asks >= cfg["max_asks"]:
+                break
+            for q in qs:
+                if ag.n_asks >= cfg["max_asks"]:
+                    break
+                ag.ask(q)
+            ag.derive()
+            ag.update(ag.derive_prims())
+            ag.sync()
+        if ag.net():
+            ag.update(ag.derive_prims())
+            ag.sync()
+        bad = ag.parity()
+        flip = ag.vintage()
+        ag.trial(bad, flip)
+        ag.verdicts()
+    except AgentTimeout:
+        _ag_undo(blk, ts, net0)
+        _ag_trim(blk, t, cfg)
+        raise AgentTimeout(blk)
+    ms = int(round((_clock() - ag.start) * 1000))
+
+    def finish(merged):
+        ag.finish(merged)
+        ag.board["ms"] = ms
+    return ag.world, {"blk": blk, "ran": True, "marks": ag.marks(), "quiet": ag.quiet(), "finish": finish, "ag": ag}
 
 
 # ── alerts (sent once) ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -1755,12 +2899,14 @@ def _unchecked(a, ep):
     return ep["fam"] == "ROAS_G" and ep.get("confirm") == "no_data" and not (a.get("notes") or {}).get("roi_rows")
 
 
-def _ledger(st, first, apps, t, now):
+def _ledger(st, first, apps, t, now, quiet=None):
     """Every open (and lately closed) ALERT / WATCH app episode → its ledger record; each ALERT notice (the opening,
     every re-notice) is due ONCE: never on the first build (seeded), never for a new D0 ROAS episode opened without the
     AdMob check (seeded; its alert item is provisional), never when first seen > LATE_DAYS after its day, never a re-notice of a seeded
     episode (shown only), and joined (not sent) when the app had a push in the PUSH_GAP days before — a seeded opening
-    day counts as that push day. → {(app id, fam, opened): (key, due)}, due = [notice key, …]."""
+    day counts as that push day. quiet ({(app id, fam, opened): build day}: an alarm the level agent re-opened):
+    every notice of it dated on or before that day is seeded, never sent; later ones follow the rules above.
+    → {(app id, fam, opened): (key, due)}, due = [notice key, …]."""
     used, out = set(), {}
     now_iso = gu._now_iso(now)
     for a in apps:
@@ -1782,10 +2928,17 @@ def _ledger(st, first, apps, t, now):
             rec = st["eps"][k]
             rec["tier"], rec["closed"] = ep["tier"], ep["closed"]
             due = []
+            q = _quiet_day(quiet, aid, ep["fam"], ep["opened"])
             if ep["tier"] == "ALERT" and ep["closed"] is None:
                 for day, is_open in [(ep["opened"], True)] + [(d, False) for d, _ in ep["esc"]]:
                     nk = _notice_key(rec, day, is_open)
                     n = rec["notices"].get(nk)
+                    if q is not None and day <= q:         # re-opened by the agent: seeded, not pushed
+                        if n is None:
+                            rec["notices"][nk] = {"day": day, "seeded": True}
+                        elif n.get("notified_at") is None and not n.get("seeded") and not n.get("joined"):
+                            n["seeded"] = True
+                        continue
                     if n is not None:
                         if n.get("notified_at") is None and not n.get("seeded") and not n.get("joined"):
                             due.append(nk)
@@ -1804,6 +2957,14 @@ def _ledger(st, first, apps, t, now):
                     due.append(nk)
             out[(aid, ep["fam"], ep["opened"])] = (k, due)
     return out
+
+
+def _quiet_day(quiet, aid, fam, opened):
+    """The build day the agent re-opened this episode (±7 days on its opening), or None."""
+    for (a, f, o), day in (quiet or {}).items():
+        if a == aid and f == fam and _near(o, opened):
+            return day
+    return None
 
 
 def _alert_item(a, ep, rec, due, t, others, closed=False):
@@ -1859,11 +3020,11 @@ def _alert_at(rec):
     return max(ats) if ats else None
 
 
-def alerts(st, first, apps, t, now):
+def alerts(st, first, apps, t, now, quiet=None):
     """→ (alerts, closed): one alert per app with an open ALERT or WATCH episode (its worst one: ALERT before WATCH, a
     ROAS alarm first, then the earliest change), the app's episodes closed in the last CLOSED_DAYS days; st["due"] = the
-    notices each due alert id carries (mark_notified_cpi)."""
-    led = _ledger(st, first, apps, t, now)
+    notices each due alert id carries (mark_notified_cpi). quiet: _ledger's (the agent's re-opened alarms)."""
+    led = _ledger(st, first, apps, t, now, quiet)
     st["due"] = {}
     out, closed = [], []
     for a in apps:
@@ -1973,7 +3134,8 @@ def compute(dashboard, data_dir, out_dir, s, now, counts=None):
     ents = entities(apps, camps, ctys, D)
     extra["day0"] = {e.id: e.day0 for e in ents if e.kind == "app"}
     extra["cday0"] = {e.id: e.day0 for e in ents if e.kind == "country"}
-    res, extra["lv"] = levels_run(ents, data_dir, t, now)
+    extra["D"] = D
+    res, extra["lv"] = levels_run(ents, data_dir, t, now, extra)
     ptr, allb, files, big = build_files(dashboard, D, apps, camps, ctys, extra, res, now)
     if counts is not None:
         counts["big"] = big
@@ -2011,7 +3173,8 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
         write_json_gz_stable(os.path.join(out_dir, FILE), allb)
         _clean(out_dir, set(files))
         st, first = load_state(data_dir)
-        al, closed = alerts(st, first, apps, D.t, now)
+        part = (lv or {}).get("agent") or {}
+        al, closed = alerts(st, first, apps, D.t, now, quiet=part.get("quiet") if part.get("ran") else None)
         save_state(data_dir, st)
         if lv is not None and lv["ledger"] is not None:
             try:

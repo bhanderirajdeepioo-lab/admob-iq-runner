@@ -13,6 +13,7 @@ rule, the counts-only line and the build_static wiring. No real data: apps "Alph
 import copy
 import gzip
 import json
+import math
 import os
 import re
 import zlib
@@ -27,6 +28,7 @@ from admob_iq.config import settings
 from admob_iq.db import write_json_gz_stable
 from admob_iq.deploy_guard import HEADERS_MAX_RULES, headers_cover, headers_rule_count
 from admob_iq.engine import cpi_alarm as CA
+from admob_iq.engine import level_agent as LA
 from admob_iq.fetch import ga4_uninstall as gu
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -88,16 +90,18 @@ def model(k, x, g):
     return m
 
 
-def make(tmp_path, fixed_till="2026-03-29", ok_till="2026-03-29", geo_till="2026-03-27", camp_till="2026-03-29"):
-    """→ (data dir, site dir, dashboard): the stores and this build's site files written, the dashboard in memory."""
+def make(tmp_path, fixed_till="2026-03-29", ok_till="2026-03-29", geo_till="2026-03-27", camp_till="2026-03-29",
+         day0=DAY0, mdl=None):
+    """→ (data dir, site dir, dashboard): the stores and this build's site files written, the dashboard in memory
+    (day0 / mdl: an earlier first day and another model of the apps' days)."""
     data, site = tmp_path / "data", tmp_path / "site"
     data.mkdir(parents=True, exist_ok=True)
     site.mkdir(parents=True, exist_ok=True)
-    ALL = days(DAY0, TODAY)
+    ALL = days(day0, TODAY)
     M = {}
     for i, k in enumerate(NAMES):
         g = prng(101 + i)
-        M[k] = {x: model(k, x, g) for x in ALL}
+        M[k] = {x: (mdl or model)(k, x, g) for x in ALL}
     cache = {"v": 2, "currency_src": "INR", "fx": {"USD": 1.0, "INR": FX1}, "daily": {}, "installs": {},
              "convval": {}, "convval_day1": {}, "campaigns": {}}
     by_app, placements, catalog, cdaily = {}, [], [], {}
@@ -156,7 +160,7 @@ def make(tmp_path, fixed_till="2026-03-29", ok_till="2026-03-29", geo_till="2026
     cd.mkdir(exist_ok=True)
     for m, f in mon.items():
         write_json_gz_stable(str(cd / (m + ".json.gz")), f)
-    write_json_gz_stable(str(cd / "state.json.gz"), {"v": 1, "first": DAY0, "till": camp_till, "done": True})
+    write_json_gz_stable(str(cd / "state.json.gz"), {"v": 1, "first": day0, "till": camp_till, "done": True})
     geo = {}
     for k, split in (("a", (("XA", 0.6), ("XB", 0.35), ("XX", 0.05))), ("b", (("XA", 1.0),))):
         for x in ALL:
@@ -168,18 +172,18 @@ def make(tmp_path, fixed_till="2026-03-29", ok_till="2026-03-29", geo_till="2026
     gd.mkdir(exist_ok=True)
     for m, g in geo.items():
         write_json_gz_stable(str(gd / (m + ".json.gz")), g)
-    write_json_gz_stable(str(gd / "state.json.gz"), {"v": 1, "ccy": "INR", "first": DAY0, "till": geo_till})
+    write_json_gz_stable(str(gd / "state.json.gz"), {"v": 1, "ccy": "INR", "first": day0, "till": geo_till})
     # this build's GA4 / ROI site files (Alpha and Beta) + their pointers
     act, nvr, roi = [], {}, {}
     for k in ("a", "b"):
         aid, key = IDS[k], gu.file_key(IDS[k])
         till = "2026-03-27"
-        a1 = [M[k][x]["dau"] for x in days(DAY0, till)]
-        write_json_gz_stable(str(site / ("active_%s.json.gz" % key)), {"daily": {"start": DAY0, "a1": a1},
+        a1 = [M[k][x]["dau"] for x in days(day0, till)]
+        write_json_gz_stable(str(site / ("active_%s.json.gz" % key)), {"daily": {"start": day0, "a1": a1},
                                                                        "data_till": till})
         act.append({"app_id": aid, "key": key, "file": "active_%s.json.gz" % key})
         nd = []
-        for x in days(DAY0, TODAY):
+        for x in days(day0, TODAY):
             m = M[k][x]
             fs = 0.3
             nd.append([x, [round(m["rev"] * fs * 0.8, 4), int(m["imp"] * fs), round(m["rev"] * (1 - fs * 0.8), 4),
@@ -187,7 +191,7 @@ def make(tmp_path, fixed_till="2026-03-29", ok_till="2026-03-29", geo_till="2026
         write_json_gz_stable(str(site / ("nvr_%s.json.gz" % key)), {"days": nd, "final_till": till})
         nvr[aid] = {"file": "nvr_%s.json.gz" % key}
         rows = []
-        for x in days(DAY0, "2026-03-29"):
+        for x in days(day0, "2026-03-29"):
             m = M[k][x]
             age = (date.fromisoformat(TODAY) - date.fromisoformat(x)).days
             df = max(0, min(31, age - 2))
@@ -203,6 +207,16 @@ def make(tmp_path, fixed_till="2026-03-29", ok_till="2026-03-29", geo_till="2026
                      "spend_fx": "dated", "d0": {"fixed_till": fixed_till}},
             "active": {"apps": act}, "nvr": {"apps": nvr}, "roi": {"apps": roi}}
     return str(data), str(site), dash
+
+
+@pytest.fixture(scope="module", autouse=True)
+def agent_off():
+    """Every test of this file keeps its meaning from before the level agent (mode "off"); the agent's own tests
+    switch it on."""
+    mp = pytest.MonkeyPatch()
+    mp.setattr(cb, "agent_cfg", lambda: dict(CA.P_PROD["levels"]["agent"], mode="off"))
+    yield
+    mp.undo()
 
 
 @pytest.fixture(scope="module")
@@ -1445,3 +1459,841 @@ def test_levels_a_row_keeps_its_last_ten_restated_values():
     assert [x["at"][8:10] for x in r["restated"]] == ["%02d" % d for d in range(5, 15)]       # the newest ten
     assert r["restated"][-1]["v_new"] == pytest.approx(v) and r["restated"][0]["v_old"] == pytest.approx(10.0 * 1.01 ** 4)
     assert len([x for x in log if x["what"] == "restated"]) == 14                             # the log keeps all (its own cap)
+
+
+# ── the level agent (D-a … D-j): synthetic apps on the engine's entities, replayed by levels_run ─────────────────────
+AG0, AGN = "2024-01-02", 480                     # AG0 on the engine's weekly phase: phase days are multiples of 7
+A1 = "ca-app-pub-0000000000000000~41"            # the app the questions are about
+OTH = ["ca-app-pub-0000000000000000~%d" % (42 + i) for i in range(3)]
+
+
+@pytest.fixture
+def agent_on(monkeypatch):
+    cfg = dict(CA.P_PROD["levels"]["agent"])
+    assert cfg["mode"] == "on"
+    monkeypatch.setattr(cb, "agent_cfg", lambda: cfg)
+    return cfg
+
+
+def ag_day(i):
+    return (date.fromisoformat(AG0) + timedelta(days=i)).isoformat()
+
+
+def ag_series(seed, sp=1000.0, cpi=20.0, ecpm=5.0, ipu=5.0, dau=200000.0, roas=0.40, n=AGN):
+    """One app's days: $ cost (₹ at 94.5), ₹ per install, eCPM, ads per user, D0 ROAS; ±1 % noise."""
+    g = prng(seed)
+    s = {k: [0.0] * n for k in ("sp_usd", "sp_inr", "inst", "d0_inr", "rev", "imp", "dau")}
+    for d in range(n):
+        f = (lambda: 1.0 + 0.01 * next(g))
+        spd = sp * f()
+        s["sp_usd"][d], s["sp_inr"][d] = spd, spd * 94.5
+        s["inst"][d] = spd * 94.5 / cpi * f()
+        s["d0_inr"][d] = spd * 94.5 * roas * f()
+        s["dau"][d] = dau * f()
+        s["imp"][d] = s["dau"][d] * ipu * f()
+        s["rev"][d] = s["imp"][d] * ecpm / 1000.0 * f()
+    return s
+
+
+def ag_mul(s, key, a, b, k):
+    for d in range(a, min(b, len(s[key]))):
+        if s[key][d] is not None:
+            s[key][d] *= k
+
+
+def ag_world(own, others=None, camps=(0.6, 0.4)):
+    """[the app, its campaigns (shares of every day), the other apps] as engine entities."""
+    out = [CA.Ent("app", A1, A1, "Alpha App", AG0, own)]
+    for i, s in enumerate(others or []):
+        out.append(CA.Ent("app", OTH[i], OTH[i], "Other App %d" % i, AG0, s))
+    for i, q in enumerate(camps):
+        out.append(CA.Ent("camp", "90000000%02d" % i, A1, "Campaign %d" % i, AG0,
+                          {k: [x * q for x in own[k]] for k in ("sp_usd", "sp_inr", "inst")}))
+    return out
+
+
+def market_apps(step=None, k=1.6, n=3):
+    """Small other apps (no alarm of their own: under the money floor) whose CPI moves by k from day `step`."""
+    out = []
+    for i in range(n):
+        s = ag_series(60 + i, sp=15.0, cpi=2.0)
+        if step is not None:
+            ag_mul(s, "inst", step, AGN, 1 / k)
+        out.append(s)
+    return out
+
+
+def ag_build(tmp, ents, t_ix, acts=None, now=None, geo=None, cd=None):
+    """One build's levels step (the agent on the saved history) → (engine result, levels part); the history saved."""
+    data = tmp / "data"
+    data.mkdir(parents=True, exist_ok=True)
+    if acts is not None:
+        write_actions(tmp, acts)
+    t = date.fromisoformat(ag_day(t_ix))
+    extra = {"D": cb._Days(date.fromisoformat(AG0), t), "geo": geo or {}, "cd": cd or {},
+             "names": {e.id: e.label for e in ents if e.kind == "app"}}
+    now = now or datetime(t.year, t.month, t.day, 5, 22, tzinfo=timezone.utc) + timedelta(days=2)
+    res, part = cb.levels_run(ents, str(data), t, now, extra)
+    if part is not None and part["ledger"] is not None:
+        cb.save_ledger(str(data), part["ledger"])
+    return res, part
+
+
+def app_eps(res, fam, aid=A1):
+    return [e for e in res["episodes"] if e["kind"] == "app" and e["id"] == aid and e["fam"] == fam]
+
+
+def rows_of(part, fam=None, aid=A1):
+    return [r for r in part["ledger"]["agent"]["rows"] if r["app"] == aid and (fam is None or r["fam"] == fam)]
+
+
+def scale_up():
+    """CPI ×1.5 from day 300 on the same spend, then spend ×3 from day 315 (installs ×3: CPI unchanged)."""
+    s = ag_series(1)
+    ag_mul(s, "inst", 300, AGN, 1 / 1.5)
+    for k in ("sp_usd", "sp_inr", "inst", "d0_inr"):
+        ag_mul(s, k, 315, AGN, 3.0)
+    return s
+
+
+def market_move(ramp=False):
+    """CPI ×1.6 from day 300 on the app and the other apps (ramp: ×1.3 → ×1.7 over 60 days: settles ~110 days later)."""
+    def shape(s):
+        for d in range(300, AGN):
+            s["inst"][d] /= (1.3 + 0.4 * min(1.0, (d - 300) / 60.0)) if ramp else 1.6
+    own = ag_series(1)
+    shape(own)
+    others = [ag_series(60 + i, sp=15.0, cpi=2.0) for i in range(3)]
+    for s in others:
+        shape(s)
+    return own, others
+
+
+def test_splice_is_the_full_replay_with_the_same_primitives():
+    own = scale_up()
+    ents = ag_world(own, market_apps(300))
+    ts = ag_day(AGN - 1)
+    res0 = CA.run(ents, CA.P_PROD, ts)
+    ep = app_eps(res0, "CPI")[0]
+    prims = {(A1, "CPI"): [{"act": "agent_veto", "ep_open": ep["opened"], "id": "D-1"}],
+             (A1, "GAP"): [{"act": "agent_veto", "ep_open": app_eps(res0, "GAP")[0]["opened"], "id": "D-2"}]}
+    runs = {A1: CA.run([e for e in ents if e.id == A1], CA.P_PROD, ts, owner=prims)}
+    sp = cb.splice(res0, runs, ents)
+    full = CA.run(ents, CA.P_PROD, ts, owner=prims)
+
+    def canon(r):
+        return json.dumps({k: (v if k == "episodes" else {"%s|%s" % kk: vv for kk, vv in v.items()})
+                           for k, v in r.items()}, sort_keys=True)
+    assert canon(sp) == canon(full) and canon(sp) != canon(res0)
+    assert app_eps(res0, "CPI")[0]["why"] == "settled" and app_eps(sp, "CPI")[0]["why"] is None
+
+
+def test_dj_a_cpi_settle_seen_with_a_spend_scale_up_is_blocked_and_reopened(tmp_path, agent_on):
+    ents = ag_world(scale_up(), market_apps())
+    res0 = CA.run(ents, CA.P_PROD, ag_day(AGN - 1))
+    s0 = app_eps(res0, "CPI")[0]
+    assert s0["why"] == "settled"
+    res, part = ag_build(tmp_path, ents, AGN - 1)
+    ep = app_eps(res, "CPI")[0]
+    assert (ep["opened"], ep["c"], ep["base"], ep["closed"]) == (s0["opened"], s0["c"], s0["base"], None)
+    assert ep["suggest"][1] == "open"                                         # open 120+ days now: the same row
+    r = rows_of(part, "CPI")[0]
+    assert (r["why"], r["dec"], r["branch"]) == ("settle", "keep", "spend_scaled")
+    assert r["cause"] == "seen with spend ×3.0 since the old level (your lever)"
+    assert [(a["d"], a["on"]) for a in r["asks"]] == [(s0["closed"], "settle"), (ag_day(AGN - 1), "reask")]
+    assert r["applied"] == {"veto": {"since_t": ag_day(AGN - 1)}, "accept": None}
+    assert r["next"] == LA.next_phase(ag_day(AGN - 1))
+    lv = cb.ship_levels(part["ledger"], A1, agent_on=True)["CPI"]
+    blk = [x for x in lv if x["st"] == "blocked"]
+    assert len(blk) == 1 and blk[0]["src"] == "accepted" and blk[0]["from"] == s0["closed"]
+    assert blk[0]["ag"]["dec"] == r["id"] and blk[0]["ag"]["cause"] == r["cause"]
+    assert [x["src"] for x in lv if x["st"] == "rest"] == ["first"]              # the old level stays the resting one
+    assert "blocked" in [x["what"] for x in part["ledger"]["log"]]
+    ag = part["agent"]["ag"]
+    assert ag.ship_data[A1]["tag"]["st"] == "blocked" and ag.ship_data[A1]["tag"]["more"] == 1   # CPI and GAP
+    assert ag.board["settle"] == {"checked": 2, "passed": 0, "blocked": 2, "hold": 0, "later": 0}
+    row = [x for x in ag.ship_data[A1]["rows"] if x["fam"] == "CPI"][0]
+    assert row["st"] == "blocked" and row["level"] == blk[0]["id"] and row["xp"]["inr"] > 0
+    assert row["h"] == [[s0["closed"], ag_day(AGN - 1), 2, "keep", "spend_scaled", None, r["short"]]]
+    # its notices: seeded, never pushed (the alarm was shown closed; it re-opens)
+    q = part["agent"]["quiet"]
+    assert q[(A1, "CPI", ep["opened"])] == ag_day(AGN - 1)
+    st = {"v": 1, "eps": {}, "push": {}, "due": {}}
+    apps = [{"app_id": A1, "name": "Alpha App", "notes": {"roi_rows": 1},
+             "view": {"eps": [dict(e, tier="ALERT") for e in app_eps(res, "CPI") + app_eps(res, "GAP")]}}]
+    got = cb._ledger(st, False, apps, date.fromisoformat(ag_day(AGN - 1)), NOW, quiet=q)
+    assert got and all(due == [] for _, due in got.values())
+    assert any(n.get("seeded") for rec in st["eps"].values() for n in rec["notices"].values())
+    noisy = cb._ledger({"v": 1, "eps": {}, "push": {}, "due": {}}, False, apps,
+                       date.fromisoformat(ag_day(AGN - 1)), NOW)
+    assert sum(len(d) for _, d in noisy.values()) >= sum(len(d) for _, d in got.values())
+
+
+def test_dj_a_market_wide_settle_passes_and_stands_as_today(tmp_path, agent_on):
+    own, others = market_move(ramp=True)
+    ents = ag_world(own, others)
+    res0 = CA.run(ents, CA.P_PROD, ag_day(AGN - 1))
+    res, part = ag_build(tmp_path, ents, AGN - 1)
+    for fam in ("CPI", "GAP"):
+        assert app_eps(res, fam) == app_eps(res0, fam) and app_eps(res, fam)[0]["why"] == "settled", fam
+        r = rows_of(part, fam)[0]
+        assert (r["dec"], r["branch"], r["asks"][0]["on"]) == ("accept", "cpi_market", "settle"), fam
+        assert r["applied"] == {"veto": None, "accept": None} and r["next"] is None
+    assert res["levels"][("app", A1)] == res0["levels"][("app", A1)]
+    lv = cb.ship_levels(part["ledger"], A1, agent_on=True)["CPI"]
+    acc = [x for x in lv if x["src"] == "accepted"][0]
+    assert acc["st"] == "now" and acc["ag"]["st"] == "passed"
+    net = {x["fam"]: x for x in part["ledger"]["agent"]["net"]}
+    assert net["CPI"]["src"] == "settle" and net["CPI"]["row"] == rows_of(part, "CPI")[0]["id"]
+    assert net["CPI"]["fired"] is None and net["CPI"]["r2"] and net["CPI"]["r3"]["why"] is None
+    assert part["agent"]["ag"].board["settle"]["passed"] == 2
+
+
+def test_dj_a_waiting_settle_is_asked_weekly_and_a_later_accept_closes_it_even_in_trial(tmp_path, agent_on):
+    own, others = market_move()
+    ents = ag_world(own, others)
+    s0 = app_eps(CA.run(ents, CA.P_PROD, ag_day(AGN - 1)), "CPI")[0]
+    s_ix = (date.fromisoformat(s0["closed"]) - date.fromisoformat(AG0)).days
+    first = s_ix + (7 - s_ix % 7)                                             # the first phase day after the settle
+    seen = []
+    for t_ix in (s_ix, first, first + 7, first + 14, first + 21, first + 28):
+        res, part = ag_build(tmp_path, ents, t_ix)
+        r = rows_of(part, "CPI")[0]
+        seen.append((t_ix, r["dec"], r["branch"], len(r["asks"]), part["ledger"]["agent"]["trial"]["st"]))
+        if r["dec"] == "accept":
+            break
+    assert seen[0][1:4] == ("wait", "unmeasured", 1) and len(seen) >= 3     # as of the settle day: too young
+    assert all(x[4] == "trial" for x in seen)
+    t_acc = seen[-1][0]
+    assert seen[-1][1:3] == ("accept", "cpi_market") and t_acc > s_ix
+    assert [x[3] for x in seen] == list(range(1, len(seen) + 1))             # one ask per weekly phase day
+    r = rows_of(part, "CPI")[0]
+    assert r["applied"]["veto"] == {"since_t": ag_day(s_ix)}
+    assert r["applied"]["accept"]["day"] == ag_day(t_acc) and r["asks"][-1]["trial"] is False
+    ep = app_eps(res, "CPI")[0]
+    assert (ep["closed"], ep["why"]) == (ag_day(t_acc), "agent")
+    row = [x for x in res["levels"][("app", A1)]["CPI"] if x["src"] == "accepted_agent"][0]
+    m = CA.measure(ents[0], CA.P_PROD, "CPI", *r["applied"]["accept"]["days"])
+    assert row["day"] == ag_day(t_acc) and abs(row["v"] / m["v"] - 1) < 1e-12 and row["act"] == r["id"]
+    lv = cb.ship_levels(part["ledger"], A1, agent_on=True)["CPI"]
+    assert [x["st"] for x in lv if x["src"] == "accepted"] == ["hold"]          # the settle the agent held
+    assert [x["ag"]["st"] for x in lv if x["src"] == "accepted_agent"] == ["agent"]
+    assert part["agent"]["ag"].board["settle"]["later"] == 2
+
+
+def test_dj_the_first_build_asks_every_settle_in_force_as_of_its_day_and_only_those(tmp_path, agent_on):
+    s = ag_series(1)
+    ag_mul(s, "inst", 150, AGN, 1 / 1.5)                                      # a CPI settle ~day 215 …
+    ag_mul(s, "inst", 330, AGN, 1 / 1.1)                                      # … replaced by a +10 % auto level later
+    ag_mul(s, "rev", 200, AGN, 0.7)                                           # an eCPM settle (never asked)
+    ents = ag_world(s, market_apps())
+    res0 = CA.run(ents, CA.P_PROD, ag_day(AGN - 1))
+    lv = res0["levels"][("app", A1)]
+    assert [x["src"] for x in lv["CPI"]][-1] == "auto" and "accepted" in [x["src"] for x in lv["CPI"]]
+    assert [e["why"] for e in app_eps(res0, "ECPM")] == ["settled"]
+    gap = app_eps(res0, "GAP")
+    res, part = ag_build(tmp_path, ents, AGN - 1)
+    asked = sorted({r["fam"] for r in part["ledger"]["agent"]["rows"]})
+    assert "CPI" not in asked and "ECPM" not in asked                         # replaced: history; eCPM: never
+    assert asked == (["GAP"] if gap and gap[-1]["why"] == "settled" and
+                     lv["GAP"][-1]["src"] == "accepted" else [])
+    # a settle in force on the first build: asked as of its settle day, from data cut there
+    ents2 = ag_world(scale_up(), market_apps())
+    _, part2 = ag_build(tmp_path / "b", ents2, AGN - 1)
+    a = rows_of(part2, "CPI")[0]["asks"][0]
+    d = a["d"]
+    assert a["on"] == "settle" and d < ag_day(AGN - 1) and a["ri"]["d"] == d
+    app = ents2[0]
+    lim = (date.fromisoformat(d) - date.fromisoformat(AG0)).days
+
+    def poison(e):
+        return CA.Ent(e.kind, e.id, e.app, e.label, e.day0, {k: [x if i <= lim - LA.LAGS.get(k, 0) else x * 9.0 + 7.0
+                                                                 for i, x in enumerate(v)] for k, v in e.s.items()})
+    ep = {"fam": "CPI", "opened": a["ri"]["ep"]["opened"], "c": a["ri"]["ep"]["c"], "base": a["ri"]["old"]["v"],
+          "bspan": a["ri"]["old"]["days"], "base_src": "before"}
+    camps = [poison(e) for e in ents2 if e.kind == "camp"]
+    ri = LA.evidence(poison(app), camps, [], ep, a["days"], d, "settle", CA.P_PROD)
+    assert json.dumps(ri, sort_keys=True) == json.dumps(a["ri"], sort_keys=True)
+    mkt = LA.market(ri, poison(app), [poison(e) for e in ents2 if e.kind == "app" and e.id != A1])
+    assert json.dumps(mkt, sort_keys=True) == json.dumps(a["mkt"], sort_keys=True)
+
+
+def settle_ix(res, fam):
+    return (date.fromisoformat(app_eps(res, fam)[0]["closed"]) - date.fromisoformat(AG0)).days
+
+
+def test_revert_r3_an_agent_accept_whose_level_comes_back_is_reverted(tmp_path, agent_on):
+    own, others = market_move()
+    for d in range(400, AGN):
+        own["inst"][d] *= 1.6                                                  # CPI back at the old level from day 400
+    ents = ag_world(own, others)
+    s_ix = settle_ix(CA.run(ents, CA.P_PROD, ag_day(399)), "CPI")
+    first = s_ix + (7 - s_ix % 7)
+    for t_ix in (s_ix, first, first + 7, first + 14):
+        res, part = ag_build(tmp_path, ents, t_ix)
+    r = rows_of(part, "CPI")[0]
+    acc = r["applied"]["accept"]["day"]
+    assert app_eps(res, "CPI")[0]["why"] == "agent"
+    res, part = ag_build(tmp_path, ents, 430)
+    r = rows_of(part, "CPI")[0]
+    ep = app_eps(res, "CPI")[0]
+    assert r["rev"]["by"] == "r3" and acc <= r["rev"]["day"] <= ag_day(430) and r["rev"]["t"] == ag_day(430)
+    assert (ep["why"], ep["closed"]) == ("recovered", r["rev"]["day"])         # re-opened from c, closed on its day
+    assert ep["c"] == r["ep"]["c"] and (r["vd"], r["ve"]) == ("wrong", "wrong")
+    lv = cb.ship_levels(part["ledger"], A1, agent_on=True)["CPI"]
+    rv = [x for x in lv if x["src"] == "accepted_agent"]
+    assert [x["st"] for x in rv] == ["reverted"] and rv[0]["from"] == acc
+    ag = part["agent"]["ag"]
+    assert ag.board["n"]["reverted"] >= 1 and ag.ship_data[A1]["tag"]["st"] == "reverted"
+    assert part["agent"]["quiet"][(A1, "CPI", ep["opened"])] == ag_day(430)
+    net = [x for x in part["ledger"]["agent"]["net"] if x["fam"] == "CPI"][0]
+    assert net["fired"] == {"by": "r3", "day": r["rev"]["day"]} and net["done"]
+    res2, part2 = ag_build(tmp_path, ents, 437)                                # a revert is final: never asked again
+    r2 = rows_of(part2, "CPI")[0]
+    assert r2["rev"] == r["rev"] and len(r2["asks"]) == len(r["asks"])
+
+
+def test_revert_r2_alone_reverts_an_engine_settle_nobody_asked(tmp_path, agent_on):
+    s = ag_series(1)
+    for k in ("sp_usd", "sp_inr", "inst", "d0_inr"):
+        ag_mul(s, k, 300, AGN, 0.4)                                           # spend −60 %, held: a SPEND settle
+        ag_mul(s, k, 380, AGN, 0.85 / 0.4)                                    # then back to 85 % of the old spend
+    ents = ag_world(s, market_apps())
+    s_ix = settle_ix(CA.run(ents, CA.P_PROD, ag_day(379)), "SPEND")
+    res, part = ag_build(tmp_path, ents, s_ix + 70)
+    r = rows_of(part, "SPEND")[0]
+    assert (r["why"], r["dec"], r["branch"], r["asks"]) == ("revert", "revert", "revert_r2", [])
+    assert r["rev"]["by"] == "r2" and (r["vd"], r["ve"]) == ("wrong", "wrong")
+    net = [x for x in part["ledger"]["agent"]["net"] if x["fam"] == "SPEND"][0]
+    assert net["src"] == "settle" and net["row"] == r["id"] and net["r3"]["why"] is None    # no recovery: R2 alone
+    assert [c[2] for c in net["r2"]][:2] == [False, False] and net["r2"][-1][2] is True
+    ep = app_eps(res, "SPEND")[0]
+    assert ep["why"] is None and ep["c"] == r["ep"]["c"]                       # the alarm goes on from its change start
+    assert "back at the old level: two 28-day checks in a row" in r["cause"]
+
+
+def test_revert_an_ecpm_settle_that_comes_back(tmp_path, agent_on):
+    s = ag_series(1)
+    ag_mul(s, "rev", 200, 290, 0.7)                                           # eCPM −30 %: settled, then back at day 290
+    ents = ag_world(s, market_apps())
+    res0 = CA.run(ents, CA.P_PROD, ag_day(330))
+    e0 = app_eps(res0, "ECPM")[0]
+    assert e0["why"] == "settled"
+    res, part = ag_build(tmp_path, ents, 330)
+    r = rows_of(part, "ECPM")[0]
+    ep = app_eps(res, "ECPM")[0]
+    assert (r["why"], r["rev"]["by"], r["branch"]) == ("revert", "r3", "revert_r3")
+    assert (ep["opened"], ep["why"], ep["closed"]) == (e0["opened"], "recovered", r["rev"]["day"])
+    assert ep["closed"] > e0["closed"] and r["short"] == "back at old level: reverted"
+
+
+def waves():
+    """CPI ×2 from day 200 with ±25 % waves: open 120+ days, never steady; the other apps flat → own campaigns."""
+    s = ag_series(1)
+    for d in range(200, AGN):
+        s["inst"][d] /= 2.0 * (1 + 0.25 * math.sin(2 * math.pi * (d - 200) / 112))
+    return s
+
+
+def test_proposal_asks_first_day_then_the_weekly_phase_frozen_against_restated_data(tmp_path, agent_on, monkeypatch):
+    own = waves()
+    ents = ag_world(own, market_apps())
+    p_day = app_eps(CA.run(ents, CA.P_PROD, ag_day(AGN - 1)), "CPI")[0]["suggest"][0]
+    p_ix = (date.fromisoformat(p_day) - date.fromisoformat(AG0)).days
+    nxt = p_ix + (7 - p_ix % 7)
+    _, part = ag_build(tmp_path, ents, p_ix)
+    r = rows_of(part, "CPI")[0]
+    assert (r["why"], r["dec"], r["branch"], r["first"], r["n"]) == ("open", "keep", "own_campaigns", p_day, 1)
+    assert r["next"] == ag_day(nxt) and r["asks"][0]["on"] == "proposal"
+    first = {k: v for k, v in r["asks"][0].items() if k != "vin"}             # (vin: its later vintage re-asks)
+    _, part = ag_build(tmp_path, ents, p_ix + 1)                              # not a phase day: not asked
+    assert rows_of(part, "CPI")[0]["n"] == 1
+    _, part = ag_build(tmp_path, ents, nxt)
+    assert [a["d"] for a in rows_of(part, "CPI")[0]["asks"]] == [p_day, ag_day(nxt)]
+    for d in range(p_ix - 20, p_ix - 10):                                     # Google restates installs in its window
+        own["inst"][d] *= 1.2
+    _, part = ag_build(tmp_path, ag_world(own, market_apps()), nxt + 10)      # a missed phase day: asked on this build
+    r = rows_of(part, "CPI")[0]
+    assert [a["d"] for a in r["asks"]] == [p_day, ag_day(nxt), ag_day(nxt + 10)] and r["n"] == 3
+    assert {k: v for k, v in r["asks"][0].items() if k != "vin"} == first     # a frozen answer is never rewritten
+    assert r["next"] == LA.next_phase(ag_day(nxt + 10)) and r["dec"] == "keep"
+    real = LA.decide
+
+    def other(ri, mkt, cfg, flags=None, **kw):
+        out = real(ri, mkt, cfg, flags, **kw)
+        return dict(out, decision="wait", branch="narrow", short="narrow: campaigns 50%") if ri["d"] == ag_day(
+            nxt + 17) else out
+    monkeypatch.setattr(LA, "decide", other)
+    _, part = ag_build(tmp_path, ag_world(own, market_apps()), nxt + 17)
+    r = rows_of(part, "CPI")[0]
+    assert (r["dec"], r["branch"], r["n"]) == ("wait", "narrow", 4)
+    assert {k: v for k, v in r["asks"][0].items() if k != "vin"} == first
+    assert [x[3:5] for x in part["agent"]["ag"].ship_data[A1]["rows"][0]["h"]] == [["wait", "narrow"],
+                                                                                    ["keep", "own_campaigns"]]
+
+
+def ecpm_world():
+    """eCPM −30 % from day 200 on the app and on 3 other apps (too small to buy users: no alarm of their own)."""
+    own = ag_series(1)
+    ag_mul(own, "rev", 200, AGN, 0.7)
+    others = []
+    for i in range(3):
+        s = ag_series(60 + i, sp=5.0, cpi=2.0, dau=2000.0)
+        ag_mul(s, "rev", 200, AGN, 0.7)
+        others.append(s)
+    return own, others
+
+
+@pytest.fixture
+def no_ecpm_settle(monkeypatch):
+    """The engine without its own eCPM settle: the only way an eCPM proposal can stand until the agent accepts it."""
+    monkeypatch.setitem(CA.P_PROD["settle"], "fams", ["CPI", "GAP", "IPU", "SPEND"])
+
+
+def test_trial_an_accept_is_recorded_not_applied_until_a_clean_28_day_trial(tmp_path, agent_on, no_ecpm_settle,
+                                                                            monkeypatch):
+    own, others = ecpm_world()
+    ents = ag_world(own, others)
+    res0 = CA.run(ents, CA.P_PROD, ag_day(AGN - 1))
+    p_ix = (date.fromisoformat(app_eps(res0, "ECPM")[0]["suggest"][0]) - date.fromisoformat(AG0)).days
+    res, part = ag_build(tmp_path, ents, p_ix)
+    r = rows_of(part, "ECPM")[0]
+    assert (r["dec"], r["branch"], r["asks"][0]["trial"], r["applied"]["accept"]) == ("accept", "ecpm_market", True,
+                                                                                      None)
+    assert app_eps(res, "ECPM") == app_eps(CA.run(ents, CA.P_PROD, ag_day(p_ix)), "ECPM")       # nothing applied
+    assert [p["fam"] for p in part["props"][A1]] == ["ECPM"]                    # the owner's Accept stays
+    ag = part["agent"]["ag"]
+    assert ag.ship_data[A1]["tag"]["st"] == "trial" and ag.board["trial"]["st"] == "trial"
+    sts = []
+    for t_ix in (p_ix + 7, p_ix + 14, p_ix + 21, p_ix + 28):
+        res, part = ag_build(tmp_path, ents, t_ix)
+        sts.append(part["ledger"]["agent"]["trial"]["st"])
+        assert app_eps(res, "ECPM")[0]["closed"] is None
+    blk = part["ledger"]["agent"]
+    assert sts == ["trial", "trial", "trial", "live"] and blk["trial"]["exit"] == ag_day(p_ix + 28)
+    assert blk["vintage"]["done7"] >= 1 and blk["vintage"]["done28"] >= 1 and blk["vintage"]["accept_flips"] == 0
+    assert blk["parity"]["bad"] == 0 and blk["parity"]["checked"] > 0
+    assert all(a["trial"] for a in rows_of(part, "ECPM")[0]["asks"])        # a trial accept is never applied later
+    res, part = ag_build(tmp_path, ents, p_ix + 35)                           # the next ask applies
+    r = rows_of(part, "ECPM")[0]
+    ep = app_eps(res, "ECPM")[0]
+    assert r["asks"][-1]["trial"] is False and r["applied"]["accept"]["day"] == ag_day(p_ix + 35)
+    assert (ep["why"], ep["closed"]) == ("agent", ag_day(p_ix + 35))
+    row = [x for x in res["levels"][("app", A1)]["ECPM"] if x["src"] == "accepted_agent"][0]
+    assert abs(row["v"] / CA.measure(ents[0], CA.P_PROD, "ECPM", *row["days"])["v"] - 1) < 1e-12
+    ag = part["agent"]["ag"]
+    assert ag.ship_data[A1]["tag"] == {"st": "accepted", "fam": "ECPM", "short": "eCPM market move",
+                                       "day": ag_day(p_ix + 35), "more": 1}             # (+ the GAP settle on hold)
+    assert rows_of(part, "GAP")[0]["applied"]["veto"] and rows_of(part, "GAP")[0]["dec"] == "wait"
+    assert ag.board["n"]["accepted"] == 1 and ag.board["n"]["pending"] == 1
+    assert ag.board["trial"]["st"] == "live" and ag.board["trial"]["exit"] == ag_day(p_ix + 28)
+    real = LA.decide                                                          # live → trial again on a mismatch
+
+    def off_by_one(ri, mkt, cfg, flags=None, **kw):
+        out = real(ri, mkt, cfg, flags, **kw)
+        return dict(out, branch="app_only") if ri["d"] == ag_day(p_ix) else out
+    monkeypatch.setattr(LA, "decide", off_by_one)
+    _, part = ag_build(tmp_path, ents, p_ix + 42)
+    tr = part["ledger"]["agent"]["trial"]
+    assert (tr["st"], tr["why"], tr["since"], tr["exit"]) == ("trial", "parity", ag_day(p_ix + 42), None)
+    assert tr["log"][-2:] == [[ag_day(p_ix + 28), "live", "clean"], [ag_day(p_ix + 42), "trial", "parity"]]
+
+
+def test_trial_a_vintage_flip_a_parity_mismatch_or_a_rule_change_start_it_again(tmp_path, agent_on, no_ecpm_settle,
+                                                                                monkeypatch):
+    own, others = ecpm_world()
+    ents = ag_world(own, others)
+    p_ix = (date.fromisoformat(app_eps(CA.run(ents, CA.P_PROD, ag_day(AGN - 1)), "ECPM")[0]["suggest"][0])
+            - date.fromisoformat(AG0)).days
+    ag_build(tmp_path, ents, p_ix)
+    own2 = {k: list(v) for k, v in own.items()}
+    own2["rev"][p_ix - 5] *= 3.0                                              # a restated day inside the ask's window
+    ents2 = ag_world(own2, others)
+    _, part = ag_build(tmp_path, ents2, p_ix + 7)
+    blk = part["ledger"]["agent"]
+    a0 = rows_of(part, "ECPM")[0]["asks"][0]
+    assert a0["vin"]["7"]["acc_flip"] and a0["vin"]["7"]["dec"] == "wait" and a0["dec"] == "accept"
+    assert blk["vintage"]["accept_flips"] == 1 and blk["trial"] == dict(blk["trial"], st="trial", why="vintage",
+                                                                         since=ag_day(p_ix + 7))
+    for t_ix in (p_ix + 14, p_ix + 21, p_ix + 28):
+        _, part = ag_build(tmp_path, ents2, t_ix)
+    assert part["ledger"]["agent"]["trial"]["st"] == "trial"                  # no exit 28 days after the start
+    real = LA.decide
+
+    def off_by_one(ri, mkt, cfg, flags=None, **kw):
+        out = real(ri, mkt, cfg, flags, **kw)
+        return dict(out, branch="app_only") if ri["d"] == ag_day(p_ix) else out
+    monkeypatch.setattr(LA, "decide", off_by_one)
+    _, part = ag_build(tmp_path, ents2, p_ix + 35)
+    blk = part["ledger"]["agent"]
+    assert blk["parity"]["bad"] >= 1 and blk["parity"]["last_bad"] == ag_day(p_ix + 35)
+    assert (blk["trial"]["why"], blk["trial"]["since"]) == ("parity", ag_day(p_ix + 35))
+    monkeypatch.setattr(LA, "decide", real)
+    checked = blk["parity"]["checked"]
+    old_th = [a["th"] for a in rows_of(part, "ECPM")[0]["asks"]]
+    monkeypatch.setattr(cb, "agent_cfg", lambda: dict(agent_on, move_bands=2.5))
+    _, part = ag_build(tmp_path, ents2, p_ix + 42)
+    blk = part["ledger"]["agent"]
+    asks = rows_of(part, "ECPM")[0]["asks"]
+    assert (blk["trial"]["why"], blk["trial"]["since"]) == ("rule", ag_day(p_ix + 42)) and blk["th"] != old_th[0]
+    assert [a["th"] for a in asks[:-1]] == old_th and asks[-1]["th"] == blk["th"]   # old asks: not rewritten …
+    new = sum(1 for r in blk["rows"] for a in r["asks"] if a["th"] == blk["th"])
+    assert 1 <= new and blk["parity"]["checked"] - checked == new             # … and not compared
+    whys = [x[2] for x in blk["trial"]["log"]]
+    assert all(x[1] == "trial" for x in blk["trial"]["log"]) and whys[0] == "start" and whys[-2:] == ["parity", "rule"]
+    assert set(whys[1:-2]) == {"vintage"}                                     # (the +28 re-ask flipped again)
+
+
+def ag_act(n, kind, at, fam="CPI", **kw):
+    a = {"id": "a-%012x" % n, "at": at, "by": "owner@example.com", "app": A1, "fam": fam, "act": kind}
+    a.update(kw)
+    return a
+
+
+def later_than(part, k=1):
+    """An owner action time after this build's agent rows were first seen."""
+    seen = max(r["seen"] for r in part["ledger"]["agent"]["rows"])
+    return (datetime.strptime(seen, "%Y-%m-%dT%H:%M:%SZ") + timedelta(minutes=k)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_owner_accept_on_a_kept_proposal_overrides_and_holds_the_family(tmp_path, agent_on):
+    ents = ag_world(waves(), market_apps())
+    p_ix = (date.fromisoformat(app_eps(CA.run(ents, CA.P_PROD, ag_day(AGN - 1)), "CPI")[0]["suggest"][0])
+            - date.fromisoformat(AG0)).days
+    _, part = ag_build(tmp_path, ents, p_ix)
+    r = rows_of(part, "CPI")[0]
+    assert r["dec"] == "keep"
+    acts = [ag_act(1, "accept", later_than(part), proposal={"day": ag_day(p_ix), "days": [ag_day(p_ix - 27),
+                                                                                         ag_day(p_ix)]},
+                   **{"from": ag_day(p_ix + 7)})]
+    for t_ix in (p_ix + 7, p_ix + 14):
+        res, part = ag_build(tmp_path, ents, t_ix, acts=acts)
+        r = rows_of(part, "CPI")[0]
+        assert (app_eps(res, "CPI")[0]["closed"], app_eps(res, "CPI")[0]["why"]) == (ag_day(p_ix + 7), "owner")
+        assert r["n"] == 1                                                     # never asked while the owner holds it
+        row = [x for x in part["agent"]["ag"].ship_data[A1]["rows"] if x["fam"] == "CPI"][0]
+        assert row["st"] == "overridden" and row["ovr"] == {"at": acts[0]["at"], "act": "accept"}
+    assert part["agent"]["ag"].board["n"]["overridden"] == 1
+
+
+def test_owner_pin_holds_a_family_until_back_to_auto(tmp_path, agent_on):
+    own = waves()
+    ents = ag_world(own, market_apps())
+    first = CA.measure(ents[0], CA.P_PROD, "CPI", ag_day(100), ag_day(127))
+    p_ix = (date.fromisoformat(app_eps(CA.run(ents, CA.P_PROD, ag_day(AGN - 1)), "CPI")[0]["suggest"][0])
+            - date.fromisoformat(AG0)).days
+    pin = ag_act(1, "set", "2024-01-03T00:00:00Z", days=[ag_day(100), ag_day(127)], **{"from": ag_day(150)})
+    res, part = ag_build(tmp_path, ents, p_ix, acts=[pin])
+    assert first and app_eps(res, "CPI")[0]["suggest"][1] == "open" and rows_of(part, "CPI") == []   # held: no ask
+    auto = ag_act(2, "auto", "2024-01-04T00:00:00Z", **{"from": ag_day(p_ix + 3)})
+    _, part = ag_build(tmp_path, ents, p_ix + 7, acts=[pin, auto])
+    assert [(r["dec"], r["asks"][0]["d"]) for r in rows_of(part, "CPI")] == [("keep", ag_day(p_ix + 7))]
+
+
+def test_owner_reject_of_an_agent_level_holds_it_and_undo_gives_the_agents_answer_back(tmp_path, agent_on):
+    own, others = market_move()
+    ents = ag_world(own, others)
+    s_ix = settle_ix(CA.run(ents, CA.P_PROD, ag_day(AGN - 1)), "CPI")
+    first = s_ix + (7 - s_ix % 7)
+    for t_ix in (s_ix, first, first + 7, first + 14):
+        res, part = ag_build(tmp_path, ents, t_ix)
+    r = rows_of(part, "CPI")[0]
+    acc = r["applied"]["accept"]["day"]
+    lid = [x for x in part["ledger"]["apps"][A1]["CPI"] if x["src"] == "accepted_agent"][0]["id"]
+    rej = ag_act(1, "reject", later_than(part), level=lid)
+    res, part = ag_build(tmp_path, ents, first + 21, acts=[rej])
+    ep = app_eps(res, "CPI")[0]
+    assert ep["closed"] is None and ep["suggest"][1] == "held"                # the owner's veto: no agent close
+    row = [x for x in part["agent"]["ag"].ship_data[A1]["rows"] if x["fam"] == "CPI"][0]
+    assert row["st"] == "held" and row["ovr"]["act"] == "reject"
+    assert rows_of(part, "CPI")[0]["applied"]["accept"]["day"] == acc         # the frozen answer stays
+    undo = {"id": "a-%012x" % 2, "at": later_than(part, 2), "act": "undo", "ref": rej["id"]}
+    res, part = ag_build(tmp_path, ents, first + 28, acts=[rej, undo])
+    ep = app_eps(res, "CPI")[0]
+    assert (ep["closed"], ep["why"]) == (acc, "agent")
+    assert [x for x in part["agent"]["ag"].ship_data[A1]["rows"] if x["fam"] == "CPI"][0]["st"] == "accepted"
+
+
+def test_owner_use_this_level_on_a_blocked_settle_overrides_the_agent(tmp_path, agent_on):
+    ents = ag_world(scale_up(), market_apps())
+    _, part = ag_build(tmp_path, ents, AGN - 8)
+    blocked = [x for x in part["ledger"]["apps"][A1]["CPI"] if (x.get("ag") or {}).get("st") == "blocked"][0]
+    n0 = rows_of(part, "CPI")[0]["n"]
+    rb = ag_act(1, "rollback", later_than(part), level=blocked["id"], **{"from": ag_day(AGN - 3)})
+    res, part = ag_build(tmp_path, ents, AGN - 1, acts=[rb])
+    ep = app_eps(res, "CPI")[0]
+    assert (ep["closed"], ep["why"]) == (ag_day(AGN - 3), "owner")
+    pin = [x for x in res["levels"][("app", A1)]["CPI"] if x["src"] == "rollback"][0]
+    assert pin["days"] == blocked["days"] and abs(pin["v"] / blocked["v"] - 1) < 1e-12
+    row = [x for x in part["agent"]["ag"].ship_data[A1]["rows"] if x["fam"] == "CPI"][0]
+    assert row["st"] == "overridden" and row["ovr"]["act"] == "rollback" and rows_of(part, "CPI")[0]["n"] == n0
+
+
+def money_drop():
+    s = ag_series(1)
+    ag_mul(s, "d0_inr", 250, AGN, 0.75)                                       # D0 ROAS 40 % → 30 %, held
+    return s
+
+
+def test_money_a_forced_accept_is_a_wait_and_an_agent_money_level_is_refused(tmp_path, agent_on, monkeypatch, capsys):
+    ents = ag_world(money_drop(), market_apps())
+    res0 = CA.run(ents, CA.P_PROD, ag_day(AGN - 1))
+    assert [p["why"] for p in res0["proposals"][("app", A1)] if p["fam"] == "ROAS_G"] == ["money"]
+    real = LA._c1
+
+    def yes(ri, mkt, th):
+        out = real(ri, mkt, th)
+        return dict(out, dec="accept", ext=out["cause"], ext_branch="cpi_market", branch="cpi_market")
+    monkeypatch.setattr(LA, "_c1", yes)
+    res, part = ag_build(tmp_path, ents, AGN - 1)
+    r = rows_of(part, "ROAS_G")[0]
+    assert (r["why"], r["dec"], r["branch"], r["applied"]) == ("money", "wait", "money_guard",
+                                                                {"veto": None, "accept": None})
+    assert app_eps(res, "ROAS_G") == app_eps(res0, "ROAS_G")                  # nothing applied
+    monkeypatch.setattr(LA, "_c1", real)
+    led = json.load(open(cb.levels_path(str(tmp_path / "data"))))
+    for x in led["agent"]["rows"]:
+        if x["fam"] == "ROAS_G":
+            x["applied"]["accept"] = {"day": ag_day(AGN - 1), "days": [ag_day(AGN - 28), ag_day(AGN - 1)],
+                                      "since_t": ag_day(AGN - 1)}
+    json.dump(led, open(cb.levels_path(str(tmp_path / "data")), "w"))
+    capsys.readouterr()
+    res, part = ag_build(tmp_path, ents, AGN - 1)
+    err = capsys.readouterr().err
+    assert skipped(err, "cpi agent skipped") == ["cpi agent skipped: AgentMoneyError"]
+    assert app_eps(res, "ROAS_G") == app_eps(res0, "ROAS_G") and part["agent"] is None
+    assert part["ledger"]["agent"] == led["agent"]                             # written back unchanged
+
+
+def test_failure_costs_the_agent_only_the_block_written_back_unchanged(tmp_path, agent_on, monkeypatch, capsys):
+    ents = ag_world(scale_up(), market_apps())
+    _, part = ag_build(tmp_path, ents, AGN - 8)
+    saved = open(cb.levels_path(str(tmp_path / "data"))).read()
+    blk = json.loads(saved)["agent"]
+
+    def boom(*a, **k):
+        raise RuntimeError("x")
+    monkeypatch.setattr(cb, "agent_run", boom)
+    capsys.readouterr()
+    res, part = ag_build(tmp_path, ents, AGN - 1)
+    err = capsys.readouterr().err
+    assert skipped(err, "cpi agent") == ["cpi agent skipped: RuntimeError"] and health.SKIP.search(err)
+    assert app_eps(res, "CPI") == app_eps(CA.run(ents, CA.P_PROD, ag_day(AGN - 1)), "CPI")      # the automatic result
+    assert part["agent"] is None and json.dumps(part["ledger"]["agent"], sort_keys=True) == json.dumps(blk,
+                                                                                                  sort_keys=True)
+    assert "ag" not in json.dumps(cb.ship_levels(part["ledger"], A1))         # marks kept, not shipped
+
+
+def test_a_timeout_keeps_the_answers_made_and_applies_nothing(tmp_path, agent_on, monkeypatch, capsys):
+    ents = ag_world(scale_up(), market_apps())
+    calls = []
+
+    def clock():
+        calls.append(1)
+        return 0.0 if len(calls) <= 3 else 1000.0                            # past budget after the two settle asks
+    monkeypatch.setattr(cb, "_clock", clock)
+    capsys.readouterr()
+    res, part = ag_build(tmp_path, ents, AGN - 1)
+    assert skipped(capsys.readouterr().err, "cpi agent") == ["cpi agent skipped: AgentTimeout"]
+    assert app_eps(res, "CPI")[0]["why"] == "settled" and part["agent"] is None
+    rows = json.load(open(cb.levels_path(str(tmp_path / "data"))))["agent"]["rows"]
+    assert sorted((r["fam"], len(r["asks"]), r["applied"]["veto"]) for r in rows) == [("CPI", 1, None), ("GAP", 1, None)]
+    monkeypatch.setattr(cb, "_clock", lambda: 0.0)
+    res, part = ag_build(tmp_path, ents, AGN - 1)                             # the next build goes on from there
+    r = rows_of(part, "CPI")[0]
+    assert r["applied"]["veto"] == {"since_t": ag_day(AGN - 1)} and app_eps(res, "CPI")[0]["closed"] is None
+    assert r["asks"][0]["on"] == "settle" and len(r["asks"]) == 2
+
+
+def test_no_history_file_and_a_bad_backtest_file(tmp_path, agent_on, capsys):
+    ents = ag_world(scale_up(), market_apps())
+    (tmp_path / "data" / "cpi").mkdir(parents=True)
+    open(cb.levels_path(str(tmp_path / "data")), "w").write("{broken")
+    capsys.readouterr()
+    res, part = ag_build(tmp_path, ents, AGN - 1)
+    err = capsys.readouterr().err
+    assert skipped(err, "cpi agent") == ["cpi agent skipped: NoLedger"] and part["agent"] is None
+    good = {"v": 1, "years": 2.5,
+            "proposals": {"moments": 10, "c1_accept": 1, "c1_right": 1, "c1_wrong": 0, "accept": 0},
+            "settles": {"checked": 4, "passed": 0, "blocked": 3, "hold": 1, "level_held": 1}, "note": "synthetic"}
+    for i, bad in enumerate((dict(good, years=60), dict(good, note="x" * 201), dict(good, note="a\u202eb"),
+                             dict(good, settles=dict(good["settles"], hold=-1)), dict(good, extra=1), "[1")):
+        tmp = tmp_path / ("b%d" % i)
+        (tmp / "data" / "cpi").mkdir(parents=True)
+        open(cb.backtest_path(str(tmp / "data")), "w").write(bad if isinstance(bad, str) else json.dumps(bad))
+        _, part = ag_build(tmp, ents, AGN - 1)
+        assert skipped(capsys.readouterr().err, "cpi agent backtest") == [
+            "cpi agent backtest skipped: %s" % ("JSONDecodeError" if isinstance(bad, str) else "ValueError")]
+        assert part["agent"]["ag"].board["bt"] is None
+    tmp = tmp_path / "ok"
+    (tmp / "data" / "cpi").mkdir(parents=True)
+    json.dump(good, open(cb.backtest_path(str(tmp / "data")), "w"))
+    _, part = ag_build(tmp, ents, AGN - 1)
+    assert part["agent"]["ag"].board["bt"] == good and capsys.readouterr().err == ""
+
+
+def test_the_agent_block_keeps_rule_inputs_on_the_asks_that_matter_and_stays_bounded():
+    t = date(2026, 3, 28)
+    asks = []
+    for i in range(300):
+        d = (t - timedelta(days=7 * (299 - i))).isoformat()
+        dec = "keep" if (i // 50) % 2 == 0 else "wait"
+        asks.append({"d": d, "t": d, "dec": dec, "branch": dec + "_b", "part": None, "k": {"old": 1.0},
+                     "ri": {"pad": "x" * 9000, "i": i}, "mkt": {"n": i}})
+    blk = {"rows": [{"asks": asks}], "net": []}
+    cb._ag_trim(blk, t, CA.P_PROD["levels"]["agent"])
+    kept = [i for i, a in enumerate(asks) if a["ri"] is not None]
+    changes = [0] + [i for i in range(1, 300) if asks[i]["dec"] != asks[i - 1]["dec"]]
+    recent = [i for i, a in enumerate(asks) if a["t"] >= (t - timedelta(days=35)).isoformat()]
+    assert kept == sorted(set(changes) | set(range(295, 300)) | set(recent))
+    assert all(a["k"] == {"old": 1.0} for a in asks) and len(asks) == 300
+    big = {"rows": [{"asks": [dict(a, ri={"pad": "y" * 9000}, t=t.isoformat()) for a in asks]}], "net": []}
+    cb._ag_trim(big, t, CA.P_PROD["levels"]["agent"])
+    size = len(json.dumps(big, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    assert size <= cb.AG_MAX_BYTES and len(big["rows"][0]["asks"]) == 300
+    assert big["rows"][0]["asks"][-1]["ri"] is not None and big["rows"][0]["asks"][0]["ri"] is None   # oldest first
+
+
+def test_money_a_reopened_cpi_alarm_never_adds_to_the_money_lost(tmp_path, agent_on):
+    own = scale_up()
+    ag_mul(own, "d0_inr", 300, AGN, 0.75)                                     # and an open D0 ROAS alarm
+    ents = ag_world(own, market_apps())
+    res0 = CA.run(ents, CA.P_PROD, ag_day(AGN - 1))
+    res, part = ag_build(tmp_path, ents, AGN - 1)
+    assert app_eps(res, "CPI")[0]["closed"] is None and app_eps(res0, "CPI")[0]["why"] == "settled"
+    assert app_eps(res, "ROAS_G") == app_eps(res0, "ROAS_G") and app_eps(res, "ROAS_G")[0]["closed"] is None
+    D = cb._Days(date.fromisoformat(AG0), date.fromisoformat(ag_day(AGN - 1)))
+    s = {k: list(v) for k, v in own.items()}
+    R = [1 / 94.5] * D.n
+    ts = ag_day(AGN - 1)
+
+    def lost(r):
+        eps = [e for e in r["episodes"] if e["kind"] == "app" and e["id"] == A1]
+        return [cb.money_lost(eps, s, R, D.d0, a, ts, ts) for a in (ag_day(AGN - 14), ag_day(100))]
+    assert lost(res) == lost(res0) and lost(res)[0]["fam"] == "ROAS_G"
+    cpi = app_eps(res, "CPI")[0]
+    assert cpi["money"]["what"] == "extra_paid" and cpi["money"]["since_c_inr"] > 0
+    row = [x for x in part["agent"]["ag"].ship_data[A1]["rows"] if x["fam"] == "CPI"][0]
+    assert row["xp"]["inr"] > 0 and row["xp"]["from"] == row["first"]
+    assert "lost" not in json.dumps(part["agent"]["ag"].board)
+
+
+# ── the agent in the whole step: mode off exactly as before, mode on through the real files ──────────────────────────
+
+def site_bytes(site):
+    out = {}
+    for fn in sorted(os.listdir(site)):
+        if fn.startswith("cpi"):
+            with gzip.open(os.path.join(site, fn), "rb") as f:
+                out[fn] = f.read()
+    return out
+
+
+def test_mode_off_runs_no_agent_code_and_carries_a_saved_block_unchanged(tmp_path, monkeypatch, capsys):
+    a_dir, b_dir = tmp_path / "a", tmp_path / "b"
+    (da, sa, dash_a), (db, sb, dash_b) = make(a_dir), make(b_dir)
+    cb.run(dash_a, da, sa, {}, NOW)
+    cb.pop_line()
+    blk0 = cb._new_block(T, "2026-03-29T05:22:00Z", CA.P_PROD["levels"]["agent"])     # one an earlier "on" build wrote
+    calls = []
+
+    def trap(name):
+        def f(*a, **k):
+            calls.append(name)
+            raise AssertionError(name)
+        return f
+    for mod, name in ((cb, "agent_run"), (cb, "load_backtest"), (cb, "_Agent"), (LA, "evidence"), (LA, "decide"),
+                      (LA, "market"), (LA, "th_sha")):
+        monkeypatch.setattr(mod, name, trap(name))
+    capsys.readouterr()
+    cb.run(dash_b, db, sb, {}, NOW)
+    cb.pop_line()
+    assert calls == [] and "cpi agent" not in capsys.readouterr().err
+    assert site_bytes(sa) == site_bytes(sb)
+    assert json.dumps(dash_a["cpi"], sort_keys=True) == json.dumps(dash_b["cpi"], sort_keys=True)
+    assert open(cb.levels_path(da), "rb").read() == open(cb.levels_path(db), "rb").read()
+    assert "agent" not in dash_b["cpi"] and "agent" not in json.load(open(cb.levels_path(db)))
+    led = json.load(open(cb.levels_path(db)))
+    led["agent"] = blk0
+    led["agent"]["rows"].append({"id": "D-00000000aa", "app": IDS["a"], "fam": "CPI", "why": "open",
+                                 "ep": {"opened": "2026-03-12", "c": "2026-03-10"}, "asks": [], "dec": "keep",
+                                 "applied": {"veto": None, "accept": None}})
+    row = led["apps"][IDS["a"]]["CPI"][0]
+    row["ag"] = {"st": "blocked", "dec": "D-00000000aa", "short": "x", "cause": "x", "next": None}
+    json.dump(led, open(cb.levels_path(db), "w"))
+    want = json.dumps(led["agent"], sort_keys=True)
+    cb.run(dash_b, db, sb, {}, NOW)
+    cb.pop_line()
+    got = json.load(open(cb.levels_path(db)))
+    assert json.dumps(got["agent"], sort_keys=True) == want and calls == []
+    assert [r.get("ag") for r in got["apps"][IDS["a"]]["CPI"] if r["id"] == row["id"]] == [row["ag"]]
+    f = load(sb, dash_b["cpi"]["apps"][IDS["a"]]["file"])
+    assert "ag" not in f and "ag" not in json.dumps(f["lv"]) and "agent" not in dash_b["cpi"]
+
+
+def test_mode_on_the_whole_step_on_the_synthetic_site(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cb, "agent_cfg", lambda: dict(CA.P_PROD["levels"]["agent"]))
+    data, site, dash = make(tmp_path)
+    capsys.readouterr()
+    assert cb.run(dash, data, site, {}, NOW) == ["/cpi*"]
+    line = cb.pop_line()
+    assert "cpi agent" not in capsys.readouterr().err and line.startswith("cpi: apps 4,")
+    p = dash["cpi"]
+    assert p["agent"]["mode"] == "on" and p["agent"]["since"] == T and p["agent"]["trial"]["st"] == "trial"
+    assert sorted(p["agent"]) == ["bt", "mode", "ms", "n", "parity", "rule", "settle", "since", "th", "trial", "v",
+                                  "vintage"]
+    for k in "abde":
+        raw = open(os.path.join(site, p["apps"][IDS[k]]["file"]), "rb").read()
+        assert len(raw) < cb.MAX_GZ
+        f = load(site, p["apps"][IDS[k]]["file"])
+        assert isinstance(f["ag"]["rows"], list) and all("ag" in x for x in f["lp"])
+        assert all("ag" in r for rows in f["lv"].values() for r in rows)
+    assert "agent" in json.load(open(cb.levels_path(data)))
+
+
+def dj_model(k, x, g):
+    """Alpha: CPI ₹20 → ₹30 from 2025-10-01 with D0 ROAS 40 % → 30 %, then spend ×3 from 2025-10-15 (installs ×3);
+    the others as model()."""
+    if k != "a":
+        return model(k, x, g)
+    f = (lambda: 1.0 + 0.01 * next(g))
+    up = 3.0 if x >= "2025-10-15" else 1.0
+    m = {"sp": 50000.0 * up, "inst": 2500.0 * up / (1.5 if x >= "2025-10-01" else 1.0),
+         "roas": 0.30 if x >= "2025-10-01" else 0.40, "imp": 50000.0, "ecpm": 6.0, "dau": 20000.0}
+    m["inst"] = round(m["inst"] * f(), 2)
+    m["d0"] = round(m["sp"] * m["roas"] * f(), 2)
+    m["imp"] = int(m["imp"] * f())
+    m["rev"] = round(m["imp"] * m["ecpm"] / 1000.0 * f(), 2)
+    m["dau"] = int(m["dau"] * f())
+    return m
+
+
+def test_dj_through_the_real_files_blocked_settle_tag_money_and_no_push(tmp_path, monkeypatch):
+    data, site, dash = make(tmp_path, day0="2025-01-01", mdl=dj_model)
+    cb.run(dash, data, site, {}, NOW)                                          # mode off first: today's site, seeded
+    cb.pop_line()
+    off = copy.deepcopy(dash["cpi"])
+    f_off = load(site, off["apps"][IDS["a"]]["file"])
+    assert [e["why"] for e in eps_of(f_off, "CPI")][0] == "settled"
+    monkeypatch.setattr(cb, "agent_cfg", lambda: dict(CA.P_PROD["levels"]["agent"]))
+    dash2 = copy.deepcopy(dash)
+    cb.run(dash2, data, site, {}, NOW)
+    cb.pop_line()
+    p = dash2["cpi"]
+    a = p["apps"][IDS["a"]]
+    f = load(site, a["file"])
+    cpi = eps_of(f, "CPI")[0]
+    assert cpi["closed"] is None and cpi["c"] == eps_of(f_off, "CPI")[0]["c"]  # re-opened from its own change start
+    row = [x for x in f["ag"]["rows"] if x["fam"] == "CPI"][0]
+    assert (row["st"], row["branch"], row["why"]) == ("blocked", "spend_scaled", "settle")
+    assert row["cause"] == "seen with spend ×3.0 since the old level (your lever)" and row["xp"]["inr"] > 0
+    lv = [x for x in f["lv"]["CPI"] if x["st"] == "blocked"]
+    assert len(lv) == 1 and lv[0]["ag"]["dec"] == row["id"] and row["level"] == lv[0]["id"]
+    assert a["ag"]["st"] in ("blocked", "kept") and p["agent"]["settle"]["blocked"] >= 1
+    assert a["lost"] == off["apps"][IDS["a"]]["lost"] and a["lost"]["inr"] > 0 # the money stays the D0 ROAS one
+    assert [x["lost"] for x in p["alerts"] if x["app_id"] == IDS["a"]] == \
+        [x["lost"] for x in off["alerts"] if x["app_id"] == IDS["a"]]
+    assert not any(x["notify"] for x in p["alerts"])                          # re-opened: seeded, never pushed
+    assert all("ag" in x for x in f["lp"]) and [x["ag"]["st"] for x in f["lp"] if x["fam"] == "CPI"] == ["blocked"]
+    led = json.load(open(cb.levels_path(data)))
+    assert any(x["what"] == "blocked" for x in led["log"]) and led["agent"]["rows"]
