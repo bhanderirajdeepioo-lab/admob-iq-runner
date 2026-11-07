@@ -16,7 +16,8 @@
 //   * the period saved per viewer: bad keys / months / half a Custom ignored, a throwing localStorage harmless;
 //   * the chart's model (daily / weekly / monthly, no point under 100 views, the printed labels) and its drawing;
 //   * keep(): the tapped control back to its place and its sideways row's scroll kept, the page's height held THROUGH the
-//     repaint (paint() inside a keep() leaves the hold for unholdLater);
+//     repaint (paint() inside a keep() leaves the hold for unholdLater); ✕ Close on a phone: the row back where keep() left
+//     it once the details' Back step has landed (the browser's own scroll restore of that step undone a frame later);
 //   * the drill-down belongs to its app: another app opens with it closed (Back step dropped), "Show more" per app;
 //   * "Details ▸" in Needs attention goes to the drill-down card; a table row's tap stays put;
 //   * a late file redraws only the slots that use it, their scroll boxes kept;
@@ -1005,6 +1006,49 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
             y0 = rowAt(7).getBoundingClientRect().top; _.late(() => { for (let j = 0; j < 7; j++) P.h[j] += 23; }); res.sticky = rowAt(7).getBoundingClientRect().top - y0;
             out.abs.lateRow = res;
           } finally { W.scrollBy = sv.sb; D.querySelector = sv.qs; SCREEN.children = sv.ch; delete W.scrollY; W.scrollY = 0; delete ctx.getComputedStyle; } }
+        // ✕ Close on a phone: the details' Back step goes with them (hbDrop → history.go(-1)) and, as that step back lands, the
+        // browser puts back the scroll it saved when they opened (scrollRestoration 'auto') — after keep() put the row back.
+        // Once OUR step back has landed the row goes back again a frame later (0 px, room made below; the blank goes as the
+        // reader scrolls); another step back still on its way: it waits for that one; the tab left before the frame: nothing;
+        // no landing: the 1.5 s timer takes the listener off; a tap that keeps the step, a close with no step (a wide
+        // screen), a step dropped with no step back started: nothing waits
+        { const W = ctx.window, D = ctx.document, sv = { sb: W.scrollBy, ae: W.addEventListener, re: W.removeEventListener, se: D.scrollingElement, qs: SCREEN.querySelector, ch: SCREEN.children,
+            oh: Object.getOwnPropertyDescriptor(SCREEN, 'offsetHeight'), hd: ctx.hbDrop, hb: ctx.HB, st: ctx.setTimeout, iw: W.innerWidth, app: ctx.APP };
+          // the page: the reader scrolled down to the details' ✕ Close (the row 1000 px above the window); they opened at 1700
+          const P = { y: 3000, vh: 800, content: 5200 }, on = {}, fr = [], tm = [], row = { getBoundingClientRect: () => ({ top: 2000 - P.y, bottom: 2040 - P.y, height: 40 }) };
+          const L = t => (on[t] || []).length, frames = () => { while (fr.length) fr.shift()(); }, fire = t => (on[t] || []).slice().forEach(f => f());
+          // our step back lands: hbPop's turn (busy off unless another step back starts), the popstate listeners, the browser's
+          // restore of the scroll saved at the open, its scroll event; then the frames
+          const land = busyAgain => { ctx.HB.busy = !!busyAgain; fire('popstate'); P.y = 1700; fire('scroll'); };
+          const close = async (st, busy) => { P.y = 3000; P.content = 5200; SCREEN.style.minHeight = ''; ctx.HB = { st: st || [{ tag: 'scr-dd' }], busy: false, go: busy !== false }; _.set({ OPEN: 1 });
+            const y0 = row.getBoundingClientRect().top; SCREEN.onclick({ target: { closest: s => s === '[data-sc-close]' ? {} : null } }); await tick(); return y0; };
+          const res = {};
+          try {
+            ctx.APP = ''; Object.defineProperty(SCREEN, 'offsetHeight', { configurable: true, get: () => Math.max(P.content, parseFloat(SCREEN.style.minHeight) || 0) });
+            SCREEN.getBoundingClientRect = () => ({ top: -P.y, height: SCREEN.offsetHeight, bottom: SCREEN.offsetHeight - P.y });
+            SCREEN.children = [{ hidden: false, getBoundingClientRect: () => ({ top: -P.y, bottom: P.content - P.y, height: P.content }) }];
+            SCREEN.querySelector = q => q === 'tr[data-sc-open="1"]' ? row : null;
+            D.scrollingElement = { get scrollHeight() { return SCREEN.offsetHeight; } }; Object.defineProperty(W, 'scrollY', { configurable: true, get: () => P.y });
+            W.scrollBy = (x, dy) => { P.y = Math.max(0, Math.min(P.y + dy, SCREEN.offsetHeight - P.vh)); }; W.innerHeight = P.vh; W.innerWidth = 375;
+            W.addEventListener = (t, f) => { (on[t] = on[t] || []).push(f); }; W.removeEventListener = (t, f) => { on[t] = (on[t] || []).filter(g => g !== f); };
+            ctx.requestAnimationFrame = f => { fr.push(f); return fr.length; }; ctx.setTimeout = (f, ms) => { tm.push([f, ms]); return tm.length; };
+            // hbDrop → hbSync's stand-in: the step goes off HB.st and our step back is on its way (go); the repaint without the
+            // details card (1500 px)
+            ctx.hbDrop = t => { if (!ctx.HB.st.some(z => z.tag === t)) return; ctx.HB.st = ctx.HB.st.filter(z => z.tag !== t); ctx.HB.busy = ctx.HB.go; P.content -= 1500; };
+            const lim = () => { const x = tm.filter(z => z[1] === 1500); return x.length ? x[x.length - 1] : null; };
+            let y0 = await close(); res.wait = [L('popstate'), (lim() || [])[1] || null, row.getBoundingClientRect().top - y0];
+            land(); res.landed = L('popstate'); frames(); res.moved = row.getBoundingClientRect().top - y0;
+            P.y -= 600; fire('scroll'); P.y = 0; fire('scroll'); res.blank = SCREEN.offsetHeight - P.content; res.scrollLeft = L('scroll');
+            y0 = await close(); land(true); res.again = [L('popstate'), fr.length]; land(); frames(); res.againMoved = row.getBoundingClientRect().top - y0;
+            y0 = await close(); land(); ON = 'x'; frames(); ON = 'scr'; res.left = row.getBoundingClientRect().top - y0;
+            tm.length = 0; await close(); const tt = lim(); if (tt) tt[0](); res.timeout = [tt ? tt[1] : null, L('popstate')];
+            const none = [];
+            ctx.HB = { st: [{ tag: 'scr-dd' }], busy: false }; _.set({ OPEN: 1 }); _.keep('tr[data-sc-open="1"]', () => {}); await tick(); none.push(L('popstate')); _.set({ OPEN: null });
+            await close([]); none.push(L('popstate')); await close(null, false); none.push(L('popstate'));
+            res.none = none; out.abs.closeBack = res;
+          } finally { SCREEN.style.minHeight = ''; fire('scroll'); W.scrollBy = sv.sb; W.addEventListener = sv.ae; W.removeEventListener = sv.re; D.scrollingElement = sv.se; SCREEN.querySelector = sv.qs; SCREEN.children = sv.ch;
+            delete SCREEN.getBoundingClientRect; delete SCREEN.offsetHeight; if (sv.oh) Object.defineProperty(SCREEN, 'offsetHeight', sv.oh); delete W.scrollY; W.scrollY = 0; W.innerHeight = 800; W.innerWidth = sv.iw;
+            ctx.hbDrop = sv.hd; ctx.HB = sv.hb; ctx.setTimeout = sv.st; delete ctx.requestAnimationFrame; ctx.APP = sv.app; _.set({ OPEN: null }); } }
         delete ALLF.bench; ctx.DATA.scr.fv = 'f12b'; SCR.paint(); await tick(); SCR.paint(); h = SCREEN.innerHTML;
         out.abs.nobench = [h.includes('data-sc-open="0"'), /class="sc-lo"/.test(h.slice(h.indexOf('id="sc-ttw"')))];
       } finally { delete ALLF.apps.absy; delete ALLF.bench; delete FILES[an2]; delete ctx.DATA.scr.apps.absy; ctx.DATA.scr.fv = 'f13'; ctx.APP = 'Alpha App';

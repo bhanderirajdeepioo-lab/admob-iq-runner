@@ -1072,3 +1072,16 @@ def test_v3_the_reader_stays_put_at_the_page_end_and_when_file_2_comes_late(out)
     # file 2 grows the ⏳ cells of the rows above the reading line: the row being read moves 0 px (and, with every row above
     # the line, what follows the table; a stuck period bar never anchors, the reading line goes below it)
     assert out["abs"]["lateRow"] == {"row": 0, "below": 0, "sticky": 0}
+
+
+def test_v3_close_on_a_phone_stays_put_when_its_back_step_lands(out):
+    # ✕ Close on a phone takes the details' Back step off (history.go(-1)); as that step back lands the browser puts back the
+    # scroll it saved when the details opened (scrollRestoration 'auto'): a frame later the row goes back where keep() left it
+    c = out["abs"]["closeBack"]
+    assert c["wait"] == [1, 1500, 0]                       # one listener for OUR step back, 1.5 s at most; keep() itself: 0 px
+    assert c["landed"] == 0 and c["moved"] == 0            # landed: the listener goes, the row moves 0 px (room made below)
+    assert c["blank"] == 0 and c["scrollLeft"] == 0        # the reader's scroll lets the blank go (none left)
+    assert c["again"] == [1, 0] and c["againMoved"] == 0   # another step back still on its way: it waits for that one
+    assert c["left"] == 1300                               # the tab left before the frame: nothing scrolls
+    assert c["timeout"] == [1500, 0]                       # no landing: the timer takes the listener off
+    assert c["none"] == [0, 0, 0]                          # a tap that keeps the step, no step (wide), no step back started

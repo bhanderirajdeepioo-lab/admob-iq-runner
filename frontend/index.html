@@ -7883,12 +7883,27 @@ const boxOf=b=>{ try{ return b&&b.closest?b.closest('.sc-x'):null; }catch(e){ re
 // KEEPING: a keep() repaint is running — paint() leaves the held height alone until unholdLater lets it go (else a
 // shorter repaint near the page's end lets the browser clamp the scroll before the tapped control is put back)
 let KEEPING=false;
+// the details' Back step is on the history (a phone: setOpen pushes 'scr-dd' while they are open)
+const ddStep=()=>{ try{ return typeof HB!=='undefined'&&!!HB&&Array.isArray(HB.st)&&HB.st.some(z=>z&&z.tag==='scr-dd'); }catch(e){ return false; } };
 function keep(sel,fn){ const s=EL; let b0=null; try{ b0=s&&s.querySelector?s.querySelector(sel):null; }catch(e){}
-  const y0=b0&&b0.getBoundingClientRect?b0.getBoundingClientRect().top:null, r0=boxOf(b0), sx=r0?+r0.scrollLeft||0:0;
+  const y0=b0&&b0.getBoundingClientRect?b0.getBoundingClientRect().top:null, r0=boxOf(b0), sx=r0?+r0.scrollLeft||0:0, dd=ddStep();
   hold(s); KEEPING=true; try{ fn(); }finally{ KEEPING=false; }
   const s2=EL; let b=null; try{ b=y0==null||!s2||!s2.querySelector?null:s2.querySelector(sel); }catch(e){}
   if(b){ const r=boxOf(b); if(r&&sx) r.scrollLeft=sx; const dy=b.getBoundingClientRect().top-y0; if(Math.abs(dy)>1){ roomBelow(s2,dy); quiet(()=>window.scrollBy(0,dy)); } }
-  unholdLater(s2); }
+  unholdLater(s2); if(b&&dd&&!ddStep()) backKeep(sel,y0); }
+// a phone closing the details on the page (✕ Close; the row or "Details ▸" tapped again): their Back step goes with them
+// (hbDrop → history.go(-1)), and as that step back lands the browser can put back the scroll it saved for the step it
+// lands on (scrollRestoration 'auto': the scroll when the details opened) — after keep() put the control back (✕ Close:
+// the row jumped by what the reader had scrolled since). Once OUR step back has landed (the popstate after hbPop's, no
+// other step back on its way), the control goes back to y again a frame later (the browser's scroll is in by then), with
+// room made below as keep() makes it. The reader's own Back is left alone (no keep(): its restore is the place it goes
+// back to); no landing within 1.5 s (hbUnstick's wait): nothing is done
+function backKeep(sel,y){ Promise.resolve().then(()=>{ if(typeof HB==='undefined'||!HB||!HB.busy||typeof window==='undefined'||!window||!window.addEventListener) return;
+  let t=0; const f=()=>{ if(HB.busy) return; window.removeEventListener('popstate',f); clearTimeout(t);
+    const go=()=>{ const s=EL; let b=null; try{ b=onScreen()&&s&&s.querySelector?s.querySelector(sel):null; }catch(e){} if(!b||!b.getBoundingClientRect) return;
+      const dy=b.getBoundingClientRect().top-y; if(Math.abs(dy)>1){ roomBelow(s,dy); quiet(()=>window.scrollBy(0,dy)); unholdLater(s); } };
+    try{ requestAnimationFrame(()=>{ go(); requestAnimationFrame(go); }); }catch(e){ go(); } };
+  window.addEventListener('popstate',f); t=setTimeout(()=>{ try{ window.removeEventListener('popstate',f); }catch(e){} },1500); }); }
 function hold(r){ if(r&&r.style) r.style.minHeight=Math.max(+r.offsetHeight||0,parseFloat(r.style.minHeight)||0)+'px'; }
 // a scroll down by dy near the page's end: the page below the window is shorter than dy (a held height bigger than the new
 // content, "Show N more screens" at the end) and the browser would clamp it — the held height grows by what is missing
