@@ -41,6 +41,8 @@ ADS = [(MAIN, "Banner", "unit_a", "new", "1.0", "XA", "src_a", 15, 5),
 EVS = [(MAIN, "ad_click", 3), (ADACT, "ad_reward", 2), (MAIN, "inter_shown", 5), (LIST_, "banner_load_fail", 4),
        (MAIN, "screen_view", 100), (MAIN, "my_event", 50)]
 EXPO = [(MAIN, 9000), (LIST_, 4000)]
+# … revenue per day (class, total, ad revenue: GA4's decimals)
+REVS = [(MAIN, 0.75, 0.75), (LIST_, 0.25, 0.25), (ADACT, 1.5, 1.25)]
 VCOL = {gs.SC: 0, gs.PP: 0, gs.NVR: 1, gs.VER: 2, gs.CTY: 3}
 VMET = {"screenPageViews": 4, "userEngagementDuration": 5, "sessions": 6, "activeUsers": 7}
 ACOL = {gs.SC: 0, gs.PP: 0, gs.FMT: 1, gs.UNIT: 2, gs.NVR: 3, gs.VER: 4, gs.CTY: 5, gs.SRC: 6}
@@ -67,6 +69,8 @@ class Model:
             return [r for r in EVS if r[1] in events], {gs.SC: 0, gs.PP: 0, gs.EVN: 1}, {"eventCount": 2}
         if "adUnitExposure" in mets:
             return EXPO, {gs.SC: 0, gs.PP: 0}, {"adUnitExposure": 1}
+        if "totalRevenue" in mets:
+            return REVS, {gs.SC: 0, gs.PP: 0}, {"totalRevenue": 1, "totalAdRevenue": 2}
         if list(mets) == ["eventCount"]:
             ads = 0 if day.isoformat() in self.no_ads else sum(r[7] for r in ADS)
             rest = self.events_per_day - ads - sum(r[2] for r in EVS)
@@ -725,7 +729,7 @@ def test_recent_splits_are_read_right_after_their_own_truth(tmp_path):
         if rid in ("TV", "TA", "TE0"):
             continue
         j = max(k for k, r in recent if r == "TE0" and k < i)
-        assert i - j <= (2 if rid.endswith(":c") and rid[0] in "kex" else 1), (i, rid)
+        assert i - j <= (2 if rid.endswith(":c") and rid[0] in "kexm" else 1), (i, rid)
     for rid in gs.ORDER:
         assert job.rd(rid)["recent_at"] == gu._now_iso(NOW) and job.rd(rid)["upto"] == FE.isoformat()
     rf = gs.load_recent(str(tmp_path / "data"), KEY)
@@ -792,7 +796,7 @@ def test_month_files_by_group_and_the_loaders(tmp_path):
     assert sorted(got[0][2]) == ["2026-09-29", "2026-09-30"] and set(got[0][2]["2026-09-29"]) == {"cV", "cA"}
     assert set(_final(tmp_path, "small", "2026-10")["2026-10-01"]) == {"k", "e", "uV", "uA", "s", "x", "nV", "nA"}
     assert set(_final(tmp_path, "ver", "2026-10")["2026-10-01"]) == {"rV", "rA"}
-    assert set(_final(tmp_path, "core", "2026-10")["2026-10-01"]) == {"t", "v", "w", "a"}
+    assert set(_final(tmp_path, "core", "2026-10")["2026-10-01"]) == {"t", "v", "w", "a", "m"}
     assert gs.load_recent(data, KEY) == {} and gs.store_keys(str(tmp_path / "none")) == []
 
 
@@ -844,7 +848,7 @@ def test_an_old_skip_record_in_the_builds_store_is_read_again_by_the_hourly_back
     n = len(asked)
     out = gs.refresh_all(cfg, data, [dict(a) for a in apps], NOW + timedelta(hours=1), clock=lambda: 0.0)
     assert out["apps"] == {AID: "fetched"}
-    assert [(_rid(q), q.a.isoformat(), q.b.isoformat()) for _, q in asked[n:]] == [("w:u", d, d)]
+    assert [(_rid(q), q.a.isoformat(), q.b.isoformat()) for _, q in asked[n:] if "date" in q.dims] == [("w:u", d, d)]
     rec = gs._read_gz(p)["days"][d]["w"]
     assert rec["st"] == "w" and rec["tried"] == ["u"] and "skip" not in rec
     assert all(rd["redo"] == [] for rd in gs.load_meta(data, KEY)["reads"].values())
@@ -910,8 +914,9 @@ def test_refresh_all_two_passes_store_and_counts_only_line(monkeypatch, tmp_path
     out = gs.refresh_all(cfg, data, [dict(a) for a in apps] + [{"app_id": "x~3", "package": None}], NOW,
                          clock=lambda: 0.0, budget=1000, workers=1)
     assert out["apps"] == {AID: "fetched", AID2: "fetched"} and "error" not in out
-    recent = [i for i, (_, q) in enumerate(asked) if q.b == TODAY or q.dims == ("eventName",)]
-    back = [i for i, (_, q) in enumerate(asked) if q.b <= FE and q.dims != ("eventName",)]
+    day = [(i, q) for i, (_, q) in enumerate(asked) if "date" in q.dims or q.dims == ("eventName",)]   # (not a
+    recent = [i for i, q in day if q.b == TODAY or q.dims == ("eventName",)]                           # period's
+    back = [i for i, q in day if q.b <= FE and q.dims != ("eventName",)]                               # users)
     assert recent and back and max(recent) < min(back)      # every app's recent window before any backfill
     meta = gs.load_meta(data, KEY)
     assert meta["package"] == "com.example.alpha" and all(meta["reads"][r]["done"] for r in gs.ORDER)
@@ -924,10 +929,22 @@ def test_refresh_all_two_passes_store_and_counts_only_line(monkeypatch, tmp_path
     assert line.startswith("ga4 screens: apps 2, with GA4 2, fetched 2, fresh 0, failed 0, deferred 0, waiting 0, ")
     assert "skipped:" not in line and "example" not in line and "Activity" not in line and "unit_" not in line
     assert KEY not in line and "~" not in line
-    # an hour later nothing is due and the history is complete: fresh, no call
+    # an hour later: the backfill moved the store's first day back (d0), so only the periods that changed with it are
+    # read (no day read: the history is complete) …
+    root = os.path.join(data, gs.DIR)
+    had = set(gs.load_users(root, KEY)["w"])
     n = len(asked)
     out2 = gs.refresh_all(cfg, data, [dict(a) for a in apps], NOW + timedelta(hours=1), clock=lambda: 0.0)
-    assert out2["apps"] == {AID: "fresh", AID2: "fresh"} and len(asked) == n
+    again = asked[n:]
+    assert again and all("date" not in q.dims for _, q in again)
+    w2 = gs.load_users(root, KEY)["w"]
+    new = {k for k in w2 if k not in had}
+    assert new and {"%s_%s" % (q.a, q.b) for p, q in again if p == "111"} == new
+    assert min(gu._d(k[:10]) for k in w2) == gu._d(gs.store_d0(root, KEY))
+    # … and an hour after that nothing is due: fresh, no call
+    n = len(asked)
+    out3 = gs.refresh_all(cfg, data, [dict(a) for a in apps], NOW + timedelta(hours=2), clock=lambda: 0.0)
+    assert out3["apps"] == {AID: "fresh", AID2: "fresh"} and len(asked) == n
     # an internal error: counted, and the health line printed with the type only
     err = gs.log_line({"counts": {}, "error": "KeyError"})
     assert err.splitlines()[0].endswith(", error KeyError") and err.splitlines()[1] == "ga4 screens skipped: KeyError"
@@ -1400,7 +1417,8 @@ def test_an_old_skip_record_is_read_again_by_the_history_job(monkeypatch, tmp_pa
     n = len(asked)
     out = run()
     assert out["apps"] == {AID: "done"} and "error" not in out
-    assert [(_rid(q), q.a.isoformat(), q.b.isoformat()) for _, q in asked[n:]] == [("a:fu", d1, d1), ("s:fs", d2, d2)]
+    assert [(_rid(q), q.a.isoformat(), q.b.isoformat()) for _, q in asked[n:] if "date" in q.dims] == [
+        ("a:fu", d1, d1), ("s:fs", d2, d2)]                 # (the users of a period moved with d0: their own test)
     rec = gs._read_gz(core)["days"][d1]["a"]
     assert rec["st"] == "w" and rec["g"] == "fu" and rec["tried"] == ["fu"] and "skip" not in rec
     assert gs._read_gz(small)["days"][d2]["s"]["st"] == "w"
@@ -1444,7 +1462,8 @@ def test_a_class_record_not_whole_is_asked_again_by_page_path_and_a_whole_one_st
     _rewrite(gs.meta_path(root, KEY), old_meta)
     n = len(asked)
     gs.refresh_all(cfg, data, [dict(a) for a in apps], NOW + timedelta(hours=1), clock=lambda: 0.0)
-    redo = [(_rid(q), q.a.isoformat(), q.b.isoformat()) for _, q in asked[n:] if q.a.isoformat() <= "2026-10-30"]
+    redo = [(_rid(q), q.a.isoformat(), q.b.isoformat()) for _, q in asked[n:] if q.a.isoformat() <= "2026-10-30"
+            and "date" in q.dims]                       # (a period's users moved with d0: their own test)
     assert redo == [("a:fu", bad, bad)]                     # the learned state started again: fu alive, whole
     days = gs._read_gz(p)["days"]
     assert days[bad]["a"]["st"] == "w" and days[bad]["a"]["g"] == "fu" and days[bad]["a"]["pp"] == 1
@@ -1542,3 +1561,251 @@ def test_the_history_job_never_asks_a_day_the_builds_store_answered(monkeypatch,
     job = gs.Job(str(tmp_path / "staged"), _it(), NOW, FakeGA(), lambda: 0.0,
                  also=gs.Store(root, KEY, gs._read_gz(gs.meta_path(root, KEY)), strict=False), bf=True)
     assert job.needs("a", d) and not job.needs("w", d)
+
+
+# ── revenue by screen (m) and the users of a period (owner, 8 Nov 2026: "Firebase jaise numbers … Revenue") ────────
+def test_revenue_by_class_in_micros_tied_to_its_own_total(tmp_path):
+    ga = FakeGA()
+    job = _job(tmp_path, ga)
+    _t_days(job, [FE])
+    d = FE.isoformat()
+    n = len(ga.asked)
+    recs, clean, _ = gs.read_chunk(job, "m", "c", FE, FE)
+    assert [_rid(q) for q in ga.asked[n:]] == ["m:own", "m:c"]
+    assert [q.mets for q in ga.asked[n:]] == [gs.REVM, gs.REVM] and all(q.event is None for q in ga.asked[n:])
+    rec = recs[d]
+    assert clean and rec["st"] == "w" and rec["t"] == [2500000, 2250000]          # 0.75 + 0.25 + 1.5 · 1.25 ad
+    assert rec["r"] == [[LIST_, 250000, 250000], [MAIN, 750000, 750000], [ADACT, 1500000, 1250000]]
+    assert gs._mic("1234.567891") == 1234567891 and gs._mic(None) == 0 and gs._mic("x") == 0
+    # a day with no revenue at all costs the split nothing: whole and empty, its zero truth kept
+    ga.model.hook = lambda q, rows: ([] if "totalRevenue" in q.mets else rows, {})
+    n = len(ga.asked)
+    recs, clean, _ = gs.read_chunk(job, "m", "c", FE, FE)
+    assert clean and recs[d] == {"st": "w", "g": "c", "fv": 1, "r": [], "t": [0, 0]}
+    assert [_rid(q) for q in ga.asked[n:]] == ["m:own"]
+    # the ad revenue of a screen lost: the second metric does not tie → not whole, no rows
+    def lose(q, rows):
+        if "totalRevenue" not in q.mets or gs.SC not in q.dims:
+            return rows, {}
+        return [dict(r, totalAdRevenue=0) if r.get(gs.SC) == ADACT else r for r in rows], {}
+    ga.model.hook = lose
+    recs, _, _ = gs.read_chunk(job, "m", "c", FE, FE)
+    assert recs[d]["st"] == "o" and "r" not in recs[d]
+    assert gs.GRP["m"] == "core" and "m" in gs.CORE and gs.ORDER.index("m") == gs.ORDER.index("a") + 1
+
+
+def test_the_periods_the_page_offers():
+    today, d0 = date(2026, 11, 4), date(2026, 8, 20)
+    got = gs.pu_wanted(today, d0)
+    keys = [k for k, *_ in got]
+    assert len(keys) == len(set(keys))
+    kinds = {k: kd for k, _, _, kd in got}
+    ft = "2026-11-02"                                       # td − 2, the page's last final day
+    assert kinds["2026-11-04_2026-11-04"] == "day" and kinds["2026-11-03_2026-11-03"] == "day"
+    assert kinds["2026-10-27_%s" % ft] == "roll" and kinds["2026-10-04_%s" % ft] == "roll"
+    assert kinds["2026-09-04_%s" % ft] == "roll" and kinds["2026-08-20_%s" % ft] == "roll"     # 90 days: from d0
+    assert kinds["2026-11-01_2026-11-04"] == "day"         # this month (… today)
+    assert kinds["2026-08-20_2026-11-04"] == "all"
+    months = [k for k, _, _, kd in got if kd == "month"]
+    assert months == ["2026-10-01_2026-10-31", "2026-09-01_2026-09-30", "2026-08-20_2026-08-31"]   # newest first
+    assert all(gu._d(k[:10]) >= d0 for k in keys)
+    # a store younger than 60 days: the clamped windows come once (60 = 90 = from d0)
+    young = gs.pu_wanted(today, date(2026, 10, 10))
+    assert [k for k, *_ in young].count("2026-10-10_%s" % ft) == 1
+    assert [k for k, _, _, kd in young if kd == "month"] == ["2026-10-10_2026-10-31"]
+
+
+def _pu_hook(extra=None):
+    def hook(q, rows):
+        if "date" in q.dims or "activeUsers" not in q.mets or q.event:
+            return rows, {}
+        return (extra or (lambda q, rows: (rows, {})))(q, rows)
+    return hook
+
+
+def test_a_periods_users_record(tmp_path):
+    ga = FakeGA()
+    job = _job(tmp_path, ga)
+    lo, hi = date(2026, 10, 1), date(2026, 10, 31)
+    rec = gs.read_users(job, lo, hi)
+    q1, q2 = ga.asked[-2:]
+    assert q1.dims == (gs.SC,) and q2.dims == () and q1.mets == q2.mets == ("activeUsers",) and not q1.event
+    assert (q1.a, q1.b) == (lo, hi) and job.did
+    # the fake's users per class are a sum over 31 days (GA4's are unique: the record keeps what GA4 says)
+    assert rec["st"] == "w" and rec["lo"] == "2026-10-01" and rec["hi"] == "2026-10-31" and "fin" not in rec
+    assert rec["r"] == [[LIST_, 9 * 31], [MAIN, 23 * 31], [ADACT, 4 * 31]] and rec["tot"] == 36 * 31
+    fin = gs.read_users(job, lo, FE)
+    assert fin["fin"] == 1
+    # GA4's fold: the named rows kept, the fold's users beside them, "p"
+    ga.model.hook = _pu_hook(lambda q, rows: ((rows + [{gs.SC: "(other)", "activeUsers": 5}]) if q.dims else rows,
+                                              {"dataLossFromOtherRow": True} if q.dims else {}))
+    rec = gs.read_users(job, lo, hi)
+    assert rec["st"] == "p" and rec["fold"] == 5 and rec["loss"] == 1 and len(rec["r"]) == 3
+    # sampled / cut: no rows
+    ga.model.hook = _pu_hook(lambda q, rows: (rows, {"samplingMetadatas": [{"samplesReadCount": "1",
+                                                                           "samplingSpaceSize": "4"}]}))
+    assert gs.read_users(job, lo, hi) == {"lo": "2026-10-01", "hi": "2026-10-31", "at": gu._now_iso(NOW), "st": "s",
+                                          "smp": 0.25}
+    ga.model.hook = _pu_hook(lambda q, rows: (rows[:-1], {"_rc": len(rows)}) if q.dims else (rows, {}))
+    rec = gs.read_users(job, lo, hi)
+    assert rec["st"] == "o" and rec["trunc"] == 1 and "r" not in rec
+    ga.model.hook = _pu_hook(lambda q, rows: (rows, {"subjectToThresholding": True}))
+    assert gs.read_users(job, lo, hi)["thr"] == 1
+
+
+def test_when_a_period_is_read_again():
+    fe, now = date(2026, 10, 30), NOW
+    at = lambda h: gu._now_iso(now - timedelta(hours=h))
+    rec = lambda st, h, **k: dict({"st": st, "at": at(h)}, **k)
+    assert gs._pu_due(None, "day", date(2026, 11, 4), fe, now)
+    assert not gs._pu_due(rec("w", 2), "day", date(2026, 11, 4), fe, now)
+    assert gs._pu_due(rec("w", 3), "day", date(2026, 11, 4), fe, now)
+    assert not gs._pu_due(rec("w", 5), "roll", date(2026, 11, 2), fe, now)
+    assert gs._pu_due(rec("w", 6), "roll", date(2026, 11, 2), fe, now)
+    assert not gs._pu_due(rec("w", 23), "all", date(2026, 11, 4), fe, now)
+    assert gs._pu_due(rec("w", 24), "all", date(2026, 11, 4), fe, now)
+    # final: a whole record read once it was final is never read again; one read before it was, or not whole, a day on
+    assert not gs._pu_due(rec("w", 500, fin=1), "month", date(2026, 9, 30), fe, now)
+    assert not gs._pu_due(rec("p", 500, fin=1), "month", date(2026, 9, 30), fe, now)
+    assert not gs._pu_due(rec("w", 20), "month", date(2026, 9, 30), fe, now)
+    assert gs._pu_due(rec("w", 24), "month", date(2026, 9, 30), fe, now)
+    assert gs._pu_due(rec("s", 24, fin=1), "month", date(2026, 9, 30), fe, now)
+    assert not gs._pu_due(rec("s", 23, fin=1), "month", date(2026, 9, 30), fe, now)
+    assert gs._pu_due({"st": "?"}, "month", date(2026, 9, 30), fe, now)
+
+
+def test_step_users_reads_the_due_periods_drops_old_ones_and_keeps_the_currency(monkeypatch, tmp_path):
+    ga = FakeGA()
+    job = _job(tmp_path, ga, hs=date(2026, 8, 20))
+    job.ga.max_calls = 60
+    job.rd("t")["done"] = True                              # (the history complete: d0 stands still — the wait: its own test)
+    root = str(tmp_path / "data" / gs.DIR)
+    assert gs.store_d0(root, KEY) is None
+    gs.step_users(job)                                      # an empty store: nothing to ask
+    assert not ga.asked and not os.path.exists(gs.users_path(root, KEY))
+    _t_days(job, gs._days(date(2026, 8, 20), FE))
+    assert gs.store_d0(root, KEY) == "2026-08-20"
+    props = []
+    monkeypatch.setattr(ga4, "property_meta", lambda tok, pid: props.append(pid) or {"currency": "USD",
+                                                                                      "time_zone": "Etc/GMT"})
+    ga.token, ga.property_id = "tok", "111"
+    stale = gu._now_iso(NOW - timedelta(days=9))
+    os.makedirs(os.path.dirname(gs.users_path(root, KEY)), exist_ok=True)
+    gs.write_json_gz_stable(gs.users_path(root, KEY), {"v": 1, "w": {"2026-10-20_2026-10-26": {"st": "w", "at": stale,
+                                                                                               "r": [], "tot": 0}}})
+    n = len(ga.asked)
+    gs.step_users(job, months=1, calls=60)
+    asked = ga.asked[n:]
+    uf = gs.load_users(root, KEY)
+    want = gs.pu_wanted(TODAY, date(2026, 8, 20))
+    first = [k for k, _, _, kd in want if kd != "month"] + [[k for k, _, _, kd in want if kd == "month"][0]]
+    assert sorted(uf["w"]) == sorted(first)                 # yesterday's week dropped, one month (newest) only
+    assert len(asked) == 2 * len(first) and all("date" not in q.dims for q in asked)
+    assert uf["prop"] == {"currency": "USD", "time_zone": "Etc/GMT", "at": gu._now_iso(NOW)} and props == ["111"]
+    assert job.ga.max_calls == 60 + len(asked)              # the day reads after it keep their 60
+    # the next run: the next month (newest first), the currency kept (a day not passed), the calls cap holds
+    n = len(ga.asked)
+    gs.step_users(job, months=4, calls=2)
+    assert len(ga.asked) - n == 2 and props == ["111"]
+    assert len(gs.load_users(root, KEY)["w"]) == len(first) + 1
+    # a stop part way keeps every period read before it: today due again (its record aged), then the last month,
+    # which the stop cuts after its first call
+    uf = gs.load_users(root, KEY)
+    tk = "%s_%s" % (TODAY, TODAY)
+    uf["w"][tk]["at"] = stale
+    gs.write_json_gz_stable(gs.users_path(root, KEY), uf)
+    ga.stop_after = len(ga.asked) + 3
+    with pytest.raises(gf.Stop):
+        gs.step_users(job, months=4, calls=60)
+    uf = gs.load_users(root, KEY)
+    assert uf["w"][tk]["at"] == gu._now_iso(NOW) and "2026-08-20_2026-08-31" not in uf["w"]
+    assert len(uf["w"]) == len(first) + 1
+    ga.stop_after = None
+    # a refused property read keeps the currency it had
+    monkeypatch.setattr(ga4, "property_meta", lambda tok, pid: (_ for _ in ()).throw(RuntimeError("HTTP 403: no")))
+    uf = gs.load_users(root, KEY)
+    uf["prop"]["at"] = stale
+    gs.step_property(job, uf)
+    assert uf["prop"]["currency"] == "USD" and uf["prop"]["at"] == gu._now_iso(NOW) and uf["prop"]["err"] == 1   # (waits)
+
+
+def test_a_bug_in_the_users_step_never_costs_the_day_reads_and_is_never_silent(monkeypatch, tmp_path):
+    apps = [{"app_id": AID, "package": "com.example.alpha", "pid": "111"}]
+    _patch_routes(monkeypatch, apps)
+    asked = _http(monkeypatch, Model())
+    monkeypatch.setattr(gs, "step_users", lambda job: (_ for _ in ()).throw(KeyError("made-up")))
+    data = str(tmp_path / "data")
+    cfg = {"client_id": "c", "client_secret": "s", "refresh_tokens": json.dumps({"o": "rt"})}
+    out = gs.refresh_all(cfg, data, [dict(a) for a in apps], NOW, clock=lambda: 0.0, budget=1000)
+    assert out["apps"] == {AID: "fetched"} and "error" not in out and asked
+    assert all(r["done"] for r in gs.load_meta(data, KEY)["reads"].values())
+    assert out["counts"]["periods_failed"] == 1 and out["counts"]["periods"] == 0
+    line = gs.log_line(out)
+    assert line.splitlines()[0].endswith(", periods 0, periods failed 1")
+    assert line.splitlines()[1] == "ga4 screens periods skipped: KeyError" and "made-up" not in line
+    from admob_iq import health
+    got = []
+    monkeypatch.setattr(health, "fault", lambda name, typ: got.append((name, typ)))
+    health.scan(line.splitlines()[1])
+    assert got == [("ga4 screens periods", "KeyError")]
+
+
+
+def test_the_reviews_fixes_refunds_tiny_revenue_thresholding_d0_and_the_property(monkeypatch, tmp_path):
+    # a refund day: own truth [-7.99, 2.00] is a day to split (its ad revenue by screen kept), never an empty record
+    ga = FakeGA()
+    job = _job(tmp_path, ga)
+    _t_days(job, [FE])
+    d = FE.isoformat()
+
+    def refund(q, rows):
+        if "totalRevenue" not in q.mets:
+            return rows, {}
+        if gs.SC not in q.dims:
+            return [dict(r, totalRevenue=-7.99, totalAdRevenue=2.0) for r in rows], {}
+        return ([{gs.SC: MAIN, "date": r.get("date"), "totalRevenue": -7.99, "totalAdRevenue": 2.0} for r in rows[:1]],
+                {})
+    ga.model.hook = refund
+    recs, clean, _ = gs.read_chunk(job, "m", "c", FE, FE)
+    assert recs[d]["st"] == "w" and recs[d]["t"] == [-7990000, 2000000] and recs[d]["r"] == [[MAIN, -7990000, 2000000]]
+    # tiny revenue: GA4's per-row rounding inside the micros floor ties
+    assert gs._tie([["a", 4], ["b", 4], ["c", 4]], None, 1, {"": 14}, gs.MIC_ABS)
+    assert not gs._tie([["a", 4], ["b", 4], ["c", 4]], None, 1, {"": 14})
+    # thresholded: kept, but never final (asked again a day on)
+    ga.model.hook = _pu_hook(lambda q, rows: (rows, {"subjectToThresholding": True}))
+    rec = gs.read_users(job, date(2026, 10, 1), FE)
+    assert rec["thr"] == 1 and "fin" not in rec
+    # an unreadable users file starts again (it is GA4's to read again), never an error every run
+    root = str(tmp_path / "data" / gs.DIR)
+    os.makedirs(os.path.dirname(gs.users_path(root, KEY)), exist_ok=True)
+    with open(gs.users_path(root, KEY), "wb") as f:
+        f.write(b"{oops")
+    assert gs.load_users(root, KEY) == {"v": gs.PU_V, "w": {}}
+
+
+def test_periods_from_d0_wait_for_the_truths_history_and_the_property_read_waits_too(monkeypatch, tmp_path):
+    ga = FakeGA()
+    job = _job(tmp_path, ga, hs=date(2026, 8, 20))
+    job.ga.max_calls = 60
+    root = str(tmp_path / "data" / gs.DIR)
+    _t_days(job, gs._days(date(2026, 10, 10), FE))           # the history still filling: d0 = 10 Oct for now
+    calls = []
+    monkeypatch.setattr(ga4, "property_meta", lambda tok, pid: calls.append(pid) or (_ for _ in ()).throw(
+        RuntimeError("HTTP 500")))
+    ga.token, ga.property_id = "tok", "111"
+    gs.step_users(job, months=4, calls=60)
+    uf = gs.load_users(root, KEY)
+    assert uf["w"] and all(not k.startswith("2026-10-10_") for k in uf["w"])   # nothing keyed on the moving d0
+    assert calls == ["111"] and uf["prop"]["err"] == 1 and "currency" not in uf["prop"]
+    gs.step_users(job, months=4, calls=60)                   # the failed property read waits a day
+    assert calls == ["111"]
+    job.rd("t")["done"] = True                               # the history complete: d0 stands still
+    gs.step_users(job, months=4, calls=60)
+    uf = gs.load_users(root, KEY)
+    assert "2026-10-10_%s" % TODAY in uf["w"] and "2026-10-10_2026-10-31" in uf["w"]
+    # a stopped property: no property read at all (its reads stop at the App's gate — not this fake's)
+    uf["prop"] = {}
+    gs.write_json_gz_stable(gs.users_path(root, KEY), uf)
+    job.ga.prop = {"stop": "hour_low"}
+    gs.step_users(job, months=4, calls=60)
+    assert calls == ["111"]

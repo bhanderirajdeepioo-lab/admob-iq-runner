@@ -30,7 +30,7 @@ ROUND 4 (owner, 8 Nov 2026, Firebase's own "Pages and screens" export beside the
          their date totals — GA4 gives revenue as a decimal: kept here in micros) and the users of a whole PERIOD by
          screen and of the app (no date dimension: unique within the period, as Firebase's "Active users"), 7 … 1000
          days; plus each property's currency and time zone (Admin API). The workflow input `days` pins the ALT days to
-         ISO dates (a calendar month's last day: "31 days" = that month).
+         ISO dates (the last day of a 31-day month: "31 days" = that month; a shorter month needs its own range).
 
 Output: ga4/screens_probe.json in the PRIVATE repo only (dp.write_private). PUBLIC LOG: a counts-only heartbeat and ONE
 result line of counts — no names, ids, dates or numbers of the data. Quota: the Screens fetch's own App and floors

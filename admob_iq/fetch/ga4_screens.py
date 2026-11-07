@@ -16,12 +16,15 @@ Android + the app's stream), one date range, dims starting with date; ad reads c
   uA  users who saw ads by class / alone (not additive: flags only)             c, a
   s   ad_impression by format × ad source                                       fs               TA (× format)
   x   the app's own ad-like events: TX date × eventName in its list, by class   c                TX (× event)
+  m   revenue: TM date → totalRevenue, totalAdRevenue, split by class           c                TM
+      (owner, 8 Nov 2026: Firebase's "Pages and screens" export beside the tab — "Firebase jaise numbers … Revenue";
+      GA4 answers revenue as a decimal in the property's currency: kept in MICROS, ints like every other count)
       (the list: once a day, the last 28 final days' event names that look like ad events — ga4_activity_probe's
       AD_EVENT_RE, not the standard ones — top 20; a name GAINED re-reads x's history)
 A day with no ad_impression in its truth costs the ad reads nothing (an empty whole record); k / e / x likewise on a
 zero truth of their own.
 
-WHOLE (counts only, revenue never read): no sampling, nothing cut, no undated row in a multi-day read (in a one-day read
+WHOLE (counts — and m's revenue in micros): no sampling, nothing cut, no undated row in a multi-day read (in a one-day read
 it is the day's GA4 "(other)" row) and the split ties its truth per day (per format / event where the truth has one)
 within max(2 %, 1): "(other)" rows are GA4's fold — state "w" (fold ≤ 0.5 %), "p" (more: rows and the fold share kept,
 and the next coarser shape read beside it when over 2 % — through the same ladder and gate, a final day it is not
@@ -43,6 +46,15 @@ SCREEN: the ads, clicks, own-events and exposure reads (PP_READS) ask GA4's page
 by class GA4 sampled or dropped rows of the biggest apps' ad events every day it was asked, by page path it gave them
 whole (6 Nov 2026). Their records carry "pp": 1; one read by class that is not whole is asked again by page path, a
 whole one stays; what the reads learned by class (grain, dead, gate) starts again ("dim").
+
+USERS OF A PERIOD (step_users, owner 8 Nov 2026: Firebase's "Active users" = unique within the period, never a sum
+of days): GA4 activeUsers by class with NO date dimension, and the app's, for every period the Screens page offers
+(pu_wanted: today, yesterday, the last 7 / 30 / 60 / 90 days ending td − 2, every calendar month from the store's first
+day — this month and last month among them — and all time) → <key>/users.json.gz {"v", "w": {"<lo>_<hi>": {"lo", "hi",
+"at", "st" (w whole · p GA4 grouped rows into "(other)": the named rows exact, "fold" its users · s sampled · o cut),
+"r" [[class, users]], "tot" (the app), "thr", "loss", "fin" (ends ≤ today − 5: never read again once whole)}},
+"prop": {"currency", "time_zone", "at"} (the Admin API, once a day)}. A period not final is read again after
+PU_HOURS; past months PU_MONTHS per app per run, newest first; a stop keeps every period already read.
 
 Store (private repo, kept for good):
     data/ga4_screens/<key>.json.gz                   meta {"v", "app_id", "package", "property_id", "stream_id",
@@ -107,10 +119,11 @@ RECENT_DAYS = 5                         # today … today − 4: re-read on refr
 FINAL_LAG = 5                           # final = today − 5 and older (written once)
 CORE_HOURS = 3.0                        # t v w a: due again after this long …
 LAYER_HOURS = 12.0                      # … every other read after this long
-CHUNK0 = {"t": 31, "v": 31, "w": 31, "a": 14, "nV": 7, "rV": 7, "cV": 7, "nA": 7, "rA": 7, "cA": 7, "k": 31,
+CHUNK0 = {"t": 31, "v": 31, "w": 31, "a": 14, "m": 31, "nV": 7, "rV": 7, "cV": 7, "nA": 7, "rA": 7, "cA": 7, "k": 31,
           "e": 31, "uV": 31, "uA": 7, "s": 31, "x": 31}
 LADDER = (31, 14, 7, 3, 1)              # a read's days per call: halved down, doubled up (≤ its CHUNK0)
-TIE_REL, TIE_ABS = 0.02, 1              # a split ties its truth within max(2 %, 1)
+TIE_REL, TIE_ABS = 0.02, 1              # a split ties its truth within max(2 %, 1) …
+MIC_ABS = 1000                          # … m's revenue within max(2 %, 1000 micros): GA4 rounds each row's decimals
 FOLD_OK = 0.005                         # fold share ≤ 0.5 %: "w"; more: "p"
 FOLD_CO = 0.02                          # "p" over 2 %: the next coarser shape is read beside it
 DEAD_AFTER = 3                          # final days in a row a shape failed → dead …
@@ -122,7 +135,8 @@ EVENTS_MAX = 20                         # … its top 20 names
 TRUTH_FRESH_SEC = 120                   # a recent split's truth is read again when older than this (same worker)
 WORKERS = 6                             # properties side by side (each property: one call at a time)
 BUDGET_SEC = 150                        # the run's clock (GA4_SCREENS_BUDGET_SEC)
-PASS1_SHARE = 0.6                       # pass 1 (recent) stops starting reads past 60 % of it
+PASS1_SHARE = 0.6                       # pass 1 (recent) stops starting reads past 60 % of it …
+PASSU_SHARE = 0.75                      # … the users of a period (step_users) past 75 %
 APP_CALLS = 60                          # calls per app per run
 RETRY_HOURS = 3.0                       # a failed app waits this long
 PAGE_ROWS = 100000
@@ -148,6 +162,16 @@ TOKEN_TTL_SEC = 2700                    # an owner's access token is fetched aga
                                         # hour: the 5.5 h job outlives several) — and at once after a 401
 TICK_SEC = 5.0
 DATA_ROOT = "_private"                  # the history job's private clone (SCREENS_DATA_DIR)
+# the users of a period (step_users): a period not final is read again after this long (by kind: today / yesterday /
+# this month · the rolling ones · all time — its read is the costly one), past months this many per app per run, and
+# at most this many calls per app per run for all of it; the property's currency / time zone once a day
+PU_FILE, PU_V = "users.json.gz", 1
+PU_HOURS = {"day": 3.0, "roll": 6.0, "all": 24.0, "month": 6.0}
+PU_MONTHS = 4
+PU_CALLS = 24
+PU_LAG = 2                              # the page's last final day: td − 2 ("GA4 data till ft")
+PU_ROLL = (7, 30, 60, 90)
+PROP_HOURS = 24.0
 
 SC, FMT, UNIT, SRC, EVN = "unifiedScreenClass", "adFormat", "adUnitName", "adSourceName", "eventName"
 # the screen of the ads, clicks, own-events and exposure reads (PP_READS): GA4's "page path and screen class" — for an app
@@ -158,6 +182,8 @@ NVR, VER, CTY = "newVsReturning", "appVersion", "countryId"
 IMP = "ad_impression"
 CLICKS = ("ad_click", "ad_reward")
 VM = ("screenPageViews", "userEngagementDuration")
+REVM = ("totalRevenue", "totalAdRevenue")             # m: GA4 answers decimals — stored in micros (_mic)
+MICROS = frozenset(REVM)
 EC = ("eventCount",)
 FOLD = frozenset(("(other)", "other"))  # GA4's fold labels (any case)
 # an app's own ad-like event — as ga4_activity_probe.AD_EVENT_RE / STD_AD_EVENTS (a test keeps them equal)
@@ -190,12 +216,16 @@ READS = {
     "uA": {"shapes": (("c", (SC,)), ("a", ())), "mets": ("activeUsers",), "ev": IMP, "tie": None},
     "s": {"shapes": (("fs", (FMT, SRC)),), "mets": EC, "ev": IMP, "tie": "ta"},
     "x": {"shapes": (("c", (PP, EVN)),), "mets": EC, "evs": "@names", "tie": "own", "own": ((EVN,), EC)},
+    # revenue by class, tied to its own date total (probe round 4, 8 Nov 2026: whole on every app over 31 days, the
+    # class split equal to Firebase's export to the micro)
+    "m": {"shapes": (("c", (SC,)),), "mets": REVM, "tie": "own", "own": ((), REVM)},
 }
 PP_READS = frozenset(r for r, R in READS.items() if any(PP in dims for _, dims in R["shapes"]))
-ORDER = ("t", "v", "w", "a", "nV", "nA", "rV", "rA", "cV", "cA", "k", "e", "s", "x", "uV", "uA")
-CORE = frozenset(("t", "v", "w", "a"))
+ORDER = ("t", "v", "w", "a", "m", "nV", "nA", "rV", "rA", "cV", "cA", "k", "e", "s", "x", "uV", "uA")
+CORE = frozenset(("t", "v", "w", "a", "m"))
 AD_READS = frozenset(("w", "a", "nA", "rA", "cA", "uA", "s"))
-GRP = {"t": "core", "v": "core", "w": "core", "a": "core", "k": "small", "e": "small", "uV": "small", "uA": "small",
+GRP = {"t": "core", "v": "core", "w": "core", "a": "core", "m": "core", "k": "small", "e": "small", "uV": "small",
+       "uA": "small",
        "s": "small", "x": "small", "nV": "small", "nA": "small", "rV": "ver", "rA": "ver", "cV": "cc", "cA": "cc"}
 GRPS = ("core", "small", "ver", "cc")
 KEY_RE = re.compile(r"[0-9a-f]{12}")
@@ -207,6 +237,14 @@ STATES = {"w": "whole", "p": "partial", "o": "not_whole", "t": "not_whole", "s":
 # ── small helpers ───────────────────────────────────────────────────────────────────────────────────────────────────
 def _i(v):
     return gaud._int(v)
+
+
+def _mic(v):
+    """A GA4 decimal (revenue) → micros, an int (a missing / bad value: 0)."""
+    try:
+        return int(round(float(v) * 1e6))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _iso(d):
@@ -222,8 +260,8 @@ def _isfold(v):
     return str(v).strip().lower() in FOLD
 
 
-def _tol(want):
-    return max(TIE_REL * abs(want), TIE_ABS)
+def _tol(want, ab=TIE_ABS):
+    return max(TIE_REL * abs(want), ab)
 
 
 def _whole(rec):
@@ -337,6 +375,10 @@ def meta_path(root, key):
 
 def month_path(root, key, grp, month):
     return os.path.join(root, key, "%s_%s.json.gz" % (grp, month))
+
+
+def users_path(root, key):
+    return os.path.join(root, key, PU_FILE)
 
 
 def recent_path(root, key):
@@ -481,7 +523,7 @@ def _parse(rows, dims, mets, a, b):
         k = tuple(str(r.get(x) or "") for x in dims)
         v = day.setdefault(k, [0] * len(mets))
         for i, m in enumerate(mets):
-            v[i] += _i(r.get(m))
+            v[i] += _mic(r.get(m)) if m in MICROS else _i(r.get(m))
     return {d: sorted(list(k) + v for k, v in day.items()) for d, day in out.items()}, und
 
 
@@ -511,13 +553,18 @@ def _read_t(job, a, b):
 
 
 def _own(rid, rows):
-    """A k / x / e own truth's rows of a day → its stored form ([[event, n]] / exposure)."""
+    """A k / x / e / m own truth's rows of a day → its stored form ([[event, n]] / exposure / [revenue, ad revenue]
+    micros)."""
     if rid == "e":
         return sum(r[0] for r in rows)
+    if rid == "m":
+        return [sum(r[0] for r in rows), sum(r[1] for r in rows)]
     return [[r[0], r[1]] for r in rows if r[1]]
 
 
 def _own_total(v):
+    if isinstance(v, list) and all(isinstance(x, int) for x in v):     # m: [revenue, ad revenue] — a refund day's
+        return sum(abs(x) for x in v)                                  # negative revenue is still a day to split
     return v if isinstance(v, int) else sum(n for _, n in v or ())
 
 
@@ -539,6 +586,9 @@ def _maps(job, rid, dims, day, own):
     if tie == "own":
         if rid == "e":
             return None, [{"": own or 0}]
+        if rid == "m":
+            o = own or [0, 0]
+            return None, [{"": o[0]}, {"": o[1]}]
         m = {k: n for k, n in own or ()}
         return (dims.index(EVN), [m]) if EVN in dims else (None, [{"": sum(m.values())}])
     t = job.truth(day) or {}
@@ -553,7 +603,7 @@ def _maps(job, rid, dims, day, own):
     return (dims.index(FMT), [m]) if FMT in dims else (None, [{"": sum(m.values())}])
 
 
-def _tie(rows, ki, col, want):
+def _tie(rows, ki, col, want, ab=TIE_ABS):
     """Σ (named + fold) of a day's rows ties the truth `want` ({key: value}) on metric column `col`: the total, every
     key at most its truth, and the keys' shortfall covered by the rows whose own key is GA4's fold."""
     got, pool = {}, 0
@@ -564,15 +614,15 @@ def _tie(rows, ki, col, want):
             continue
         got[k] = got.get(k, 0) + r[col]
     tw = sum(want.values())
-    if abs(sum(got.values()) + pool - tw) > _tol(tw):
+    if abs(sum(got.values()) + pool - tw) > _tol(tw, ab):
         return False
     short = 0
     for k in set(want) | set(got):
         w, g = want.get(k, 0), got.get(k, 0)
-        if g > w + _tol(w):
+        if g > w + _tol(w, ab):
             return False
-        short += max(0, w - g - _tol(w))
-    return short <= pool + _tol(tw)
+        short += max(0, w - g - _tol(w, ab))
+    return short <= pool + _tol(tw, ab)
 
 
 def _judge(job, rid, shape, dims, day, rows, info, und, own):
@@ -589,8 +639,8 @@ def _judge(job, rid, shape, dims, day, rows, info, und, own):
         rec.update(st="o", cov=None, trunc=1)
         return rec
     nd = len(dims)
-    tot = sum(r[nd] for r in rows)
-    fold = sum(r[nd] for r in rows if any(_isfold(v) for v in r[:nd]))
+    tot = sum(abs(r[nd]) for r in rows)                 # (abs: m's refunds; every count is ≥ 0)
+    fold = sum(abs(r[nd]) for r in rows if any(_isfold(v) for v in r[:nd]))
     f = fold / float(tot) if tot else 0.0
     tm = _maps(job, rid, dims, day, own)
     if tm is None:                                      # users: not additive, flags only
@@ -604,7 +654,8 @@ def _judge(job, rid, shape, dims, day, rows, info, und, own):
         if info.get("loss"):                            # the tie below finds what went missing; the flag is kept
             rec["loss"] = 1
         ki, wants = tm
-        if not all(_tie(rows, ki, nd + i, w) for i, w in enumerate(wants)):
+        ab = MIC_ABS if rid == "m" else TIE_ABS
+        if not all(_tie(rows, ki, nd + i, w, ab) for i, w in enumerate(wants)):
             tw = sum(wants[0].values())
             rec.update(st="o", cov=round(tot / float(tw), 4) if tw else None)
             return rec
@@ -792,6 +843,7 @@ class Job:
         self.c = dict.fromkeys(("whole", "partial", "not_whole", "sampled", "gated", "dead"), 0)
         self.failed = set()
         self.did = False
+        self.periods = 0                                # periods whose users step_users read
 
     @property
     def names(self):
@@ -1179,6 +1231,177 @@ def step_recent(job):
         job.store.save_meta()
 
 
+def store_d0(root, key, recent=None):
+    """The store's first day with any record (the build's d0): its oldest core month file's first day, else the recent
+    file's — None while it holds none (an unreadable month file passes over to the next)."""
+    for m in sorted((_months_on_disk(root, key).get("core") or ())):
+        days = (_read_gz(month_path(root, key, "core", m)) or {}).get("days") or {}
+        real = sorted(d for d, v in days.items() if v)
+        if real:
+            return real[0]
+    real = sorted(d for d, v in (recent or {}).items() if v)
+    return real[0] if real else None
+
+
+def _month_last(d):
+    return (d.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+
+
+def pu_wanted(today, d0):
+    """The periods the Screens page offers (its rng(): the property's calendar, ft = td − 2) → [(key, lo, hi, kind)]:
+    today, yesterday, the last 7 / 30 / 60 / 90 days ending ft, every calendar month from d0's (this month … today; the
+    first one from d0, as the page's sums start there) and all time (d0 … today); key "<lo>_<hi>" (ISO). Days before
+    d0 are never asked."""
+    d0 = gu._d(d0) if isinstance(d0, str) else d0
+    ft = today - timedelta(days=PU_LAG)
+    out, seen = [], set()
+
+    def add(lo, hi, kd):
+        lo = max(lo, d0)
+        k = "%s_%s" % (_iso(lo), _iso(hi))
+        if lo <= hi and k not in seen:
+            seen.add(k)
+            out.append((k, lo, hi, kd))
+    add(today, today, "day")
+    add(today - timedelta(days=1), today - timedelta(days=1), "day")
+    for n in PU_ROLL:
+        add(ft - timedelta(days=n - 1), ft, "roll")
+    add(today.replace(day=1), today, "day")                        # this month
+    add(d0, today, "all")
+    m = today.replace(day=1)
+    while True:                                                    # last month, then older ones, newest first
+        m = (m - timedelta(days=1)).replace(day=1)
+        if _month_last(m) < d0:
+            break
+        add(m, _month_last(m), "month")
+    return out
+
+
+def load_users(root, key):
+    """The app's users of a period file → {"v", "w", "prop"}; missing, unreadable or of another PU_V: a new one (every
+    period in it is GA4's to read again — unlike the month files, nothing here is history only this store holds)."""
+    try:
+        with gzip.open(users_path(root, key), "rt", encoding="utf-8") as f:
+            j = json.load(f)
+    except Exception:                                   # noqa: BLE001 — (missing / unreadable: read again)
+        j = None
+    if not isinstance(j, dict) or j.get("v") != PU_V or not isinstance(j.get("w"), dict):
+        j = {"v": PU_V, "w": {}}
+    return j
+
+
+def read_users(job, lo, hi):
+    """One period: GA4 activeUsers by class (no date: unique in the period) and the app's → its record (st w / p / s
+    / o; rows kept only when neither answer was sampled or cut)."""
+    rng = [gu._rng(lo, hi)]
+    rows, i1 = _ask(job.ga, {"dateRanges": rng, "dimensions": ga4._dim(SC), "metrics": ga4._dim("activeUsers"),
+                             "keepEmptyRows": False})
+    trows, i2 = _ask(job.ga, {"dateRanges": rng, "dimensions": [], "metrics": ga4._dim("activeUsers"),
+                              "keepEmptyRows": False})
+    job.did = True
+    rec = {"lo": _iso(lo), "hi": _iso(hi), "at": gu._now_iso(job.now)}
+    if i1["s"] or i2["s"]:
+        rec.update(st="s", smp=min(i["smp"] for i in (i1, i2) if i["s"]))
+        return rec
+    if i1["trunc"] or i2["trunc"] or len(trows) > 1:
+        rec.update(st="o", trunc=1)
+        return rec
+    r, fold = {}, 0
+    for x in rows:
+        c, n = str(x.get(SC) or ""), _i(x.get("activeUsers"))
+        if _isfold(c):
+            fold += n
+            continue
+        r[c] = r.get(c, 0) + n
+    rec.update(st="p" if (fold or i1["loss"]) else "w", r=sorted([c, n] for c, n in r.items()),
+               tot=_i((trows[0] if trows else {}).get("activeUsers")))
+    if fold:
+        rec["fold"] = fold
+    if i1["loss"]:
+        rec["loss"] = 1
+    if i1["thr"] or i2["thr"]:
+        rec["thr"] = 1
+    if hi <= job.final_end and not rec.get("thr"):    # (thresholded: GA4 withheld small rows — asked again)
+        rec["fin"] = 1
+    return rec
+
+
+def _pu_due(rec, kd, hi, final_end, now):
+    """A period's record → read it (again)? Never read · not final and older than its PU_HOURS · final but not whole
+    (or read before it was final) and older than a day."""
+    if not isinstance(rec, dict) or rec.get("st") not in ("w", "p", "s", "o"):
+        return True
+    age = gu._hours_since(rec.get("at"), now)
+    if hi <= final_end:
+        return not (rec.get("fin") and rec["st"] in ("w", "p")) and age >= PU_HOURS["all"]
+    return age >= PU_HOURS[kd]
+
+
+def step_property(job, ufile):
+    """The property's currency and time zone (Admin API) into the users file, once per PROP_HOURS; a refusal keeps
+    what it had."""
+    pr = ufile.get("prop") if isinstance(ufile.get("prop"), dict) else {}
+    if gu._hours_since(pr.get("at"), job.now) < PROP_HOURS:            # (asked within the day: success or not)
+        return
+    if (getattr(job.ga, "prop", None) or {}).get("stop") or (job.ga.over() if getattr(job.ga, "over", None) else None):
+        return
+    try:
+        tok = (job.ga.renew() if getattr(job.ga, "renew", None) else None) or job.ga.token
+        m = ga4.property_meta(tok, job.ga.property_id)
+    except gf.Stop:
+        raise
+    except Exception:                                   # noqa: BLE001 — kept as it was, asked again in a day
+        ufile["prop"] = dict(pr, at=gu._now_iso(job.now), err=1)
+        return
+    if m.get("currency"):
+        ufile["prop"] = {"currency": str(m["currency"]), "time_zone": str(m.get("time_zone") or ""),
+                         "at": gu._now_iso(job.now)}
+
+
+def step_users(job, months=PU_MONTHS, calls=PU_CALLS):
+    """The users of every period the page offers (pu_wanted), for one app: the due ones — today / yesterday / this
+    month, the rolling ones, all time, then past months (at most `months`, newest first) — each stored as soon as it is
+    read; a period no longer offered (yesterday's rolling windows) is dropped, a final month kept. At most `calls` GA4
+    calls. Raises gf.Stop (what was read is saved first)."""
+    d0 = store_d0(job.root, job.key, job.recent)
+    if not d0:
+        return
+    fixed = bool(job.rd("t").get("done"))              # d0 moves back while the truth's history fills: a period that
+    #                                                    starts at d0 (all time, the first month, a clamped window)
+    #                                                    is read once it stands still — the build's d0 is the same then
+    ufile = load_users(job.root, job.key)
+    want = pu_wanted(job.today, d0)
+    keep = {k for k, *_ in want}
+    old = len(ufile["w"])
+    ufile["w"] = {k: v for k, v in ufile["w"].items() if k in keep}
+    changed = len(ufile["w"]) != old
+    pr0 = dict(ufile.get("prop") or {})
+    left, nm, cap0, c0 = calls, 0, job.ga.max_calls, job.ga.calls
+    job.ga.max_calls = max(cap0, c0) + calls            # its own calls, beside the app's APP_CALLS for the day reads
+    try:
+        step_property(job, ufile)
+        changed |= ufile.get("prop") != pr0
+        for k, lo, hi, kd in want:
+            if left < 2:
+                break
+            if kd == "month" and nm >= months:
+                continue
+            if not fixed and _iso(lo) == d0:
+                continue
+            if not _pu_due(ufile["w"].get(k), kd, hi, job.final_end, job.now):
+                continue
+            ufile["w"][k] = read_users(job, lo, hi)
+            job.periods += 1
+            left -= 2
+            nm += kd == "month"
+            changed = True
+            write_json_gz_stable(users_path(job.root, job.key), ufile)
+    finally:
+        job.ga.max_calls = cap0 + (job.ga.calls - c0)  # (the day reads after it keep their whole APP_CALLS)
+        if changed:
+            write_json_gz_stable(users_path(job.root, job.key), ufile)
+
+
 def _skips(job):
     """The days of every skip record from before a final day had to be asked (nothing asked: dead / gated) — and, for
     a page path read, of every record read by screen class that is not whole — in this store and, the history job's,
@@ -1402,7 +1625,8 @@ def _whole_status(s):
 
 # ── the runs ────────────────────────────────────────────────────────────────────────────────────────────────────────
 COUNTS = ("selected", "with_ga4", "fetched", "fresh", "failed", "deferred", "waiting", "calls", "tokens", "whole",
-          "partial", "not_whole", "sampled", "gated", "dead", "quota_stops", "merged", "merged_nw", "staged_bad")
+          "partial", "not_whole", "sampled", "gated", "dead", "quota_stops", "merged", "merged_nw", "staged_bad",
+          "periods", "periods_failed")
 
 
 def _select(cfg, data_dir, apps, now, state, counts, out, retry=True, clock=time.monotonic):
@@ -1479,6 +1703,9 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
         def over1():
             return "budget" if clock() - t0 >= budget * PASS1_SHARE else None
 
+        def overu():
+            return "budget" if clock() - t0 >= budget * PASSU_SHARE else None
+
         def over2():
             return "budget" if clock() - t0 >= budget else None
 
@@ -1500,6 +1727,15 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
                 job.ga.over = over
                 if what == "recent":
                     step_recent(job)
+                elif what == "users":
+                    try:
+                        step_users(job)
+                    except gf.Stop:             # best effort: the periods read are kept, the rest next run (a
+                        pass                    # property stop still holds for the passes after it)
+                    except Exception as e:      # a bug here never costs the app its day reads — and never silent:
+                        with lock:              # counted, and the health line printed with its type
+                            counts["periods_failed"] += 1
+                            out.setdefault("periods_error", type(e).__name__)
                 else:
                     with lock:
                         it["st"]["turn"] = now_iso      # it had its turn (a cut-off app goes last next time too)
@@ -1533,6 +1769,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
             for it in xs:
                 it["meta_reads"] = (_read_gz(meta_path(root, gu.file_key(it["a"]["app_id"]))) or {}).get("reads")
         pass_("recent", over1, _stale)
+        pass_("users", overu, _stale)
         pass_("A", over2, lambda t: t["st"].get("turn") or "")
         pass_("B", over2, lambda t: t["st"].get("turn") or "")
         for xs in by_prop.values():
@@ -1552,6 +1789,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
                 if job is not None:
                     counts["calls"] += job.ga.calls
                     counts["tokens"] += job.ga.tok
+                    counts["periods"] += job.periods
                     for k, v in job.c.items():
                         counts[k] += v
         counts["quota_stops"] += sum(_i(p.get("stops")) for p in props.values())
@@ -1569,14 +1807,18 @@ def log_line(status):
     """The build log's line for this step — counts only (and, after an internal error, the health line too)."""
     c = (status or {}).get("counts") or {}
     err = (status or {}).get("error")
+    perr = (status or {}).get("periods_error")
     line = ("ga4 screens: apps %d, with GA4 %d, fetched %d, fresh %d, failed %d, deferred %d, waiting %d, calls %d, "
-            "tokens %d, whole %d, partial %d, not whole %d, sampled %d, gated %d, dead %d, quota stops %d, merged %d%s%s"
+            "tokens %d, whole %d, partial %d, not whole %d, sampled %d, gated %d, dead %d, quota stops %d, merged %d, "
+            "periods %d%s%s%s"
             % tuple([_i(c.get(k)) for k in ("selected", "with_ga4", "fetched", "fresh", "failed", "deferred",
                                               "waiting", "calls", "tokens", "whole", "partial", "not_whole",
-                                              "sampled", "gated", "dead", "quota_stops", "merged")]
+                                              "sampled", "gated", "dead", "quota_stops", "merged", "periods")]
                     + [(", staged bad %d" % _i(c.get("staged_bad"))) if _i(c.get("staged_bad")) else "",
+                       (", periods failed %d" % _i(c.get("periods_failed"))) if _i(c.get("periods_failed")) else "",
                        (", error " + err) if err else ""]))
-    return line + ("\n" + "ga4 screens skipped: %s" % err if err else "")
+    return (line + ("\n" + "ga4 screens skipped: %s" % err if err else "")
+            + ("\n" + "ga4 screens periods skipped: %s" % perr if perr else ""))
 
 
 # ── the history job (python -m admob_iq.fetch.ga4_screens --backfill) ──────────────────────────────────────────────
