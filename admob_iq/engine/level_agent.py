@@ -31,7 +31,7 @@ The rule, cause first (C1), in plain words:
      accept (A1–A7, no K1 / K2).
 
 Ported verbatim from the private study's two rules and its evidence builder (tests, order, arithmetic); the thresholds
-are priors, none fitted. Wording: a cause names what was SEEN with the move ("seen with spend ×2.2 since the old
+are priors, none fitted. Wording: a cause names what was SEEN with the move ("seen with spend ×2.5 since the old
 level"), never that it caused it; "campaigns" or "countries" exactly as the test read them. Every window is an ISO
 [a, b] turned into each entity's own index (i = date − e.day0): every entity of the build has its own day0."""
 from __future__ import annotations
@@ -847,6 +847,8 @@ def decide(ri, mkt, cfg, flags=None, th=TH, pp=PERSIST):
         wl, bl = ri["move"]["worse_log"], ri["move"]["band_log"]
         bands = wl / bl if (wl is not None and bl) else None
         st = _g(ri, "steadiness", "l14_56d", "max_dev")
+        nv, ov = ri["new"]["v"], ri["old"]["v"]
+        lw = CA.lworse(fam, nv, ov) if (nv and ov and nv > 0 and ov > 0) else None    # vs ri's own band: never P_PROD
         if fam in CA.MONEY_FAMS:
             dec, branch = "wait", "money_guard"
             cause, short = "%s; money level — the agent never lowers it (you can accept it)" % ext, "money: only you"
@@ -854,8 +856,7 @@ def decide(ri, mkt, cfg, flags=None, th=TH, pp=PERSIST):
             dec, branch = "wait", "reverted_before"
             cause = "the agent reverted its own accept on this alarm — only you can accept now"
             short = "only you"
-        elif bands is None or bands < cfg["move_bands"] or \
-                back_at_old(fam, ri["new"]["v"], ri["old"]["v"], CA.P_PROD) is not False:
+        elif bands is None or bands < cfg["move_bands"] or lw is None or lw <= bl:
             dec, branch = "wait", "small_move"
             cause = "%s; but the move is %s bands (needs %.1f) or the last 28 days are back near the old level" % (
                 ext, "?" if bands is None else "%.1f" % bands, cfg["move_bands"])

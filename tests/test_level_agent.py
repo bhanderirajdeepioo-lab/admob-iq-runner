@@ -98,7 +98,7 @@ def test_every_branch_of_the_cause_rule():
          "no_split", None),
         ("spend", ri("SPEND", move=-0.5), mk(), "keep", "spend", None),
         ("ipu", ri("IPU", move=-0.3), mk(), "keep", "ipu", None),
-        ("scale up", ri("CPI", **{"context__spend_usd_per_day__move": 1.2}), mk(cpi=cpi_up), "keep", "spend_scaled",
+        ("scale up", ri("CPI", **{"context__spend_usd_per_day__move": 1.4}), mk(cpi=cpi_up), "keep", "spend_scaled",
          None),
         ("scale down", ri("CPI", **{"context__spend_usd_per_day__move": -0.55}), mk(cpi=cpi_up), "keep", "spend_scaled",
          None),
@@ -129,7 +129,7 @@ def test_every_branch_of_the_cause_rule():
          mk(cpi=math.expm1(0.2), ecpm=math.expm1(-0.2)), "accept", "parts_external", None),
         ("gap cpi part keeps", ri("GAP", **{"context__spend_usd_per_day__move": 2.0}), mk(cpi=cpi_up), "keep",
          "spend_scaled", "cpi"),
-        ("money cost part narrow", ri("ROAS_G", **{"breadth__countries_cpi__same": 0.65}), mk(cpi=own_cost), "wait",
+        ("money cost part narrow", ri("ROAS_G", **{"breadth__countries_cpi__same": 0.55}), mk(cpi=own_cost), "wait",
          "narrow", "cpi"),
         ("money value part", ri("ROAS_C0", **{"drivers__roas_split__share_of_move": {"cost_per_install": 0.0,
                                                                                    "value_per_install": 1.0},
@@ -140,13 +140,13 @@ def test_every_branch_of_the_cause_rule():
         got = c1(x, m)
         assert (got["dec"], got["branch"], got["part"]) == (want, branch, part), name
         assert got["cause"] and got["short"] and len(got["short"]) <= 60, name
-    narrow = c1(ri("ROAS_G", **{"breadth__countries_cpi__same": 0.65}), mk(cpi=own_cost))
-    assert "countries moving the same way = 65%" in narrow["cause"] and narrow["short"] == "narrow: countries 65%"
+    narrow = c1(ri("ROAS_G", **{"breadth__countries_cpi__same": 0.55}), mk(cpi=own_cost))
+    assert "countries moving the same way = 55%" in narrow["cause"] and narrow["short"] == "narrow: countries 55%"
     assert "campaigns moving the same way = 60%" in c1(ri("CPI", **{"breadth__campaigns__same": 0.6}),
                                                        mk(cpi=cpi_up))["cause"]
-    s = c1(ri("CPI", **{"context__spend_usd_per_day__move": 1.2}), mk(cpi=cpi_up))
-    assert s["cause"] == "seen with spend ×2.2 since the old level (your lever)"
-    assert s["short"] == "spend ×2.2 (your lever)"
+    s = c1(ri("CPI", **{"context__spend_usd_per_day__move": 1.4}), mk(cpi=cpi_up))
+    assert s["cause"] == "seen with spend ×2.4 since the old level (your lever)"
+    assert s["short"] == "spend ×2.4 (your lever)"
     g = c1(ri("GAP", **{"context__spend_usd_per_day__move": 2.0}), mk(cpi=cpi_up))
     assert g["cause"].startswith("CPI part 100% of the move: seen with spend ×3.0")
     both = c1(ri("GAP", **{"drivers__gap_split__share_of_move": {"cpi_inr": 0.5, "fx": 0.0, "ecpm": 0.5},
@@ -243,6 +243,19 @@ def test_a_reverted_alarm_and_a_small_move_wait():
     assert (out["decision"], out["branch"]) == ("wait", "small_move")
     assert "the move is 1.9 bands (needs 2.0)" in out["cause"]
     near = ri("CPI", **{"new__v": 20.0 * 1.05})                              # the last 28 days within one band of old
+    assert dec(near, m)["branch"] == "small_move"
+
+
+def test_the_small_move_test_reads_the_frozen_band_never_the_live_config(monkeypatch):
+    # a stored ask reproduces from its rule inputs alone: the engine's level deltas changed later move neither of the
+    # two band tests (the live band here is wider than the whole move)
+    m = mk(cpi=0.5)
+    x = LA.frozen(ri("CPI"))
+    a = dec(x, m)
+    assert a["decision"] == "accept"
+    monkeypatch.setitem(P["levels"]["delta"], "CPI", 0.6)
+    assert json.dumps(dec(x, m), sort_keys=True) == json.dumps(a, sort_keys=True)
+    near = LA.frozen(ri("CPI", **{"new__v": 20.0 * 1.05}))
     assert dec(near, m)["branch"] == "small_move"
 
 
