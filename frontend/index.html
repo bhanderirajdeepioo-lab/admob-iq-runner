@@ -7860,8 +7860,10 @@ function achip(w){ const c=AWD[w]; if(w&&!c) return chip(w); let h=''; try{ h=hu
 // a row's status chip: the abs word on a screen row, else (a trigger, an older file) its own word
 const stChip=(st,it)=>{ const w=absW(st); return w!=null&&(w||it&&it[1]==='s')?achip(w):chip(st&&st[0]); };
 // the line under it: the abs cause's first weak number (up to its ":"), the why of a word that is not judged, "" for OK
+// (N/A and Too early are the old judge's words, kept by the build with an empty [8]: their why is still [1])
 const stWhy=(st,it)=>{ const w=absW(st); if(w==null||!(w||it&&it[1]==='s')) return st&&st[1]?String(st[1]):''; if(!w) return 'benchmark nahi bana';
-  const f=String(st[8]||'').split('; ')[0], j=f.indexOf(': '); return j>0&&(w==='Low'||w==='Few ads')?f.slice(0,j):f; };
+  const f=String(st[8]||'').split('; ')[0], j=f.indexOf(': '); if(!f&&(w==='N/A'||w==='Too early')) return st[1]?String(st[1]):'';
+  return j>0&&(w==='Low'||w==='Few ads')?f.slice(0,j):f; };
 // the rank: the abs word (Low first; inside it the weakest value ÷ median first), else the word an older file ships
 const arank=s=>{ const w=absW(s); return w==null||w===''?rankOf(s&&s[0])+10:w in ARANK?ARANK[w]:8; };
 const aweak=s=>{ let m=Infinity; for(const q of Array.isArray(s)&&Array.isArray(s[9])?s[9]:[]) if(ok(+q[2])&&+q[3]>0) m=Math.min(m,q[2]/q[3]); return m; };

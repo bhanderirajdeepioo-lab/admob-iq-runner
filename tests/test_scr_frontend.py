@@ -988,6 +988,8 @@ def test_v3_benchmark_failed_and_a_status_without_the_abs_fields(out):
     assert o["Screen"] == ('<span class="sc-n">List</span><span class="sc-stl"><span class="hub-st st-bigda">bigda</span></span>'
                            '<small>imp/user 0.30 → 0.20 (−33%)</small>')
     assert o["Cause"] == "Lower show rate" and o["Fill"].startswith("<b>")
+    # N/A / Too early keep their why under the chip (the build ships them an empty abs cause); OK has none
+    assert a["naWhy"] == ["Too few ads — 0.4% of the app's inline ads", "21 ads expected (needs 30)", ""]
 
 
 def test_v3_check_texts_are_the_builds():

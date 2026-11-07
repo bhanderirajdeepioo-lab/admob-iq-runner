@@ -918,6 +918,9 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
         out.abs.failed = cm(_.tableHtml(xb, 'absy', ...P30), 0).Screen;
         const xo = JSON.parse(JSON.stringify(ax)); for (const k in xo.status) xo.status[k] = xo.status[k].slice(0, 7);
         out.abs.older = cm(_.tableHtml(xo, 'absy', ...P30), 1);
+        // N/A and Too early (the old judge's words, an empty abs cause): the line under the chip is still their why; OK: none
+        out.abs.naWhy = [['N/A', "Too few ads — 0.4% of the app's inline ads", 'N/A'], ['Too early', '21 ads expected (needs 30)', 'Too early'], ['Normal', 'imp/user 1.00 → 1.02 (+2%)', 'OK']]
+          .map(([w, why, aw]) => _.stWhy([w, why, null, '', '', null, 10, aw, '', []], ['x.y.HomeActivity', 's', 'inline']));
         delete ALLF.bench; ctx.DATA.scr.fv = 'f12b'; SCR.paint(); await tick(); SCR.paint(); h = SCREEN.innerHTML;
         out.abs.nobench = [h.includes('data-sc-open="0"'), /class="sc-lo"/.test(h.slice(h.indexOf('id="sc-ttw"')))];
       } finally { delete ALLF.apps.absy; delete ALLF.bench; delete FILES[an2]; delete ctx.DATA.scr.apps.absy; ctx.DATA.scr.fv = 'f13'; ctx.APP = 'Alpha App';
