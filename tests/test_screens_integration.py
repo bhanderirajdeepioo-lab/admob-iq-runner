@@ -49,6 +49,17 @@ def test_what_the_fetch_writes_the_build_reads(monkeypatch, tmp_path):
     # the build's own readers see the fetch's store
     keys = set(sb.store_keys(data))
     assert set(keys) == {gu.file_key(AID), gu.file_key(AID2)}
+    # the app's daily users: the Uninstall store of the same stream (the build reads it at gu.store_path, beside the
+    # screens store) — its meta's property / stream / time zone, made-up counts to ft
+    for aid in (AID, AID2):
+        meta = sb.load_meta(data, gu.file_key(aid))
+        ft = NOW.date() - timedelta(days=2)
+        daily = {(ft - timedelta(days=k)).isoformat(): {"a1": 500 + k} for k in range(60)}
+        p = gu.store_path(data, aid)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with gzip.open(p, "wt", encoding="utf-8") as f:
+            json.dump({"v": 3, "app_id": aid, "property_id": meta.get("property_id"), "stream_id": meta.get("stream_id"),
+                       "time_zone": meta.get("time_zone") or "UTC", "daily": daily, "flags": {"truncated": []}}, f)
     # the build step on that store
     days = [date(2026, 10, 15) + timedelta(days=i) for i in range(25)]
     dash = _dash(days)
@@ -56,7 +67,7 @@ def test_what_the_fetch_writes_the_build_reads(monkeypatch, tmp_path):
     paths = sb.run(dash, data, out, {}, NOW)
     line = sb.pop_line()
     assert paths == sb.HEADER_PATHS and "scr" in dash, line
-    assert "failed 0" in line and "Alpha" not in line and AID not in line
+    assert "failed 0" in line and "Alpha" not in line and AID not in line and ", users 2, " in line
     ptr = dash["scr"]
     allf = _read(os.path.join(out, ptr["file"]))
     assert set(allf["apps"]) == {AID, AID2}
@@ -68,6 +79,11 @@ def test_what_the_fetch_writes_the_build_reads(monkeypatch, tmp_path):
         assert a["ft"] == (NOW.date() - timedelta(days=2)).isoformat()
         # the history reached the build: whole ads days exist and the screens carry visits and ads
         assert any(v is not None for v in a["vis"]) and any(x is not None for x in a["A"])
+        # the users reached it too: the app's daily users in scr_all to ftU (the last final day with both user reads),
+        # never Today / Yesterday; the App row is judged on them (not "users not in yet")
+        assert a["ftu"] <= a["ft"] and a["au"][-2:] == [None, None] and any(v for v in a["au"])
+        k = (date.fromisoformat(a["ftu"]) - date.fromisoformat(a["d0"])).days
+        assert a["au"][k] and all(v is None for v in a["au"][k + 1:]) and "users not in yet" not in a["app"][1]
         f2 = _read(os.path.join(out, "scr_%s.json.gz" % key))
         assert f2["key"] == key and f2["app_id"] == aid
         assert {u[0] for u in f2["units"]} >= {"unit_a", "unit_b"}

@@ -11,7 +11,12 @@ cannot be read (counted, one health line, its days "x", never cached), a day the
 shipped "-", not read yet — in scr_l too), Ads / user (in file 2, never scr_all: each top screen's users on the FINAL
 days the users read and the ads by screen are whole — never Today / Yesterday — a recent users read replacing the month
 file's, whole or not; never added across screens, per user per day; the app's daily users from its Uninstall store of
-the same stream only, final days only), the counts-only line and the backtest CLI."""
+the same stream only, final days only), the counts-only line and the backtest CLI. Status v2 (owner, 6–7 Nov 2026):
+impressions per user per day — a screen on its own users, a trigger and the App row on the app's daily users; days by
+whole reads (a 0-user day is a whole day), "No visits", impact against the APP's total, the app-wide fold on triggers
+only, the collapse rule, the 2-day confirm, the exact parts of the per-user change, the App row's AdMob check (judged on
+AdMob when GA4 disagrees), ftU (one end per app), the users by screen read beside small_days, scr_all's "au", v2 files
+with shards at v1, the stale users health line and the daily backtest."""
 import gzip
 import hashlib
 import io
@@ -125,18 +130,25 @@ def layer_recs(d, sc):
 
 
 def write_store(data, aid=AID, sc=None, first="2026-08-01", last="2026-11-04", package="x.y.app", now=NOW,
-                tz="UTC", layers=True, day_fn=None):
-    """A made-up store in the §2.7 layout: final days (≤ today − 5) in month files per group, the rest in recent."""
+                tz="UTC", layers=True, day_fn=None, users=True):
+    """A made-up store in the §2.7 layout: final days (≤ today − 5) in month files per group, the rest in recent; the
+    layers (a day_fn's own records kept) and, with users, the app's Uninstall store of the same stream (its daily users
+    to ft: uni_store)."""
     sc = sc or {}
     key = gu.file_key(aid)
     cut = (now.date() - timedelta(days=4)).isoformat()
     groups = {"core": ("t", "v", "w", "a"), "small": ("k", "e", "uV", "uA", "s", "x", "nV", "nA"),
               "ver": ("rV", "rA"), "cc": ("cV", "cA")}
     files, recent = {}, {}
+    if users:
+        uni_store(data, aid, first=min(first, "2026-07-25"), last=(now.date() - timedelta(days=2)).isoformat(), tz=tz)
     for d in _days(first, last):
         recs = day_fn(d) if day_fn else core_recs(d, sc)
         if layers and not day_fn:
             recs.update(layer_recs(d, sc))
+        elif layers:
+            for k, v in layer_recs(d, sc).items():
+                recs.setdefault(k, v)
         if d >= cut:
             recent[d] = recs
             continue
@@ -175,11 +187,20 @@ def dashboard(sc=None, first="2026-07-01", last="2026-11-04", latest="2026-11-03
 
 
 def app_of(tmp_path, sc=None, dash=None, aid=AID, **kw):
+    """The fixture's App with its users set as build_app sets them (daily users + users by screen → ftU)."""
     data = tmp_path / "data"
     key = write_store(data, aid, sc, **kw)
     meta = sb.load_meta(str(data), key)
     rec = sb.load_recent(str(data), key)
-    return sb.App(meta, sb.core_days(str(data), key, meta, rec), NOW, dash if dash is not None else dashboard(sc), {})
+    return with_users(sb.App(meta, sb.core_days(str(data), key, meta, rec), NOW,
+                             dash if dash is not None else dashboard(sc), {}), data)
+
+
+def with_users(app, data_dir):
+    """An App with its users set as build_app sets them: the Uninstall store's daily users + the users by screen."""
+    au, auw = sb.app_users(app.meta, str(data_dir))
+    sb.set_users(app, au, auw, sb.screen_users(app, str(data_dir), sb.load_recent(str(data_dir), app.key)))
+    return app
 
 
 def gz(path):
@@ -256,8 +277,8 @@ def dup_app(tmp_path, ratio_fn, copy_fn, today_imp=None, latest="2026-11-03"):
     data = tmp_path / "data"
     key = write_store(data, day_fn=lambda d: dup_day(d, 200, copy_fn(d)), first="2026-09-01")
     meta = sb.load_meta(str(data), key)
-    return sb.App(meta, sb.core_days(str(data), key, meta, sb.load_recent(str(data), key)), NOW,
-                  dup_dash(ratio_fn, latest, today_imp), {})
+    return with_users(sb.App(meta, sb.core_days(str(data), key, meta, sb.load_recent(str(data), key)), NOW,
+                  dup_dash(ratio_fn, latest, today_imp), {}), data)
 
 
 def test_dup_a_copy_series_short_of_admob_is_still_a_dup_by_pattern(tmp_path):
@@ -271,6 +292,13 @@ def test_dup_a_copy_series_short_of_admob_is_still_a_dup_by_pattern(tmp_path):
     assert all(app.dup[d] == 2 for d in finals)                        # … but every copy day is a dup by pattern
     d = finals[-1]
     assert app.w[d][("(not set)", "notset")] == copy[d]                # unconfirmed: kept as "Format not recorded"
+    # … and the App row's ads (app_series) leave it out on such a day (dup 2: the copies are still in the truth the page
+    # gets, "dk" 2 tells it the same); a day without copies counts its not recorded
+    ser, fm = sb.app_series(app)
+    assert app.ta[d]["notset"] == copy[d] and ser[d] == (1000, 200, app.au[d]) and fm[d] == (200, 0, 0)
+    app.dup[d] = 0
+    assert sb.app_series(app)[0][d][1] == 200 + copy[d] and sb.app_series(app)[1][d] == (200, 0, copy[d])
+    app.dup[d] = 2
     # a confirmed run (labelled ties AdMob): the copies are removed from w, a and the truth's notset
     app2 = dup_app(tmp_path / "b", lambda d: 1.0, lambda d: copy[d])
     assert app2.runs[0]["ok"] and all(app2.dup[d] == 1 for d in finals)
@@ -332,7 +360,7 @@ def test_units_join_by_name_then_id_and_list_admob_only(tmp_path):
     dash = dashboard()
     dash["placements"].append({"id": "ca-app-pub-0000000000000000/9", "name": "unit_spare", "app": "App A",
                                "account": "pub-0", "format": "rewarded", "daily": [["2026-10-01", 0, 5, 9, 8, 0]]})
-    app = sb.App(meta, sb.core_days(str(data), key, meta, {}), NOW, dash, {})
+    app = with_users(sb.App(meta, sb.core_days(str(data), key, meta, {}), NOW, dash, {}), data)
     by = {(u[0], u[1]): u for u in app.units}
     assert by[("unit_a", "banner")][2:5] == [[IDS["unit_a"]], "unit_a", "name"]
     assert by[("Unit_N", "banner")][4] == "name"                                      # case-insensitive
@@ -410,6 +438,18 @@ def series(rate_n=0.2, rate_w=0.2, v=1000, n_days=None, w_days=None, n_rates=Non
     for i, d in enumerate(w_days if w_days is not None else WD):
         r = w_rates[i] if w_rates else rate_w
         s[d] = (v, round(v * r))
+    return s
+
+
+def useries(rate_n=0.2, rate_w=0.2, u=1000, n_days=None, w_days=None, n_rates=None, w_rates=None, v=None):
+    """A per-user series {day: (views, ads, users)}: u users a day (views = 2 × users unless v), ads = rate × users."""
+    s = {}
+    for i, d in enumerate(n_days if n_days is not None else ND):
+        r = n_rates[i % len(n_rates)] if n_rates else rate_n
+        s[d] = (v if v is not None else 2 * u, round(u * r), u)
+    for i, d in enumerate(w_days if w_days is not None else WD):
+        r = w_rates[i] if w_rates else rate_w
+        s[d] = (v if v is not None else 2 * u, round(u * r), u)
     return s
 
 
@@ -500,6 +540,7 @@ def mat_day(d):
         r["w"]["r"].append([f, u, n])
         ta[f] = ta.get(f, 0) + n
     r["t"]["a"] = [[f, n] for f, n in ta.items()]
+    r["uV"] = {"st": "w", "g": "c", "r": [[MAIN, 300, 200], [EDIT, 150, 100], [TINY, 80, 60], [BIG, 200, 150]]}
     return r
 
 
@@ -510,16 +551,18 @@ def test_a_row_with_too_few_ads_is_not_judged(tmp_path):
     data = tmp_path / "data"
     write_store(data, day_fn=mat_day)
     meta = sb.load_meta(str(data), KEY)
-    app = sb.App(meta, sb.core_days(str(data), KEY, meta, sb.load_recent(str(data), KEY)), NOW, dashboard(), {})
+    app = with_users(sb.App(meta, sb.core_days(str(data), KEY, meta, sb.load_recent(str(data), KEY)), NOW, dashboard(), {}), data)
     rows = {r[2]: r for r in sb.statuses(app)[0]}
     st = rows[TINY][6]
     assert (st["word"], st["why"], st["score"], st["z"]) == ("N/A", "Too few ads — 0.5% of the app's inline ads", None,
                                                               None)
     assert 0.0055 < st["mat"] < 0.006 and (st["AW"], st["AN"]) == (240, 112)      # W 24 / 4,228 a day; N 4 / 4,258
-    alone = sb.judge(rows[TINY][5], WD, ND)                                        # the same row without the gate
+    alone = sb.judge_u(rows[TINY][5], WD, ND)                                      # the same row without the gate
     assert (alone["word"], alone["score"]) == ("Better", 600)
     st = rows[EDIT][6]                                                             # 1.2 % in N, nothing in W: judged
-    assert (st["word"], st["AW"], st["score"]) == ("Worse", 0, 0) and 0.0115 < st["mat"] < 0.012
+    assert (st["base"], st["AW"], st["score"]) == ("Worse", 0, 0) and 0.0115 < st["mat"] < 0.012
+    # (−1.09 % of the app's imp / user today, −0.98 % the day before — "small" then: its first day as a flag)
+    assert (st["word"], st["hold"]) == ("Normal", "confirm") and st["why"].endswith(" · first day — confirms tomorrow")
     assert rows[MAIN][6]["word"] == rows[BIG][6]["word"] == "Normal"
     st = rows["interstitial · Splash"][6]                                          # 1 of 331 interstitials a day
     assert (st["word"], st["why"]) == ("N/A", "Too few ads — 0.3% of the app's interstitial ads")
@@ -533,21 +576,13 @@ def test_a_row_with_too_few_ads_is_not_judged(tmp_path):
     assert sb.run(dashboard(), str(data), str(out), {}, NOW) == ["/scr_*"]
     one = gz(out / "scr_all.json.gz")["apps"][AID]
     st_of = {it[0]: one["status"].get(str(i)) for i, it in enumerate(one["items"])}
-    assert st_of[TINY] == ["N/A", "Too few ads — 0.5% of the app's inline ads", None, ""]
+    assert st_of[TINY] == ["N/A", "Too few ads — 0.5% of the app's inline ads", None, "", "", None, 10]   # (+ W days)
     assert st_of["Splash"][:2] == ["N/A", "Too few ads — 0.3% of the app's interstitial ads"]
-    assert st_of[EDIT][0] == "Worse" and one["app"][2:] == [1, 0]     # (the app's word: its rows with ≥ 3 % of N ads)
+    assert st_of[EDIT][0] == "Normal" and one["app"][2:4] == [0, 0]               # (Worse / Watch rows of the app)
     f2, fl = gz(out / ("scr_%s.json.gz" % KEY)), gz(out / ("scr_l_%s.json.gz" % KEY))
     rid = {c: "s%d" % i for i, (c, k) in enumerate(f2["screens"])}
-    assert rid[EDIT] in fl["report"]["rows"] and rid[TINY] not in fl["report"]["rows"]
+    assert rid[TINY] not in fl["report"]["rows"] and f2["rows"][rid[EDIT]]["base"] == ["Worse", "Normal"]
     assert f2["rows"][rid[TINY]]["cause"] == "" and f2["rows"][rid[TINY]]["st"][2] is None
-
-
-def test_app_status_is_the_worst_row_with_enough_ads():
-    mk = lambda w: {"word": w, "why": w.lower()}
-    rows = [(mk("Normal"), "s", 1000), (mk("Worse"), "s", 20), (mk("Watch"), "s", 300), (mk("Better"), "fs", 50)]
-    assert sb.app_status(rows) == ["Watch", "1 row Watch", 1, 1]             # the Worse row holds < 3 % of N ads
-    assert sb.app_status([(mk("Too early"), "s", 0)])[0] == "Too early"
-    assert sb.app_status([])[0] == "N/A"
 
 
 def test_logging_guard(tmp_path):
@@ -590,7 +625,7 @@ def fold_app(tmp_path, share, fold_days):
     data = tmp_path / "data"
     key = write_store(data, day_fn=day)
     meta = sb.load_meta(str(data), key)
-    return sb.App(meta, sb.core_days(str(data), key, meta, sb.load_recent(str(data), key)), NOW, dashboard(), {})
+    return with_users(sb.App(meta, sb.core_days(str(data), key, meta, sb.load_recent(str(data), key)), NOW, dashboard(), {}), data)
 
 
 def test_ga4_grouped_days_never_read_as_a_drop(tmp_path):
@@ -692,17 +727,18 @@ def test_a_day_ga4_was_never_asked_ships_not_read_yet(tmp_path):
     why = {it[0]: one["status"][str(i)][1] for i, it in enumerate(one["items"]) if str(i) in one["status"]}
     scr = ("Not whole — 0 whole days of inline ads in the last 10 (GA4 sampled 2 · GA4 dropped rows 1 · not read yet 6 "
            "· format not split 1)")
-    assert why[MAIN] == why[EDIT] == scr and one["app"] == ["N/A", scr, 0, 0]
+    # (the App row is judged on GA4's truth ÷ the app's daily users: whole, so judged — never a screen row's N/A)
+    assert why[MAIN] == why[EDIT] == scr and one["app"][0] == "Normal" and one["app"][2:4] == [0, 0]
     assert why["Back press"] == "Not whole — 0 whole days of interstitial ads in the last 10 (GA4 sampled 10)"
     fl = gz(out / ("scr_l_%s.json.gz" % KEY))
     rep = fl["report"]["app"]
-    assert "Status: N/A — %s (0 Worse, 0 Watch)" % scr in rep and "GA4 sampled —" not in rep
+    assert "Status: Normal — imp/user " in rep and "GA4 sampled —" not in rep
     # scr_l's own record of that day ships the same state as scr_all's string (never the "s" it is stored with)
     assert fl["days"][k]["nA"] == {"st": "-", "g": "cf", "skip": "gate", "tried": [], "fv": 1}
     assert fl["days"][k - 1]["nA"]["st"] == "w" and fl["days"][k]["nV"]["st"] == "w"
     # the first read a row cannot use names its day: GA4 grouped visits stop a screen row, not a trigger row
     meta = sb.load_meta(str(data), KEY)
-    app = sb.App(meta, sb.core_days(str(data), KEY, meta, sb.load_recent(str(data), KEY)), NOW, dashboard(), {})
+    app = with_users(sb.App(meta, sb.core_days(str(data), KEY, meta, sb.load_recent(str(data), KEY)), NOW, dashboard(), {}), data)
     app.st["v"][WD[0]] = "p"
     assert [app.day_why(d, fs) for d in (WD[0], WD[9]) for fs in (False, True)] == ["p", "s", "f", "s"]
     # a core month file that cannot be read: its W days ship "x" and the N/A names them, never "not read yet"
@@ -722,7 +758,7 @@ def test_not_whole_leaves_out_the_days_with_nothing_to_read(tmp_path):
     data = tmp_path / "new" / "data"
     write_store(data, first=WD[6])                                 # a new app: its first day is W's 7th
     meta = sb.load_meta(str(data), KEY)
-    app = sb.App(meta, sb.core_days(str(data), KEY, meta, sb.load_recent(str(data), KEY)), NOW, dashboard(), {})
+    app = with_users(sb.App(meta, sb.core_days(str(data), KEY, meta, sb.load_recent(str(data), KEY)), NOW, dashboard(), {}), data)
     assert _main_row(app)[6]["why"] == "Not whole — 4 whole days of inline ads in the last 10"
     assert [app.day_why(d, fs) for d in WD[:6] for fs in (False, True)] == [None] * 12
 
@@ -737,13 +773,13 @@ def test_not_whole_leaves_out_the_days_with_nothing_to_read(tmp_path):
     write_store(data, day_fn=day)
     meta = sb.load_meta(str(data), KEY)
     meta["reads"]["a"] = {"oldest": WD[2], "done": True}             # GA4 has nothing for it before W's 3rd day
-    app = sb.App(meta, sb.core_days(str(data), KEY, meta, sb.load_recent(str(data), KEY)), NOW, dashboard(), {})
+    app = with_users(sb.App(meta, sb.core_days(str(data), KEY, meta, sb.load_recent(str(data), KEY)), NOW, dashboard(), {}), data)
     assert app.d0 == "2026-08-01" and [app.st["t"].get(d) for d in WD[1:4]] == ["w", "s", "w"]
     assert _main_row(app)[6]["why"] == ("Not whole — 4 whole days of inline ads in the last 10 (GA4 sampled 1 · not "
                                         "read yet 3)")
     assert [app.day_why(d) for d in WD[:6]] == [None, None, "s", "-", "-", "-"]
     meta["reads"]["a"]["done"] = False                              # its history still filling: those days are unread
-    app = sb.App(meta, sb.core_days(str(data), KEY, meta, sb.load_recent(str(data), KEY)), NOW, dashboard(), {})
+    app = with_users(sb.App(meta, sb.core_days(str(data), KEY, meta, sb.load_recent(str(data), KEY)), NOW, dashboard(), {}), data)
     assert _main_row(app)[6]["why"] == ("Not whole — 4 whole days of inline ads in the last 10 (GA4 sampled 1 · not "
                                         "read yet 5)")
 
@@ -758,7 +794,7 @@ def test_a_steady_unconfirmed_copy_is_judged_on_all_formats(tmp_path):
     assert app.guard() is None and app.guard(screen=False) is None
     st = _main_row(app)[6]
     assert st["word"] in sb.JUDGED and not st["why"].startswith("Logging changed")
-    assert sb.statuses(app)[1][0] != "N/A"
+    assert sb.statuses(app)[1]["word"] != "N/A"
     # a copy that STARTS inside N is still the dup-driven N/A
     app = dup_app(tmp_path / "b", lambda d: lab_ratio[d], lambda d: copy[d] if d >= "2026-10-10" else 0)
     assert app.runs[0]["a"] == "2026-10-10"
@@ -800,7 +836,7 @@ def test_no_format_split_from_ga4_judges_screens_on_all_formats(tmp_path):
     # judged on every format, c days included: status, score; the cause still needs the units (fu) — as before
     rid = "s%d" % f2["screens"].index([MAIN, "s"])
     row = f2["rows"][rid]
-    assert row["st"][0] == "Normal" and row["st"][1].startswith("ads/100 ") and 90 < row["st"][2] < 110
+    assert row["st"][0] == "Normal" and row["st"][1].startswith("imp/screen user ") and 90 < row["st"][2] < 110
     assert row["W"][2] == 10 and row["N"][2] == 28 and row["cause"] == "Not measurable (units not split)"
     st = one["status"][str([it[0] for it in one["items"]].index(MAIN))]
     assert st[0] == "Normal" and st[2] == row["st"][2]
@@ -814,15 +850,15 @@ def test_no_format_split_from_ga4_judges_screens_on_all_formats(tmp_path):
         d2 = tmp_path / c_from / "data"
         write_store(d2, day_fn=nosplit_day(c_from))
         meta = sb.load_meta(str(d2), KEY)
-        app = sb.App(meta, sb.core_days(str(d2), KEY, meta, sb.load_recent(str(d2), KEY)), NOW, dashboard(), {})
+        app = with_users(sb.App(meta, sb.core_days(str(d2), KEY, meta, sb.load_recent(str(d2), KEY)), NOW, dashboard(), {}), d2)
         got[c_from] = (app.allf(), _main_row(app)[6]["why"])
     assert got["2026-10-15"] == (0, "Not whole — 0 whole days of inline ads in the last 10 (format not split 10)")
-    assert got["2026-10-14"][0] == 2 and got["2026-10-14"][1].startswith("ads/100 ")
+    assert got["2026-10-14"][0] == 2 and got["2026-10-14"][1].startswith("imp/screen user ")
     # no split day at all: allf 2 with no measured share
     d3 = tmp_path / "all_c" / "data"
     write_store(d3, day_fn=nosplit_day("2026-01-01"))
     meta = sb.load_meta(str(d3), KEY)
-    app = sb.App(meta, sb.core_days(str(d3), KEY, meta, sb.load_recent(str(d3), KEY)), NOW, dashboard(), {})
+    app = with_users(sb.App(meta, sb.core_days(str(d3), KEY, meta, sb.load_recent(str(d3), KEY)), NOW, dashboard(), {}), d3)
     assert (app.allf(), app.allf_share()) == (2, None)
 
 
@@ -840,7 +876,7 @@ def test_full_screen_ads_losing_their_format_still_stop_trigger_rows(tmp_path):
     data = tmp_path / "data"
     key = write_store(data, day_fn=day)
     meta = sb.load_meta(str(data), key)
-    app = sb.App(meta, sb.core_days(str(data), key, meta, sb.load_recent(str(data), key)), NOW, dashboard(), {})
+    app = with_users(sb.App(meta, sb.core_days(str(data), key, meta, sb.load_recent(str(data), key)), NOW, dashboard(), {}), data)
     assert not app.runs                                                  # a unit is logged: not the copy pattern
     assert app.guard(screen=False) == "Logging changed — format not recorded 0% → 10%"
     rows, _ = sb.statuses(app)
@@ -915,7 +951,7 @@ def test_unit_stopped_and_changed(tmp_path):
     for p in dash["placements"]:
         if p["name"] == "unit_a":
             p["daily"] = [r if r[0] < W0 else [r[0], 0, 0, 0, 0, 0] for r in p["daily"]]
-    app = sb.App(meta, sb.core_days(str(data), key, meta, sb.load_recent(str(data), key)), NOW, dash, {})
+    app = with_users(sb.App(meta, sb.core_days(str(data), key, meta, sb.load_recent(str(data), key)), NOW, dash, {}), data)
     rid, row, label, k, ii, ser, st = _main_row(app)
     cz = sb.cause(app, row, st)
     assert st["word"] == "Worse" and cz["cause"] == "Ad unit stopped: unit_a" and cz["stop_day"] == W0
@@ -937,7 +973,7 @@ def test_data_quality_items(tmp_path):
     dash["placements"].append({"id": "ca-app-pub-0000000000000000/8", "name": "unit_admob_only", "app": "App A",
                                "account": "pub-0", "format": "banner",
                                "daily": [[d, 0, 500, 900, 800, 0] for d in _days("2026-08-01", "2026-11-04")]})
-    app = sb.App(meta, sb.core_days(str(data), key, meta, sb.load_recent(str(data), key)), NOW, dash, {})
+    app = with_users(sb.App(meta, sb.core_days(str(data), key, meta, sb.load_recent(str(data), key)), NOW, dash, {}), data)
     codes, lines = sb.dq_items(app, {"seen": 30, "n": 0})
     assert codes == ["ns", "unmatched", "test_ids", "admob_only", "no_click"]
     assert any("unit_ghost" in x for x in lines) and any("unit_admob_only" in x and "500" in x for x in lines)
@@ -962,7 +998,7 @@ def test_cause_gates(tmp_path):
     data = tmp_path / "d" / "data"
     key = write_store(data, day_fn=fday)
     meta = sb.load_meta(str(data), key)
-    app = sb.App(meta, sb.core_days(str(data), key, meta, sb.load_recent(str(data), key)), NOW, dashboard(sc), {})
+    app = with_users(sb.App(meta, sb.core_days(str(data), key, meta, sb.load_recent(str(data), key)), NOW, dashboard(sc), {}), data)
     r = _main_row(app)
     assert r[6]["word"] == "Worse" and sb.cause(app, r[1], r[6])["cause"] == "Not measurable (units not split)"
 
@@ -980,7 +1016,7 @@ def ghost_app(tmp_path, n_ghost, sc=None):
     data = tmp_path / "data"
     key = write_store(data, day_fn=day)
     meta = sb.load_meta(str(data), key)
-    return sb.App(meta, sb.core_days(str(data), key, meta, sb.load_recent(str(data), key)), NOW, dashboard(sc), {})
+    return with_users(sb.App(meta, sb.core_days(str(data), key, meta, sb.load_recent(str(data), key)), NOW, dashboard(sc), {}), data)
 
 
 def test_units_without_an_admob_id_are_their_own_gate(tmp_path):
@@ -1009,19 +1045,28 @@ def test_units_without_an_admob_id_are_their_own_gate(tmp_path):
     assert math.isclose(sum(cz["abs"].values()), cz["dr"], rel_tol=1e-6, abs_tol=1e-8)
 
 
-def test_first_bad_day():
-    s = series(w_rates=[0.2, 0.2, 0.2, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1])
+def test_first_bad_day_per_user():
+    # the daily rate PER USER below 90 % of the normal from that day on (a day without users skipped, never a break)
+    s = useries(w_rates=[0.2, 0.2, 0.2, 0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1])
     assert sb.first_bad_day(s, ND + WD, 0.2) == WD[5]
-    assert sb.first_bad_day(series(), ND + WD, 0.2) is None
+    assert sb.first_bad_day(useries(), ND + WD, 0.2) is None
+    s[WD[7]] = (0, 0, 0)
+    assert sb.first_bad_day(s, ND + WD, 0.2) == WD[5]
+    # users halve on a day, ads halve with them: the rate per user holds, so it is no bad day
+    s = useries()
+    s.update({d: (500, 100, 500) for d in WD[3:]})
+    assert sb.first_bad_day(s, ND + WD, 0.2) is None
+    s.update({d: (500, 100, 1000) for d in WD[3:]})                     # the same ads with the users kept: bad
+    assert sb.first_bad_day(s, ND + WD, 0.2) == WD[3]
 
 
 # ── run: files, report, pointer, order, isolation, cache, line ───────────────────────────────
 
-def build(tmp_path, sc=None, dash=None, apps=(AID,), monkeypatch=None):
+def build(tmp_path, sc=None, dash=None, apps=(AID,), monkeypatch=None, **kw):
     data, out = tmp_path / "data", tmp_path / "site"
     out.mkdir(parents=True, exist_ok=True)
     for a in apps:
-        write_store(data, a, sc)
+        write_store(data, a, sc, **kw)
     (data / "app_store_ids.json").write_text(json.dumps({"by_id": {}}))
     d = dash if dash is not None else dashboard(sc)
     return data, out, d
@@ -1050,31 +1095,58 @@ def test_run_files_pointer_report_and_stale_removal(tmp_path):
     assert e["v"] == hashlib.sha1(raw2).hexdigest()[:12] and e["vl"] == hashlib.sha1(rawl).hexdigest()[:12]
     assert p["fv"] == hashlib.sha1(rawa).hexdigest()[:12]
     f2, fl, fa = json.loads(raw2), json.loads(rawl), json.loads(rawa)
-    assert (f2["v"], f2["key"], f2["td"], f2["d0"]) == (1, KEY, "2026-11-04", "2026-08-01")
+    assert (f2["v"], f2["key"], f2["td"], f2["d0"]) == (2, KEY, "2026-11-04", "2026-08-01")
     assert len(f2["days"]) == len(_days("2026-08-01", "2026-11-04")) and len(f2["adm"]["0"]) == len(f2["days"])
     one = fa["apps"][AID]
-    # scr_all: All apps' day arrays only — Ads / user's users ("U" / "Us", "au" / "auw") are file 2's, which only the
-    # app page loads (scr_all keeps its size)
-    assert set(one) == {"key", "ft", "td", "d0", "items", "vis", "V", "A", "ta", "st", "bf", "status", "app", "dq"}
+    # scr_all: All apps' day arrays + the app's daily users "au" (≤ ftU: the App total and All apps from this file
+    # alone), ftU, the copy-day states "dk"; the screens' own users ("U" / "Us") stay file 2's
+    assert set(one) == {"key", "ft", "td", "d0", "items", "vis", "V", "A", "ta", "st", "bf", "status", "app", "dq", "au",
+                        "ftu", "dk", "nvr"} and one["ftu"] == "2026-11-02" and len(one["au"]) == len(one["vis"])
     assert set(f2) == {"v", "key", "app_id", "ft", "td", "d0", "screens", "units", "trig", "days", "adm", "rows", "notes",
-                       "Us", "U", "auw"} and f2["auw"] == "none" and len(f2["U"]) == len(f2["days"])
+                       "Us", "U", "au"} and len(f2["U"]) == len(f2["days"]) and f2["au"] == one["au"]
+    assert one["dk"] == "0" * len(one["vis"]) and f2["notes"]["ftu"] == "2026-11-02"
     assert len(one["vis"]) == len(f2["days"]) and all(len(s) == len(f2["days"]) for s in one["st"].values())
     assert set(one["st"]) == set(sb.READ_IDS) and one["st"]["a"].count("w") == len(f2["days"])
     assert one["items"][:2] == [[EDIT, "s", "in"], [MAIN, "s", "in"]]           # by class name, never by views
     assert ["Back press", "fs", "interstitial"] in one["items"]
-    assert one["status"]["1"][0] == "Worse" and one["status"]["1"][3] == "Lower show rate"
-    assert one["app"][0] == "Worse" and one["app"][2] == 1
+    # status per item: [word, why, score, cause, its Needs attention group, impact (of the app's imp / user), W days
+    # (Needs attention's "n/10 days", from scr_all alone)]
+    s1 = one["status"]["1"]
+    assert s1[:2] == ["Worse", "imp/screen user 1.00 → 0.600 (−40%) · z −18.0"] and s1[2] == 60
+    assert s1[3:5] == ["Lower show rate", "Lower show rate"] and -0.27 < s1[5] < -0.26 and s1[6] == 10
+    f0 = min(i for i, it in enumerate(one["items"]) if it[1] == "fs")          # the triggers: file 2's rows "t<group>"
+    assert all(len(s) == 7 for s in one["status"].values()) and any(int(i) >= f0 for i in one["status"])
+    assert all(s[6] == f2["rows"]["t%d" % (int(i) - f0)]["W"][2] for i, s in one["status"].items() if int(i) >= f0)
+    # the App row: [word, why, worse n, watch n, score, cause, parts, daily users move, AdMob check]
+    a = one["app"]
+    assert a[0] == "Worse" and a[1].startswith("imp/user 0.337 → 0.248 (−26%) · z −") and a[2:4] == [1, 0]
+    assert a[1].endswith(" · AdMob agrees (inline −31%)") and a[4] == 74 and set(a[6]) == {"avu", "adv"}
+    assert abs(a[7]) < 0.01 and a[8]["st"] == "agree" and a[8]["f"] == "inline"
+    r2 = f2["rows"]["s%d" % f2["screens"].index([MAIN, "s"])]
+    assert r2["U"] == [2000, 5600] and r2["reach"] and r2["base"] == ["Worse", "Worse"] and r2["group"] == "Lower show rate"
+    assert r2["W"][2] == s1[6]                                                        # the same W days in both files
+    assert set(r2["parts"]) == {"vpu", "tpv", "apm"} and math.isclose(sum(r2["parts"].values()), 100 * 0.6 / 1.0 - 100,
+                                                                         abs_tol=0.6)
     # the developer report: the key numbers, the acceptance check, no money
     rid = "s%d" % f2["screens"].index([MAIN, "s"])
     txt = fl["report"]["rows"][rid]
     st = f2["rows"][rid]
     assert "Score %d" % 0 not in txt and "(score %d)" % st["st"][2] in txt
-    assert "Visits: W %s" % "{:,}".format(st["W"][0]) in txt and "Cause: Lower show rate" in txt
-    assert "Acceptance check: After the fix ships: ads per 100 visits on %s ≥ 18.0 for 3 final days." % MAIN in txt
+    assert ("Impressions per screen user per day (this screen's ads ÷ this screen's own daily users): W 0.600 · N 1.00"
+            in txt) and "Screen users: W 200/day · N 200/day · reach W 22% · N 22%" in txt
+    assert "Why it moved (% of normal, adds up to −40." in txt and "ads per minute −40." in txt
+    assert "Cause: Lower show rate" in txt
+    assert ("Acceptance check: after the fix ships, for 3 final days: impressions per screen user per day on %s ≥ 0.902 "
+            "(0.9 × normal) and ads per minute ≥ 1.08 (0.9 × 1.20)" % MAIN) in txt
     assert "unit_a (%s) banner · requests/day" % IDS["unit_a"] in txt and "show 0.60 → 0.36" in txt
     assert "First bad day: %s" % W0 in txt and "Ads per 100 visits: W 12.0 · N 20.0" in txt
     assert "What to check: Ads are filled but fewer are shown." in txt and "Version: " in txt
-    assert "Countries (top 3 by change): XA" in txt and txt in fl["report"]["app"]
+    assert "Countries (top 3 by change, per 100 visits): XA" in txt and txt in fl["report"]["app"]
+    assert "(per 100 visits — GA4 gives no users by version or country here)" in txt
+    head = fl["report"]["app"].split("\n\n")[0]
+    assert "GA4 data till 2026-11-02 · users till 2026-11-02" in head and "Daily users (GA4 active users" in head
+    assert "New vs returning (ads per 100 views): new-user mix" in head and "not the cause" not in head
+    assert "Causes: Lower show rate — 1 row (≈ −26% of the app's impressions per user)" in head
     full = fl["report"]["app"]
     assert "$" not in full and not re.search(r"revenue|earn|ecpm|money|income|usd|₹", full, re.I)
     # layers: versions, month sums, shards
@@ -1274,7 +1346,12 @@ def users_day(d):
     r["uV"] = case.get(d, uv)
     if d == WD[4]:
         r["a"] = dict(r["a"], st="p", f=0.3)            # the ads by screen 30 % grouped: its ads ship, the day is not whole
+    if d == VNW:
+        r["v"] = dict(r["v"], st="p", f=0.3)            # the screen views 30 % grouped (users read, ads by screen whole)
     return r
+
+
+VNW = "2026-10-15"                                                   # a final day in N whose views read is not whole
 
 
 def test_ads_per_user_counts_each_top_screens_users_on_whole_final_days_only(tmp_path):
@@ -1290,7 +1367,7 @@ def test_ads_per_user_counts_each_top_screens_users_on_whole_final_days_only(tmp
     # per day their users ("U")
     assert items[:3] == [EDIT, MAIN, "Other screens"] and len(f2["U"]) == len(days)
     assert f2["Us"] == [f2["screens"].index([EDIT, "s"]), f2["screens"].index([MAIN, "s"])]
-    assert not {"U", "Us", "au", "auw"} & set(one)
+    assert not {"U", "Us"} & set(one) and "au" in one                  # (the screens' users: file 2 only)
     U = {d: f2["U"][days.index(d)] for d in WD}
     # one users number per TOP screen (Edit, Main) a day: Rare (All other screens), not recorded and the ad SDK's
     # Activity never ship — no row gets users added across screens
@@ -1304,6 +1381,11 @@ def test_ads_per_user_counts_each_top_screens_users_on_whole_final_days_only(tmp
     # without the screen's row has 0; ads by screen not whole that day (its ads still in "A") → none
     assert [U[d] for d in WD] == [None, None, [100, 190], None, None, [100, 0], [100, 200], None, [100, 210], [100, 200]]
     assert one["A"][days.index(WD[4])][1] is not None
+    # the screen views not whole that day (its users read and its ads by screen whole): none either — the build's own
+    # per-user days need all three
+    k = days.index(VNW)
+    assert (one["st"]["v"][k], one["st"]["a"][k], fl["days"][k]["uV"]["st"]) == ("p", "w", "w")
+    assert f2["U"][k] is None and f2["U"][k - 1] == [100, 200]
     # the per user per day math over W: Σ the day's ads ÷ Σ the day's users of that screen, on the days with users
     ads = lambda d: counts(d, {})[1][(MAIN, "Banner", "unit_a")]
     use = [d for d in WD if U[d] is not None]
@@ -1356,12 +1438,12 @@ def test_a_recent_users_read_replaces_the_month_files_whole_or_not(tmp_path):
     assert [fl["days"][days.index(d)]["uV"]["st"] for d in (d1, d2)] == ["o", "w"]       # scr_l: recent's, as shipped
 
 
-def uni_store(data, aid=AID, last="2026-11-02", **kw):
+def uni_store(data, aid=AID, last="2026-11-02", first="2026-07-25", tz="UTC", **kw):
     """A made-up Uninstall store (data/ga4_uninstall/<key>.json.gz) of the fixture's stream: daily a1 = 900 + a wiggle
-    up to `last` (its window end), none on 2026-09-15 (a1 0)."""
+    from `first` up to `last` (its window end), none on 2026-09-15 (a1 0)."""
     daily = {d: {"new": 10, "a1": 0 if d == "2026-09-15" else 900 + 10 * _j(d), "a28": 5000, "un": 3, "un_ev": 3,
-                 "upd": 0} for d in _days("2026-07-25", last)}
-    body = {"v": 3, "app_id": aid, "package": "x.y.app", "property_id": "0", "stream_id": "0", "time_zone": "UTC",
+                 "upd": 0} for d in _days(first, last)}
+    body = {"v": 3, "app_id": aid, "package": "x.y.app", "property_id": "0", "stream_id": "0", "time_zone": tz,
             "daily": daily, "flags": {"truncated": [], "thresholded": False, "incomplete_days": {}}}
     body.update(kw)
     p = os.path.join(str(data), "ga4_uninstall", gu.file_key(aid) + ".json.gz")
@@ -1378,7 +1460,7 @@ def test_the_apps_daily_users_come_from_its_uninstall_store_of_the_same_stream(t
     f2 = gz(out / ("scr_%s.json.gz" % KEY))
     days = _days(f2["d0"], "2026-11-04")
     want = [daily[d]["a1"] if d in daily and daily[d]["a1"] and d <= "2026-11-02" else None for d in days]
-    assert f2["au"] == want and "auw" not in f2 and not {"au", "auw"} & set(one)        # file 2's, never scr_all's
+    assert f2["au"] == want and "auw" not in f2 and one["au"] == want and "auw" not in one   # file 2 and scr_all
     assert f2["au"][days.index("2026-09-15")] is None                                   # no users: never 0
     assert f2["au"][-2:] == [None, None] and daily["2026-11-03"]["a1"] > 0 and daily["2026-11-04"]["a1"] > 0   # not final
     # the app's ads per active user per day over W: Σ GA4's labelled ad_impression (inline + full-screen) ÷ Σ its users
@@ -1506,7 +1588,7 @@ def test_layers_keep_no_month_bytes(tmp_path):
     data, out, dash = build(tmp_path)
     meta = sb.load_meta(str(data), KEY)
     recent = sb.load_recent(str(data), KEY)
-    app = sb.App(meta, sb.core_days(str(data), KEY, meta, recent), NOW, dash, {})
+    app = with_users(sb.App(meta, sb.core_days(str(data), KEY, meta, recent), NOW, dash, {}), data)
     cnt = {"cached": 0}
     cc = sb.Layer(app, "cc", str(data), str(out), recent, {}, cnt).run()
     assert cc.src and all(v is None or isinstance(v, str) for v in cc.src.values())   # the sha1 only (None: a month
@@ -1552,7 +1634,7 @@ def test_the_line_is_counts_only(tmp_path):
     dash["placements"].append({"id": "z", "name": "z", "app": "Unmapped", "account": "pub-9", "daily": []})
     sb.run(dash, str(data), str(out), {}, NOW)
     line = sb.pop_line()
-    assert re.match(r"^scr: apps 1, rows \d+, judged \d+, worse 1, watch 0, files 11, too big 0, failed 0, "
+    assert re.match(r"^scr: apps 1, users 1, rows \d+, judged \d+, worse 1, watch 0, files 11, too big 0, failed 0, "
                     r"broken 0, unmapped 1, cached 0$", line)
     for bad in (AID, KEY, MAIN, "unit_a", "App A", "skipped:"):
         assert bad not in line
@@ -1636,20 +1718,396 @@ def test_switch_and_step(tmp_path, monkeypatch, capsys):
     assert "scr skipped: ZeroDivisionError" in capsys.readouterr().err
 
 
+# ── status v2: impressions per user per day (owner, 6–7 Nov 2026) ───────────────────────────────────────────────
+
+def test_status_v2_rules_in_order():
+    # the order: Not whole (the missing W days by part, "u" users not in yet) · the guard · No ads / Ads started · Too
+    # few ads · No visits · Too early · the shipped thresholds on the PER-USER score (+ collapse) · the holds
+    j = lambda s, **k: sb.judge_u(s, WD, ND, **k)
+    st = j(useries(w_days=WD[:4]), miss=lambda d: "u")
+    assert (st["word"], st["why"]) == ("N/A", "Not whole — 4 whole days of inline ads in the last 10 (users not in yet 6)")
+    assert j(useries(), guard="Logging changed — format not recorded 40%")["why"].startswith("Logging changed")
+    assert j(useries(rate_n=0, rate_w=0))["why"] == "No inline ads"
+    assert j(useries(rate_n=0, rate_w=0), kind="t", what="interstitial")["why"] == "No full-screen ads"
+    assert j(useries(rate_n=0, rate_w=0.1))["why"].startswith("Ads started")
+    st = j(useries(n_days=ND[:13]))
+    assert (st["word"], st["why"]) == ("Too early", "normal has 13 whole days (needs 14)")
+    st = j(useries(w_days=WD[:6]))
+    assert (st["word"], st["why"]) == ("Too early", "last 10 days have 6 whole days (needs 7)")
+    assert j(useries(u=100, v=10))["why"] == "280 views in the normal (needs 300)"
+    assert j(useries(u=10, rate_n=0.1, rate_w=0.1))["why"] == "10 ads expected (needs 30)"
+    st = j(useries(rate_w=0.12))
+    assert (st["word"], st["score"], st["h"]) == ("Worse", 60, [60, 60]) and st["z"] <= -3
+    assert st["why"] == "imp/screen user 0.200 → 0.120 (−40%) · z −17.9"
+    assert j(useries(rate_w=0.17))["word"] == "Watch" and j(useries(rate_w=0.26))["word"] == "Better"
+    assert j(useries(rate_w=0.195))["word"] == "Normal"
+    # collapse: more than half gone, both halves too, z ≤ −2 → Worse though z misses −3 (a stop is never held by z)
+    st = j(useries(n_rates=[0.1, 0.5], rate_w=0.12, u=200))
+    assert (st["word"], st["score"], st["h"]) == ("Worse", 40, [40, 40]) and -3 < st["z"] <= -2
+    assert sb._base_word(53, -2.5, [53, 53]) == "Normal" and sb._base_word(50, -2.0, [60, 60]) == "Worse"
+    assert sb._base_word(50, -1.9, [50, 50]) == "Normal" and sb._base_word(50, -2.5, [50, 61]) == "Normal"
+
+
+def test_zero_user_days_are_whole_days():
+    # critic B2: a whole day with 0 users of the screen is (0, 0, 0) — a day for the count, nothing for any sum — so a
+    # screen without ads reads "No ads", never "Not whole · users not in yet"; ads in N but no users in W → "No visits"
+    z = {d: (0, 0, 0) for d in WD + ND}
+    st = sb.judge_u(z, WD, ND)
+    assert (st["word"], st["why"], st["dW"], st["dN"]) == ("N/A", "No inline ads", 10, 28)
+    s = useries()
+    s.update({d: (0, 0, 0) for d in WD})
+    st = sb.judge_u(s, WD, ND)
+    assert (st["word"], st["why"], st["dW"], st["UW"]) == ("N/A", "No visits in the last 10 days", 10, 0)
+    s = useries()
+    s.update({d: (0, 0, 0) for d in WD[:4]})                           # 4 days nobody came: the rate of the other 6
+    st = sb.judge_u(s, WD, ND)
+    assert (st["word"], st["dW"], st["score"], st["UW"]) == ("Normal", 10, 100, 6000)
+    # in the build: a whole users read without the screen's row → (0, 0, 0); a day with no whole users read → absent
+    app = sb.App.__new__(sb.App)
+    app.days = WD[:3]
+    app.views = {d: {MAIN: [100, 1000]} for d in app.days}
+    fu = sb.a_day({"st": "w", "g": "fu", "r": [[MAIN, "Banner", "u1", 10]]})
+    app.ads = {d: fu for d in app.days}
+    app.whole = {"v": set(app.days), "a": set(app.days), "w": set(app.days)}
+    app.su = {WD[0]: {MAIN: 40}, WD[1]: {EDIT: 5}}
+    ser, base = sb.screen_series_u(app, MAIN, False)
+    assert ser == {WD[0]: (100, 10, 40), WD[1]: (0, 0, 0)} and set(base) == set(WD[:3])
+
+
+def test_screen_denominator_is_the_screens_own_users():
+    # the screen's ads ÷ the screen's OWN users: half the visitors and half the ads is the same rate (Normal, 100);
+    # half the ads with the same visitors is a real drop
+    s = useries(u=1000, rate_n=0.2, rate_w=0.2)
+    s.update({d: (1000, 100, 500) for d in WD})
+    st = sb.judge_u(s, WD, ND)
+    assert (st["word"], st["score"], st["UW"], st["AW"]) == ("Normal", 100, 5000, 1000)
+    s.update({d: (2000, 100, 1000) for d in WD})
+    assert sb.judge_u(s, WD, ND)["word"] == "Worse"
+
+
+def test_impact_is_against_the_app_total():
+    # critic B2: a flag stands only at ≥ 1 % of the APP's total imp / user: impact = (AW − rn·UW) ÷ (app_rn · the app's
+    # daily users over the row's W days) — the ads the row lost against its own normal rate, in the app's units
+    s = useries(u=1000, rate_n=0.2, rate_w=0.12)                       # −0.08 × 1,000 users × 10 days = −800 ads
+    au = {d: 5000 for d in WD + ND}
+    st = sb.judge_u(s, WD, ND, app_rn=2.0, au=au)                      # the app: 2 ads per user × 50,000 user-days
+    assert st["imp"] == round(-800 / 100000, 5) == -0.008
+    assert (st["word"], st["base"], st["hold"]) == ("Normal", "Worse", "small")
+    assert st["why"].endswith(" · small — −0.8% of the app's imp / user")
+    st = sb.judge_u(s, WD, ND, app_rn=1.0, au=au)                      # the same loss is 1.6 % of a smaller app total
+    assert (st["word"], st["imp"]) == ("Worse", -0.016)
+    up = useries(u=1000, rate_n=0.2, rate_w=0.26)
+    assert sb.judge_u(up, WD, ND, app_rn=2.0, au=au)["hold"] == "small"    # Better too: + under 1 %
+    assert sb.judge_u(up, WD, ND, app_rn=0.5, au=au)["word"] == "Better"
+    # without the app's normal (no daily users) the hold cannot be weighed: the word stands
+    assert sb.judge_u(s, WD, ND, app_rn=None, au=au)["word"] == "Worse"
+
+
+def test_the_app_wide_fold_is_for_triggers_only():
+    # critic B1: a trigger's ads ÷ the app's daily users = app views per user × ads per app view; when users open fewer
+    # screens app-wide, its flag goes to the App row ("app-wide"). A screen's own users carry no app-views factor: no fold
+    au = {d: 1000 for d in WD + ND}
+    vapp = {d: (7000 if d in WD else 10000) for d in WD + ND}          # app views per user −30 %
+    s = {d: (vapp[d], vapp[d] // 50, 1000) for d in WD + ND}          # ads per app view flat (0.02)
+    st = sb.judge_u(s, WD, ND, kind="t", what="interstitial", app_rn=0.5, au=au, vapp=vapp)
+    assert (st["base"], st["word"], st["hold"], st["own"]) == ("Worse", "Normal", "fold", 100)
+    assert st["why"].endswith(" · app-wide — users open fewer screens (see App total)")
+    s2 = {d: (vapp[d], vapp[d] // 70 if d in WD else vapp[d] // 50, 1000) for d in WD + ND}   # ads per view −29 % too
+    st = sb.judge_u(s2, WD, ND, kind="t", what="interstitial", app_rn=0.5, au=au, vapp=vapp)
+    assert st["word"] == "Worse" and st["own"] < sb.OWN_FOLD
+    scr = {d: (2000, 140 if d in WD else 200, 1000) for d in WD + ND}
+    st = sb.judge_u(scr, WD, ND, kind="s", app_rn=0.5, au=au, vapp=vapp)
+    assert st["word"] == "Worse" and st["own"] is None and st["hold"] is None
+
+
+def test_confirm_needs_two_final_days_in_a_row():
+    w = {"word": "Worse", "why": "x", "base": "Worse"}
+    assert sb._confirm(w, ["Watch"])["word"] == "Worse"                # Worse / Watch are one family
+    st = sb._confirm(w, ["Normal"])
+    assert (st["word"], st["why"], st["hold"]) == ("Normal", "x · first day — confirms tomorrow", "confirm")
+    assert sb._confirm(w, [None])["word"] == "Normal"                  # (no day before: not confirmed)
+    assert sb._confirm(dict(w, word="Better"), ["Worse"])["word"] == "Normal"
+    assert sb._confirm(dict(w, word="N/A"), ["Normal"])["word"] == "N/A" and sb.CONFIRM_DAYS == 2
+
+
+def test_parts_add_up_to_the_change_exactly():
+    # screen: imp / screen user = views per user × time per view × ads per minute ÷ 60, exact LMDI parts in % of normal
+    s = {d: (3000 if d in WD else 4000, 120 if d in WD else 200, 1000) for d in WD + ND}
+    eng = {d: (330 if d in WD else 400) * (3000 if d in WD else 4000) for d in WD + ND}   # seconds: 330 / 400 a view
+    st = sb.judge_u(s, WD, ND, eng=eng)
+    p = st["parts"]
+    assert set(p) == {"vpu", "tpv", "apm"} and math.isclose(sum(p.values()), 100 * (st["rw"] / st["rn"] - 1), abs_tol=0.2)
+    assert p["vpu"] < 0 and p["tpv"] < 0 and st["G"] == [9900000, 44800000]
+    assert sb.cause_u(st, {"cause": "Lower show rate"}) == "Users open it fewer times"   # views / user −25 % leads
+    # without engagement time: views per user × ads per view
+    st = sb.judge_u(s, WD, ND)
+    assert set(st["parts"]) == {"vpu", "adv"} and math.isclose(sum(st["parts"].values()), -40.0, abs_tol=0.2)
+    # trigger / App: app views per user × ads per app view
+    vapp = {d: 8000 if d in WD else 10000 for d in WD + ND}
+    t = {d: (vapp[d], 150 if d in WD else 200, 1000) for d in WD + ND}
+    st = sb.judge_u(t, WD, ND, kind="t", what="interstitial", au={d: 1000 for d in t}, vapp=vapp)
+    assert set(st["parts"]) == {"avu", "adv"} and math.isclose(sum(st["parts"].values()), -25.0, abs_tol=0.2)
+    # the ad-logic part → the AdMob cause; no ads in W → "Ads stopped" (or the stopped unit's own words)
+    st = sb.judge_u({d: (4000, 120 if d in WD else 200, 1000) for d in WD + ND}, WD, ND, eng={d: 1600000 for d in eng})
+    assert max(st["parts"], key=lambda k: -st["parts"][k]) == "apm"
+    assert sb.cause_u(st, {"cause": "Mixed: Fewer ad requests + Lower show rate"}).startswith("Mixed: Fewer ad requests")
+    assert sb.cause_group("Mixed: Fewer ad requests + Lower show rate") == "Fewer ad requests"
+    assert sb.cause_group("Ad unit stopped: unit_a") == "Ad unit stopped"
+    st = sb.judge_u({d: (4000, 0 if d in WD else 200, 1000) for d in WD + ND}, WD, ND)
+    assert sb.cause_u(st, {}) == "Ads stopped" and sb.cause_u(st, {"cause": "Ad unit stopped: u"}) == "Ad unit stopped: u"
+
+
+class _Adm:
+    def __bool__(self):
+        return True
+
+
+def _app_ns(**kw):
+    """A stand-in App for app_judge: no copy runs, the truth / visits / daily users of the days given."""
+    import types
+    days = WD + ND
+    a = types.SimpleNamespace(runs=[], ta={d: {} for d in days}, vis={d: 20000 for d in days},
+                              st={"t": {}}, au={d: 1000 for d in days}, adm=_Adm())
+    a.__dict__.update(kw)
+    return a
+
+
+def _aser(gi, gf, gns):
+    """The App series from GA4 per user per day per format (W, N): inline, full-screen, not recorded."""
+    ser, fm = {}, {}
+    for d in WD + ND:
+        k = 0 if d in WD else 1
+        il, fl, ns = round(1000 * gi[k]), round(1000 * gf[k]), round(1000 * gns[k])
+        ser[d], fm[d] = (20000, il + fl + ns, 1000), (il, fl, ns)
+    return ser, fm
+
+
+def test_app_row_admob_word():
+    # critic B3: "not recorded" became inline after an update — GA4's total per daily user rose, while AdMob's fell: the
+    # App row is judged on AdMob ("Worse (AdMob)"), never a quiet N/A
+    ser, fm = _aser((5.0, 1.0), (0.4, 0.4), (0.0, 2.6))                # GA4 4.00 → 5.40 per daily user
+    adm = {d: ((1.8 if d in WD else 3.6) * 1000, (0.3 if d in WD else 0.4) * 1000) for d in WD + ND}   # AdMob 4.0 → 2.1
+    st = sb.app_judge(_app_ns(), WD, ND, ser, fm, adm)
+    assert st["word"] == "Worse" and st["adm"]["st"] == "admob" and st["adm"]["f"] == "inline"
+    assert st["why"].startswith("AdMob imp/user 4.00 → 2.10 (−48%) · z ") and st["ga4"]["base"] == "Better"
+    assert st["why"].endswith(" · GA4 +35% ≠ AdMob −48% — GA4 logging changed")
+    al = sb.app_list(st, [])
+    assert al[0] == "Worse" and al[5] == "GA4 logging changed" and al[8]["st"] == "admob"
+    # both up → Better stands, "AdMob agrees"
+    ser, fm = _aser((8.0, 6.0), (0.3, 0.3), (0.0, 0.0))
+    adm = {d: ((6.5 if d in WD else 5.0) * 1000, 300.0) for d in WD + ND}
+    st = sb.app_judge(_app_ns(), WD, ND, ser, fm, adm)
+    assert (st["word"], st["adm"]["st"]) == ("Better", "agree") and st["why"].endswith(" · AdMob agrees (inline +30%)")
+    # GA4 ≠ AdMob, and AdMob too thin to judge (Too early: 10 ads expected) → N/A "Not measurable (GA4 ≠ AdMob)"
+    ser, fm = _aser((5.0, 1.0), (0.4, 0.4), (0.0, 2.6))
+    adm = {d: (0.5 if d in WD else 1.0, 0.0) for d in WD + ND}
+    st = sb.app_judge(_app_ns(), WD, ND, ser, fm, adm)
+    assert (st["word"], st["adm"]["st"]) == ("N/A", "na") and st["why"].startswith("Not measurable (GA4 ≠ AdMob) — GA4 +")
+    # fewer than 7 / 14 AdMob-complete days: the word stands, "AdMob not checked"
+    ser, fm = _aser((0.6, 1.0), (0.3, 0.3), (0.0, 0.0))
+    st = sb.app_judge(_app_ns(), WD, ND, ser, fm, {d: (1000.0, 300.0) for d in WD[:6] + ND})
+    assert st["word"] == "Worse" and st["adm"]["st"] == "unchecked" and st["why"].endswith(" · AdMob not checked")
+
+
+def test_app_row_dau_move_and_guard():
+    # the App row's why names a daily-users move over 25 %; its guard is a duplicate run only (critic S4)
+    ser = {d: (20000, 3000 if d in WD else 1000, 5000 if d in WD else 1000) for d in WD + ND}   # ×5 users, ×0.6 rate
+    fm = {d: (ser[d][1], 0, 0) for d in ser}
+    au = {d: ser[d][2] for d in ser}
+    st = sb.app_judge(_app_ns(au=au), WD, ND, ser, fm, {})
+    assert st["word"] == "Worse" and st["dau"] == 4.0 and "imp/user 1.00 → 0.600 (−40%) · z " in st["why"]
+    assert " · daily users ×5.0" in st["why"] and st["adm"]["st"] == "unchecked"
+    run = {"a": ND[5], "b": WD[2], "open": False, "days": [], "ok": False}
+    assert sb.app_judge(_app_ns(au=au, runs=[run]), WD, ND, ser, fm, {})["why"].startswith(
+        "Logging changed — duplicate ad_impression logging started")
+    early = dict(run, a="2026-08-01", b="2026-08-05")                  # a run outside W ∪ N: no guard
+    assert sb.app_judge(_app_ns(au=au, runs=[early]), WD, ND, ser, fm, {})["word"] == "Worse"
+
+
+def test_nvr_split_is_exact():
+    # the App row's users mix, measured: ads per 100 app views split exactly into the new-user share of views (mix) and
+    # each group's own ads per view (within) — their sum is the change; views per user is its own (not split) number
+    def frag(nv, na):
+        return json.dumps({"nV": {"st": "w", "g": "a", "r": [["new", nv[0]], ["returning", nv[1]]]},
+                           "nA": {"st": "w", "g": "a", "r": [["new", na[0]], ["returning", na[1]]]}}).encode()
+    fr = {d: frag((300, 700), (30, 140)) if d in WD else frag((100, 900), (10, 180)) for d in WD + ND}
+    fr[WD[0]] = json.dumps({"nV": {"st": "s"}, "nA": {"st": "w", "r": []}}).encode()     # not whole: left out
+    app = sb.App.__new__(sb.App)
+    app.vis, app.au, app.ta = {}, {}, {}
+    out = sb.nvr_split(app, fr, WD, ND, {})
+    assert out["d"] == [9, 28] and out["g"] == {"new": [10.0, 10.0], "returning": [20.0, 20.0]}
+    assert math.isclose(out["mix"] + out["within"], out["ch"], abs_tol=0.11) and out["within"] == 0.0
+    assert out["ch"] == -10.5 and out["vpu"] is None
+    assert sb.nvr_split(app, {}, WD, ND, {}) is None
+
+
+def test_nvr_views_per_user_on_the_ga4_judges_days_when_judged_on_admob():
+    # an App row judged on AdMob carries the AdMob judge's sums (AdMob-complete days only); views per user in the users
+    # mix divides the app's views on EVERY W / N day with daily users, so it takes the GA4 judge's users ("ga4") of those
+    # same days. AdMob one day behind (none for the last W day): views per user 18 → 20 a day is still −10 %, never the
+    # 0 % of ten days' views over nine days' users
+    ser, fm = _aser((5.0, 1.0), (0.4, 0.4), (0.0, 2.6))                # GA4 4.00 → 5.40 per daily user
+    adm = {d: ((1.8 if d in WD else 3.6) * 1000, (0.3 if d in WD else 0.4) * 1000) for d in WD[:-1] + ND}
+    app = _app_ns(vis={d: 18000 if d in WD else 20000 for d in WD + ND})
+    st = sb.app_judge(app, WD, ND, ser, fm, adm)
+    assert (st["word"], st["adm"]["st"], st["dW"], st["UW"]) == ("Worse", "admob", 9, 9000)
+    assert (st["ga4"]["dW"], st["ga4"]["UW"]) == (10, 10000)
+
+    def frag(nv, na):
+        return json.dumps({"nV": {"st": "w", "g": "a", "r": [["new", nv[0]], ["returning", nv[1]]]},
+                           "nA": {"st": "w", "g": "a", "r": [["new", na[0]], ["returning", na[1]]]}}).encode()
+    fr = {d: frag((300, 700), (30, 140)) if d in WD else frag((100, 900), (10, 180)) for d in WD + ND}
+    nvr = sb.nvr_split(app, fr, WD, ND, st)
+    assert nvr["vpu"] == -10.0
+    # the developer report: its users mix labelled — the ads per 100 views come from the GA4 logging that changed
+    import types
+    al = sb.app_list(st, [])
+    head = sb.report_head(types.SimpleNamespace(ft=date(2026, 11, 2), ftu=date(2026, 11, 2)), KEY, al, st, nvr, [])
+    line = [x for x in head if "New vs returning" in x]
+    assert len(line) == 1 and line[0].startswith("  New vs returning (ads per 100 views; GA4, logging changed): "
+                                                 "new-user mix ")
+    assert line[0].endswith(" · views per user −10.0% (not split: GA4 gives no new / returning users here)")
+    assert head[1].startswith("Status: Worse (AdMob) — AdMob imp/user 4.00 → 2.10 (−48%)")
+    # a row judged on GA4 keeps the plain line
+    al[8] = dict(al[8], st="agree")
+    assert [x for x in sb.report_head(types.SimpleNamespace(ft=date(2026, 11, 2), ftu=date(2026, 11, 2)), KEY, al, st,
+                                      nvr, []) if "New vs returning" in x][0].startswith(
+        "  New vs returning (ads per 100 views): new-user mix ")
+
+
+def test_ftu_one_end_per_app(tmp_path):
+    # ftU = the last final day with BOTH the app's daily users and a whole screen users read: every window ends there
+    data, out, dash = build(tmp_path)
+    uni_store(data, last="2026-11-01")                                # the daily users one day short (a morning build)
+    assert sb.run(dash, str(data), str(out), {}, NOW) == ["/scr_*"]
+    one = gz(out / "scr_all.json.gz")["apps"][AID]
+    f2 = gz(out / ("scr_%s.json.gz" % KEY))
+    days = _days(one["d0"], "2026-11-04")
+    assert (one["ft"], one["ftu"], f2["notes"]["ftu"]) == ("2026-11-02", "2026-11-01", "2026-11-01")
+    assert f2["notes"]["w"] == ["2026-10-23", "2026-11-01"] and f2["notes"]["n"][1] == "2026-10-22"
+    k = days.index("2026-11-01")
+    assert one["au"][k] and one["au"][k + 1:] == [None] * 3 and f2["U"][k] and f2["U"][k + 1:] == [None] * 3
+    fl = gz(out / ("scr_l_%s.json.gz" % KEY))
+    assert "GA4 data till 2026-11-02 · users till 2026-11-01" in fl["report"]["app"]
+    app = app_of(tmp_path / "b")
+    assert app.ftu == date(2026, 11, 2) and app.windows()[0][-1] == "2026-11-02" and not sb.stale_users(app)
+    su = dict(app.su)
+    sb.set_users(app, {d: 900 for d in _days("2026-08-01", "2026-10-30")}, None, su)
+    assert app.ftu == date(2026, 10, 30) and sb.stale_users(app)       # 3 days late: the health line
+    sb.set_users(app, {}, "stream", su)
+    assert app.ftu == date(2026, 11, 2) and app.auw == "stream" and sb.stale_users(app)
+    # daily users up to ft but never a whole screen users day: ftU = ft (no lag shows), still the health line
+    sb.set_users(app, {d: 900 for d in _days("2026-08-01", "2026-11-02")}, None, {})
+    assert app.ftu == date(2026, 11, 2) and app.au and not app.su and sb.stale_users(app)
+    app.final = app.final[-2:]                                          # a brand-new app (under 3 final days): not yet
+    assert not sb.stale_users(app)
+
+
+def test_screen_users_match_small_days_users(tmp_path):
+    # screen_users reads the users by screen beside small_days, never through it: the same users (by class), from the
+    # month cache or the store file, and no class registered (the screen indexes, and the shards, stay as they were)
+    data, out, dash = build(tmp_path, day_fn=users_day)
+    meta = sb.load_meta(str(data), KEY)
+    rec = sb.load_recent(str(data), KEY)
+    for cached in (False, True):
+        app = sb.App(meta, sb.core_days(str(data), KEY, meta, rec), NOW, dash, {})
+        n0 = list(app.screens)
+        su = sb.screen_users(app, str(data), rec)
+        assert app.screens == n0                                       # nothing registered
+        if not cached:
+            assert not os.path.exists(data / "ga4_screens_cache" / KEY / "small_2026-10.json.gz")
+        users = sb.small_days(app, str(data), rec)[3]
+        want = {d: {app.screens[si]: n for si, n in u.items()} for d, u in users.items() if d <= "2026-11-02"}
+        assert su == want and su[WD[2]][MAIN] == 190 and MAIN not in su[WD[5]] and WD[0] not in su
+        sb.run(dash, str(data), str(out), {}, NOW)                     # (writes the month caches)
+
+
+def test_aggregates_never_get_users_and_today_yesterday_never_judged(tmp_path):
+    data, out, dash = build(tmp_path)
+    sb.run(dash, str(data), str(out), {}, NOW)
+    one = gz(out / "scr_all.json.gz")["apps"][AID]
+    f2 = gz(out / ("scr_%s.json.gz" % KEY))
+    tops = [i for i, it in enumerate(one["items"]) if it[1] == "s"]
+    assert [f2["screens"][si][0] for si in f2["Us"]] == [one["items"][i][0] for i in tops] == [EDIT, MAIN]
+    assert {len(u) for u in f2["U"] if u} == {2}                      # one users number per TOP screen, never an aggregate
+    assert all(one["items"][int(i)][1] in ("s", "fs") for i in one["status"])     # aggregate rows: never a word
+    # Today / Yesterday: no daily users, no screen users, no window reaches them
+    assert one["au"][-2:] == [None, None] and f2["U"][-2:] == [None, None] and f2["au"][-2:] == [None, None]
+    assert f2["notes"]["w"][1] <= one["ftu"] <= one["ft"] < one["td"]
+
+
+def test_line_users_and_stale_users_warning(tmp_path, monkeypatch, capsys):
+    data, out, dash = build(tmp_path, {"show_w": 0.6})
+    os.remove(data / "ga4_uninstall" / (KEY + ".json.gz"))            # no daily users at all
+    capsys.readouterr()
+    assert sb.run(dash, str(data), str(out), {}, NOW) == ["/scr_*"]
+    assert sb.pop_line().startswith("scr: apps 1, users 0, rows ")
+    err = capsys.readouterr().err
+    assert err.count("skipped:") == 1 and "scr users skipped: StaleUsersWarning\n" in err
+    from admob_iq import health
+    monkeypatch.setattr(health, "FAULTS", {})
+    for ln in err.splitlines():
+        health.scan(ln)
+    assert health.FAULTS == {"scr users": "StaleUsersWarning"}
+    one = gz(out / "scr_all.json.gz")["apps"][AID]
+    assert one["auw"] == "none" and "au" not in one
+    assert one["app"][0] == "N/A" and one["app"][1].endswith("(users not in yet 10)")
+    trig = [one["status"][str(i)] for i, it in enumerate(one["items"]) if it[1] == "fs"]
+    assert trig and all(s[0] == "N/A" and s[1].endswith("(users not in yet 10)") for s in trig)
+    # screens keep their own users: still judged
+    assert one["status"][str([it[0] for it in one["items"]].index(MAIN))][0] == "Worse"
+    # healthy again: no line
+    uni_store(data, last="2026-11-02")
+    sb.run(dash, str(data), str(out), {}, NOW)
+    assert sb.pop_line().startswith("scr: apps 1, users 1, ") and "skipped" not in capsys.readouterr().err
+    # daily users in, but the users by screen read never whole (always sampled): every screen row is N/A, so the line
+    data2, out2 = tmp_path / "d2", tmp_path / "s2"
+    out2.mkdir()
+    write_store(data2, day_fn=lambda d: dict(users_day(d), uV={"st": "s", "g": "c", "smp": 0.2}))
+    (data2 / "app_store_ids.json").write_text(json.dumps({"by_id": {}}))
+    capsys.readouterr()
+    assert sb.run(dash, str(data2), str(out2), {}, NOW) == ["/scr_*"]
+    assert sb.pop_line().startswith("scr: apps 1, users 0, ")
+    err = capsys.readouterr().err
+    assert err.count("skipped:") == 1 and "scr users skipped: StaleUsersWarning\n" in err
+    assert "au" in gz(out2 / "scr_all.json.gz")["apps"][AID]          # the daily users themselves are in
+
+
+def test_v2_files_and_shards_v1(tmp_path):
+    data, out, dash = build(tmp_path)
+    sb.run(dash, str(data), str(out), {}, NOW)
+    assert sb.V == 2 and dash["scr"]["v"] == 2
+    assert gz(out / "scr_all.json.gz")["v"] == 2 and gz(out / ("scr_%s.json.gz" % KEY))["v"] == 2
+    assert gz(out / ("scr_l_%s.json.gz" % KEY))["v"] == 2
+    assert gz(out / ("scr_c_%s_202609.json.gz" % KEY))["v"] == 1 == sb.V_SHARD == sb.SHARD_V    # shards untouched
+
+
 # ── backtest ────────────────────────────────────────────────────────────────────────────────
 
-def test_backtest_on_a_tiny_store(tmp_path):
+def test_backtest_v2_tiny_store(tmp_path):
+    # every final day with W + N inside the history replayed as "today": the words after the holds and the confirm,
+    # per app — counts and 12-hex keys only
     data = tmp_path / "data"
-    write_store(data, sc={"show_w": 0.6}, layers=False)
+    write_store(data, sc={"show_w": 0.6})
     buf = io.StringIO()
     res = sb.backtest(str(data), dashboard({"show_w": 0.6}), NOW, buf)
-    wk = res[KEY]["weeks"]
-    assert [w[0] for w in wk] == ["2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05", "2026-10-12",
-                                  "2026-10-19", "2026-10-26", "2026-11-02"]
-    assert wk[-1][1] >= 1 and all(w[1] == 0 for w in wk[:-2]) and 0 < res[KEY]["flip"] < 1
-    assert buf.getvalue().startswith("%s  weeks 9  flip " % KEY)
+    r = res[KEY]
+    assert r["days"] == len(_days("2026-09-07", "2026-11-02")) and r["ftu"] == "2026-11-02" and r["users"]
+    # the drop starts on W0 (24 Oct): MainActivity turns Worse once both halves of W show it, from its 2nd such day
+    # (the confirm) to ft — one episode, the only flagged row
+    assert 1 <= r["worse"] < 9 and r["watch"] == 0 and r["confirm"] >= 1 and r["episodes"] == 1
+    assert r["median"] == r["worse"] and r["row_months"] == [2, r["row_months"][1]] and r["app"][0] >= 1
+    line = buf.getvalue()
+    assert line.startswith("%s  days %d  judged " % (KEY, r["days"])) and "MainActivity" not in line
     p = subprocess.run([sys.executable, "-m", "admob_iq.screens_build", "backtest", str(data)], cwd=ROOT,
                        capture_output=True, text=True, timeout=120)
     assert p.returncode == 0 and p.stdout.startswith(KEY)
     assert subprocess.run([sys.executable, "-m", "admob_iq.screens_build"], cwd=ROOT, capture_output=True,
                           timeout=120).returncode == 2
+    # --users: the daily users from a built site's file 2 (the store without its Uninstall store)
+    out = tmp_path / "site"
+    (data / "app_store_ids.json").write_text(json.dumps({"by_id": {}}))
+    sb.run(dashboard({"show_w": 0.6}), str(data), str(out), {}, NOW)
+    os.remove(data / "ga4_uninstall" / (KEY + ".json.gz"))
+    assert sb.backtest(str(data), dashboard({"show_w": 0.6}), NOW, io.StringIO(), users=str(out))[KEY]["users"]
+    assert not sb.backtest(str(data), dashboard({"show_w": 0.6}), NOW, io.StringIO())[KEY]["users"]

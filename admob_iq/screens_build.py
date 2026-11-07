@@ -20,12 +20,12 @@ this store's (app_users).
 Files (sorted compact JSON, deterministic gzip — no mtime / file name, level GZ_LEVEL — written only when their bytes
 changed, known from the out-file index in the cache dir; day arrays from the app's first day d0, shards from the 1st of
 their month; a month's shard is not even built while its inputs are unchanged):
-  site/scr_all.json.gz          every app's day arrays over its display items + status words (the tab's first load)
+  site/scr_all.json.gz          every app's day arrays over its display items + status words + the app's daily users
+                                "au" ≤ ftU (the App total and All apps draw from this file alone; the tab's first load)
   site/scr_<key>.json.gz        the app page: screens, units, per-day core rows, AdMob per unit (blended), row details;
-                                Ads / user (only the app page reads them, never All apps): "U" the top screens' users
-                                per FINAL day ("Us" their screen indexes; only where the users read AND the ads by
-                                screen are whole: users_by_day), "au" the app's daily active users per final day
-                                (app_users; else "auw" why)
+                                "U" the top screens' users per final day ≤ ftU ("Us" their screen indexes; only where
+                                the users read, the views and the ads by screen are whole: users_by_day), "au" the
+                                app's daily active users per final day ≤ ftU (app_users; else "auw" why)
   site/scr_l_<key>.json.gz      the app's layers: per-day small-group records, versions, month sums, shard list, the
                                 developer report text (English, no money)
   site/scr_r_<key>_<YYYYMM>.json.gz / scr_c_<key>_<YYYYMM>.json.gz   one month of versions / countries over the display
@@ -38,14 +38,22 @@ Calendar: td = the property's today; ft = td − 2 (GA4 still adds to the last t
 the property's (UTC on every live property); AdMob days are the report zone's (IST): GA4 day D = the overlapped share of
 AdMob days D and D+1 (0.7708 / 0.2292 for UTC vs IST), only when both are ≤ latest_complete.
 
-Status (fixed window, the picker never changes it — the First open precedent): W = the 10 final days ending ft, N = the
-28 final days before W; the z gate allows for each row's own day-to-day spread (overdispersion from N) and both halves of
-W must agree; a row holding under 1 % of the app's ads of its kind in W and in N is not judged ("Too few ads"). Screen
-rows count inline ads, or every format (allf: 1 formats not recorded, 2 GA4 gave the screens without the format on most
-whole days of W ∪ N — the full-screen share measured where it did ships beside it). Cause: a stopped / changed ad unit
-first, else an exact LMDI split of the change in ads per visit over the row's units — tie (GA4 ÷ AdMob), share of the
-unit on this screen, show rate, fill, requests per app visit, the screen's share of visits — whose terms add up to the
-change exactly (no leftover is ever named a cause).
+Status (owner, 6–7 Nov 2026: "total user ke samne kitna impression mila vo imp hota he"; fixed window, the picker never
+changes it — the First open precedent): IMPRESSIONS PER USER PER DAY. A screen row = its ads ÷ that screen's own users
+(GA4 activeUsers by screen class, unique within one day and one screen: summed over days = user-days, never across
+screens); a full-screen trigger (no screen) and the App row = ads ÷ the app's daily users ("per app user"). W = the 10
+final days ending ftU, N = the 28 before; ftU = the last final day on which both the app's daily users and the screen
+users read are in (one end per app: the word changes once a day). Days are counted by whole reads (a whole day with 0
+users of the screen is a day that adds to no sum). The shipped thresholds on the per-user numbers + 4 holds: under 1 % of
+the app's total imp / user ("small"), the app-wide fold (triggers only: app views per user moved), 2 final days in a row,
+and the collapse rule (≤ 50, halves ≤ 60, z ≤ −2 → Worse). The App row is checked against AdMob per daily user: when GA4
+and AdMob disagree it is judged on AdMob ("Worse (AdMob)"), N/A only when AdMob is incomplete. Screen rows count inline
+ads, or every format (allf: 1 formats not recorded, 2 GA4 gave the screens without the format on most whole days of
+W ∪ N — the full-screen share measured where it did ships beside it). Cause: the exact parts of the per-user change
+(screen: views per user × time per view × ads per minute; trigger / App: app views per user × ads per app view), then
+for the ad-logic part a stopped / changed ad unit first, else an exact LMDI split of the change in ads per visit over the
+row's units — tie (GA4 ÷ AdMob), share of the unit on this screen, show rate, fill, requests per app visit, the screen's
+share of visits — whose terms add up to the change exactly (no leftover is ever named a cause).
 
 run(dashboard, data_dir, out_dir, s) → the _headers no-store paths (["/scr_*"], ONE splat rule) or [] (no store / switched
 off / a failure: every scr_ file removed, no pointer); only the apps the dashboard's apps_catalog selects (when it has
@@ -73,7 +81,7 @@ PREFIX = "scr_"
 ALL_FILE = "scr_all.json.gz"
 APP_RE = re.compile(r"^scr_(?:all|(?:[lrc]_)?[0-9a-f]{12}(?:_\d{6})?)\.json\.gz$")
 HEADER_PATHS = ["/scr_*"]
-V = 1
+V = 2                                  # 2: impressions per user per day (status / score / why changed, scr_all "au")
 MAX_GZ = 8 * 1024 * 1024
 STORE_DIR = "ga4_screens"
 CACHE_DIR = "ga4_screens_cache"
@@ -86,6 +94,7 @@ SMALL_V = 1                            # the small month cache's parts beside it
 GZ_LEVEL = 6                           # the scr_ files' gzip level (9 took ~4× the time for files under a tenth smaller)
 IDX_V, IDX_APP, IDX_ALL = 1, "shards.json", "all.json"      # the out-file index (_idx_path)
 SHARD_V = 1                            # bump when shard_body's output changes for the same inputs (a shard key part)
+V_SHARD = 1                            # the shard files' own format version (unchanged by V 2: no shard is rewritten)
 GROUPS = {"core": ("t", "v", "w", "a"), "small": ("k", "e", "uV", "uA", "s", "x", "nV", "nA"),
           "ver": ("rV", "rA"), "cc": ("cV", "cA")}
 READ_IDS = ("t", "v", "w", "a", "nV", "nA", "rV", "rA", "cV", "cA", "k", "e", "s", "x", "uV", "uA")
@@ -99,7 +108,7 @@ W_DAYS, N_DAYS, HALF = 10, 28, 5
 MIN_A_W = 5                            # whole days of the row's ads in W, else N/A "Not whole" + why (WHY_PARTS)
 # that why: the W days the row's series lacks, counted by the state each ships (App.day_why) — non-zero parts, in order
 WHY_PARTS = (("s", "GA4 sampled"), ("o", "GA4 dropped rows"), ("p", "GA4 grouped"), ("t", "thresholding"),
-             ("-", "not read yet"), ("f", "format not split"), ("x", "store file unreadable"))
+             ("-", "not read yet"), ("f", "format not split"), ("x", "store file unreadable"), ("u", "users not in yet"))
 MIN_N, MIN_W, MIN_VN, MIN_E = 14, 7, 300, 30
 LOG_SHIFT, LOG_MAX = 0.05, 0.30        # unset-class / notset-format share: moved > 5 points or > 30 % in W
 ALLF_SHARE = 0.05                      # notset formats above this in N or W: screen rows judged on all formats (allf 1)
@@ -108,10 +117,30 @@ ALLF_NOSPLIT = 0.5                     # … or, over W ∪ N, the whole ads-by-
 ALLF_FS_DAYS = 60                      # allf's why: the full-screen share on app screens over the newest ≤ 60 split days
 MAT_SHARE = 0.01                       # a row is judged only holding ≥ 1 % of the app's ads of its kind in W or in N (a
                                        # ratio of near-zero rates is no finding: owner, 6 Nov)
-APP_SHARE = 0.03                       # a row counts for the app status with ≥ 3 % of its kind's N ads
 PHI_MIN_E = 5
 WATCH_Z = 3                            # Watch / Better need |z| ≥ 3 too (the real-store backtest: |z| 2–3 flagged too many
                                        # marginal rows); Worse: z ≤ −3 and score < 80
+IMP_MAT = 0.01                         # a flag holds only at ≥ 1 % of the APP's total imp / user (impact, below)
+OWN_FOLD = 90                          # triggers: the change net of the app-wide app-views-per-user change still < 90
+COLLAPSE = (50, 60, 2.0)               # score ≤ 50, both halves ≤ 60, z ≤ −2 → Worse (a stop is never held by z)
+CONFIRM_DAYS = 2                       # a flag shows from its 2nd final day in a row (3: the owner option)
+DAU_MOVE = 0.25                        # the App row's why names a daily-users move above this (why only)
+ADM_MIN_W, ADM_MIN_N = 7, 14           # the App row's AdMob check: AdMob-complete days in W / N
+FLAGS = ("Worse", "Watch")
+# the parts of a per-user change (exact LMDI, % of normal): screens views per user × time per view × ads per minute
+# (or × ads per view without time); triggers and the App row app views per user × ads per app view
+PART_NAME = {"vpu": "views per user", "tpv": "time per view", "apm": "ads per minute", "adv": "ads per view",
+             "avu": "app views per user"}
+PART_LABEL = {"vpu": "Users open it fewer times", "tpv": "Users stay shorter", "avu": "Users open fewer screens"}
+PART_CHECK = {
+    "Users open it fewer times": "This screen's own users open it fewer times a day: check its entry points and "
+                                 "back-stack in the latest version.",
+    "Users stay shorter": "Users leave this screen sooner, so refreshed banners show fewer times per view: content / "
+                          "load time, not the ad code.",
+    "Users open fewer screens": "Across the whole app users open fewer screens: user mix (see new vs returning), "
+                                "retention or an app-wide flow change.",
+    "Ads stopped": "No ads on this screen in the last 10 days.",
+}
 # ── cause (§3.3) ──
 STOP_REQ, STOP_FRAC, STOP_SHARE = 50, 0.10, 0.50
 TERM_MIN, MIXED = 0.10, 0.6
@@ -899,6 +928,9 @@ class App:
         self.meta, self.aid, self.key = meta, str(meta["app_id"]), gu.file_key(str(meta["app_id"]))
         self.td = _today(meta, now)
         self.ft = self.td - timedelta(days=2)
+        # the users beside the ads (set_users): app daily users {day: n} and screen users {day: {class: n}} on final
+        # days ≤ ftU, the Uninstall store's why when it gave none, and ftU (every status window ends there)
+        self.au, self.su, self.auw, self.ftu = {}, {}, None, self.ft
         real = sorted(d for d, r in days.items() if r)
         self.d0 = real[0] if real else None
         # a core month file that cannot be read (broken: [(grp, month, error type)]) keeps its days on the calendar
@@ -1096,7 +1128,8 @@ class App:
 
     # windows
     def windows(self, ft=None):
-        ft = _d(ft or self.ft)
+        """W = the W_DAYS final days ending ft (default ftU: the last final day with both user reads), N the N_DAYS before."""
+        ft = _d(ft or self.ftu)
         w = _span(ft - timedelta(days=W_DAYS - 1), ft)
         n = _span(ft - timedelta(days=W_DAYS + N_DAYS - 1), ft - timedelta(days=W_DAYS))
         return w, n
@@ -1117,7 +1150,7 @@ class App:
     def allf_share(self, ft=None):
         """The measured full-screen share of all ads on app screens (kind "s") over the newest ≤ ALLF_FS_DAYS final
         days whose ads by screen are whole WITH the format (fu / f), 4 places; None when there is none."""
-        ft, n, fs, tot = _iso(_d(ft or self.ft)), 0, 0, 0
+        ft, n, fs, tot = _iso(_d(ft or self.ftu)), 0, 0, 0
         for d in reversed(self.days):
             a = self.ads.get(d)
             if d > ft or d not in self.whole["a"] or not a or a["cls"] is None:
@@ -1341,24 +1374,384 @@ def _fmt100(r):
     return "—" if r is None else ("%.1f" % (100 * r))
 
 
-def app_status(rows):
-    """rows: [(status, kind, N-window ads)] → [word, why, worse n, watch n]: the worst (Worse, Watch, Better, Normal)
-    among judged rows holding ≥ 3 % of their kind's N ads; else Too early / N/A."""
-    tot = {}
-    for st, k, an in rows:
-        tot[k] = tot.get(k, 0) + (an or 0)
-    worse = sum(1 for st, k, an in rows if st["word"] == "Worse")
-    watch = sum(1 for st, k, an in rows if st["word"] == "Watch")
-    elig = [st for st, k, an in rows if st["word"] in JUDGED and tot.get(k) and (an or 0) >= APP_SHARE * tot[k]]
-    if elig:
-        best = min(elig, key=lambda s: STATUS_RANK[s["word"]])
-        n = sum(1 for s in elig if s["word"] == best["word"])
-        return [best["word"], "%d row%s %s" % (n, "" if n == 1 else "s", best["word"]), worse, watch]
-    if any(st["word"] == "Too early" for st, k, an in rows):
-        return ["Too early", "history still short", worse, watch]
-    if rows:
-        return ["N/A", rows[0][0]["why"], worse, watch]
-    return ["N/A", "no screens yet", worse, watch]
+# ── status v2: impressions per user per day (owner, 6–7 Nov 2026) ─────────────────────────────────
+# Kept above: judge() (ads per 100 visits, the previous status) for the backtest's comparison only.
+
+def _q(v):
+    """A per-user number as printed: three figures (4.52 · 0.318 · 12.4 · 1,234)."""
+    if v is None:
+        return "—"
+    a = abs(v)
+    if a >= 100:
+        return "{:,}".format(int(round(v)))
+    return ("%.1f" if a >= 10 else "%.2f" if a >= 1 else "%.3f") % v
+
+
+def _sgn(x, fmt_="%.0f"):
+    """A signed number with a real minus ("−12", "+2.4")."""
+    t = fmt_ % abs(x)
+    return ("−" if x < 0 and t.strip("0.") else "+") + t
+
+
+def _pc(x, dp=0):
+    """A change (a ratio − 1) as a signed percent: "−12%", "+2.0%"."""
+    return "—" if x is None else _sgn(100 * x, "%%.%df" % dp) + "%"
+
+
+def _ft(sec):
+    """Seconds as the page prints them: "40s", "2m 10s", "1h 05m"."""
+    if sec is None:
+        return "—"
+    t = int(round(sec))
+    if t < 60:
+        return "%ds" % t
+    if t < 3600:
+        return "%dm %02ds" % (t // 60, t % 60)
+    m = int(round(sec / 60))
+    return "%dh %02dm" % (m // 60, m % 60)
+
+
+def _base_word(score, z, h):
+    """The shipped thresholds on a per-user score, plus the collapse rule (a stop is never held by z alone)."""
+    hs = [x for x in h if x is not None]
+    both = len(hs) == 2
+    if score < 80 and z <= -3 and both and all(x < 90 for x in hs):
+        return "Worse"
+    if score < 90 and z <= -WATCH_Z and both and all(x < 95 for x in hs):
+        return "Watch"
+    if score > 110 and z >= WATCH_Z and both and all(x > 105 for x in hs):
+        return "Better"
+    if score <= COLLAPSE[0] and z <= -COLLAPSE[2] and both and all(x <= COLLAPSE[1] for x in hs):
+        return "Worse"
+    return "Normal"
+
+
+ROW_NOUN = {"s": "imp/screen user", "t": "imp/app user", "a": "imp/user"}
+
+
+def _lm(x, y):
+    """ln(x / y), or None unless both are > 0."""
+    return math.log(x / y) if x and y and x > 0 and y > 0 else None
+
+
+def _parts_of(kind, rw, rn, f):
+    """The exact parts of rw − rn in % of rn (they add up to 100 × (rw / rn − 1)): f = {part: (W value, N value)} whose
+    product is the rate. None when a factor is 0 on a side (the LMDI weight needs both)."""
+    if not rw or not rn or any(_lm(a, b) is None for a, b in f.values()):
+        return None
+    L = _L(rw, rn)
+    return {k: round(100 * L * _lm(a, b) / rn, 1) for k, (a, b) in f.items()}
+
+
+def judge_u(series, w_days, n_days, guard=None, what="inline", kind="s", app_rn=None, au=None, vapp=None, miss=None,
+            tot=None, eng=None):
+    """A row's {day: (views, ads, users)} on its whole days → its status (dict). users = the screen's own users (kind
+    "s"), the app's daily users for a trigger ("t") and the App row ("a"); a whole day with 0 users is (0, 0, 0): a day
+    that adds to no sum. First that applies: N/A Not whole (< MIN_A_W whole days in W; why by part, "u" users not in
+    yet) · N/A the guard · N/A No ads / Ads started · N/A Too few ads (tot) · N/A No visits in the last 10 days (ads in
+    N, no users in W) · Too early · the base word (_base_word). Then held as Normal: "small" (|impact| under IMP_MAT of
+    the APP's total imp / user: impact = (AW − rn·UW) ÷ (app_rn · the app's daily users over the row's W days); screens
+    and triggers) · "app-wide" (triggers only: the score net of the app-wide app-views-per-user change, own, ≥ OWN_FOLD
+    for a down word, ≤ 200 − OWN_FOLD for Better). The 2-day confirm is statuses'. eng {day: engagement seconds}: a
+    screen's time parts."""
+    au, vapp = au or {}, vapp or {}
+    W = [(d,) + tuple(series[d]) for d in w_days if d in series]
+    N = [(d,) + tuple(series[d]) for d in n_days if d in series]
+    VW, AW, UW = (sum(x[j] for x in W) for j in (1, 2, 3))
+    VN, AN, UN = (sum(x[j] for x in N) for j in (1, 2, 3))
+    out = {"VW": VW, "AW": AW, "UW": UW, "VN": VN, "AN": AN, "UN": UN, "dW": len(W), "dN": len(N), "rw": None,
+           "rn": None, "score": None, "z": None, "h": [None, None], "imp": None, "own": None, "reach": None,
+           "parts": None, "base": None, "hold": None, "kind": kind}
+
+    def done(word, why, base=None):
+        out.update(word=word, why=why, base=base or word)
+        return out
+    if len(W) < MIN_A_W:
+        parts = _parts([miss(d) for d in w_days if d not in series]) if miss else ""
+        noun = ("%s " % what) if what else ""
+        return done("N/A", "Not whole — %d whole days of %sads in the last %d%s" % (len(W), noun, W_DAYS, parts))
+    if guard:
+        return done("N/A", guard)
+    noun = "full-screen " if kind == "t" else ("%s " % what if what else "")
+    if AN == 0 and AW == 0:
+        return done("N/A", "No %sads" % noun)
+    if AN == 0:
+        return done("N/A", "Ads started — no %sads in the %d days before" % (noun, N_DAYS))
+    if tot is not None:
+        sw, sn = sum(tot.get(x[0], 0) for x in W), sum(tot.get(x[0], 0) for x in N)
+        out["mat"] = mat = max(AW / sw if sw else 0.0, AN / sn if sn else 0.0)
+        if mat < MAT_SHARE:
+            pct = ("%.1f%%" % (math.floor(1000 * mat) / 10)) if mat >= 0.001 else "under 0.1%"
+            return done("N/A", "Too few ads — %s of the app's %s ads" % (pct, what))
+    if not UW:
+        return done("N/A", "No visits in the last %d days" % W_DAYS)
+    if not UN:
+        return done("N/A", "No visits in the %d days before" % N_DAYS)
+    rn, rw = AN / UN, AW / UW
+    E = rn * UW
+    out.update(rn=rn, rw=rw)
+    if len(N) < MIN_N:
+        return done("Too early", "normal has %d whole days (needs %d)" % (len(N), MIN_N))
+    if len(W) < MIN_W:
+        return done("Too early", "last %d days have %d whole days (needs %d)" % (W_DAYS, len(W), MIN_W))
+    if VN < MIN_VN:
+        return done("Too early", "%d views in the normal (needs %d)" % (VN, MIN_VN))
+    if E < MIN_E:
+        return done("Too early", "%d ads expected (needs %d)" % (round(E), MIN_E))
+    ex = [(a - rn * u) ** 2 / (rn * u) for _, v, a, u in N if rn * u >= PHI_MIN_E]
+    phi = max(1.0, sum(ex) / len(ex)) if ex else 1.0
+    z = (AW - E) / math.sqrt(E * phi)
+    score = round(100 * rw / rn)
+    halves = []
+    for part in (set(w_days[:HALF]), set(w_days[HALF:])):
+        pu = sum(x[3] for x in W if x[0] in part)
+        pa = sum(x[2] for x in W if x[0] in part)
+        halves.append(round(100 * (pa / pu) / rn) if pu else None)
+    out.update(score=score, z=round(z, 2), h=halves, phi=round(phi, 2))
+    # the app's daily users and app views on the row's own days: impact, the fold, reach, the parts
+    DW, DN = sum(au.get(x[0], 0) for x in W), sum(au.get(x[0], 0) for x in N)
+    PW, PN = sum(vapp.get(x[0], 0) for x in W), sum(vapp.get(x[0], 0) for x in N)
+    if kind == "a":
+        imp = rw / rn - 1
+    else:
+        imp = (AW - rn * UW) / (app_rn * DW) if app_rn and DW else None
+    out["imp"] = None if imp is None else round(imp, 5)
+    depth = _lm(PW / DW, PN / DN) if DW and DN and PW and PN else None
+    if kind == "t" and depth is not None:
+        out["own"] = round(score / math.exp(depth))
+    if kind == "s" and DW and DN:
+        out["reach"] = [round(UW / DW, 4), round(UN / DN, 4)]
+    if kind == "s":
+        GW = sum((eng or {}).get(x[0], 0) for x in W)
+        GN = sum((eng or {}).get(x[0], 0) for x in N)
+        if GW > 0 and GN > 0 and VW and VN:
+            f = {"vpu": (VW / UW, VN / UN), "tpv": (GW / VW, GN / VN), "apm": (60 * AW / GW, 60 * AN / GN)}
+            out["G"] = [GW, GN]
+        else:
+            f = {"vpu": (VW / UW, VN / UN), "adv": (AW / VW if VW else 0, AN / VN if VN else 0)}
+    else:
+        f = {"avu": (PW / UW, PN / UN), "adv": (AW / PW if PW else 0, AN / PN if PN else 0)}
+    out["parts"] = _parts_of(kind, rw, rn, f)
+    base = _base_word(score, z, halves)
+    line = "%s %s → %s (%s) · z %s" % (ROW_NOUN[kind], _q(rn), _q(rw), _pc(rw / rn - 1), _sgn(z, "%.1f"))
+    word, why = base, line
+    if base in ("Worse", "Watch", "Better") and kind != "a":
+        down = base != "Better"
+        if imp is not None and (imp > -IMP_MAT if down else imp < IMP_MAT):
+            word, why, out["hold"] = "Normal", line + " · small — %s of the app's imp / user" % _pc(imp, 1), "small"
+        elif out["own"] is not None and (out["own"] >= OWN_FOLD if down else out["own"] <= 200 - OWN_FOLD):
+            word, why, out["hold"] = ("Normal", line + " · app-wide — users open %s screens (see App total)"
+                                      % ("fewer" if down else "more"), "fold")
+    return done(word, why, base)
+
+
+def _fam(w):
+    return "F" if w in FLAGS else "B" if w == "Better" else None
+
+
+def _confirm(st, prev):
+    """The 2-day confirm: a flag (Worse / Watch, or Better) shows only when the same family stood on each of the
+    CONFIRM_DAYS − 1 final days before (their words after the holds) — else Normal "first day — confirms tomorrow"."""
+    f = _fam(st["word"])
+    if f and any(_fam(p) != f for p in prev):
+        st = dict(st, word="Normal", why=st["why"] + " · first day — confirms tomorrow", hold="confirm")
+    return st
+
+
+# ── the users beside the ads ─────────────────────────────────────────────────────────────────
+
+def screen_users(app, data_dir, recent):
+    """The users by screen → {day: {class: users}} on the final days whose uV record is whole (GA4's activeUsers by
+    screen class: unique within one day and one screen). Read beside small_days, never through it: each small month's
+    cache "u" + "cls" / "map" when the cache is that store file's (its sha1), else that month's uV records only; then
+    recent.json the way small_days takes it (a recent record replaces the month's: whole or not). Registers NO class
+    (app.six untouched: small_days' registration order — and the shards' screen indexes — stay as they are)."""
+    out, ft = {}, _iso(app.ft)
+    if not app.d0:
+        return out
+    td = _iso(app.td)
+    for m in _months(data_dir, app.key, "small", app.meta):
+        try:
+            with open(_month_path(data_dir, app.key, "small", m), "rb") as f:
+                b = f.read()
+        except OSError:
+            continue                                   # (small_days counts it: one health line per build)
+        lo, hi = max(app.d0, m + "-01"), min(_month_end(m), td)
+        c = _cache_get(data_dir, app.key, "small", m, _sha(b))
+        if c is not None and c.get("sv") == SMALL_V and [c.get("lo"), c.get("hi")] == [lo, hi] \
+                and isinstance(c.get("u"), dict) and len(c.get("cls") or ()) == len(c.get("map") or ()):
+            inv = dict(zip(c["map"], c["cls"]))
+            if all(si in inv for rows in c["u"].values() for si, _ in rows):
+                for d, rows in c["u"].items():
+                    out[d] = {inv[si]: n for si, n in rows}
+                continue
+        try:
+            days = _parse_month(b)
+        except Exception:
+            continue
+        for d, recs in days.items():
+            if isinstance(recs, dict) and lo <= d <= hi and _whole(recs.get("uV")):
+                out[d] = _uv_rows(recs["uV"])
+    for d, recs in recent.items():
+        if not isinstance(recs, dict) or not app.d0 <= d <= td or "uV" not in recs:
+            continue
+        if _whole(recs["uV"]):
+            out[d] = _uv_rows(recs["uV"])
+        else:
+            out.pop(d, None)
+    return {d: u for d, u in out.items() if d <= ft}
+
+
+def _uv_rows(rec):
+    out = {}
+    for r in rec.get("r") or []:
+        try:
+            out[str(r[0] or "")] = _i(r[2])
+        except (IndexError, TypeError, ValueError):
+            continue
+    return out
+
+
+def set_users(app, au, auw, su):
+    """ftU = the last final day on which both the app's daily users and a whole screen users read are in (≤ ft; one
+    end per app: every status window, the confirm and every per-user period end there); app.au / app.su cut to it."""
+    ft = _iso(app.ft)
+    a = [d for d, n in (au or {}).items() if d <= ft and n]
+    s = [d for d in (su or {}) if d <= ft]
+    ends = [max(x) for x in (a, s) if x]
+    app.ftu = _d(min(ends)) if ends else app.ft
+    f = _iso(app.ftu)
+    app.au = {d: n for d, n in (au or {}).items() if d <= f and n}
+    app.su = {d: u for d, u in (su or {}).items() if d <= f}
+    app.auw = None if app.au else (auw or "none")
+    return app.ftu
+
+
+def stale_users(app):
+    """True when the users behind this app's numbers are late or missing: no daily users (none / another stream / GA4
+    cut the report), ftU more than a day before ft (the users read stopped), or daily users but no whole screen users
+    day at all once the app has 3 final days (a new read, or one always thresholded / sampled: ftU then ends on the
+    last daily users day, so no lag shows, yet every screen row is N/A)."""
+    return not app.au or (app.ft - app.ftu).days > 1 or (not app.su and len(app.final) >= 3)
+
+
+def screen_series_u(app, c, allf):
+    """{day: (views, ads, users)} of one screen class on its whole days ≤ ftU (screen_series' days whose users read is
+    whole too; a whole day without users of the screen → (0, 0, 0)), and screen_series' own days (the "u" why)."""
+    base = app.screen_series(c, allf)
+    out = {}
+    for d, (v, a) in base.items():
+        u = app.su.get(d)
+        if u is None:
+            continue
+        n = u.get(c, 0)
+        out[d] = (v, a, n) if n > 0 else (0, 0, 0)
+    return out, base
+
+
+def trig_series_u(app, gi):
+    """{day: (app visits, the trigger group's ads, the app's daily users)} on the units read's whole days with users."""
+    base = app.trig_series(gi)
+    return {d: (v, a, app.au[d]) for d, (v, a) in base.items() if d in app.au}, base
+
+
+def app_series(app):
+    """The App row: {day: (app visits, GA4's ads — inline + full-screen + not recorded, not recorded left out on copy
+    days AdMob did not confirm, dup 2 — , the app's daily users)} and {day: (inline, full, counted not recorded)}."""
+    ser, fm = {}, {}
+    for d, t in app.ta.items():
+        if d not in app.vis or d not in app.au:
+            continue
+        il = sum(n for f, n in t.items() if fgroup(f) == 0)
+        fl = sum(n for f, n in t.items() if fgroup(f) == 1)
+        ns = t.get("notset", 0) if app.dup.get(d) != 2 else 0
+        ser[d] = (app.vis[d], il + fl + ns, app.au[d])
+        fm[d] = (il, fl, ns)
+    return ser, fm
+
+
+def _app_guard(app, w, n):
+    """The App row's guard: a duplicate ad_impression run starting / ending inside W ∪ N only."""
+    a, b = n[0], w[-1]
+    for run in app.runs:
+        if a <= run["a"] <= b:
+            return "Logging changed — duplicate ad_impression logging started %s" % run["a"]
+        if not run["open"] and a <= run["b"] <= b:
+            return "Logging changed — duplicate ad_impression logging ended %s" % run["b"]
+    return None
+
+
+def _adm_fmt(app):
+    """{GA4 day: (AdMob inline, AdMob full-screen impressions)} on the final days AdMob is complete for."""
+    out = {}
+    if not app.adm:
+        return out
+    for d in app.final:
+        m = app.adm.fmt_imp(d)
+        if m is not None:
+            out[d] = (sum(v for f, v in m.items() if f not in FULL), sum(v for f, v in m.items() if f in FULL))
+    return out
+
+
+def app_judge(app, w, n, aser, gfmt, afmt):
+    """The App row at one anchor: judge_u on GA4 ÷ the app's daily users (guard: duplicate runs only), then the AdMob
+    check on a flagged word — the driving format (the one that moved most toward the word), its AdMob change per daily
+    user put in GA4's place: still < 90 (Worse / Watch) or > 110 (Better) → the word stands ("AdMob agrees"); else the
+    row is judged on AdMob per daily user (inline + full-screen, AdMob-complete days) with the same rules — "(AdMob)",
+    why "GA4 +x% ≠ AdMob −y%" — and only when that cannot be judged N/A "Not measurable (GA4 ≠ AdMob)". Fewer than
+    ADM_MIN_W / ADM_MIN_N AdMob days: the word stands, "AdMob not checked". → the status (+ "adm")."""
+    miss = lambda d: "u" if d in app.ta and d in app.vis else app.st["t"].get(d, "-")
+    st = judge_u(aser, w, n, _app_guard(app, w, n), "", "a", None, app.au, app.vis, miss)
+    Wd, Nd = [d for d in w if d in aser], [d for d in n if d in aser]
+    U_ = {s: sum(aser[d][2] for d in ds) for s, ds in (("W", Wd), ("N", Nd))}
+    G = {s: [sum(gfmt[d][j] for d in ds) for j in range(3)] for s, ds in (("W", Wd), ("N", Nd))}
+    dW, dN = len(Wd), len(Nd)
+    st["dau"] = round((U_["W"] / dW) / (U_["N"] / dN) - 1, 4) if dW and dN and U_["W"] and U_["N"] else None
+    if st["score"] is not None and st["dau"] is not None and abs(st["dau"]) > DAU_MOVE:
+        x = 1 + st["dau"]
+        st["why"] += " · daily users ×%s" % (("%.1f" if x >= 1 else "%.2f") % x)
+    aw, an = [d for d in Wd if d in afmt], [d for d in Nd if d in afmt]
+    Ua = {"W": sum(aser[d][2] for d in aw), "N": sum(aser[d][2] for d in an)}
+    gA = {s: [sum(gfmt[d][j] for d in ds) for j in range(3)] for s, ds in (("W", aw), ("N", an))}   # (+ not recorded)
+    aA = {s: [sum(afmt[d][j] for d in ds) for j in range(2)] for s, ds in (("W", aw), ("N", an))}
+    ok = len(aw) >= ADM_MIN_W and len(an) >= ADM_MIN_N and Ua["W"] and Ua["N"]
+    ch = lambda X, j: ((X["W"][j] / Ua["W"]) / (X["N"][j] / Ua["N"]) - 1) if ok and X["N"][j] else None
+    tot = lambda X: ((sum(X["W"]) / Ua["W"]) / (sum(X["N"]) / Ua["N"]) - 1) if ok and sum(X["N"]) else None
+    adm = {"st": "none" if not app.adm else "short" if not ok else "ok", "gt": _r(tot(gA), 4), "mt": _r(tot(aA), 4)}
+    st["adm"] = adm
+    if st["base"] not in ("Worse", "Watch", "Better"):
+        return st
+    if not ok:
+        st["why"] += " · AdMob not checked"
+        adm["st"] = "unchecked"
+        return st
+    down = st["base"] != "Better"
+    dI = G["W"][0] / U_["W"] - G["N"][0] / U_["N"]
+    dF = G["W"][1] / U_["W"] - G["N"][1] / U_["N"]
+    drv = (0 if dI <= dF else 1) if down else (0 if dI >= dF else 1)
+    g, m = ch(gA, drv), ch(aA, drv)
+    adm.update(f="inline" if drv == 0 else "full", g=_r(g, 4), m=_r(m, 4))
+    if g is None or m is None:
+        st["why"] += " · AdMob not checked"
+        adm["st"] = "unchecked"
+        return st
+    tw, tn = sum(G["W"]) / U_["W"], sum(G["N"]) / U_["N"]
+    sa = 100 * (tw - G["W"][drv] / U_["W"] + G["N"][drv] / U_["N"] * (1 + m)) / tn
+    adm["sa"] = round(sa)
+    if sa < 90 if down else sa > 110:
+        adm["st"] = "agree"
+        st["why"] += " · AdMob agrees (%s %s)" % (adm["f"], _pc(m))
+        return st
+    # GA4 ≠ AdMob: the App row on AdMob per daily user (inline + full-screen), the same rules
+    gt, mt = adm["gt"], adm["mt"]
+    tail = "GA4 %s ≠ AdMob %s — GA4 logging changed" % (_pc(gt), _pc(mt))
+    aser2 = {d: (aser[d][0], afmt[d][0] + afmt[d][1], aser[d][2]) for d in aser if d in afmt}
+    s2 = judge_u(aser2, w, n, None, "", "a", None, app.au, app.vis)
+    if s2["word"] in JUDGED:
+        s2.update(why="AdMob " + s2["why"] + " · " + tail, adm=dict(adm, st="admob"), dau=st["dau"], ga4=st)
+        return s2
+    st.update(word="N/A", why="Not measurable (GA4 ≠ AdMob) — " + tail, adm=dict(adm, st="na"))
+    return st
 
 
 # ── cause (§3.3) ─────────────────────────────────────────────────────────────────────────────
@@ -1538,16 +1931,47 @@ def cause(app, row, st, ft=None):
     return out
 
 
+def cause_u(st, cz):
+    """A judged row's cause: the most negative part of its per-user change (≤ −10 % of normal) → its label (views per
+    user "Users open it fewer times" · time per view "Users stay shorter" · app views per user "Users open fewer
+    screens"); the ad-logic part (ads per minute / per view) → the AdMob cause of `cause()` (cz: a stopped / changed
+    unit, the exact per-visit split, or why it cannot be measured); no ads in W → "Ads stopped" (or the stopped unit)."""
+    cz = cz or {}
+    c = cz.get("cause") or ""
+    if st.get("rn") and not st["AW"]:
+        return c if c.startswith("Ad unit") else "Ads stopped"
+    neg = sorted((v, k) for k, v in (st.get("parts") or {}).items() if v <= -100 * TERM_MIN)
+    if not neg:
+        return "No single cause"
+    k = neg[0][1]
+    if k in PART_LABEL:
+        return PART_LABEL[k]
+    if st.get("kind") == "a":
+        return ""
+    return c or "No single cause"
+
+
+def cause_group(label):
+    """The Needs attention group of a cause label: "Mixed: A + B" → A, "Ad unit stopped: x" → "Ad unit stopped"."""
+    label = label or ""
+    if label.startswith("Mixed: "):
+        return label[7:].split(" + ")[0]
+    return label.split(":")[0] if ":" in label else label
+
+
 def first_bad_day(series, final_days, rn):
-    """The first final day from which the daily rate stays < 90 % of rate_N (to the last final day), or None."""
+    """The first final day from which the daily rate per user stays < 90 % of the normal (to the row's last day with
+    users), or None. series {day: (views, ads, users)}; a day without users is skipped."""
     if not rn:
         return None
     fb = None
     for d in reversed(final_days):
         if d not in series:
             continue
-        v, a = series[d]
-        if v and a / v < BAD_RATE * rn:
+        v, a, u = series[d]
+        if not u:
+            continue
+        if a / u < BAD_RATE * rn:
             fb = d
         else:
             break
@@ -1564,25 +1988,66 @@ def _p(v):
     return "—" if v is None else "%.2f" % v
 
 
+def _part_line(st):
+    """ "views per user −12.0 (4.10 → 3.60) · time per view +2.4 (2m 10s → 2m 15s) · ads per minute −20.0 (…)" """
+    p = st.get("parts") or {}
+    VW, VN, UW, UN, AW, AN = (st[k] for k in ("VW", "VN", "UW", "UN", "AW", "AN"))
+    G = st.get("G") or [0, 0]
+    val = {"vpu": (VN / UN, VW / UW, _q), "tpv": (G[1] / VN if VN else None, G[0] / VW if VW else None, _ft),
+           "apm": (60 * AN / G[1] if G[1] else None, 60 * AW / G[0] if G[0] else None, _q),
+           "adv": (AN / VN if VN else None, AW / VW if VW else None, _q)}
+    out = []
+    for k in ("vpu", "tpv", "apm", "adv", "avu"):
+        if k not in p:
+            continue
+        if k in val:
+            n, w, f = val[k]
+            out.append("%s %s (%s → %s)" % (PART_NAME[k], _sgn(p[k], "%.1f"), f(n), f(w)))
+        else:
+            out.append("%s %s" % (PART_NAME[k], _sgn(p[k], "%.1f")))
+    return " · ".join(out)
+
+
 def row_report(app, label, what, st, cz, series, fbd, ver=None, cc=None, versions=None):
-    """One judged row → its report block (text). label: the Activity class or "format · trigger"; what: "screen" /
-    "full-screen trigger"."""
+    """One judged row → its report block (text, English, no money). label: the Activity class or "format · trigger";
+    what: "screen" / "full-screen trigger". The numbers are impressions per user per day: the screen's own users, or the
+    app's daily users for a trigger; versions and countries stay per 100 visits (GA4 gives no users by them here)."""
     w, n = app.windows()
     rn, rw = st.get("rn"), st.get("rw")
+    scr = what == "screen"
+    noun = "impressions per screen user per day (this screen's ads ÷ this screen's own daily users)" if scr else \
+        "impressions per app user per day (this trigger's ads ÷ the app's daily users)"
     out = ["== %s (%s) ==" % (label, what),
            "Status: %s — %s (score %s)" % (st["word"], st["why"], st["score"] if st["score"] is not None else "—"),
            "Window W %s – %s, normal N %s – %s (GA4 days, UTC)" % (w[0], w[-1], n[0], n[-1]),
-           "Visits: W %s · N %s" % (_n(st["VW"]), _n(st["VN"])),
-           "Ads per 100 visits: W %s · N %s" % (_fmt100(rw), _fmt100(rn)),
-           "First bad day: %s" % (fbd or "—"),
-           "Last 14 GA4 days (date, visits, ads, ads/100):"]
-    for d in _span(app.ft - timedelta(days=13), app.ft):
-        v, a = series.get(d, (None, None))
-        out.append("  %s  %s  %s  %s" % (d, _n(v), _n(a), _fmt100(a / v) if v else "—"))
+           "%s: W %s · N %s" % (noun[0].upper() + noun[1:], _q(rw), _q(rn))]
+    if st.get("imp") is not None:
+        out.append("  = %s of the app's impressions per user" % _pc(st["imp"], 1))
+    dw, dn = st.get("dW") or 0, st.get("dN") or 0
+    if scr:
+        rc = st.get("reach")
+        out.append("Screen users: W %s/day · N %s/day%s" % (
+            _n(st["UW"] / dw if dw else None), _n(st["UN"] / dn if dn else None),
+            " · reach W %d%% · N %d%% of the app's daily users" % (round(100 * rc[0]), round(100 * rc[1])) if rc else ""))
+    else:
+        out.append("App daily users: W %s/day · N %s/day" % (_n(st["UW"] / dw if dw else None),
+                                                            _n(st["UN"] / dn if dn else None)))
+    if st.get("parts"):
+        out.append("Why it moved (%% of normal, adds up to %s): %s" % (
+            _sgn(sum(st["parts"].values()), "%.1f"), _part_line(st)))
+    out.append("Ads per 100 visits: W %s · N %s · First bad day: %s" % (
+        _fmt100(st["AW"] / st["VW"] if st["VW"] else None), _fmt100(st["AN"] / st["VN"] if st["VN"] else None),
+        fbd or "—"))
+    out.append("Last 14 GA4 days (date, %s, visits, ads, imp/%s user, ads/100):" % (
+        "screen users" if scr else "app daily users", "screen" if scr else "app"))
+    for d in _span(app.ftu - timedelta(days=13), app.ftu):
+        v, a, u = series.get(d, (None, None, None))
+        out.append("  %s  %s  %s  %s  %s  %s" % (d, _n(u), _n(v), _n(a), _q(a / u) if u else "—",
+                                                 _fmt100(a / v) if v else "—"))
     if ver:
-        out.append("Version: %s" % ver)
+        out.append("Version: %s (per 100 visits — GA4 gives no users by version or country here)" % ver)
     if cc:
-        out.append("Countries (top 3 by change): %s" % cc)
+        out.append("Countries (top 3 by change, per 100 visits): %s" % cc)
     if cz.get("units"):
         out.append("Units, normal N → last 10 days W (AdMob requests/day · fill · show · GA4 ÷ AdMob):")
         for ui, rqw, rqn, fw, fn, sw, sn, tw, tn in cz["units"]:
@@ -1590,14 +2055,18 @@ def row_report(app, label, what, st, cz, series, fbd, ver=None, cc=None, version
             out.append("  %s (%s) %s · requests/day %s → %s · fill %s → %s · show %s → %s · GA4 ÷ AdMob %s → %s" % (
                 u[0] or u[3], ", ".join(u[2]) or "no AdMob id", u[1], _n(rqn), _n(rqw), _p(fn), _p(fw), _p(sn), _p(sw),
                 _p(tn), _p(tw)))
-    out.append("Cause: %s" % (cz.get("cause") or "—"))
+    lab = st.get("cause") or ""
+    out.append("Cause: %s%s" % (lab or "—", (" · ad logic: %s" % cz["cause"]) if cz.get("cause") and
+                                cz["cause"] != lab and lab in PART_LABEL.values() else ""))
     if cz.get("terms"):
-        out.append("  Terms (%% of normal ads per visit): %s" % " · ".join(
+        out.append("  Ad logic terms (%% of normal ads per visit): %s" % " · ".join(
             "%s %+.1f" % (TERM_LABEL[k], cz["terms"][k]) for k in TERMS if cz["terms"].get(k)))
     checks = []
     c = cz.get("cause") or ""
-    for lab, txt in CHECK.items():
-        if lab in c and txt not in checks:
+    if lab in PART_CHECK:
+        checks.append(PART_CHECK[lab])
+    for lab_, txt in CHECK.items():
+        if lab_ in c and txt not in checks and lab not in PART_CHECK:
             checks.append(txt)
     if c.startswith("Ad unit"):
         st_ = (cz.get("stopped") or [None])[0]
@@ -1612,8 +2081,17 @@ def row_report(app, label, what, st, cz, series, fbd, ver=None, cc=None, version
     if checks:
         out.append("What to check: " + " ".join(checks))
     if rn:
-        out.append("Acceptance check: After the fix ships: ads per 100 visits on %s ≥ %.1f for 3 final days."
-                   % (label, 0.9 * rn * 100))
+        acc = "Acceptance check: after the fix ships, for 3 final days: impressions per %s user per day on %s ≥ %s " \
+              "(0.9 × normal)" % ("screen" if scr else "app", label, _q(0.9 * rn))
+        p = st.get("parts") or {}
+        G = st.get("G") or [0, 0]
+        if lab == "Users open it fewer times" and st["UN"]:
+            acc += " and views per user ≥ %s" % _q(0.9 * st["VN"] / st["UN"])
+        elif lab == "Users stay shorter" and st["VN"] and G[1]:
+            acc += " and time per view ≥ %s" % _ft(0.9 * G[1] / st["VN"])
+        elif "apm" in p and G[1]:
+            acc += " and ads per minute ≥ %s (0.9 × %s)" % (_q(0.9 * 60 * st["AN"] / G[1]), _q(60 * st["AN"] / G[1]))
+        out.append(acc)
     return "\n".join(out)
 
 
@@ -1787,7 +2265,7 @@ def shard_body(app, m, merged):
             else:
                 ad["r"] = [[di, x[3]] for (di, ii), x in sorted(ar.items())]
         out.append({"V": vd, "A": ad})
-    return {"v": V, "key": app.key, "m": m, "dims": dims, "items": app.ditems, "days": out}
+    return {"v": V_SHARD, "key": app.key, "m": m, "dims": dims, "items": app.ditems, "days": out}
 
 
 def _month_end(m):
@@ -2364,53 +2842,100 @@ def core_days(data_dir, key, meta, recent, broken=None):
     return days
 
 
-def statuses(app, ft=None):
-    """Every row of the app → [(row id, row, label, kind, item index | None, series, status)] and the app status."""
+def _rows_at(app, ft, memo):
+    """Every row of the app judged at one anchor ft (post-holds, before the confirm) → (rows, the App row's status)."""
     w, n = app.windows(ft)
     allf = app.allf(ft)
+    af = bool(allf)
     gs, gt = app.guard(ft, True), app.guard(ft, False)
+    if "app" not in memo:
+        memo["app"], memo["afmt"] = app_series(app), _adm_fmt(app)
+    aser, gfmt = memo["app"]
+    ast = app_judge(app, w, n, aser, gfmt, memo["afmt"])
+    UN, AN = sum(aser[d][2] for d in n if d in aser), sum(aser[d][1] for d in n if d in aser)
+    app_rn = AN / UN if UN else None
     tix = {c: i for i, c in enumerate(app.top)}
-    out, sa, fa = [], app.kind_ads(allf), {}
+    sa = memo.get(("k", af))
+    if sa is None:
+        sa = memo[("k", af)] = app.kind_ads(allf)
+    what = "all-format" if allf else "inline"
+    out = []
     for c in app.screens:
         if kind(c) != "s":
             continue
-        row = ("s", c, allf)
-        ser = app.screen_series(c, allf)
-        st = judge(ser, w, n, gs, "all-format" if allf else "inline", miss=app.day_why, tot=sa)
-        out.append(("s%d" % app.six[c], row, c, "s", tix.get(c), ser, st))
+        k = ("s", c, af)
+        if k not in memo:
+            ser, base = screen_series_u(app, c, allf)
+            eng = {d: app.views[d].get(c, [0, 0])[1] for d, x in ser.items() if x[2] > 0 and d in app.views}
+            memo[k] = (ser, base, eng)
+        ser, base, eng = memo[k]
+        st = judge_u(ser, w, n, gs, what, "s", app_rn, app.au, app.vis,
+                     miss=lambda d, b=base: "u" if d in b else app.day_why(d), tot=sa, eng=eng)
+        out.append(("s%d" % app.six[c], ("s", c, allf), c, "s", tix.get(c), ser, st))
     for gi, (f, lab, _) in enumerate(app.trig):
-        ser = app.trig_series(gi)
-        if f not in fa:
-            fa[f] = app.fmt_ads(f)
-        st = judge(ser, w, n, gt, f, full=True, miss=lambda d: app.day_why(d, True), tot=fa[f])
+        k = ("t", gi)
+        if k not in memo:
+            memo[k] = trig_series_u(app, gi)
+        ser, base = memo[k]
+        if ("f", f) not in memo:
+            memo[("f", f)] = app.fmt_ads(f)
+        st = judge_u(ser, w, n, gt, f, "t", app_rn, app.au, app.vis,
+                     miss=lambda d, b=base: "u" if d in b else app.day_why(d, True), tot=memo[("f", f)])
         out.append(("t%d" % gi, ("t", gi), "%s · %s" % (f, lab), "fs", app.fs0 + gi, ser, st))
-    ast = app_status([(st, k, st["AN"]) for _, _, _, k, _, _, st in out])
     return out, ast
 
 
-# ── Ads / user (owner, 6 Nov 2026: "1 user ko kitna impression mila"): the users beside the ads ─────────────────
+def app_list(ast, rows):
+    """scr_all's "app": [word, why, worse n, watch n, score, cause, parts, daily users move, AdMob check]."""
+    worse = sum(1 for r in rows if r[6]["word"] == "Worse")
+    watch = sum(1 for r in rows if r[6]["word"] == "Watch")
+    adm = ast.get("adm")
+    cz = "" if ast["word"] not in FLAGS else (
+        "GA4 logging changed" if (adm or {}).get("st") == "admob" else cause_u(ast, None))
+    return [ast["word"], ast["why"], worse, watch, ast.get("score"), cz, ast.get("parts"), ast.get("dau"), adm]
 
-def users_by_day(app, users):
+
+def statuses(app, ft=None):
+    """Every row of the app → ([(row id, row, label, kind, item index | None, series, status)], the App row's status):
+    the words at ft (default ftU) after the holds and the CONFIRM_DAYS confirm (the words on the days before)."""
+    ft = _d(ft or app.ftu)
+    memo = {}
+    rows, ast = _rows_at(app, ft, memo)
+    prev = [_rows_at(app, ft - timedelta(days=k), memo) for k in range(1, CONFIRM_DAYS)]
+    pw = [{r[0]: r[6]["word"] for r in p[0]} for p in prev]
+    out = []
+    for rid, row, label, k, ii, ser, st in rows:
+        before = [p.get(rid) for p in pw]
+        st = _confirm(st, before)
+        st["bases"] = [st["base"] if st.get("hold") == "confirm" else st["word"]] + before
+        out.append((rid, row, label, k, ii, ser, st))
+    before = [p[1]["word"] for p in prev]
+    ast = _confirm(ast, before)
+    ast["bases"] = [ast["word"] if ast.get("hold") != "confirm" else ast["base"]] + before
+    return out, ast
+
+
+# ── the users beside the ads in the files ─────────────────────────────────────────────────────
+
+def users_by_day(app):
     """File 2's "Us" + "U": the top screens (app.top's order) as file 2 screen indexes, and per app day their users —
-    only on FINAL days (≤ ft, the tab's "GA4 data till") whose users read (uV) AND ads by screen are whole, else None; a
-    top screen with no uV row that day has 0. Never Today / Yesterday: their users (a layer read, re-read every 12 h)
-    and their ads (core, every 3 h) are snapshots hours apart while GA4 still adds to both — ads ÷ users of two
-    moments. GA4's users are unique within ONE day and ONE screen: the page divides the period's Σ of a row's ads by
-    the Σ of these (ads per user per day), and no row ever gets users added across screens — an aggregate row (Other
-    screens, Not recorded, Ad screens, GA4 grouped) has none. users: small_days' {day: {screen index: users}}. →
-    (Us, U), or None when no day has any (that app ships neither)."""
+    only on final days ≤ ftU whose users read (uV), screen views AND ads by screen are whole (the build's own per-user
+    days), else None; a top screen with no uV row that day has 0. Never Today / Yesterday: their users (a layer read,
+    re-read every 12 h) and their ads (core, every 3 h) are snapshots hours apart while GA4 still adds to both. GA4's
+    users are unique within ONE day and ONE screen: the page divides a period's Σ of a row's ads by the Σ of these, and
+    no row ever gets users added across screens — an aggregate row (Other screens, Not recorded, Ad screens, GA4
+    grouped) has none. → (Us, U), or None when no day has any (that app ships neither)."""
     six = [app.six[c] for c in app.top]
-    ft = _iso(app.ft)
-    out = [None if d > ft or d not in users or d not in app.whole["a"] else [users[d].get(si, 0) for si in six]
-           for d in app.days]
+    ft = _iso(app.ftu)
+    out = [None if d > ft or d not in app.su or d not in app.whole["a"] or d not in app.whole["v"] else
+           [app.su[d].get(c, 0) for c in app.top] for d in app.days]
     return (six, out) if six and any(x is not None for x in out) else None
 
 
-def daily_users(app, au):
-    """File 2's "au": the app's daily active users (app_users' {day: users}) per app day — FINAL days only (≤ ft: as
-    users_by_day, never Today / Yesterday), else None (never 0) — or None when no day has any."""
-    ft = _iso(app.ft)
-    out = [au.get(d) if d <= ft else None for d in app.days]
+def daily_users(app):
+    """The app's daily active users per app day — final days ≤ ftU only (as users_by_day, never Today / Yesterday),
+    else None (never 0) — or None when no day has any. Shipped in scr_all ("au": the App total and All apps) and file 2."""
+    out = [app.au.get(d) for d in app.days]
     return out if any(v is not None for v in out) else None
 
 
@@ -2446,6 +2971,109 @@ def app_users(meta, data_dir):
     return (out, None) if out else ({}, "none")
 
 
+def nvr_split(app, frags, w, n, ast):
+    """The App row's users mix, measured (critic S1): ads per 100 app views W vs N split exactly (LMDI) into the new-user
+    share of views ("mix") and each group's own ads per view ("within"), on the days both the New vs returning reads
+    (nV / nA, scr_l's day records) are whole — plus the App row's views per user change, which this layer cannot split
+    (GA4 gives no users by new / returning here): the app's views on every W / N day with daily users ÷ the GA4 judge's
+    users of those same days (an App row judged on AdMob carries the AdMob judge's sums, AdMob-complete days only: its
+    GA4 judge is "ga4", as in report_head). % of normal; None when either window has no such day."""
+    def acc(ds):
+        v, a, nd = {}, {}, 0
+        for d in ds:
+            f = frags.get(d)
+            if not f:
+                continue
+            try:
+                e = json.loads(f)
+            except ValueError:
+                continue
+            nv, na = e.get("nV") or {}, e.get("nA") or {}
+            if nv.get("st") != "w" or na.get("st") != "w" or na.get("r") is None:
+                continue
+            nd += 1
+            for q in nv.get("r") or []:
+                v[q[0]] = v.get(q[0], 0) + _i(q[-1])
+            for q in na.get("r") or []:
+                a[q[0]] = a.get(q[0], 0) + _i(q[-1])
+        return v, a, nd
+    vw, aw, ndw = acc(w)
+    vn, an, ndn = acc(n)
+    VW, VN, AW, AN = sum(vw.values()), sum(vn.values()), sum(aw.values()), sum(an.values())
+    if not (ndw and ndn and VW and VN and AW and AN):
+        return None
+    rw, rn = AW / VW, AN / VN
+    mix = within = 0.0
+    grp = {}
+    for g in sorted(set(vw) | set(vn)):
+        if not (vw.get(g) and vn.get(g) and aw.get(g) and an.get(g)):
+            continue
+        sW, sN, qW, qN = vw[g] / VW, vn[g] / VN, aw[g] / vw[g], an[g] / vn[g]
+        L = _L(sW * qW, sN * qN)
+        mix += L * math.log(sW / sN)
+        within += L * math.log(qW / qN)
+        grp[str(g)] = [_r(100 * qN, 1), _r(100 * qW, 1)]
+    vpu = None
+    g = ast.get("ga4") or ast
+    if g.get("parts") is not None and g.get("UW") and g.get("UN"):
+        PW = sum(app.vis.get(d, 0) for d in w if d in app.au and d in app.ta)
+        PN = sum(app.vis.get(d, 0) for d in n if d in app.au and d in app.ta)
+        vpu = _r(100 * ((PW / g["UW"]) / (PN / g["UN"]) - 1), 1) if PW and PN else None
+    return {"mix": _r(100 * mix / rn, 1), "within": _r(100 * within / rn, 1), "ch": _r(100 * (rw / rn - 1), 1),
+            "g": grp, "vpu": vpu, "d": [ndw, ndn]}
+
+
+def attn_groups(rows):
+    """The flagged rows grouped as Needs attention shows them: (word family, cause group) → [rows, ≈ Σ impact] (the
+    impacts are in the app's units, so they add; the rows sit on their own day sets: "≈")."""
+    out = {}
+    for rid, row, label, k, ii, ser, st in rows:
+        if st["word"] not in FLAGS:
+            continue
+        g = out.setdefault((st["word"], st.get("group") or ""), [[], 0.0])
+        g[0].append(label)
+        g[1] += st.get("imp") or 0.0
+    return out
+
+
+def report_head(app, key, alist, ast, nvr, rows):
+    """The developer report's head (§5.8): the App row on impressions per user per day, its daily users, the users mix
+    (S1 wording: measured parts only, never "not the cause"; labelled "GA4, logging changed" when GA4 ≠ AdMob — the row
+    judged on AdMob or not measurable: its ads per 100 views come from that GA4 logging), GA4 vs AdMob, the causes with
+    ≈ Σ impact."""
+    adm = alist[8] or {}
+    word = alist[0] + (" (AdMob)" if adm.get("st") == "admob" else "")
+    head = ["Screens report · app %s · GA4 data till %s · users till %s (GA4 days, UTC)" % (key, _iso(app.ft),
+                                                                                         _iso(app.ftu)),
+            "Status: %s — %s (%d Worse, %d Watch)" % (word, alist[1], alist[2], alist[3])]
+    g = ast.get("ga4") or ast
+    if g.get("dW") and g.get("dN") and g.get("UW") and g.get("UN"):
+        a, b = g["UW"] / g["dW"], g["UN"] / g["dN"]
+        head.append("Daily users (GA4 active users, same stream): W %s/day · N %s/day (×%s)" % (
+            _n(a), _n(b), ("%.1f" if a >= b else "%.2f") % (a / b)))
+    if nvr:
+        rt = nvr["g"].get("returning")
+        head.append("  New vs returning (ads per 100 views%s): new-user mix %s · within groups %s%s · views per user %s "
+                    "(not split: GA4 gives no new / returning users here)" % (
+                        "; GA4, logging changed" if adm.get("st") in ("admob", "na") else "",
+                        _sgn(nvr["mix"], "%.1f") + "%", _sgn(nvr["within"], "%.1f") + "%",
+                        " (returning %s → %s)" % (rt[0], rt[1]) if rt else "",
+                        "—" if nvr["vpu"] is None else _sgn(nvr["vpu"], "%.1f") + "%"))
+    if adm.get("g") is not None and adm.get("m") is not None:
+        head.append("GA4 vs AdMob, per daily user, %s: GA4 %s · AdMob %s — %s" % (
+            adm.get("f"), _pc(adm["g"]), _pc(adm["m"]), "agree" if adm.get("st") == "agree" else "disagree"))
+    elif adm.get("gt") is not None and adm.get("mt") is not None:
+        head.append("GA4 vs AdMob, per daily user, inline + full-screen: GA4 %s · AdMob %s" % (
+            _pc(adm["gt"]), _pc(adm["mt"])))
+    gr = attn_groups(rows)
+    if gr:
+        head.append("Causes: " + " · ".join(
+            "%s%s — %d row%s (≈ %s of the app's impressions per user)" % (
+                "" if w_ == "Worse" else "Watch: ", gk or "No single cause", len(v[0]), "" if len(v[0]) == 1 else "s",
+                _pc(v[1])) for (w_, gk), v in sorted(gr.items(), key=lambda kv: (STATUS_RANK[kv[0][0]], kv[1][1]))))
+    return head
+
+
 def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=None, idx=None):
     """One app → (file-2 name, its raw bytes, scr_l name, its raw bytes, the scr_all entry, kept shard names, counts) —
     the shards and scr_l written here; file 2 written by the caller after this returns (write order). broken (a list):
@@ -2457,12 +3085,19 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
     app = App(meta, core_days(data_dir, key, meta, recent, broken), now, dashboard, by_id, broken)
     if not app.d0:
         return None
+    # the users beside the ads, BEFORE the statuses: the app's daily users (Uninstall store) and the users by screen
+    # (the small group's uV, read without registering a class); ftU = the last final day with both
+    au, auw = app_users(meta, data_dir)
+    set_users(app, au, auw, screen_users(app, data_dir, recent))
     rows, ast = statuses(app)
     report_rows = {rid: row for rid, row, _, _, _, _, st in rows if st["word"] in ("Worse", "Watch")}
     causes = {}
     for rid, row, label, k, ii, ser, st in rows:
         if st["word"] in JUDGED:
             causes[rid] = cause(app, row, st)
+            st["cause"] = cause_u(st, causes[rid])
+            st["group"] = cause_group(st["cause"])
+    alist = app_list(ast, rows)
     # layers: shards first (write order), then scr_l
     keep = set()
     lay = {}
@@ -2488,8 +3123,8 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
                                     causes.get(rid) or {}, ser, fbd.get(rid), _ver_line(app, row, order, wsame, prev),
                                     _cc_line(lay["cc"].wsum.get(rid)), {v: ver[v]["first"] for v in ver})
     dq, dql = dq_items(app, clicks)
-    head = ["Screens report · app %s · GA4 data till %s (GA4 days, UTC)" % (key, _iso(app.ft)),
-            "Status: %s — %s (%d Worse, %d Watch)" % tuple(ast)]
+    nvr = nvr_split(app, sdays, w, n, ast)
+    head = report_head(app, key, alist, ast, nvr, rows)
     if dql:
         head += ["Data quality:"] + ["  - " + x for x in dql]
     app_text = "\n\n".join(["\n".join(head)] + [rtext[r] for r, *_ in rows if r in rtext])
@@ -2531,6 +3166,8 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
         cz = causes.get(rid) or {}
         rows2[rid] = {"st": [st["word"], st["why"], st["score"]], "z": st["z"], "h": st["h"],
                       "W": [st["VW"], st["AW"], st["dW"]], "N": [st["VN"], st["AN"], st["dN"]],
+                      "U": [st["UW"], st["UN"]], "imp": st["imp"], "own": st["own"], "parts": st["parts"],
+                      "reach": st["reach"], "base": st.get("bases"), "group": st.get("group", ""),
                       "cause": cz.get("cause", ""), "terms": cz.get("terms"), "units": cz.get("units"),
                       "fbd": fbd.get(rid)}
     allf = app.allf()
@@ -2538,7 +3175,7 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
     notes = {"zone": "assumed" if app.adm.assumed else ("account" if app.adm else "none"),
              "admob": "ok" if app.adm else "none", "allf": allf, "allfs": allfs,
              "runs": [[r["a"], r["b"], 1 if r["ok"] else 0, 1 if r["open"] else 0] for r in app.runs],
-             "w": [w[0], w[-1]], "n": [n[0], n[-1]], "dq": dq}
+             "w": [w[0], w[-1]], "n": [n[0], n[-1]], "dq": dq, "ftu": _iso(app.ftu), "nvr": nvr}
     # scr_l (after the shards; the screens list is final once the small records are encoded)
     lbody = {"v": V, "key": key, "app_id": app.aid, "d0": app.d0, "items": app.ditems, "days": _SPLICE,
              "ver": ver, "ver_order": order, "ver_m": lay["ver"].msum(), "cc_m": lay["cc"].msum(),
@@ -2549,18 +3186,17 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
     body2 = {"v": V, "key": key, "app_id": app.aid, "ft": _iso(app.ft), "td": _iso(app.td), "d0": app.d0,
              "screens": [[c, kind(c)] for c in app.screens], "units": app.units, "trig": app.trig, "days": days2,
              "adm": adm, "rows": rows2, "notes": notes}
-    # Ads / user — here, never in scr_all (only the app page reads them): the top screens' users per final day ("U",
-    # their screen indexes "Us": the screen rows) and the app's daily active users per final day ("au", the app tile:
-    # GA4's own, the same stream) — or why the app has none ("auw": none · stream · cut)
-    uu = users_by_day(app, users)
+    # the users beside the ads: the top screens' users per final day ≤ ftU ("U", their screen indexes "Us": the screen
+    # rows) and the app's daily active users per final day ≤ ftU ("au": GA4's own, the same stream; also in scr_all) —
+    # or why the app has none ("auw": none · stream · cut)
+    uu = users_by_day(app)
     if uu is not None:
         body2["Us"], body2["U"] = uu
-    au, auw = app_users(meta, data_dir)
-    aul = daily_users(app, au)
+    aul = daily_users(app)
     if aul is not None:
         body2["au"] = aul
     else:
-        body2["auw"] = auw or "none"
+        body2["auw"] = app.auw or "none"
     # scr_all entry
     vis, V_, A_, ta = [], [], [], []
     ni = len(app.items)
@@ -2598,22 +3234,35 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
         src = app.st.get(i) if i in GROUPS["core"] else (sst.get(i) if i in GROUPS["small"] else
                                                        (lay["ver"].st.get(i) if i in GROUPS["ver"] else lay["cc"].st.get(i)))
         stall[i] = "".join((src or {}).get(d, "-") for d in app.days)
+    # per display item: [word, why, score, cause, its Needs attention group, impact, W days] — the W days (its whole days
+    # of the last W_DAYS) here, not only in file 2: Needs attention's "n/10 days" is drawn from scr_all alone
     status = {}
     for rid, row, label, k, ii, ser, st in rows:
         if ii is not None:
             cz = causes.get(rid) or {}
             status[str(ii)] = [st["word"], st["why"], st["score"],
-                               cz.get("cause", "") if st["word"] in ("Worse", "Watch") else ""]
+                               st.get("cause", "") if st["word"] in FLAGS else "",
+                               st.get("group", "") if st["word"] in FLAGS else "", st["imp"], st["dW"]]
     bf = {i: _bf(r) for i, r in ((meta.get("reads") or {}).items()) if isinstance(r, dict)}
     entry = {"key": key, "ft": _iso(app.ft), "td": _iso(app.td), "d0": app.d0, "items": app.items, "vis": vis,
-             "V": V_, "A": A_, "ta": ta, "st": stall, "bf": bf, "status": status, "app": ast, "dq": dq}
+             "V": V_, "A": A_, "ta": ta, "st": stall, "bf": bf, "status": status, "app": alist, "dq": dq,
+             "ftu": _iso(app.ftu), "dk": "".join(str(app.dup.get(d, 0)) for d in app.days)}
+    # the App total and All apps from this file alone: the app's daily users per day ≤ ftU (null else) — or why none
+    if aul is not None:
+        entry["au"] = aul
+    else:
+        entry["auw"] = app.auw or "none"
+    if nvr:
+        entry["nvr"] = {k: nvr[k] for k in ("mix", "within", "vpu")}
     if allf:                                         # why the screens count every format: 1 format not recorded, 2 no
         entry["allf"], entry["allfs"] = allf, allfs  # split from GA4; allfs its measured full-screen share on screens
     c = counts
     c["rows"] += len(rows)
     c["judged"] += sum(1 for r in rows if r[6]["word"] in JUDGED)
-    c["worse"] += ast[2]
-    c["watch"] += ast[3]
+    c["worse"] += alist[2]
+    c["watch"] += alist[3]
+    c["users"] += 1 if app.au and app.su else 0
+    c["stale"] += 1 if stale_users(app) else 0
     return {"app": app, "body2": body2, "lraw": _splice(lbody, [sdays.get(d) for d in app.days]), "entry": entry,
             "keep": keep,
             "seen": lay["ver"].seen | lay["cc"].seen}
@@ -2660,7 +3309,8 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
     try:
         now = now or datetime.now(timezone.utc)
         by_id = _by_id(data_dir)
-        counts = {"rows": 0, "judged": 0, "worse": 0, "watch": 0, "big": 0, "failed": 0, "cached": 0}
+        counts = {"rows": 0, "judged": 0, "worse": 0, "watch": 0, "big": 0, "failed": 0, "cached": 0, "users": 0,
+                  "stale": 0}
         apps, entries, keep = {}, {}, set()
         bad = []                                    # (key, group, month, error type): store month files not readable
         sel = selected(dashboard)
@@ -2707,6 +3357,8 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
         nbad = len({b[:3] for b in bad})
         if nbad:                                    # ONE health line per build (the red banner), the type only
             print("scr store skipped: %s" % bad[0][3], file=sys.stderr)
+        if counts["stale"]:                         # ONE line too: an app's users are late or missing (its rows say
+            print("scr users skipped: StaleUsersWarning", file=sys.stderr)      # "users not in yet")
         fv = None
         if apps:
             ia = _idx_path(data_dir)
@@ -2721,10 +3373,10 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                 fv = ha[:12]
             _idx_save(ia, {k: v for k, v in aidx.items() if k == ALL_FILE}, aidx0)
         _clean(out_dir, keep)
-        line = "scr: apps %d, rows %d, judged %d, worse %d, watch %d, files %d, too big %d, failed %d, broken %d, " \
-               "unmapped %d, cached %d" % (len(apps), counts["rows"], counts["judged"], counts["worse"],
-                                           counts["watch"], len(keep), counts["big"], counts["failed"], nbad,
-                                           unmapped_pairs(dashboard), counts["cached"])
+        line = "scr: apps %d, users %d, rows %d, judged %d, worse %d, watch %d, files %d, too big %d, failed %d, " \
+               "broken %d, unmapped %d, cached %d" % (
+                   len(apps), counts["users"], counts["rows"], counts["judged"], counts["worse"], counts["watch"],
+                   len(keep), counts["big"], counts["failed"], nbad, unmapped_pairs(dashboard), counts["cached"])
         LINE = line
         if not apps:
             return []
@@ -2750,12 +3402,24 @@ def pop_line():
     return line
 
 
-# ── the backtest (§3.6, read-only) ───────────────────────────────────────────────────────────
+# ── the backtest (read-only; impressions per user per day, every final day) ───────────────────────
 
-def backtest(data_dir, dashboard=None, now=None, out=None):
-    """For every week of each app's filled history: the §3.2 rule at that week's end → Worse / Watch / Better counts per
-    app per week + the status flip rate (rows whose word changed from the week before). Reads only; prints a table
-    (12-hex keys and counts) and returns {key: {"weeks": [[ft, worse, watch, better, judged]], "flip": rate}}."""
+def _site_au(site, key):
+    """{day: daily users} from a built site's file 2 ("au" from its d0), or {} (the --users fallback)."""
+    raw = _read_gz_bytes(os.path.join(site, "%s%s.json.gz" % (PREFIX, key)))
+    f2 = _json(raw) if raw is not None else None
+    if not f2 or not isinstance(f2.get("au"), list) or not f2.get("d0"):
+        return {}
+    d0 = _d(f2["d0"])
+    return {_iso(d0 + timedelta(days=k)): v for k, v in enumerate(f2["au"]) if v}
+
+
+def backtest(data_dir, dashboard=None, now=None, out=None, users=None):
+    """Every final day of each app's history with W + N inside it replayed as "today" (only data ≤ that day in any
+    window): the rows' words after the holds and the confirm (statuses' rules, the confirm over the days in order) →
+    per app: judged row-days, Worse / Watch / Better, the holds (small · app-wide · first day), flag episodes, row-months
+    flagged, and the App row's words. The users: the Uninstall store in data_dir (or `users`: a built site's file 2
+    "au"), the screen users from the store. Reads only; prints 12-hex keys and counts. → {key: {...}}."""
     out = out or sys.stdout
     now = now or datetime.now(timezone.utc)
     by_id = _by_id(data_dir)
@@ -2764,44 +3428,64 @@ def backtest(data_dir, dashboard=None, now=None, out=None):
         meta = load_meta(data_dir, key)
         if not meta:
             continue
-        app = App(meta, core_days(data_dir, key, meta, load_recent(data_dir, key)), now, dashboard or {}, by_id)
+        recent = load_recent(data_dir, key)
+        app = App(meta, core_days(data_dir, key, meta, recent), now, dashboard or {}, by_id)
         if not app.d0:
             continue
-        weeks, prev, flips, comps = [], None, 0, 0
-        ft = app.ft
-        anchors = []
-        while ft - timedelta(days=W_DAYS + N_DAYS - 1) >= _d(app.d0):
-            anchors.append(ft)
-            ft -= timedelta(days=7)
-        for a in reversed(anchors):
-            rows, _ = statuses(app, a)
-            words = {rid: st["word"] for rid, *_, st in rows}
-            cnt = [sum(1 for w in words.values() if w == x) for x in ("Worse", "Watch", "Better")]
-            weeks.append([_iso(a)] + cnt + [sum(1 for w in words.values() if w in JUDGED)])
-            if prev is not None:
-                for rid, w_ in words.items():
-                    if rid in prev:
-                        comps += 1
-                        flips += prev[rid] != w_
-            prev = words
-        res[key] = {"weeks": weeks, "flip": round(flips / comps, 4) if comps else None}
-        print("%s  weeks %d  flip %s" % (key, len(weeks), res[key]["flip"]), file=out)
-        for wk in weeks:
-            print("  %s  worse %d  watch %d  better %d  judged %d" % tuple(wk), file=out)
+        au, auw = (_site_au(users, key), None) if users else app_users(meta, data_dir)
+        set_users(app, au, auw, screen_users(app, data_dir, recent))
+        ftu, d0 = _iso(app.ftu), _d(app.d0)
+        anchors = [d for d in app.final if d <= ftu and _d(d) - timedelta(days=W_DAYS + N_DAYS - 1) >= d0]
+        memo, last, c = {}, {}, {}
+        rmj, rmf, eps, run = set(), set(), [], {}
+        for a in anchors:
+            rows, ast = _rows_at(app, a, memo)
+            for rid, row, label, k, ii, ser, st in rows + [("app", None, "", "a", None, None, ast)]:
+                prev = last.get(rid, [])[-(CONFIRM_DAYS - 1):] if CONFIRM_DAYS > 1 else []
+                fin = _confirm(st, prev + [None] * (CONFIRM_DAYS - 1 - len(prev)))
+                last.setdefault(rid, []).append(st["word"])
+                w_ = fin["word"]
+                tag = "app " if rid == "app" else ""
+                c[tag + w_] = c.get(tag + w_, 0) + 1
+                if fin.get("hold"):
+                    c[tag + "hold " + fin["hold"]] = c.get(tag + "hold " + fin["hold"], 0) + 1
+                if rid == "app":
+                    continue
+                if w_ in JUDGED:
+                    rmj.add((rid, a[:7]))
+                if w_ in FLAGS:
+                    rmf.add((rid, a[:7]))
+                    run[rid] = run.get(rid, 0) + 1
+                elif run.get(rid):
+                    eps.append(run.pop(rid))
+        eps += [n_ for n_ in run.values() if n_]
+        eps.sort()
+        r = {"days": len(anchors), "judged": sum(c.get(w_, 0) for w_ in JUDGED),
+             "worse": c.get("Worse", 0), "watch": c.get("Watch", 0), "better": c.get("Better", 0),
+             "small": c.get("hold small", 0), "fold": c.get("hold fold", 0), "confirm": c.get("hold confirm", 0),
+             "episodes": len(eps), "median": eps[len(eps) // 2] if eps else None, "row_months": [len(rmf), len(rmj)],
+             "app": [c.get("app " + w_, 0) for w_ in ("Worse", "Watch", "Better", "Normal", "N/A")],
+             "ftu": ftu, "users": bool(app.au and app.su)}
+        res[key] = r
+        print("%s  days %d  judged %d  worse %d  watch %d  better %d  held small %d fold %d first day %d  episodes %d "
+              "(median %s)  row-months %d/%d  app worse %d watch %d better %d normal %d na %d" % (
+                  key, r["days"], r["judged"], r["worse"], r["watch"], r["better"], r["small"], r["fold"], r["confirm"],
+                  r["episodes"], r["median"], r["row_months"][0], r["row_months"][1], *r["app"]), file=out)
     return res
 
 
 def main(argv):
     if not argv or argv[0] != "backtest" or len(argv) < 2:
-        print("usage: python -m admob_iq.screens_build backtest <data_dir> [--dashboard <dashboard.json.gz>]",
-              file=sys.stderr)
+        print("usage: python -m admob_iq.screens_build backtest <data_dir> [--dashboard <dashboard.json.gz>] "
+              "[--users <site dir>]", file=sys.stderr)
         return 2
     dash = None
     if "--dashboard" in argv:
         p = argv[argv.index("--dashboard") + 1]
         raw = _read_gz_bytes(p) if p.endswith(".gz") else open(p, "rb").read()
         dash = _json(raw) if raw else None
-    backtest(argv[1], dash)
+    users = argv[argv.index("--users") + 1] if "--users" in argv else None
+    backtest(argv[1], dash, users=users)
     return 0
 
 
