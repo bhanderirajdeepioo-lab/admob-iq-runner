@@ -576,7 +576,8 @@ def test_a_row_with_too_few_ads_is_not_judged(tmp_path):
     assert sb.run(dashboard(), str(data), str(out), {}, NOW) == ["/scr_*"]
     one = gz(out / "scr_all.json.gz")["apps"][AID]
     st_of = {it[0]: one["status"].get(str(i)) for i, it in enumerate(one["items"])}
-    assert st_of[TINY] == ["N/A", "Too few ads — 0.5% of the app's inline ads", None, "", "", None, 10]   # (+ W days)
+    assert st_of[TINY] == ["N/A", "Too few ads — 0.5% of the app's inline ads", None, "", "", None, 10,    # (+ W days)
+                           "N/A", "", []]                                  # not judged: N/A as the absolute word too
     assert st_of["Splash"][:2] == ["N/A", "Too few ads — 0.3% of the app's interstitial ads"]
     assert st_of[EDIT][0] == "Normal" and one["app"][2:4] == [0, 0]               # (Worse / Watch rows of the app)
     f2, fl = gz(out / ("scr_%s.json.gz" % KEY)), gz(out / ("scr_l_%s.json.gz" % KEY))
@@ -1095,15 +1096,15 @@ def test_run_files_pointer_report_and_stale_removal(tmp_path):
     assert e["v"] == hashlib.sha1(raw2).hexdigest()[:12] and e["vl"] == hashlib.sha1(rawl).hexdigest()[:12]
     assert p["fv"] == hashlib.sha1(rawa).hexdigest()[:12]
     f2, fl, fa = json.loads(raw2), json.loads(rawl), json.loads(rawa)
-    assert (f2["v"], f2["key"], f2["td"], f2["d0"]) == (2, KEY, "2026-11-04", "2026-08-01")
+    assert (f2["v"], f2["key"], f2["td"], f2["d0"]) == (3, KEY, "2026-11-04", "2026-08-01")
     assert len(f2["days"]) == len(_days("2026-08-01", "2026-11-04")) and len(f2["adm"]["0"]) == len(f2["days"])
     one = fa["apps"][AID]
     # scr_all: All apps' day arrays + the app's daily users "au" (≤ ftU: the App total and All apps from this file
     # alone), ftU, the copy-day states "dk"; the screens' own users ("U" / "Us") stay file 2's
     assert set(one) == {"key", "ft", "td", "d0", "items", "vis", "V", "A", "ta", "st", "bf", "status", "app", "dq", "au",
-                        "ftu", "dk", "nvr"} and one["ftu"] == "2026-11-02" and len(one["au"]) == len(one["vis"])
+                        "ftu", "dk", "nvr", "lo"} and one["ftu"] == "2026-11-02" and len(one["au"]) == len(one["vis"])
     assert set(f2) == {"v", "key", "app_id", "ft", "td", "d0", "screens", "units", "trig", "days", "adm", "rows", "notes",
-                       "Us", "U", "au"} and len(f2["U"]) == len(f2["days"]) and f2["au"] == one["au"]
+                       "Us", "U", "au", "ufmt"} and len(f2["U"]) == len(f2["days"]) and f2["au"] == one["au"]
     assert one["dk"] == "0" * len(one["vis"]) and f2["notes"]["ftu"] == "2026-11-02"
     assert len(one["vis"]) == len(f2["days"]) and all(len(s) == len(f2["days"]) for s in one["st"].values())
     assert set(one["st"]) == set(sb.READ_IDS) and one["st"]["a"].count("w") == len(f2["days"])
@@ -1115,7 +1116,7 @@ def test_run_files_pointer_report_and_stale_removal(tmp_path):
     assert s1[:2] == ["Worse", "imp/screen user 1.00 → 0.600 (−40%) · z −18.0"] and s1[2] == 60
     assert s1[3:5] == ["Lower show rate", "Lower show rate"] and -0.27 < s1[5] < -0.26 and s1[6] == 10
     f0 = min(i for i, it in enumerate(one["items"]) if it[1] == "fs")          # the triggers: file 2's rows "t<group>"
-    assert all(len(s) == 7 for s in one["status"].values()) and any(int(i) >= f0 for i in one["status"])
+    assert all(len(s) == 10 for s in one["status"].values()) and any(int(i) >= f0 for i in one["status"])
     assert all(s[6] == f2["rows"]["t%d" % (int(i) - f0)]["W"][2] for i, s in one["status"].items() if int(i) >= f0)
     # the App row: [word, why, worse n, watch n, score, cause, parts, daily users move, AdMob check]
     a = one["app"]
@@ -2073,12 +2074,12 @@ def test_line_users_and_stale_users_warning(tmp_path, monkeypatch, capsys):
     assert "au" in gz(out2 / "scr_all.json.gz")["apps"][AID]          # the daily users themselves are in
 
 
-def test_v2_files_and_shards_v1(tmp_path):
+def test_v3_files_and_shards_v1(tmp_path):
     data, out, dash = build(tmp_path)
     sb.run(dash, str(data), str(out), {}, NOW)
-    assert sb.V == 2 and dash["scr"]["v"] == 2
-    assert gz(out / "scr_all.json.gz")["v"] == 2 and gz(out / ("scr_%s.json.gz" % KEY))["v"] == 2
-    assert gz(out / ("scr_l_%s.json.gz" % KEY))["v"] == 2
+    assert sb.V == 3 and dash["scr"]["v"] == 3
+    assert gz(out / "scr_all.json.gz")["v"] == 3 and gz(out / ("scr_%s.json.gz" % KEY))["v"] == 3
+    assert gz(out / ("scr_l_%s.json.gz" % KEY))["v"] == 3
     assert gz(out / ("scr_c_%s_202609.json.gz" % KEY))["v"] == 1 == sb.V_SHARD == sb.SHARD_V    # shards untouched
 
 
@@ -2111,3 +2112,141 @@ def test_backtest_v2_tiny_store(tmp_path):
     os.remove(data / "ga4_uninstall" / (KEY + ".json.gz"))
     assert sb.backtest(str(data), dashboard({"show_w": 0.6}), NOW, io.StringIO(), users=str(out))[KEY]["users"]
     assert not sb.backtest(str(data), dashboard({"show_w": 0.6}), NOW, io.StringIO())[KEY]["users"]
+
+
+# ── absolute numbers: Ads / view, Fill, Show rate, the format benchmark (owner, 7 Nov 2026) ──────────────
+
+def test_absolute_numbers_share_a_unit_by_sigma_and_keep_its_rates(tmp_path):
+    # MAIN and the not-recorded class share unit_a (200 + 4 a day): MAIN's AdMob side is σ = Σg ÷ ΣG of the unit's
+    # requests / matched / impressions — the rates stay the unit's (fill 0.9, show 0.6 in the fixture)
+    app = app_of(tmp_path)
+    w = app.windows()[0]
+    side = sb.ab_side(app, w, app.allf())
+    assert side["sig"] == ["W", 10, w[0], w[-1]] and side["K"] == w
+    ua = app.uix[("unit_a", "banner")]
+    g = sum(app.ads[d]["cu"][(MAIN, "unit_a", "banner")] for d in w)
+    G = sum(app.w[d][("unit_a", "banner")] for d in w)
+    assert side["g"][MAIN] == {ua: g} and side["G"][ua] == G and g < G
+    ab = sb.ab_row(app, side, MAIN, w, 0)
+    X = side["X"][ua]
+    assert ab["p"]["banner"] == [1.0, g / G * X[0], g / G * X[1], g / G * X[2]]
+    assert abs(ab["fill"] - 0.9) < 1e-3 and abs(ab["show"] - 0.6) < 1e-3 and ab["unm"] == 0 and ab["why"] == ""
+    va = [(app.views[d][MAIN][0], app.ads[d]["cls"][MAIN][0]) for d in w]
+    assert ab["av"] == 100 * sum(a for _, a in va) / sum(v for v, _ in va) and ab["ads"] == sum(a for _, a in va)
+    assert side["ufmt"][ua] == "banner" and all(f is None for u, f in zip(app.units, side["ufmt"]) if not u[2])
+    # one vote per unit (its AdMob ids): the W sums over the complete days
+    bu = {r[0]: r for r in side["bu"]}
+    assert bu[(IDS["unit_a"],)][1:] == ["banner"] + X and bu[(IDS["unit_n"],)][1] == "native"
+    # file 2's shape: 4 places for shares / rates, 1 for sums
+    sh = sb.ab_ship(ab, side["sig"])
+    assert sh["p"]["banner"][0] == 1 and sh["fill"] == round(ab["fill"], 4) and sh["p"]["banner"][1] == round(
+        g / G * X[0], 1) and set(sh) == {"av", "fill", "show", "p", "sig", "unm", "why"}
+
+
+def test_absolute_sigma_falls_back_to_the_newest_split_days_and_unmatched_units_stay_out(tmp_path):
+    # W's ads by screen come without the unit (grain c) on 8 of 10 days: σ from the newest 28 split days ≤ W's end;
+    # EDIT also shows a unit AdMob does not know (no id): its ads are the unmatched share, never in a rate
+    def day_fn(d):
+        r = core_recs(d, {})
+        r["a"]["r"].append([EDIT, "Native advanced", "zz_house", 50])
+        r["w"]["r"].append(["Native advanced", "zz_house", 50])
+        if W0 <= d <= "2026-10-31":
+            tot = {}
+            for c, f, u, n in r["a"]["r"]:
+                tot[c] = tot.get(c, 0) + n
+            r["a"] = {"st": "w", "g": "c", "r": [[c, n] for c, n in tot.items()]}
+        return r
+    app = app_of(tmp_path, day_fn=day_fn)
+    w = app.windows()[0]
+    side = sb.ab_side(app, w, app.allf())
+    fu = [d for d in app.days if d <= w[-1] and app.ads[d]["g"] == "fu"]
+    assert side["sig"] == ["new", 28, fu[-28], fu[-1]] and fu[-1] == w[-1] and len([d for d in fu if d in w]) == 2
+    ab = sb.ab_row(app, side, EDIT, w, app.allf())
+    assert set(ab["p"]) == {"native"} and abs(ab["unm"] - 0.5) < 0.05 and abs(ab["p"]["native"][0] - 0.5) < 0.05
+    assert abs(ab["fill"] - 0.9) < 0.01 and abs(ab["show"] - 0.6) < 0.01               # (the fixture's rounded AdMob)
+    j = sb.ab_judge("Normal", ab, {"fmt": {"native": {"fill": None, "show": [0.7, 0.8, 0.9, 0.95, 20]}}},
+                    side["sig"])                                   # (~930 requests in W: under the fill floor)
+    assert j[0] == "Low" and j[1].startswith("Show rate 60 % (native median 90 %): ads filled but not shown · ")
+    assert j[1].endswith(" · unit mix from %d %s – %d %s" % (
+        sb._d(fu[-28]).day, sb.MONTHS[sb._d(fu[-28]).month - 1], sb._d(fu[-1]).day, sb.MONTHS[sb._d(fu[-1]).month - 1]))
+    # no AdMob: "—" with the reason, never a 0
+    app2 = app_of(tmp_path / "b", dash=dashboard(placements=False))
+    s2 = sb.ab_side(app2, w, 0)
+    ab2 = sb.ab_row(app2, s2, MAIN, w, 0)
+    assert (ab2["fill"], ab2["show"], ab2["why"], ab2["nm"], s2["bu"]) == (None, None, "AdMob data nahi", True, [])
+    assert sb.ab_judge("Normal", ab2, {"fmt": {}}, s2["sig"]) == ["Not measurable", "AdMob data nahi", []]
+
+
+def test_absolute_benchmark_quantiles_one_vote_per_unit_and_none_under_20():
+    # banner: 25 units (req ≥ 1000) fill 0.50 … 0.98, one small unit left out of the sample, a unit seen by two apps
+    # votes once; native: 19 → no benchmark
+    bu = [["b%d" % i, "banner", 2000, 2000 * (0.5 + 0.02 * i), 1000 * (0.5 + 0.02 * i)] for i in range(25)]
+    bu += [["small", "banner", 999, 10, 5]] + [["n%d" % i, "native", 5000, 4000, 3000] for i in range(19)]
+    rows = {str(i): ("Normal", {"p": {"banner": [0.9, 1, 1, 1], "native": [0.1, 1, 1, 1]}, "av": float(i),
+                                "ads": 300}) for i in range(20)}
+    rows["x"] = ("N/A", {"p": {"banner": [1, 1, 1, 1]}, "av": 99.0, "ads": 10 ** 6})   # its level votes too
+    rows["y"] = ("Normal", {"p": {"banner": [1, 1, 1, 1]}, "av": 50.0, "ads": 299})    # under AB_ADS: no vote
+    B = sb.ab_bench({"a": (bu, rows, None), "b": (bu[:3], {}, None), "c": ([], {}, None)})
+    fl = sorted(0.5 + 0.02 * i for i in range(25))
+    f = B["fmt"]["banner"]["fill"]
+    assert f[-1] == 25 and abs(f[1] - fl[6]) < 1e-12 and abs(f[2] - fl[12]) < 1e-12 and abs(f[0] - (fl[2] + 0.4 *
+                                                                                                  (fl[3] - fl[2]))) < 1e-12
+    assert B["fmt"]["banner"]["nall"] == 26 and B["fmt"]["banner"]["show"][-1] == 25           # matched 10 < 300: out
+    assert B["fmt"]["native"] == {"fill": None, "show": None, "av": None, "nall": 19} and B["apps"] == 2
+    assert B["fmt"]["banner"]["av"] == pytest.approx([2.0, 5.0, 10.0, 21]) and B["min"] == {"req": 1000, "mt": 300, "ads": 300, "n": 20}
+    sh = sb.ab_bench_ship(B)
+    assert sh["fmt"]["banner"]["fill"][1] == round(fl[6], 4) and sh["check"]["show"] == sb.CHECK["Lower show rate"]
+
+
+def test_absolute_status_words_and_cause():
+    B = {"fmt": {"native": {"fill": [0.5, 0.72, 0.88, 0.98, 130], "show": [0.14, 0.28, 0.64, 0.79, 153],
+                            "av": [3.3, 9.7, 26.6, 45]},
+                 "banner": {"fill": [0.55, 0.7, 0.85, 0.94, 167], "show": [0.43, 0.7, 0.8, 0.86, 203], "av": None}}}
+
+    def ab(p, av=20.0, ads=5000, nm=False):
+        return {"p": p, "av": av, "ads": ads, "nm": nm, "why": "x" if nm else ""}
+    low = ab({"native": [0.997, 10000, 7100, 1640], "banner": [0.003, 10, 9, 8]})
+    w, cz, weak = sb.ab_judge("Normal", low, B, ["W", 10, "2026-10-24", "2026-11-02"])
+    assert w == "Low" and cz == "Show rate 23 % (native median 64 %): ads filled but not shown; Fill 71 % (native " \
+                                "median 88 %): requests not filled"                  # weakest (÷ median) first
+    assert weak == [["show", "native", 0.231, 0.64, 0.28], ["fill", "native", 0.71, 0.88, 0.72]]
+    assert sb.ab_judge("Normal", ab({"native": [1.0, 10000, 7200, 6000]}), B, None)[0] == "OK"      # = p25: not under
+    assert sb.ab_judge("Normal", ab({"banner": [1.0, 10000, 9000, 8000]}), B, None) == ["OK", "", []]
+    assert sb.ab_judge("Worse", ab({"banner": [0.15, 100000, 1000, 10], "native": [0.85, 900, 200, 100]}), B,
+                       None)[0] == "Too few ads"                  # the weak banner part is under 20 %: not judged
+    few = sb.ab_judge("Better", ab({"native": [0.9, 10000, 8000, 6000]}, av=2.4), B, None)
+    assert few == ["Few ads", "Ads / view 2 % (native median 27 %): few ads per view", [["av", "native", 2.4, 26.6, 9.7]]]
+    assert sb.ab_judge("Normal", ab({"banner": [0.9, 10000, 8000, 6000]}, av=0.1), B, None)[0] == "OK"   # no av bench
+    assert sb.ab_judge("Normal", ab({"native": [0.9, 10000, 8000, 6000]}, av=2.4, ads=299), B, None)[0] == "OK"
+    assert sb.ab_judge("N/A", low, B, None) == ["N/A", "", []] and sb.ab_judge("Too early", low, B, None)[0] == "Too early"
+    assert sb.ab_judge("Normal", ab({}, ads=0), B, None)[0] == "No ads"
+    assert sb.ab_judge("Normal", ab({}, nm=True), B, None) == ["Not measurable", "x", []]
+    # a req floor: 999 requests at fill 10 % are not judged on fill
+    assert sb.ab_judge("Normal", ab({"banner": [1.0, 999, 400, 380]}), B, None)[0] == "OK"
+
+
+def test_absolute_files_v3_and_a_benchmark_failure_ships_blank_words(tmp_path, monkeypatch, capsys):
+    data, out, dash = build(tmp_path, {"show_w": 0.6})
+    assert sb.run(dash, str(data), str(out), {}, NOW) == ["/scr_*"]
+    fa, f2, fl = gz(out / "scr_all.json.gz"), gz(out / ("scr_%s.json.gz" % KEY)), gz(out / ("scr_l_%s.json.gz" % KEY))
+    one = fa["apps"][AID]
+    assert set(fa["bench"]) == {"fmt", "min", "apps", "check"} and fa["bench"]["apps"] == 1
+    assert fa["bench"]["fmt"]["banner"] == {"fill": None, "show": None, "av": None, "nall": 1}       # 1 unit < 20
+    st = {it[0]: one["status"][str(i)] for i, it in enumerate(one["items"]) if str(i) in one["status"]}
+    assert all(len(s) == 10 for s in st.values()) and st[MAIN][7] == "OK" and one["lo"] == 0
+    assert all(s[7:] == ["", "", []] for i, s in one["status"].items() if one["items"][int(i)][1] == "fs")  # triggers
+    assert len(f2["ufmt"]) == len(f2["units"]) and "banner" in f2["ufmt"]
+    rid = {c: "s%d" % i for i, (c, k) in enumerate(f2["screens"])}
+    ab = f2["rows"][rid[MAIN]]["ab"]
+    assert set(ab) == {"av", "fill", "show", "p", "sig", "unm", "why"} and ab["sig"][0] == "W" and ab["p"]["banner"][0] == 1
+    assert "ab" not in f2["rows"]["t0"] and "ab" not in f2["rows"].get(rid[ADACT], {})
+    rep = fl["report"]["rows"][rid[MAIN]]
+    assert "\nAbsolute (last 10 days): Ads / view " in rep and "banner 100 % of the unit ads (fill 90 %, show" in rep
+    # a failing benchmark: the words ship "", one health line, the rest of the files unchanged
+    monkeypatch.setattr(sb, "ab_bench", lambda apps: 1 / 0)
+    out2 = tmp_path / "site2"
+    sb.run(dashboard({"show_w": 0.6}), str(data), str(out2), {}, NOW)
+    assert "scr bench skipped: ZeroDivisionError" in capsys.readouterr().err
+    fb = gz(out2 / "scr_all.json.gz")
+    assert fb["bench"] is None and fb["apps"][AID]["lo"] is None and fb["apps"][AID]["status"]["0"][7:] == ["", "", []]
+    assert gz(out2 / ("scr_%s.json.gz" % KEY)) == f2

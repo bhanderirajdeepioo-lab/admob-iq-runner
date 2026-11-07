@@ -55,6 +55,15 @@ for the ad-logic part a stopped / changed ad unit first, else an exact LMDI spli
 row's units — tie (GA4 ÷ AdMob), share of the unit on this screen, show rate, fill, requests per app visit, the screen's
 share of visits — whose terms add up to the change exactly (no leftover is ever named a cause).
 
+Absolute numbers (owner, 7 Nov 2026: "10.6 view ke samne 3.19 ads aayi … ye kam he na?" — the status above only says
+"same as its own past": a screen that was always low read Normal): per screen row over W, Ads / view % (its ads ÷ its
+views × 100, Imp / user / day's ads), Fill (AdMob matched ÷ requests) and Show rate (impressions ÷ matched) of its units,
+each unit weighted by σ = the screen's share of the unit's GA4 ads (ab_side / ab_row; a shared unit's rates stay the
+unit's). The words judge them against the SAME AdMob format across every built app's units (ab_bench: one vote per
+AdMob unit id, unweighted quantiles, no benchmark under AB_MIN_N units; run() after the app loop) → Low (a part ≥ 20 %
+under its format's p25) · Few ads · OK · Too few ads · Not measurable · No ads (ab_judge) in scr_all's status [7] – [9];
+the vs-own-past word stays beside them. The page windows Fill / Show itself from file 2 (units, ufmt, adm, days).
+
 run(dashboard, data_dir, out_dir, s) → the _headers no-store paths (["/scr_*"], ONE splat rule) or [] (no store / switched
 off / a failure: every scr_ file removed, no pointer); only the apps the dashboard's apps_catalog selects (when it has
 one). Failure-isolated; ONE counts-only line. A store month file that cannot be read or parsed is never skipped
@@ -81,7 +90,8 @@ PREFIX = "scr_"
 ALL_FILE = "scr_all.json.gz"
 APP_RE = re.compile(r"^scr_(?:all|(?:[lrc]_)?[0-9a-f]{12}(?:_\d{6})?)\.json\.gz$")
 HEADER_PATHS = ["/scr_*"]
-V = 2                                  # 2: impressions per user per day (status / score / why changed, scr_all "au")
+V = 3                                  # 3: absolute numbers (Ads / view · Fill · Show rate, the format benchmark); 2:
+                                       # impressions per user per day (status / score / why changed, scr_all "au")
 MAX_GZ = 8 * 1024 * 1024
 STORE_DIR = "ga4_screens"
 CACHE_DIR = "ga4_screens_cache"
@@ -149,6 +159,21 @@ UNTIED_SHARE = 0.5                     # units with no AdMob id + units whose ti
                                        # this share of the row's ads → not measurable, named by the bigger part
 ADM_MIN_DAYS = 7
 FU_MIN_W, FU_MIN_N = 7, 14
+# ── absolute numbers (owner, 7 Nov 2026: "10.6 view ke samne 3.19 ads aayi … ye kam he na?" — a screen that was always
+# low shows Low): Ads / view, Fill, Show rate of a screen against the same AdMob format across ALL apps' units ──
+AB_REQ, AB_MT, AB_ADS = 1000, 300, 300  # volume floors: requests (fill) / matched (show) of a unit or a screen's part, a
+                                       # screen's ads (Ads / view) — never thresholds: those are the measured quantiles
+AB_MIN_N = 20                          # under 20 units (screens for Ads / view) in a sample: that format has no benchmark
+AB_PART, AB_DOM = 0.2, 0.8             # a part (AdMob format) is judged from 20 % of the screen's unit ads; Ads / view
+                                       # needs one part ≥ 80 %
+AB_Q = (0.1, 0.25, 0.5, 0.75)          # p10 / p25 / median / p75, unweighted (one big unit would be the median), linear;
+                                       # Low = under p25 (the owner's case sits between p10 and p25: p10 calls it fine)
+SIG_MIN, SIG_N = 3, 28                 # σ from W's unit-split days; under 3 of them the newest 28 split days ≤ W's end
+AB_TXT = {"fill": ("Fill", "requests not filled", "Lower fill"),
+          "show": ("Show rate", "ads filled but not shown", "Lower show rate"),
+          "av": ("Ads / view", "few ads per view", "Fewer ad requests")}       # label, cause, its CHECK text
+FMT_NAME = {"appopen": "app open", "rewardedinterstitial": "rewarded interstitial"}
+MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 # ── duplicate ad_impression copies (§3.1) ──
 DUP_SHARE, DUP_LO, DUP_HI, DUP_RUN, DUP_END = 0.10, 0.8, 1.25, 2, 2
 CONF_LO, CONF_HI, DUP_FMT_MIN = 0.85, 1.15, 100
@@ -2008,7 +2033,7 @@ def _part_line(st):
     return " · ".join(out)
 
 
-def row_report(app, label, what, st, cz, series, fbd, ver=None, cc=None, versions=None):
+def row_report(app, label, what, st, cz, series, fbd, ver=None, cc=None, versions=None, ab=None):
     """One judged row → its report block (text, English, no money). label: the Activity class or "format · trigger";
     what: "screen" / "full-screen trigger". The numbers are impressions per user per day: the screen's own users, or the
     app's daily users for a trigger; versions and countries stay per 100 visits (GA4 gives no users by them here)."""
@@ -2044,6 +2069,14 @@ def row_report(app, label, what, st, cz, series, fbd, ver=None, cc=None, version
         v, a, u = series.get(d, (None, None, None))
         out.append("  %s  %s  %s  %s  %s  %s" % (d, _n(u), _n(v), _n(a), _q(a / u) if u else "—",
                                                  _fmt100(a / v) if v else "—"))
+    if ab is not None:                                 # numbers only: the benchmark needs every app (the page has it)
+        out.append("Absolute (last %d days): Ads / view %s, Fill %s, Show rate %s%s%s" % (
+            W_DAYS, _pa(ab["av"]), _pf(ab["fill"]), _pf(ab["show"]), "".join(
+                " · %s %s of the unit ads (fill %s, show %s)" % (FMT_NAME.get(f, f), _pf(p[0]),
+                                                                 _pf(p[2] / p[1] if p[1] else None),
+                                                                 _pf(p[3] / p[2] if p[2] else None))
+                for f, p in sorted(ab["p"].items(), key=lambda kv: (-kv[1][0], kv[0]))),
+            " — %s" % ab["why"] if ab["why"] else ""))
     if ver:
         out.append("Version: %s (per 100 visits — GA4 gives no users by version or country here)" % ver)
     if cc:
@@ -3074,6 +3107,195 @@ def report_head(app, key, alist, ast, nvr, rows):
     return head
 
 
+# ── absolute numbers: Ads / view, Fill, Show rate (owner, 7 Nov 2026) ──────────────────────────
+
+def ab_side(app, w, allf):
+    """The app's absolute side over window w (W): σ's source days S (W's whole unit-split days — the shipped day
+    states, so the page finds the same days; under SIG_MIN of them the newest SIG_N such days ≤ W's end: GA4 gives
+    some apps the screen × unit split only on some days), g {class: {unit: its GA4 ads on the class over S}} on Imp /
+    user / day's basis (inline, every format when allf), G {unit: its GA4 ads on all screens over S}, X {unit with an
+    AdMob id: AdMob [req, matched, imp] over W's complete days K}, ufmt (per unit its AdMob format; ids of mixed formats
+    GA4's; None without an id) and bu (per unit's AdMob ids of one format [ids, format, req, matched, imp] over K: the
+    benchmark's votes — one per unit as the screens see it, a name on two AdMob apps' ids is one unit)."""
+    fu = [d for d in app.days if d <= w[-1] and d in app.whole["a"] and (app.ads.get(d) or {}).get("g") == "fu"]
+    sw = [d for d in fu if d >= w[0]]
+    S, src = (sw, "W") if len(sw) >= SIG_MIN else (fu[-SIG_N:], "new")
+    g, G = {}, {}
+    for d in S:
+        for (c, u, f), n in app.ads[d]["cu"].items():
+            if n and (allf or fgroup(f) != 1 and fgroup(f) != 2) and kind(c) == "s" and (u, f) in app.uix:
+                x = g.setdefault(c, {})
+                ui = app.uix[(u, f)]
+                x[ui] = x.get(ui, 0) + n
+        for k, n in (app.w.get(d) or {}).items():
+            if k in app.uix:
+                G[app.uix[k]] = G.get(app.uix[k], 0) + n
+    K = [d for d in w if app.adm and app.adm.complete(d)]
+    X, ufmt, bu = {}, [], []
+    for ui, u in enumerate(app.units):
+        fs = {app.adm.ids[i]["fmt"] for i in u[2] if i in app.adm.ids}
+        ufmt.append((next(iter(fs)) if len(fs) == 1 else u[1]) if fs else None)
+        if ufmt[-1]:                          # file 2's day values (1 place): the page sums the very same numbers
+            s = [0.0, 0.0, 0.0]
+            for d in K:
+                v = app.unit_adm(ui, d)
+                for j in range(3):
+                    s[j] += _r(v[j], 1) if v else 0
+            X[ui] = s
+            if len(fs) == 1:
+                bu.append([tuple(u[2]), ufmt[-1]] + s)
+    return {"S": S, "sig": [src, len(S), S[0], S[-1]] if S else None, "g": g, "G": G, "K": K, "X": X, "ufmt": ufmt,
+            "bu": bu}
+
+
+def ab_row(app, side, c, w, allf):
+    """One screen class's absolute numbers over W, exact: Ads / view % (its ads ÷ its views × 100 on the W days with
+    both — the page's sumItem days, Imp / user / day's ads), and its AdMob side Σ σ_u × X_u over its units (σ_u =
+    min(1, g_u ÷ G_u): a unit shared by screens gives each its share, the rates stay the unit's) → Fill = matched ÷
+    requests, Show rate = impressions ÷ matched; per AdMob format p [share of the class's unit ads (unmatched in the
+    whole), req, matched, imp]; unm the unmatched share (no AdMob id, or G 0: never in a rate); why "" or the reason a
+    number is "—" (never a silent 0); nm: not measurable (no matched unit, or no complete AdMob day in W)."""
+    v = a = 0
+    for d in w:
+        vd, ad = app.views.get(d), app.ads.get(d)
+        q = None if ad is None else ad["tot"] if allf else ad["cls"]
+        if vd is None or q is None:
+            continue
+        v += vd.get(c, (0, 0))[0]
+        a += q.get(c, 0) if allf else q.get(c, (0,))[0]
+    gc = side["g"].get(c) or {}
+    tot = sum(gc.values())
+    parts, unm = {}, 0
+    for ui, n in sorted(gc.items()):
+        if ui not in side["X"] or not side["G"].get(ui):
+            unm += n
+            continue
+        s = min(1.0, n / side["G"][ui])
+        p = parts.setdefault(side["ufmt"][ui], [0.0, 0.0, 0.0, 0.0])
+        p[0] += n
+        for j in range(3):
+            p[j + 1] += s * side["X"][ui][j]
+    T = [sum(p[j] for p in parts.values()) for j in (1, 2, 3)]
+    why = ("AdMob data nahi" if not app.adm else
+           "GA4 ne is app ke ads screen × unit ke saath nahi diye" if not side["S"] else
+           "GA4 ne is screen ke ads unit ke saath nahi diye" if not tot else
+           "GA4 unit names AdMob me nahi mile (unmatched 100 %)" if not parts else
+           "AdMob ~1–2 din baad pura hota hai" if not side["K"] else
+           "koi ad fill nahi hua" if T[0] and not T[1] else "")
+    return {"ads": a, "views": v, "av": 100 * a / v if v > 0 else None, "fill": T[1] / T[0] if T[0] else None,
+            "show": T[2] / T[1] if T[1] else None, "p": {f: [p[0] / tot] + p[1:] for f, p in parts.items()},
+            "unm": unm / tot if tot else None, "why": why, "nm": not parts or not side["K"]}
+
+
+def ab_ship(ab, sig):
+    """File 2's rows[rid]["ab"]: shares / rates 4 places, sums 1, Ads / view % 2."""
+    return {"av": _r(ab["av"], 2), "fill": _r(ab["fill"], 4), "show": _r(ab["show"], 4),
+            "p": {f: [_r(p[0], 4), _r(p[1], 1), _r(p[2], 1), _r(p[3], 1)] for f, p in sorted(ab["p"].items())},
+            "sig": sig, "unm": _r(ab["unm"], 4), "why": ab["why"]}
+
+
+def _qs(xs, qs):
+    """Unweighted linear-interpolation quantiles of xs + their n, or None under AB_MIN_N values."""
+    if len(xs) < AB_MIN_N:
+        return None
+    xs, out = sorted(xs), []
+    for p in qs:
+        k = (len(xs) - 1) * p
+        i = int(k)
+        j = min(i + 1, len(xs) - 1)
+        out.append(xs[i] + (xs[j] - xs[i]) * (k - i))
+    return out + [len(xs)]
+
+
+def ab_bench(apps):
+    """The format benchmark over every built app, {app id: (bu, {item: (vs-own-past word, ab_row)}, sig)} → per AdMob
+    format: the units' Fill (requests ≥ AB_REQ) and Show rate (matched ≥ AB_MT), one vote per unit (its AdMob ids, once)
+    over its app's W; Ads / view over the top screens with ≥ AB_ADS ads whose dominant part is ≥ AB_DOM (the measured
+    population: a row's vs-own-past word is about its own past, not its level); nall = the format's units (the ones
+    left out are the small ones: counted, never dropped silently). Exact (ab_bench_ship rounds)."""
+    units, seen, av, k = {}, set(), {}, 0
+    for aid in sorted(apps):
+        bu, rows, _ = apps[aid]
+        k += 1 if bu else 0
+        for pid, f, rq, mt, im in bu:
+            if pid not in seen:
+                seen.add(pid)
+                units.setdefault(f, []).append((rq, mt, im))
+        for word, ab in rows.values():
+            if ab["p"] and ab["av"] is not None and ab["ads"] >= AB_ADS:
+                f, p = max(sorted(ab["p"].items()), key=lambda kv: kv[1][0])
+                if p[0] >= AB_DOM:
+                    av.setdefault(f, []).append(ab["av"])
+    fm = {}
+    for f in sorted(set(units) | set(av)):
+        us = units.get(f) or []
+        fm[f] = {"fill": _qs([mt / rq for rq, mt, _ in us if rq >= AB_REQ], AB_Q),
+                 "show": _qs([im / mt for _, mt, im in us if mt >= AB_MT], AB_Q),
+                 "av": _qs(av.get(f) or [], AB_Q[:3]), "nall": len(us)}
+    return {"fmt": fm, "min": {"req": AB_REQ, "mt": AB_MT, "ads": AB_ADS, "n": AB_MIN_N}, "apps": k}
+
+
+def ab_bench_ship(B):
+    """scr_all's "bench": rates 4 places, Ads / view % 2, n as is; null = under AB_MIN_N; check = the developer texts."""
+    def q(x, n):
+        return None if x is None else [_r(v, n) for v in x[:-1]] + [x[-1]]
+    return {"fmt": {f: {"fill": q(b["fill"], 4), "show": q(b["show"], 4), "av": q(b["av"], 2), "nall": b["nall"]}
+                    for f, b in B["fmt"].items()}, "min": B["min"], "apps": B["apps"],
+            "check": {k: CHECK[t[2]] for k, t in AB_TXT.items()}}
+
+
+def _dm(s, ref):
+    d = _d(s)
+    return "%d %s%s" % (d.day, MONTHS[d.month - 1], "" if d.year == ref.year else " %d" % d.year)
+
+
+def ab_judge(word, ab, B, sig):
+    """A top screen row's absolute status → [word, cause, weak [[k, format, value, median, p25], …] weakest first]: a
+    vs-own-past word not judged stays (N/A, Too early); No ads; Not measurable (why); Low (a part ≥ AB_PART with fill
+    under its format's p25 on ≥ AB_REQ requests, or show under p25 on ≥ AB_MT matched); Too few ads (no such part with
+    ≥ AB_MT matched); Few ads (the dominant part ≥ AB_DOM, Ads / view under its format's p25); else OK. Cause: up to 2
+    weak numbers, weakest (value ÷ median) first; a σ from older split days names them."""
+    if word not in JUDGED:
+        return [word, "", []]
+    if not ab["ads"]:
+        return ["No ads", "10 din me is screen pe koi ad nahi", []]
+    if ab["nm"]:
+        return ["Not measurable", ab["why"], []]
+    fm, weak = B["fmt"], []
+    for f, p in sorted(ab["p"].items(), key=lambda kv: (-kv[1][0], kv[0])):
+        b = fm.get(f) or {}
+        if p[0] < AB_PART:
+            continue
+        if b.get("fill") and p[1] >= AB_REQ and p[2] / p[1] < b["fill"][1]:
+            weak.append(["fill", f, p[2] / p[1], b["fill"][2], b["fill"][1]])
+        if b.get("show") and p[2] >= AB_MT and p[3] / p[2] < b["show"][1]:
+            weak.append(["show", f, p[3] / p[2], b["show"][2], b["show"][1]])
+    out = "Low"
+    if not weak:
+        if not any(p[0] >= AB_PART and p[2] >= AB_MT for p in ab["p"].values()):
+            return ["Too few ads", "har bade part pe AdMob matched %d se kam" % AB_MT, []]
+        f, p = max(sorted(ab["p"].items()), key=lambda kv: kv[1][0])
+        a = (fm.get(f) or {}).get("av") if p[0] >= AB_DOM else None
+        if not (a and ab["av"] is not None and ab["ads"] >= AB_ADS and ab["av"] < a[1]):
+            return ["OK", "", []]
+        out, weak = "Few ads", [["av", f, ab["av"], a[2], a[1]]]
+    weak.sort(key=lambda x: x[2] / x[3] if x[3] else 0.0)
+    cz = "; ".join("%s %d %% (%s median %d %%): %s" % (
+        AB_TXT[k][0], round(v if k == "av" else 100 * v), FMT_NAME.get(f, f), round(m if k == "av" else 100 * m),
+        AB_TXT[k][1]) for k, f, v, m, _ in weak[:2])
+    if sig and sig[0] == "new":
+        cz += " · unit mix from %s – %s" % (_dm(sig[2], _d(sig[3])), _dm(sig[3], _d(sig[3])))
+    return [out, cz, [[k, f] + [_r(x, 2 if k == "av" else 4) for x in (v, m, q)] for k, f, v, m, q in weak]]
+
+
+def _pf(v):
+    return "—" if v is None else "%d %%" % round(100 * v)
+
+
+def _pa(v):
+    return "—" if v is None else ("%.1f %%" % v) if v < 10 else "%d %%" % round(v)
+
+
 def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=None, idx=None):
     """One app → (file-2 name, its raw bytes, scr_l name, its raw bytes, the scr_all entry, kept shard names, counts) —
     the shards and scr_l written here; file 2 written by the caller after this returns (write order). broken (a list):
@@ -3114,6 +3336,10 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
     mark_lost(app, broken, lambda i: app.st[i] if i in GROUPS["core"] else sst[i] if i in GROUPS["small"] else
               lay["ver"].st[i] if i in GROUPS["ver"] else lay["cc"].st[i])
     w, n = app.windows()
+    allf = app.allf()
+    # the absolute numbers over W (every screen row; the words need every app's benchmark: run() after the app loop)
+    side = ab_side(app, w, allf)
+    abr = {rid: ab_row(app, side, row[1], w, allf) for rid, row, *_ in rows if row[0] == "s"}
     fbd, rtext = {}, {}
     for rid, row, label, k, ii, ser, st in rows:
         if st["word"] in JUDGED:
@@ -3121,7 +3347,7 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
         if rid in report_rows:
             rtext[rid] = row_report(app, label, "screen" if row[0] == "s" else "full-screen trigger", st,
                                     causes.get(rid) or {}, ser, fbd.get(rid), _ver_line(app, row, order, wsame, prev),
-                                    _cc_line(lay["cc"].wsum.get(rid)), {v: ver[v]["first"] for v in ver})
+                                    _cc_line(lay["cc"].wsum.get(rid)), {v: ver[v]["first"] for v in ver}, abr.get(rid))
     dq, dql = dq_items(app, clicks)
     nvr = nvr_split(app, sdays, w, n, ast)
     head = report_head(app, key, alist, ast, nvr, rows)
@@ -3170,7 +3396,8 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
                       "reach": st["reach"], "base": st.get("bases"), "group": st.get("group", ""),
                       "cause": cz.get("cause", ""), "terms": cz.get("terms"), "units": cz.get("units"),
                       "fbd": fbd.get(rid)}
-    allf = app.allf()
+        if rid in abr:
+            rows2[rid]["ab"] = ab_ship(abr[rid], side["sig"])
     allfs = app.allf_share() if allf else None
     notes = {"zone": "assumed" if app.adm.assumed else ("account" if app.adm else "none"),
              "admob": "ok" if app.adm else "none", "allf": allf, "allfs": allfs,
@@ -3185,7 +3412,7 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
              "report": {"app": app_text, "rows": rtext}}
     body2 = {"v": V, "key": key, "app_id": app.aid, "ft": _iso(app.ft), "td": _iso(app.td), "d0": app.d0,
              "screens": [[c, kind(c)] for c in app.screens], "units": app.units, "trig": app.trig, "days": days2,
-             "adm": adm, "rows": rows2, "notes": notes}
+             "adm": adm, "rows": rows2, "notes": notes, "ufmt": side["ufmt"]}
     # the users beside the ads: the top screens' users per final day ≤ ftU ("U", their screen indexes "Us": the screen
     # rows) and the app's daily active users per final day ≤ ftU ("au": GA4's own, the same stream; also in scr_all) —
     # or why the app has none ("auw": none · stream · cut)
@@ -3235,18 +3462,21 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
                                                        (lay["ver"].st.get(i) if i in GROUPS["ver"] else lay["cc"].st.get(i)))
         stall[i] = "".join((src or {}).get(d, "-") for d in app.days)
     # per display item: [word, why, score, cause, its Needs attention group, impact, W days] — the W days (its whole days
-    # of the last W_DAYS) here, not only in file 2: Needs attention's "n/10 days" is drawn from scr_all alone
-    status = {}
+    # of the last W_DAYS) here, not only in file 2: Needs attention's "n/10 days" is drawn from scr_all alone — + [the
+    # absolute word, its cause, the weak numbers]: "", "", [] until run() judges them on every app's benchmark
+    status, abj = {}, {}
     for rid, row, label, k, ii, ser, st in rows:
         if ii is not None:
             cz = causes.get(rid) or {}
             status[str(ii)] = [st["word"], st["why"], st["score"],
                                st.get("cause", "") if st["word"] in FLAGS else "",
-                               st.get("group", "") if st["word"] in FLAGS else "", st["imp"], st["dW"]]
+                               st.get("group", "") if st["word"] in FLAGS else "", st["imp"], st["dW"], "", "", []]
+            if rid in abr:
+                abj[str(ii)] = (st["word"], abr[rid])
     bf = {i: _bf(r) for i, r in ((meta.get("reads") or {}).items()) if isinstance(r, dict)}
     entry = {"key": key, "ft": _iso(app.ft), "td": _iso(app.td), "d0": app.d0, "items": app.items, "vis": vis,
              "V": V_, "A": A_, "ta": ta, "st": stall, "bf": bf, "status": status, "app": alist, "dq": dq,
-             "ftu": _iso(app.ftu), "dk": "".join(str(app.dup.get(d, 0)) for d in app.days)}
+             "ftu": _iso(app.ftu), "dk": "".join(str(app.dup.get(d, 0)) for d in app.days), "lo": None}
     # the App total and All apps from this file alone: the app's daily users per day ≤ ftU (null else) — or why none
     if aul is not None:
         entry["au"] = aul
@@ -3265,7 +3495,7 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
     c["stale"] += 1 if stale_users(app) else 0
     return {"app": app, "body2": body2, "lraw": _splice(lbody, [sdays.get(d) for d in app.days]), "entry": entry,
             "keep": keep,
-            "seen": lay["ver"].seen | lay["cc"].seen}
+            "seen": lay["ver"].seen | lay["cc"].seen, "ab": (side["bu"], abj, side["sig"])}
 
 
 # ── run ──────────────────────────────────────────────────────────────────────────────────────
@@ -3311,7 +3541,7 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
         by_id = _by_id(data_dir)
         counts = {"rows": 0, "judged": 0, "worse": 0, "watch": 0, "big": 0, "failed": 0, "cached": 0, "users": 0,
                   "stale": 0}
-        apps, entries, keep = {}, {}, set()
+        apps, entries, keep, abx = {}, {}, set(), {}
         bad = []                                    # (key, group, month, error type): store month files not readable
         sel = selected(dashboard)
         for key in store_keys(data_dir):
@@ -3344,6 +3574,7 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                 mine.add(fn)
                 keep |= mine
                 entries[aid] = res["entry"]
+                abx[aid] = res["ab"]
                 apps[aid] = {"key": key, "v": h2[:12], "vl": hl[:12] if hl else None,
                              "from": res["entry"]["d0"], "ft": res["entry"]["ft"]}
             except Exception as e:                  # a broken app: its own files and pointer entry gone
@@ -3359,12 +3590,26 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             print("scr store skipped: %s" % bad[0][3], file=sys.stderr)
         if counts["stale"]:                         # ONE line too: an app's users are late or missing (its rows say
             print("scr users skipped: StaleUsersWarning", file=sys.stderr)      # "users not in yet")
+        bench = None
+        if apps:                                    # the absolute words: every app's units make the benchmark
+            try:
+                B = ab_bench(abx)
+                js = {aid: {ii: ab_judge(word, ab, B, sig) for ii, (word, ab) in rws.items()}
+                      for aid, (_, rws, sig) in abx.items()}
+                bench = ab_bench_ship(B)
+            except Exception as e:                  # the words ship "" (the page: "—", benchmark nahi bana)
+                js = {}
+                print("scr bench skipped: %s" % type(e).__name__, file=sys.stderr)
+            for aid, jj in js.items():
+                for ii, j in jj.items():
+                    entries[aid]["status"][ii][7:10] = j
+                entries[aid]["lo"] = sum(1 for j in jj.values() if j[0] == "Low")
         fv = None
         if apps:
             ia = _idx_path(data_dir)
             aidx = _idx_load(ia)
             aidx0 = {k: dict(v) for k, v in aidx.items()}
-            ha = _put(out_dir, ALL_FILE, _raw({"v": V, "apps": entries}), aidx)
+            ha = _put(out_dir, ALL_FILE, _raw({"v": V, "apps": entries, "bench": bench}), aidx)
             if ha is None:
                 counts["big"] += 1
                 apps = {}
