@@ -14,7 +14,7 @@ engine.cpi_alarm (P_PROD) to the data day t, nothing trimmed:
   build's site files through this build's pointers only: active_<key> (GA4 a1), nvr_<key> (first session vs returning),
   roi_<key> (install-day rows, matured ages only).
 
-  site/cpi.json.gz        {"v", "t", "day0", "apps": {app id: {"h": {"CPI" ₹×100, "ECPM" $×10000, "ROAS_G" ×10000: the
+  site/cpi.json.gz        {"v", "t", "day0", "apps": {app id: {"h": {"CPI" ₹×100, "ECPM" $×10000, "ROAS_G" ×10000, "GAP" ads×100: the
                            engine's healthy level per day day0 … t, null kept}, "ep": [[fam, opener, tier, c, opened,
                            closed, why, base], …] every app episode, all history}}}  (any period besides the default)
   site/cpi_<key>.json.gz  {"v", "app_id", "name", "key", "t", "day0" (the app's first spend − 28 days), "d": {days},
@@ -97,7 +97,7 @@ CTY_SHARE = 0.02         # a country line in the file: ≥ 2 % of the app's spen
 CTY_MAX = 12
 SRC_NOTE = ("ad sources not shipped: the only per-source AdMob rows in a build are data/mediation.json.gz (several "
             "seconds to stream) and the Mediation tab's file, written after this step")
-SCALE = {"CPI": 100, "ECPM": 10000, "ROAS_G": 10000}
+SCALE = {"CPI": 100, "ECPM": 10000, "ROAS_G": 10000, "GAP": 100}
 ROWS = ("sp_inr", "sp_usd", "inst", "d0_inr", "rev", "imp", "dau", "fs_rev", "fs_imp", "fs_u", "rt_rev", "rt_imp",
         "rt_u", "c_n", "c_sp", "c_r0", "c_r1", "c_r7")
 ENG = ("sp_usd", "sp_inr", "inst", "d0_inr", "rev", "imp", "dau", "c_n", "c_sp", "c_r0", "c_r1", "c_r7")
@@ -1170,7 +1170,7 @@ def build_files(dashboard, D, apps, camps, ctys, extra, res, now):
                 m = money_lost([ep], a["s"], extra["R"], D.d0, ep["c"], ep["closed"] or ts, ts, hl, e0)
                 if m:
                     ep["money"] = dict(ep["money"], since_c_inr=m["inr"], since_c_usd=m["usd"])
-        nrm = {f: normal_at(f, eps, hl, e0, a_iso, b_iso) for f in ("CPI", "ECPM", "ROAS_G")}
+        nrm = {f: normal_at(f, eps, hl, e0, a_iso, b_iso) for f in ("CPI", "ECPM", "ROAS_G", "GAP")}
         st, since = status_of(eps, a["s"], nrm, D.d0, a_iso, b_iso, ts)
         to = None
         if st == "fixed":                                  # the closed alarm's last day, for its span on the page
@@ -1201,7 +1201,7 @@ def build_files(dashboard, D, apps, camps, ctys, extra, res, now):
                 ptr_apps[aid]["ag"] = tag
         off = (D.d0 + timedelta(days=g0) - e0).days
         h = {}
-        for fam in ("CPI", "ECPM", "ROAS_G"):
+        for fam in ("CPI", "ECPM", "ROAS_G", "GAP"):
             arr = hl.get(fam) or []
             vals = arr[off:] if off >= 0 else [None] * (-off) + list(arr)
             h[fam] = [None if v is None else int(round(v * SCALE[fam])) for v in vals]

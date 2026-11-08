@@ -115,17 +115,17 @@ def test_default_view_comes_from_the_pointer(out):
     assert H not in rows                                                                # hidden in Settings
     assert d["order"] == [A, B, C_, Z, D, E_]                                           # Alarm, Watch, OK, New, Paused (then money, spend)
     a = rows[A]
-    assert a["since"] == "2026-03-10" and a["nrm"] == {"CPI": [20, 1], "ECPM": [6, 1], "ROAS_G": [0.4, 1]}   # the frozen baselines
+    assert a["since"] == "2026-03-10" and a["nrm"] == {"CPI": [20, 1], "ECPM": [6, 1], "ROAS_G": [0.4, 1], "GAP": [40, 0]}   # the frozen baselines (no GAP alarm: its healthy level)
     assert a["lost"]["inr"] == pytest.approx(175000) and a["lost"]["usd"] == pytest.approx(2100)      # the build's period number
     since = days("2026-03-10", "2026-03-28")                                            # since c: 19 days × (50,000 − 15,000 ÷ 0.4)
     assert a["lost"]["sinr"] == pytest.approx(19 * 12500) and a["lost"]["susd"] == pytest.approx(sum(12500 * fxd(x) for x in since), abs=0.01)
     assert a["lost"]["pre"] and a["lost"]["from"] == "2026-03-10"
     assert rows[B]["nrm"]["CPI"] == [10, 1] and rows[B]["nrm"]["ECPM"] == [3, 0] and rows[B]["lost"] is None
-    assert rows[D]["nrm"] == {"CPI": None, "ECPM": None, "ROAS_G": None}
+    assert rows[D]["nrm"] == {"CPI": None, "ECPM": None, "ROAS_G": None, "GAP": None}
     t = d["text"]
     assert "Data till 28 Mar 2026 (final) · Last check 30 Mar, 10:52 IST" in t
     assert "● 1 Alarm ● 1 Watch ● 2 OK · Money lost: ≈₹1.8 L" in t
-    assert "Alpha App spend ₹7.0 L · since 10 Mar (19 din) ₹31.3 +56% vs ₹20.0 $5.00 −17% vs $6.00 30.0% −25% vs 40.0% 10 Mar 19 din se" in t
+    assert "Alpha App spend ₹7.0 L · since 10 Mar (19 din) ₹31.3 +56% vs ₹20.0 $5.00 −17% vs $6.00 30.0% −25% vs 40.0% 75.0 +88% vs 40.0 10 Mar 19 din se" in t
     assert "Alarm ≈₹1.8 L since 10 Mar: ≈₹2.4 L" in t
     assert "no normal yet" in t and "Not linked spend: ₹12.3k (3 store ids) — Marketing ROAS me" in t
     # the $ view: the same words, the numbers at each day's own rate; the % the same (CPI's $ normal at the period's rate)
@@ -163,7 +163,7 @@ def test_other_periods_are_judged_by_the_page(out):
     assert D not in dec                                                                 # no spend in the period: no row
     feb = by(out["pfeb"])
     assert {k: v["st"] for k, v in feb.items()} == {A: "ok", B: "ok", C_: "ok", E_: "ok", Z: "ok"}
-    assert feb[A]["nrm"] == {"CPI": [20, 0], "ECPM": [6, 0], "ROAS_G": [0.4, 0]} and feb[A]["lost"] is None
+    assert feb[A]["nrm"] == {"CPI": [20, 0], "ECPM": [6, 0], "ROAS_G": [0.4, 0], "GAP": [40, 0]} and feb[A]["lost"] is None
     y = by(out["pyday"])[A]                                                             # Yesterday (after t): D0 not final
     assert y["st"] == "alarm" and y["lost"]["na"] and y["lost"]["sinr"] == pytest.approx(19 * 12500)
     assert by(out["p14_from_file"])[A] == by(out["def"]["rows"])[A]                     # the default view: the pointer, file or not
@@ -289,7 +289,7 @@ def test_details_and_every_tab(out):
     assert [z[:2] for z in dw["first"]] == [["2026-03-30", True], ["2026-03-29", True], ["2026-03-28", False], ["2026-03-27", False]]
     assert dw["rows"] == [31, 61, 60]                                                   # 30 rows (+ head), Show 30 more
     assert [f["fam"] for f in dw["t"]["fams"]] == ["ROAS_G", "CPI", "ECPM"]             # the open families that day
-    assert "Rest 5% ₹35.0k — —" in tb["cc"]["text"] and "≈ app installs" not in tb["cc"]["text"]   # the Rest row: its spend and share only
+    assert "Rest 5% ₹35.0k — — —" in tb["cc"]["text"] and "≈ app installs" not in tb["cc"]["text"]   # the Rest row: its spend and share only
     assert "⚠️ CPI up · since 12 Mar" in tb["cc"]["text"]
     assert "tROAS · target 55.0%" in tb["cp"]["text"] and "tCPA · target not known" in tb["cp"]["text"]
     assert "1 campaign ka is period me spend nahi" in tb["cp"]["text"]
@@ -380,14 +380,48 @@ def test_list_layout_fits_every_width():
     assert re.search(r'\.screen\[data-screen="cpx"\]\{[^}]*container:cpx/inline-size', m)
     base = m[m.index(".cpx-row{display:grid"):m.index("@container cpx")]
     assert 'grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"app loss" "m m"' in base   # the default = the 2-line card
-    q = m[m.index("@container cpx (min-width:900px)"):m.index("@media (max-width:760px)")]
+    q = m[m.index("@container cpx (min-width:980px)"):m.index("@media (max-width:760px)")]
     tracks = re.search(r"grid-template-columns:([^;]+);grid-template-areas:none", q).group(1)
-    assert "minmax(0,1.9fr) repeat(3,minmax(0,1fr))" in tracks                           # shrinkable tracks: nothing can push Money lost out
+    assert "minmax(0,1.9fr) repeat(4,minmax(0,1fr))" in tracks                           # shrinkable tracks: nothing can push Money lost out
     assert not re.search(r"minmax\(\d+px", tracks)                                        # … no fixed minimum
     px = sum(int(x) for x in re.findall(r"(?<![\d.(,])(\d+)px", tracks))
-    assert px + 7 * 10 + 28 + 100 + 4 * 95 <= 900                                       # fixed tracks + gaps + padding + 4 flexible columns ≥ 95 px fit 900 px
+    assert px + 8 * 10 + 28 + 100 + 5 * 95 <= 980                                       # fixed tracks + gaps + padding + 5 flexible columns ≥ 95 px fit 980 px
+    assert "@container cpx (max-width:520px){.cpx-mrow{grid-template-columns:repeat(2,minmax(0,1fr))}}" in m   # a phone: the 4 numbers two by two
+    assert ".cpx-nm{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}" in q   # an app's name: two lines where the column is narrow
+    assert 'class="cpx-nm" title="${E(r.name)}"' in p
     assert "@media (min-width:761px){.cpx-mob" not in m                                  # (the old viewport rule that cut the Money column)
     assert "grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))" in m     # the charts: 3 / 2 / 1 across by the room
+
+
+def test_ads_to_pay_back_on_the_list_day_wise_and_countries(out):
+    # Alpha, the default 14 days (15–28 Mar): ($ spend ÷ 22,400 installs) × (700,000 impressions ÷ $3,500) — one number in both views
+    usd = sum(50000 * fxd(x) for x in days("2026-03-15", "2026-03-28"))
+    g = out["gap"]
+    assert g["in"] == pytest.approx(usd / 22400 * 200) and g["us"] == g["in"] and g["in"] == pytest.approx(75.0)
+    # … and where the rates do not cancel (7 days, one day): ₹ and $ views the same number, each day's own rate
+    s = out["sums"]
+    y = date(2026, 3, 29)
+    assert s["INR"]["ay"]["gap"] == s["USD"]["ay"]["gap"] == pytest.approx(50000 * fxd(y) / 1600 * 200)
+    wk = sum(50000 * fxd(x) for x in days("2026-03-22", "2026-03-28"))
+    assert s["INR"]["a7"]["gap"] == s["USD"]["a7"]["gap"] == pytest.approx(wk / (7 * 1600) * 200)
+    assert g["now"]["v"] == g["in"] and g["now"]["n"] == 40 and g["now"]["d"] == pytest.approx(0.875)   # vs its healthy level
+    assert out["def"]["gap_head"] and out["def"]["gap_tile"]                            # the wide list's column, the phone's tile
+    assert "75.0 +88% vs 40.0" in out["def_usd"]["text"]
+    # the alarm's own family: its number and normal lead the sentence
+    assert g["verdict"].startswith("Ads to pay back an install 12 Mar se normal se upar: 75.0 (normal 40.0). CPI ")
+    # Day-wise: per day ($ spend ÷ installs) × (impressions ÷ $ earnings), final or not
+    t = out["day"]["t"]
+    assert t["gap"] == pytest.approx(round(50000 * fxd(date(2026, 3, 28)), 2) / 1600 * (50000 / 250.0))
+    assert out["gap"]["no_rev"] is None and out["gap"]["no_rev_title"]                   # a day with no AdMob earnings: "—" and why, never 0
+    assert out["day"]["gap_nf"] == pytest.approx(50000 * fxd(TODAY) / 1600 * 200)       # (a not-final day too, each day's own rate)
+    w = out["tabs"]["dw"]["text"]
+    assert "CPI eCPM Ads to pay back Ads / user" in w and "Ads to pay back = 1 install ka kharch (CPI) wapas laane" in w
+    # Countries: the column between eCPM and the alarms; a country's own GAP alarm is its normal (US: base 50), else the 28 days before
+    c = out["tabs"]["cc"]["text"]
+    assert "CPI eCPM Ads to pay back Alarm" in c and "vs 50.0" in c
+    assert "⚠️ Ads to pay back an install up · since 12 Mar" in c
+    r = out["gap_why"]                                                                  # a country's "—" names its own cause
+    assert r == {"none": "AdMob data nahi", "apart": "installs aur AdMob ke din alag", "noinst": "installs nahi", "norev": "AdMob kamai nahi", "nosp": "spend nahi"}
 
 
 def test_no_owner_data_in_the_fixture():

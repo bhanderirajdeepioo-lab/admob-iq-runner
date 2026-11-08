@@ -69,11 +69,12 @@ function build() {
     return { inr: r2(inr), usd: r2(usd), from: G.map(e => e.c).sort()[0], sc: { inr: r2(si), usd: r2(su) }, fam: 'ROAS_G' }; };   // sc: the same from c (the "since c" line)
   // ---- the per-app files ----
   const FILES = {}, apps = {}, allApps = {};
-  const hOf = k => { const cpi = [], ecpm = [], roas = [];
+  const hOf = k => { const cpi = [], ecpm = [], roas = [], gap = [];
     for (const x of TD) { const m = M[k](x), live = k !== 'd' && x >= addD(DAY0, 28);
       const mb = k === 'a' ? M.a('2026-01-01') : k === 'b' ? M.b('2026-01-01') : m;      // the healthy level leaves the problem days out
-      cpi.push(live && mb.inst > 0 ? Math.round(mb.sp / mb.inst * 100) : null); ecpm.push(live && mb.imp > 0 ? Math.round(mb.ecpm * 10000) : null); roas.push(live ? Math.round(mb.d0 * 10000) : null); }
-    return { CPI: cpi, ECPM: ecpm, ROAS_G: roas }; };
+      cpi.push(live && mb.inst > 0 ? Math.round(mb.sp / mb.inst * 100) : null); ecpm.push(live && mb.imp > 0 ? Math.round(mb.ecpm * 10000) : null); roas.push(live ? Math.round(mb.d0 * 10000) : null);
+      gap.push(live && mb.inst > 0 && mb.imp > 0 ? Math.round(mb.sp * FX1 / mb.inst * (1000 / mb.ecpm) * 100) : null); }   // ads to pay back one install × 100
+    return { CPI: cpi, ECPM: ecpm, ROAS_G: roas, GAP: gap }; };
   for (const k of Object.keys(M)) {
     const id = IDS[k], key = KEYS[k], file = 'cpi_' + key + '.json.gz';
     const first = TD.find(x => M[k](x).sp > 0), f0 = addD(first, -28) < DAY0 ? DAY0 : addD(first, -28), FD = days(f0, T), N = FD.length;
@@ -90,7 +91,7 @@ function build() {
       d.c_r0.push(age < 3 ? null : r2(sp * m.d0 * 0.9)); d.c_r1.push(age < 4 ? null : r2(sp * m.d0 * 1.2)); d.c_r7.push(age < 10 ? null : r2(sp * m.d0 * 1.8)); });
     const hh = hOf(k), off = nD(DAY0, f0) - 1;
     const nrm = { CPI: hh.CPI.slice(off).map(v => v == null ? null : v / 100), ECPM: hh.ECPM.slice(off).map(v => v == null ? null : v / 10000),
-      ROAS_G: hh.ROAS_G.slice(off).map(v => v == null ? null : v / 10000), GAP: FD.map(() => null), IPU: FD.map(() => null), ROAS_C0: hh.ROAS_G.slice(off).map(v => v == null ? null : r6(v / 10000 * 0.9)) };
+      ROAS_G: hh.ROAS_G.slice(off).map(v => v == null ? null : v / 10000), GAP: hh.GAP.slice(off).map(v => v == null ? null : v / 100), IPU: FD.map(() => null), ROAS_C0: hh.ROAS_G.slice(off).map(v => v == null ? null : r6(v / 10000 * 0.9)) };
     // the open episodes keep their frozen baseline in the normal
     EP[k].forEach(e => { if (e.closed || !nrm[e.fam]) return; FD.forEach((x, i) => { if (x >= e.opened) nrm[e.fam][i] = e.base; }); });
     const camps = k === 'a' ? [
@@ -109,7 +110,8 @@ function build() {
         ...(cc === 'BR' ? {} : { r0: d.c_r0.map(v => v == null ? null : r2(v * q * (cc === 'US' ? 1.2 : 0.9))) }) },
       // its normal per day (CPI ₹, eCPM $, D0 ROAS AdMob-matched): the build's (its own B while open, else H)
       nrm: Object.assign({ CPI: FD.map((x, i) => i < 28 ? null : 20), ECPM: FD.map((x, i) => i < 28 ? null : r6(6 * pr)) }, cc === 'BR' ? {} : { ROAS: FD.map((x, i) => i < 28 ? null : (cc === 'US' ? 0.432 : 0.324)) }),
-        ep: cc === 'BR' && k === 'a' ? [tup(ep({ kind: 'country', id: id + '|BR', app: id, fam: 'CPI', tier: 'LINE', c: '2026-03-12', opened: '2026-03-16', base: 20 }))] : [] }; });
+        ep: cc === 'BR' && k === 'a' ? [tup(ep({ kind: 'country', id: id + '|BR', app: id, fam: 'CPI', tier: 'LINE', c: '2026-03-12', opened: '2026-03-16', base: 20 }))]
+          : cc === 'US' && k === 'a' ? [tup(ep({ kind: 'country', id: id + '|US', app: id, fam: 'GAP', tier: 'LINE', c: '2026-03-12', opened: '2026-03-16', base: 50 }))] : [] }; });
     const src = [{ name: 'AdMob Network', from: f0, d: { rev: d.rev.map(v => r2(v * 0.7)), imp: d.imp.map(v => Math.round(v * 0.6)) } },
       { name: 'Synth Ads', from: f0, d: { rev: d.rev.map(v => r2(v * 0.3)), imp: d.imp.map(v => Math.round(v * 0.4)) } }];
     FILES[file] = { v: 1, app_id: id, name: NAMES[k], key, t: T, day0: f0, d, nrm, camps, ctys, src, ep: EP[k],
@@ -124,7 +126,7 @@ function build() {
     const top = (st === 'fixed' ? w.filter(e => e.tier === 'ALERT') : live.filter(e => e.tier === (st === 'alarm' ? 'ALERT' : 'WATCH'))).map(e => e.c).sort()[0] || null;
     const ix = nD(DAY0, addD(def0, -1)) - 1, nv = (f, s) => { const o = EP[k].find(e => e.fam === f && !e.closed); if (o) return o.base; const v = hh[f][ix]; return v == null ? null : v / s; };
     apps[id] = { name: NAMES[k], key, file, v: 'v' + key.slice(-6), st, since: top, open,
-      nrm: { CPI: nv('CPI', 100), ECPM: nv('ECPM', 10000), ROAS_G: nv('ROAS_G', 10000) }, lost: lostOf(k) };
+      nrm: { CPI: nv('CPI', 100), ECPM: nv('ECPM', 10000), ROAS_G: nv('ROAS_G', 10000), GAP: nv('GAP', 100) }, lost: lostOf(k) };
   }
   FILES['cpi.json.gz'] = { v: 1, t: T, day0: DAY0, apps: allApps };
   const counts = { alarm: 0, watch: 0, fixed: 0, ok: 0, new: 0, paused: 0 }; Object.values(apps).forEach(a => { counts[a.st]++; });

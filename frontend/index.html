@@ -2968,8 +2968,8 @@ h2.cpx-h{font-size:20px;margin:0 0 3px;font-weight:800}.cpx-d{margin:0;color:var
 .cpx-wait{min-height:120px}
 .cpx-card{margin-bottom:14px}
 .cpx-tbl{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
-/* the list row: the 2-line card by default (a phone, a tablet, a window narrower than 900 px of screen) — app + money lost on top,
-   the three numbers in boxes below; the one-line table only where all of it fits (@container below) */
+/* the list row: the 2-line card by default (a phone, a tablet, a window narrower than 980 px of screen) — app + money lost on top,
+   the four numbers in boxes below; the one-line table only where all of it fits (@container below) */
 .cpx-row{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"app loss" "m m";align-items:center;gap:8px 10px;padding:11px 12px;border-top:1px solid var(--line);cursor:pointer}
 .cpx-row:hover{background:var(--panel2)}.cpx-row:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px}
 .cpx-row.cpx-hd{display:none;border-top:none;background:var(--panel2);color:var(--faint);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding-block:8px;cursor:default}
@@ -3051,13 +3051,15 @@ h2.cpx-h{font-size:20px;margin:0 0 3px;font-weight:800}.cpx-d{margin:0;color:var
 .cpx-lm .cpx-k{color:var(--faint);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
 .cpx-ft{color:var(--faint);font-size:12px;margin:12px 0 0;max-width:1100px}.cpx-ft b{color:var(--ink2)}
 .cpx-lnk{background:none;border:none;padding:0;font:inherit;color:var(--cyan);font-weight:700;cursor:pointer;text-decoration:underline}
-.cpx-mrow{grid-area:m;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.cpx-mrow{grid-area:m;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+@container cpx (max-width:520px){.cpx-mrow{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .cpx-mrow>div{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:5px 8px;min-width:0}
 .cpx-mrow .cpx-k{font-size:10px;color:var(--faint);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
 .cpx-mrow .cpx-s,.cpx-mrow .cpx-v,.cpx-c.cpx-m .cpx-s{white-space:normal}
-@container cpx (min-width:900px){
-  .cpx-row,.cpx-row.cpx-hd{grid-template-columns:66px minmax(0,1.9fr) repeat(3,minmax(0,1fr)) 84px 124px 12px;grid-template-areas:none;gap:10px;padding:10px 14px}
+@container cpx (min-width:980px){
+  .cpx-row,.cpx-row.cpx-hd{grid-template-columns:66px minmax(0,1.9fr) repeat(4,minmax(0,1fr)) 84px 124px 12px;grid-template-areas:none;gap:10px;padding:10px 14px}
   .cpx-row.cpx-hd{display:grid}
+  .cpx-nm{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
   .cpx-c.cpx-cst,.cpx-c.cpx-m,.cpx-c.cpx-since,.cpx-c.cpx-ar{display:block}
   .cpx-app,.cpx-c.cpx-loss{grid-area:auto}.cpx-c.cpx-loss{align-items:stretch;text-align:left}
   .cpx-mob,.cpx-mrow{display:none!important}
@@ -9058,8 +9060,8 @@ const UP={CPI:1,GAP:1};                    // up is bad; every other family: dow
 const OPW={SUDDEN:'Sudden step',DRIFT:'Slow drift',ABSOLUTE:'Below the usual'};
 const WHYW={recovered:'recovered',stopped:'spend stopped',no_paid:'no paid users',settled:'new level accepted',owner:'level set by owner'};
 const TIERW={ALERT:'Alarm',WATCH:'Watch',LINE:'Line'};
-const MINW={CPI:0.25,ECPM:0.15,ROAS_G:0.10};      // a move this big is coloured (the families' smallest alarm step)
-const SCALE={CPI:100,ECPM:10000,ROAS_G:10000};    // cpi.json.gz h: scaled ints
+const MINW={CPI:0.25,ECPM:0.15,ROAS_G:0.10,GAP:0.30};      // a move this big is coloured (the families' smallest alarm step)
+const SCALE={CPI:100,ECPM:10000,ROAS_G:10000,GAP:100};    // cpi.json.gz h: scaled ints
 const BIDW={TARGET_ROAS:'tROAS',TARGET_CPA:'tCPA',MAXIMIZE_CONVERSIONS:'Max conversions',MAXIMIZE_CONVERSION_VALUE:'Max conversion value'};
 const E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ok=v=>v!=null&&isFinite(v);
@@ -9091,6 +9093,8 @@ const fR=v=>ok(v)?(v*100).toFixed(1)+'%':'—';
 const fN=v=>ok(v)?Math.round(v).toLocaleString('en-US'):'—';
 const fP=r=>!ok(r)?'—':(r>0.0005?'+':r<-0.0005?'−':'±')+Math.round(Math.abs(r)*100)+'%';
 const fX=v=>ok(v)?(v>=10?v.toFixed(1):v.toFixed(2)):'—';
+const GAPN='Ads to pay back', GAPW='1 install ka kharch (CPI) wapas laane ke liye kitne ad dikhane padenge = CPI ÷ ek ad ki kamai (eCPM ÷ 1000)';   // the family GAP's short name and meaning (app line, Day-wise, Countries)
+const gapOf=(sp,n,im,rv)=>n>0&&sp>0&&im>0&&rv>0?(sp/n)*(im/rv):null;    // USD spend ÷ installs × impressions ÷ USD earnings (the engine's GAP)
 // ---- the files ----
 function ptr(){ if(dev()) return null; const d=DD(), p=d&&d.cpi;
   return p&&p.v===1&&okD(p.t)&&p.apps&&typeof p.apps==='object'&&!Array.isArray(p.apps)?p:null; }
@@ -9141,12 +9145,13 @@ function sums(lo,hi){ const d=DD(), p=ptr(); if(!d||!p) return {}; const mk=lo+'
   const R=(d.roas&&d.roas.by_app)||{}, out={}, s3=addD(p.t,-2);
   Object.keys(p.apps).forEach(id=>{ const a=p.apps[id], nm=a&&a.name; if(typeof nm!=='string'||out[nm]) return;
     const o=out[nm]={sp:0,spi:0,sp1:0,n:0,v1:0,rev:0,imp:0,last3:0,days:0,till:hi>p.t?p.t:null,nf:lo>p.t}, e=R[nm]; if(!e) return;   // D4: D0 ROAS counts the days ≤ t only (till: the period runs past t; nf: it has no final day)
-    let dv={}; try{ dv=roasDaily(e); }catch(err){ dv=e.daily||{}; } const one=e.daily||{}, ins=e.installs_daily||{}, cv=e.convval_day1_daily||{};
+    let dv={}; try{ dv=(roasFxDated()&&e.daily_dated)||e.daily||{}; }catch(err){ dv=e.daily||{}; } const one=e.daily||{}, ins=e.installs_daily||{}, cv=e.convval_day1_daily||{};   // (USD in both views, each day's own rate: the engine's sp_usd; the ₹ view swaps o.sp for o.spi below)
     for(const x in one){ const v=+one[x]||0; if(x>=s3&&x<=p.t) o.last3+=v; if(x<lo||x>hi) continue;
       if(x<=p.t){ o.sp1+=v; o.v1+=(+cv[x]||0)*1e6; }
       o.spi+=inr(d,v); o.sp+=(+dv[x]||0)/1e6; o.n+=+ins[x]||0; if(v>0) o.days++; } });   // (convval_day1_daily: plain USD; daily: micros)
   (d.placements||[]).forEach(q=>{ const o=q&&out[q.app]; if(!o) return; (q.daily||[]).forEach(r=>{ const x=r[0]; if(x<lo||x>hi) return; o.rev+=(+r[1]||0)/1e6; o.imp+=+r[2]||0; }); });
-  for(const nm in out){ const o=out[nm]; if(VIN()) o.sp=o.spi;
+  for(const nm in out){ const o=out[nm]; o.spu=o.sp; if(VIN()) o.sp=o.spi;
+    o.gap=o.n>0&&o.spu>0&&o.imp>0&&o.rev>0?(o.spu/o.n)*(o.imp/o.rev):null;   // ads to pay back one install = CPI ÷ one ad's earning (USD: the same in ₹ view)
     o.cpi=o.n>0&&o.spi>0?o.spi/o.n:null; o.cpiV=o.n>0&&o.sp>0?o.sp/o.n:null; o.k=o.spi>0?o.sp/o.spi:null;   // k: the view's units per ₹ (1 in ₹)
     o.ecpm=o.imp>0?o.rev/o.imp*1000:null; o.roas=o.sp1>0?o.v1/o.sp1:null; }
   m.set(mk,out); return out; }
@@ -9213,10 +9218,10 @@ function rowOf(id,a,s,lo,hi){ const p=ptr(), def=isDef(lo,hi), A=ALLF.raw&&ALLF.
   const r={id,a,name:a.name,s,lo,hi,def,L,wait:false,st:null,since:null,fam:null,ep:null,sinceOpen:false,sinceTo:null,nrm:{},lost:null};
   let j=null;
   if(def){ r.st=ST[a.st]?a.st:'ok'; r.since=okD(a.since)?a.since:null; const n=a.nrm||{}; j=judge(L,lo,hi); r.fam=j.fam;
-    ['CPI','ECPM','ROAS_G'].forEach(f=>{ const o=L.find(e=>e.fam===f&&!e.closed), pk=o&&ok(+o.base)&&Math.abs(+n[f]-+o.base)>1e-6*Math.max(1,Math.abs(+o.base));
+    ['CPI','ECPM','ROAS_G','GAP'].forEach(f=>{ const o=L.find(e=>e.fam===f&&!e.closed), pk=o&&ok(+o.base)&&Math.abs(+n[f]-+o.base)>1e-6*Math.max(1,Math.abs(+o.base));
       r.nrm[f]=ok(n[f])?{v:+n[f],b:o?1:0,c:o?o.c:null,src:o?(pk?'Bpk':'B'):'H0'}:null; }); }   // (the build's normal ≠ the episode's B: B was a peak)
   else if(A){ j=judge(L,lo,hi); r.fam=j.fam; r.since=j.since;
-    ['CPI','ECPM','ROAS_G'].forEach(f=>{ r.nrm[f]=normal(f,L,A,lo,hi); });
+    ['CPI','ECPM','ROAS_G','GAP'].forEach(f=>{ r.nrm[f]=normal(f,L,A,lo,hi); });
     // D3: New = no healthy level and no open episode (truly new) — never because the period starts before H exists
     r.st=j.w===0?'alarm':j.w===1?'watch':j.w===2?'fixed':hi===p.t&&!(s.last3>0)?'paused':!r.nrm.CPI&&!r.nrm.ROAS_G?'new':'ok'; }
   else { r.wait=ALLF.err||!allName(p)?'err':true; r.st=ST[a.st]?a.st:'ok'; }   // (sorted by the default status while cpi.json.gz loads)
@@ -9244,8 +9249,9 @@ function rows(lo,hi){ const p=ptr(); if(!p) return []; const S=sums(lo,hi), out=
 // rate, so the printed % is the same in both views)
 function now3(r){ const s=r.s, n=r.nrm, nc=n.CPI?n.CPI.v*(VIN()?1:(s.k||0)):null;
   return {CPI:{v:s.cpiV,n:nc,d:n.CPI&&s.cpi!=null?s.cpi/n.CPI.v-1:null},ECPM:{v:s.ecpm,n:n.ECPM?n.ECPM.v:null,d:n.ECPM&&s.ecpm!=null?s.ecpm/n.ECPM.v-1:null},
-    ROAS_G:{v:s.roas,n:n.ROAS_G?n.ROAS_G.v:null,d:n.ROAS_G&&s.roas!=null?s.roas/n.ROAS_G.v-1:null}}; }
-const fmtF=(f,v)=>f==='CPI'?fCpi(v):f==='ECPM'?fE(v):fR(v);
+    ROAS_G:{v:s.roas,n:n.ROAS_G?n.ROAS_G.v:null,d:n.ROAS_G&&s.roas!=null?s.roas/n.ROAS_G.v-1:null},
+    GAP:{v:s.gap,n:n.GAP?n.GAP.v:null,d:n.GAP&&s.gap!=null?s.gap/n.GAP.v-1:null}}; }
+const fmtF=(f,v)=>f==='CPI'?fCpi(v):f==='ECPM'?fE(v):f==='GAP'?fX(v):fR(v);
 function dCls(f,d){ if(!ok(d)||Math.abs(d)<(MINW[f]||0.1)) return 'cpx-flat'; return (d>0)===!!UP[f]?'cpx-bad':'cpx-good'; }
 function cell(r,f,m){ const x=m[f], n=r.nrm[f], nt=[]; let sub;
   if(r.wait) sub=`<span class="cpx-nv">${r.wait==='err'?'normal —':'⏳ normal…'}</span>`;
@@ -9264,18 +9270,18 @@ function sinceOf(r){ if(!r.since) return {a:'—',b:''};
   const sp=r.sinceTo?rg(r.since,r.sinceTo):fd(r.since)+' – closed'; return {a:E(sp),b:' · '+E(sp)}; }
 function rowHtml(r,on,one){ const c=stw(r), m=now3(r), lv=lostV(r), ls=lostS(r), sw=sinceOf(r);
   const sn=sw.b?`<span class="cpx-mob">${sw.b}</span>`:'';
-  const nm=one?'':`<span class="cpx-nm">${E(r.name)}</span>`;   // one app: its name is in the top bar already (once per page)
+  const nm=one?'':`<span class="cpx-nm" title="${E(r.name)}">${E(r.name)}</span>`;   // one app: its name is in the top bar already (once per page)
   const lt=agTag(r.a)||(+r.a.lp>0?`<span class="cpx-lvt">🆕 New level ready</span>`:'');   // the agent's answer in the 🆕 tag's place
   const sc=ls!=null?`<span class="cpx-lsc">since ${fd(r.lost.from)}: ≈${fM(r.lost.sinr,r.lost.susd)}</span>`:'';
   const loss=(lv!=null?`<span class="cpx-lv cpx-bad">≈${fM(r.lost.inr,r.lost.usd)}</span>`:`<span class="cpx-lv">—</span>`)+sc;
   return `<div class="cpx-row${on?' cpx-on':''}" data-cpx-app="${E(r.id)}" role="button" tabindex="0" aria-expanded="${!!on}">`
     +`<div class="cpx-c cpx-cst"><span class="cpx-sw ${c[1]}">${c[0]}</span></div>`
     +`<div class="cpx-c cpx-app">${one?'':icon(r.id,r.name,26)}<span class="cpx-nmw">${nm}<span class="cpx-spd">spend ${fM(r.s.spi,r.s.sp)}${sn}</span>${lt}</span></div>`
-    +['CPI','ECPM','ROAS_G'].map(f=>`<div class="cpx-c cpx-m">${cell(r,f,m)}</div>`).join('')
+    +['CPI','ECPM','ROAS_G','GAP'].map(f=>`<div class="cpx-c cpx-m">${cell(r,f,m)}</div>`).join('')
     +`<div class="cpx-c cpx-since">${sw.a}</div>`
     +`<div class="cpx-c cpx-loss"><span class="cpx-sw ${c[1]} cpx-mob">${c[0]}</span>${loss}</div>`
     +`<div class="cpx-c cpx-ar" aria-hidden="true">${on?'▾':'›'}</div>`
-    +`<div class="cpx-mrow">${[['CPI','CPI'],['ECPM','eCPM'],['ROAS_G','D0 ROAS']].map(([f,l])=>`<div><div class="cpx-k">${l}</div>${cell(r,f,m)}</div>`).join('')}</div></div>`; }
+    +`<div class="cpx-mrow">${[['CPI','CPI'],['ECPM','eCPM'],['ROAS_G','D0 ROAS'],['GAP',GAPN]].map(([f,l])=>`<div><div class="cpx-k">${l}</div>${cell(r,f,m)}</div>`).join('')}</div></div>`; }
 // ---- the period picker: one select (Last 14 days first) + the month mover ‹ Mon YYYY › + the period's dates ----
 function perRestore(raw,d0,T){ let o=raw; try{ if(typeof raw==='string') o=JSON.parse(raw); }catch(e){ return null; }
   if(!o||typeof o!=='object') return null; const k=String(o.k==null?'':o.k);
@@ -9316,7 +9322,7 @@ function footHtml(lo,hi){ const p=ptr(), u=unlinkedFor(p.unlinked,lo||addD(p.t,-
 function listHtml(L,lo,hi,one){ const p=ptr(), nf=!allName(p)&&!isDef(lo,hi);
   let note=''; if(!isDef(lo,hi)&&!ALLF.raw) note=ALLF.err||nf?`<p class="cpx-note">⚠️ Data load nahi hua. <button type="button" class="cpx-lnk" data-cpx-allretry="1">Try again</button></p>`:'<p class="cpx-note">⏳ Loading… (normal aur status is period ke liye)</p>';
   if(!L.length) return note+`<div class="card cpx-card"><p class="cpx-note">${APP?'Is app ka is period me Google Ads spend nahi (ya ye app Google Ads se link nahi).':'Is period me kisi app ka Google Ads spend nahi.'}</p></div>`;
-  const hd='<div class="cpx-row cpx-hd" aria-hidden="true"><div>Status</div><div>'+(one?'':'App')+'</div><div>CPI</div><div>eCPM</div><div>D0 ROAS</div><div>Since</div><div>Money lost</div><div></div></div>';
+  const hd=`<div class="cpx-row cpx-hd" aria-hidden="true"><div>Status</div><div>${one?'':'App'}</div><div>CPI</div><div>eCPM</div><div>D0 ROAS</div><div title="${E(GAPW)}">${GAPN}</div><div>Since</div><div>Money lost</div><div></div></div>`;
   return note+`<div class="cpx-tbl" id="cpx-tbl">${hd}${L.map(r=>{ const on=OPEN===r.id; return rowHtml(r,on,one)+(on?detHtml(r):''); }).join('')}</div>`; }
 // ---- the details under the tapped row ----
 // the one-line verdict (from the numbers) and the money line
@@ -9484,20 +9490,20 @@ function tipHtml(c,i,day){ const p=c.P[i]||(day?{x:day,v:null,n:null}:null); if(
 // ---- 📅 Day-wise: newest first (Today / Yesterday on top from DATA, marked ⏳), 30 rows + Show 30 more ----
 function dayRows(r,F){ const d=DD(), t=ptr().t, c=cal(), L=eps(F.ep), e=d&&d.roas&&d.roas.by_app&&d.roas.by_app[r.name], out=[];
   // the days after t (not final): from DATA, as the list's own sums
-  if(e) for(let x=c.td;x>t;x=addD(x,-1)){ const s=sums(x,x)[r.name]||{}; out.push({x,nf:true,sp:s.sp,spi:s.spi,n:s.n,cpi:s.cpiV,ec:s.ecpm,apu:null,ro:s.roas,c0:null}); }
+  if(e) for(let x=c.td;x>t;x=addD(x,-1)){ const s=sums(x,x)[r.name]||{}; out.push({x,nf:true,sp:s.sp,spi:s.spi,n:s.n,cpi:s.cpiV,ec:s.ecpm,gap:s.gap,apu:null,ro:s.roas,c0:null}); }
   let first=0; const sp=F.d.sp_inr||[]; while(first<sp.length&&!(+sp[first]>0)) first++;
   const last=Math.min(fLen(F)-1,fIx(F,t));
   for(let i=last;i>=first;i--){ const x=addD(F.day0,i), si=at(F,'sp_inr',i), su=at(F,'sp_usd',i), n=at(F,'inst',i), rv=at(F,'rev',i), im=at(F,'imp',i), dau=at(F,'dau',i), d0=at(F,'d0_inr',i), cs=at(F,'c_sp',i), c0=at(F,'c_r0',i);
     const spv=VIN()?si:su;
-    out.push({x,nf:false,sp:spv,spi:si,n,cpi:n>0&&spv!=null?spv/n:null,ec:im>0&&rv!=null?rv/im*1000:null,apu:dau>0&&im!=null?im/dau:null,ro:si>0&&d0!=null?d0/si:null,c0:cs>0&&c0!=null?c0/cs:null,
+    out.push({x,nf:false,sp:spv,spi:si,n,cpi:n>0&&spv!=null?spv/n:null,ec:im>0&&rv!=null?rv/im*1000:null,gap:gapOf(su,n,im,rv),apu:dau>0&&im!=null?im/dau:null,ro:si>0&&d0!=null?d0/si:null,c0:cs>0&&c0!=null?c0/cs:null,
       fams:L.filter(z=>(z.tier==='ALERT'||z.tier==='WATCH')&&z.c<=x&&(!z.closed||z.closed>=x))}); }
   return out; }
 function dayHtml(r,F){ const R=dayRows(r,F), show=R.slice(0,DN);
   const dot=z=>!z.fams||!z.fams.length?'':`<span class="cpx-dot2 ${z.fams.some(e=>e.tier==='ALERT')?'cpx-bad':'cpx-wat'}" title="${E(z.fams.map(e=>FAMW[e.fam]||e.fam).join(', '))}">●</span>`;
-  const body=show.map(z=>`<tr${z.nf?' class="cpx-nf"':''}><td>${E(fdy(z.x))}${z.nf?' <span class="cpx-wat" title="not final">⏳</span>':''}</td><td>${z.spi!=null?fM(z.spi,z.sp):'—'}</td><td>${fN(z.n)}</td><td>${fCpi(z.cpi)}</td><td>${fE(z.ec)}</td><td>${fX(z.apu)}</td><td>${z.nf?'<span title="D0 abhi final nahi">⏳</span>':fR(z.ro)}</td><td>${z.nf?'⏳':z.c0==null?'<span class="cpx-nv" title="abhi matured nahi">—</span>':fR(z.c0)}</td><td>${dot(z)}</td></tr>`).join('');
-  return `<div class="cpx-x" id="cpx-dwx"><table class="cpx-t"><thead><tr><th>Date</th><th>Spend</th><th>Google Ads installs</th><th>CPI</th><th>eCPM</th><th title="AdMob impressions (har source) ÷ GA4 daily active users">Ads / user</th><th>D0 ROAS</th><th title="AdMob-matched install-day revenue ÷ spend (≈)">Install-day ROAS (AdMob)</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`
+  const body=show.map(z=>`<tr${z.nf?' class="cpx-nf"':''}><td>${E(fdy(z.x))}${z.nf?' <span class="cpx-wat" title="not final">⏳</span>':''}</td><td>${z.spi!=null?fM(z.spi,z.sp):'—'}</td><td>${fN(z.n)}</td><td>${fCpi(z.cpi)}</td><td>${fE(z.ec)}</td><td${z.gap==null?' title="us din spend, installs ya AdMob kamai nahi"':''}>${fX(z.gap)}</td><td>${fX(z.apu)}</td><td>${z.nf?'<span title="D0 abhi final nahi">⏳</span>':fR(z.ro)}</td><td>${z.nf?'⏳':z.c0==null?'<span class="cpx-nv" title="abhi matured nahi">—</span>':fR(z.c0)}</td><td>${dot(z)}</td></tr>`).join('');
+  return `<div class="cpx-x" id="cpx-dwx"><table class="cpx-t"><thead><tr><th>Date</th><th>Spend</th><th>Google Ads installs</th><th>CPI</th><th>eCPM</th><th title="${E(GAPW)}">${GAPN}</th><th title="AdMob impressions (har source) ÷ GA4 daily active users">Ads / user</th><th>D0 ROAS</th><th title="AdMob-matched install-day revenue ÷ spend (≈)">Install-day ROAS (AdMob)</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`
     +(R.length>DN?`<button type="button" class="cpx-more" data-cpx-more="1">Show 30 more</button>`:'')
-    +'<p class="cpx-fn">Installs = Google Ads installs (ads only) · Ads / user = AdMob impressions (har ad source) ÷ GA4 daily active users (GA4 din = GMT) · Install-day ROAS (AdMob, ≈ AdMob-matched) sirf matured din pe · ⏳ = abhi final nahi.</p>'; }
+    +`<p class="cpx-fn">Installs = Google Ads installs (ads only) · ${GAPN} = ${E(GAPW)} · Ads / user = AdMob impressions (har ad source) ÷ GA4 daily active users (GA4 din = GMT) · Install-day ROAS (AdMob, ≈ AdMob-matched) sirf matured din pe · ⏳ = abhi final nahi.</p>`; }
 // ---- 🌍 Countries: the period's spend share, CPI (cost ÷ Google Ads downloads) and eCPM (AdMob country, gross) vs normal ----
 // normal for a country / campaign: its own open alarm's baseline, else the 28 days before the period (the engine ships the
 // healthy level for apps only)
@@ -9512,14 +9518,16 @@ function ctyHtml(r,F){ const [lo,hi]=span(r); if(lo>hi) return '<p class="cpx-no
   const rowsC=C.map(c=>{ const w=fsum(c.d,c.from,['sp_inr','sp_usd','dl'],lo,hi), m=fsum(c.d,c.from,['rev','imp'],lo,hi), L=eps(c.ep), k=VIN()?1:(w.sp_inr>0?w.sp_usd/w.sp_inr:0);
       const cp=w.dl>0?(VIN()?w.sp_inr:w.sp_usd)/w.dl:null, cpI=w.dl>0?w.sp_inr/w.dl:null, ec=m.imp>0?m.rev/m.imp*1000:null;
       const nc=entNorm(L,'CPI',lo,hi,c.d,c.from,['sp_inr','dl'],q=>q.dl>0?q.sp_inr/q.dl:null), ne=entNorm(L,'ECPM',lo,hi,c.d,c.from,['rev','imp'],q=>q.imp>0?q.rev/q.imp*1000:null);
-      return {c,w,m,cp,cpI,ec,nc,ne,k,L}; }).filter(z=>z.w.sp_inr>0).sort((a,b)=>b.w.sp_inr-a.w.sp_inr);
+      const GK=['sp_usd','dl','imp','rev'], gf=q=>gapOf(q.sp_usd,q.dl,q.imp,q.rev), gq=fsum(c.d,c.from,GK,lo,hi), gp=gf(gq), ng=entNorm(L,'GAP',lo,hi,c.d,c.from,GK,gf);   // (only days with all four)
+      return {c,w,m,cp,cpI,ec,nc,ne,k,L,gp,gq,ng}; }).filter(z=>z.w.sp_inr>0).sort((a,b)=>b.w.sp_inr-a.w.sp_inr);
   const cn=cc=>{ try{ return valFlag(cc)+' '+E(valCtyName(cc)); }catch(e){ return E(cc); } };
   const body=rowsC.map(z=>`<tr><td>${cn(z.c.cc)}</td><td>${tot.sp_inr>0?Math.round(z.w.sp_inr/tot.sp_inr*100)+'%':'—'}<small>${fM(z.w.sp_inr,z.w.sp_usd)}</small></td>`
       +`<td><b>${fCpi(z.cp)}</b>${z.cpI!=null&&z.nc?`<small><span class="cpx-dl ${dCls('CPI',z.cpI/z.nc.v-1)}">${fP(z.cpI/z.nc.v-1)}</span> vs ${fCpi(z.nc.v*z.k)}</small>`:'<small class="cpx-nv">no normal</small>'}</td>`
-      +`<td><b>${fE(z.ec)}</b>${z.ec!=null?vsH(z.ec,z.ne,'ECPM'):'<small class="cpx-nv">AdMob data nahi</small>'}</td><td>${alarmLine(z.L,lo,hi)}</td></tr>`).join('');
+      +`<td><b>${fE(z.ec)}</b>${z.ec!=null?vsH(z.ec,z.ne,'ECPM'):'<small class="cpx-nv">AdMob data nahi</small>'}</td>`
+      +`<td><b>${fX(z.gp)}</b>${z.gp!=null?vsH(z.gp,z.ng,'GAP'):`<small class="cpx-nv">${z.ec==null?'AdMob data nahi':!z.gq.n?'installs aur AdMob ke din alag':!(z.gq.dl>0)?'installs nahi':!(z.gq.rev>0)?'AdMob kamai nahi':'spend nahi'}</small>`}</td><td>${alarmLine(z.L,lo,hi)}</td></tr>`).join('');
   const rs={sp_inr:tot.sp_inr-rowsC.reduce((s,z)=>s+z.w.sp_inr,0),sp_usd:tot.sp_usd-rowsC.reduce((s,z)=>s+z.w.sp_usd,0)};
-  const rest=rs.sp_inr>0.5?`<tr class="cpx-rest"><td>Rest</td><td>${tot.sp_inr>0?Math.round(rs.sp_inr/tot.sp_inr*100)+'%':'—'}<small>${fM(rs.sp_inr,rs.sp_usd)}</small></td><td>—</td><td>—</td><td></td></tr>`:'';   // (only its spend and share: no CPI — it would mix two install counts)
-  return (rowsC.length?`<div class="cpx-x"><table class="cpx-t"><thead><tr><th>Country</th><th>Spend share</th><th title="cost ÷ Google Ads downloads">CPI</th><th title="AdMob country report (gross)">eCPM</th><th>Alarm</th></tr></thead><tbody>${body}${rest}</tbody></table></div>`:'<p class="cpx-note">Is period me country-wise spend nahi.</p>')
+  const rest=rs.sp_inr>0.5?`<tr class="cpx-rest"><td>Rest</td><td>${tot.sp_inr>0?Math.round(rs.sp_inr/tot.sp_inr*100)+'%':'—'}<small>${fM(rs.sp_inr,rs.sp_usd)}</small></td><td>—</td><td>—</td><td>—</td><td></td></tr>`:'';   // (only its spend and share: no CPI — it would mix two install counts)
+  return (rowsC.length?`<div class="cpx-x"><table class="cpx-t"><thead><tr><th>Country</th><th>Spend share</th><th title="cost ÷ Google Ads downloads">CPI</th><th title="AdMob country report (gross)">eCPM</th><th title="${E(GAPW)}">${GAPN}</th><th>Alarm</th></tr></thead><tbody>${body}${rest}</tbody></table></div>`:'<p class="cpx-note">Is period me country-wise spend nahi.</p>')
     +`<p class="cpx-fn">${E(perDates(lo,hi))} · Normal = country ka khula alarm ho to uska baseline, warna period se pehle ke 28 din.${okD(nt.admob_cty_from)&&lo<nt.admob_cty_from?` AdMob country data ${E(fdy(nt.admob_cty_from))} se hai — usse pehle ka eCPM nahi.`:''}</p>`; }
 // ---- 🎯 Campaigns: status, bidding (the tROAS target on the period's last day, "not known" before the archive), spend, installs,
 // CPI and D0 ROAS vs normal, its own alarm line ----
@@ -10014,7 +10022,7 @@ function card(name){ const p=ptr(); if(!p) return null; const id=Object.keys(p.a
 // an app without one (no Google Ads spend: that card keeps today's Review card)
 function hubVerdict(name){ const p=ptr(); if(!p||!Object.keys(p.apps).some(k=>p.apps[k]&&p.apps[k].name===name)) return null; return card(name); }
 return {ptr, render, paint, show:showMe, left, alarmN, alertNote, card, hubVerdict,
-  _:{rg, fd, rng, isDef, sums, rows, rowOf, judge, normal, hLvl, lossG, epOf, eps, now3, perRestore, perLoad, keep, cal, fI, fU, fP, series, cSeries, ctyList, ctyOf, dayRows, verdict, moneyLine, tabBody, ALLF, FILES, CHD,
+  _:{rg, fd, rng, isDef, sums, rows, rowOf, judge, normal, hLvl, lossG, epOf, eps, now3, perRestore, perLoad, keep, cal, fI, fU, fP, series, cSeries, ctyList, ctyOf, dayRows, dayHtml, ctyHtml, verdict, moneyLine, tabBody, ALLF, FILES, CHD,
     lvCheck, lvOf, lvV, lvActs, levelsHtml, tipHtml, chart, LVQ:()=>LVQ, PEND:()=>PEND, agTag, agRows, agBoard, agBt, agNums, agDetHtml, agListHtml, propLines,
     get:()=>({PER,PF,PTO,OPEN,TAB,DN,CTY,LVF,LVSET,LVBUSY,AGD}), set:o=>{ if('AGD' in o) AGD=o.AGD; if('LVBUSY' in o) LVBUSY=!!o.LVBUSY; if('LVF' in o) LVF=o.LVF; if('LVSET' in o) LVSET=o.LVSET; if('LVQ' in o) LVQ=o.LVQ; if('PEND' in o) PEND=o.PEND; if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o) OPEN=o.OPEN; if('TAB' in o) TAB=o.TAB; if('DN' in o) DN=o.DN; if('PREAD' in o) PREAD=o.PREAD; if('CTY' in o) CTY=o.CTY; }}};
 })();

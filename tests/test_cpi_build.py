@@ -282,7 +282,8 @@ def test_run_writes_files_pointer_and_removes_stale(built):
     assert b["open"] == [] and b["since"] is None and b["lost"] is None
     assert b["nrm"]["CPI"] == pytest.approx(10.0, rel=0.02) and b["nrm"]["ROAS_G"] == pytest.approx(0.35, rel=0.02)
     d = p["apps"][IDS["d"]]
-    assert d["nrm"] == {"CPI": None, "ECPM": None, "ROAS_G": None}
+    assert d["nrm"] == {"CPI": None, "ECPM": None, "ROAS_G": None, "GAP": None}
+    assert a["nrm"]["GAP"] == pytest.approx(40.0, rel=0.06)                        # ads to pay back one install: $0.24 ÷ ($6 ÷ 1000)
 
 
 def test_unlinked_spend_is_shipped_per_day_for_the_period_picked(built):
@@ -326,13 +327,14 @@ def test_the_shapes_the_page_reads(built):
     assert sorted(allb) == ["apps", "day0", "t", "v"] and (allb["v"], allb["t"], allb["day0"]) == (1, T, p["day0"])
     n = nd(allb["day0"], T)
     for aid, x in allb["apps"].items():
-        assert sorted(x) == ["ep", "h"] and sorted(x["h"]) == ["CPI", "ECPM", "ROAS_G"]
+        assert sorted(x) == ["ep", "h"] and sorted(x["h"]) == ["CPI", "ECPM", "GAP", "ROAS_G"]
         assert all(len(v) == n and all(z is None or isinstance(z, int) for z in v) for v in x["h"].values())
         assert all(len(e) == 9 for e in x["ep"])                               # … the 9th: the baseline shown
     ha = allb["apps"][IDS["a"]]["h"]
     i = nd(allb["day0"], "2026-02-15") - 1
     assert ha["CPI"][i] == pytest.approx(2000, rel=0.03) and ha["ECPM"][i] == pytest.approx(60000, rel=0.03)
     assert ha["ROAS_G"][i] == pytest.approx(4000, rel=0.03)                     # scaled ints: ₹×100, $×10000, ×10000
+    assert ha["GAP"][i] == pytest.approx(4000, rel=0.06)                        # ads × 100
     roas = [e for e in allb["apps"][IDS["a"]]["ep"] if e[0] == "ROAS_G"]
     assert roas and roas[-1][7] == pytest.approx(0.40, abs=0.01) and roas[-1][5] is None    # a plain base, open
     for k in "abde":

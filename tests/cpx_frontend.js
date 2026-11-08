@@ -128,13 +128,14 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     // ── the sums (₹ / $) ──
     out.sums = {};
     for (const cur of ['INR', 'USD']) { CURV = cur; const s14 = _.sums(...R['14']), s7 = _.sums(...R['7']), sy = _.sums(...R.yday);
-      out.sums[cur] = { a14: s14['Alpha App'], b14: s14['Beta App'], c14: s14['Gamma App'], e7: s7['Epsilon App'], ay: sy['Alpha App'], memo: _.sums(...R['14']) === s14 }; }
+      out.sums[cur] = { a14: s14['Alpha App'], b14: s14['Beta App'], c14: s14['Gamma App'], e7: s7['Epsilon App'], a7: s7['Alpha App'], ay: sy['Alpha App'], memo: _.sums(...R['14']) === s14 }; }
     CURV = 'INR';
     // ── the default view: the pointer only (no file) ──
     reset(); CPX.paint(); await tick();
     const H0 = SCREEN.innerHTML;
     out.def = { loads: LOADS.slice(), rows: _.rows(...R['14']).map(rowJ), text: strip(H0), html_len: H0.length };
     out.def.order = [...H0.matchAll(/data-cpx-app="([^"]+)"/g)].map(m => m[1]);
+    out.def.gap_head = H0.includes('>Ads to pay back</div><div>Since</div>'); out.def.gap_tile = H0.includes('<div class="cpx-k">Ads to pay back</div>');
     out.def.hostile_raw = H0.includes('<img src=x onerror'); out.def.hostile_esc = H0.includes('&lt;img src=x onerror=alert(1)&gt;Zeta');
     CURV = 'USD'; out.def_usd = { rows: _.rows(...R['14']).map(rowJ), text: strip((CPX.paint(), SCREEN.innerHTML)) }; CURV = 'INR';
     // ── another period: cpi.json.gz (⏳ while it loads, then judged by the page) ──
@@ -189,7 +190,19 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     out.series_usd = (CURV = 'USD', _.series(F, '2026-03-20', '2026-03-28', 'CPI').map(p => [p.x, p.v, p.n])); CURV = 'INR';
     const rA = _.rows(...R['14']).find(r => r.id === ID.a);
     out.verdict = strip(_.verdict(rA)); out.money = strip(_.moneyLine(rA));
-    const dr = _.dayRows(rA, F); out.day = { n: dr.length, first: dr.slice(0, 4).map(z => [z.x, z.nf, z.spi, z.n, z.ro]), t: dr.find(z => z.x === FX.T) };
+    // ads to pay back one install: the same number in ₹ and $ (USD spend either way), and the sentence when GAP is the alarm
+    const gapIn = _.sums(...R['14'])['Alpha App'].gap; CURV = 'USD'; const gapUs = _.sums(...R['14'])['Alpha App'].gap, nowG = _.now3(_.rows(...R['14']).find(r => r.id === ID.a)).GAP; CURV = 'INR';
+    out.gap = { in: gapIn, us: gapUs, now: nowG, verdict: strip(_.verdict(Object.assign({}, rA, { fam: 'GAP', st: 'alarm', since: '2026-03-12', sinceOpen: true }))) };
+    const dr = _.dayRows(rA, F); out.day = { n: dr.length, first: dr.slice(0, 4).map(z => [z.x, z.nf, z.spi, z.n, z.ro]), t: dr.find(z => z.x === FX.T), gap_nf: dr[0].gap };
+    { // a country's "—": its own cause (the last 14 days, one synthetic line per cause)
+      const N = F.d.sp_inr.length, line = (cc, g) => ({ cc, from: F.day0, ep: [], d: Object.fromEntries(['sp_inr', 'sp_usd', 'dl', 'rev', 'imp'].map(k => [k, Array.from({ length: N }, (_x, i) => (i < N - 14 ? null : g(i - (N - 14))[k]))])) });
+      const pay = { sp_inr: 100, sp_usd: 1, dl: 10 }, ad = { rev: 1, imp: 100 }, none = { rev: null, imp: null }, nopay = { sp_inr: null, sp_usd: null, dl: null };
+      const F1 = Object.assign({}, F, { ctys: [line('AA', () => ({ ...pay, ...none })), line('BB', i => (i < 7 ? { ...pay, ...none } : { ...nopay, ...ad })), line('CC', () => ({ ...pay, dl: 0, ...ad })),
+        line('DD', () => ({ ...pay, ...ad, rev: 0 })), line('EE', () => ({ ...pay, sp_usd: 0, ...ad }))] });
+      const h1 = _.ctyHtml(rA, F1), why = cc => [...h1.split('<tr>').find(r => r.includes('[' + cc + ']')).matchAll(/<small class="cpx-nv">([^<]+)<\/small>/g)].pop()[1];
+      out.gap_why = { none: why('AA'), apart: why('BB'), noinst: why('CC'), norev: why('DD'), nosp: why('EE') }; }
+    { const F0 = JSON.parse(JSON.stringify(F)); F0.d.rev[F0.d.rev.length - 1] = null; out.gap.no_rev = _.dayRows(rA, F0).find(z => z.x === FX.T).gap;
+      out.gap.no_rev_title = _.dayHtml(rA, F0).includes('title="us din spend, installs ya AdMob kamai nahi"'); }
     tapTab = 'dw'; tap('[data-cpx-tab]'); const n30 = (det(SCREEN.innerHTML).match(/<tr/g) || []).length;
     SCREEN._on.click[0]({ target: { closest: s => s === '[data-cpx-more]' ? {} : null } }); const n60 = (det(SCREEN.innerHTML).match(/<tr/g) || []).length;
     out.day.rows = [n30, n60, _.get().DN];
