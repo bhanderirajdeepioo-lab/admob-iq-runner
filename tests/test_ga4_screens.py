@@ -1314,6 +1314,11 @@ def test_stage_names_and_the_wiring():
     src = open(os.path.join(root, "admob_iq", "uninstall_build.py"), encoding="utf-8").read()
     i = src.index('_sc.stage("ga4_screens")')
     assert i > src.index('_sc.stage("ga4_cube")') and 'print("ga4 screens skipped: %s" % type(e).__name__' in src
+    # both prints reach the health reader only on stderr (health.watch tees stderr alone): the log line (its second
+    # line "ga4 screens periods skipped: …") and the except branch's
+    j = src.index("except Exception as e:", i)
+    assert "file=sys.stderr" in src[i:j]
+    assert src[j:].split("\n")[1].strip() == 'print("ga4 screens skipped: %s" % type(e).__name__, file=sys.stderr)'
     from admob_iq import config
     cfg = config.settings()
     assert cfg["ga4_screens"] is False and cfg["ga4_screens_budget_sec"] == 0 and cfg["screens_tab"] is True

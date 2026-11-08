@@ -32,9 +32,10 @@ their month; a month's shard is not even built while its inputs are unchanged):
                                 items (the page loads only a picked period's edge months)
 v 4 (owner, 8 Nov 2026: Firebase's own numbers and three signals — the v 4 section below): file 2 adds per day "m" (revenue
 by screen, micros), "pw" (the periods the page offers), "pu" (their users, unique in the period: the fetch's
-users.json.gz), "sig" (the signals per period and row), "fs4" / "fsd" (the full-screen rows from AdMob on its own days)
-and "adt" (the app's AdMob total per day); a scr_all entry adds "rv" (per day [GA4's revenue, AdMob's]), "pt" (the app's
-users per period) and "sg" (the signals' counts per period).
+users.json.gz), "sig" (the signals per period and row), "fs4" / "fsd" (the full-screen rows from AdMob on its own days),
+"adt" (the app's AdMob total per day) and "cur" (the GA4 property's currency, only when not USD: the page then hides
+GA4's revenue and says why); a scr_all entry adds "rv" (per day [GA4's revenue, AdMob's]), "pt" (the app's users per
+period) and "sg" (the signals' counts per period, null where not judged).
 and the pointer dashboard["scr"] = {"v", "file", "fv", "apps": {app id: {"key", "v", "vl", "from", "ft"}}}. Write order:
 shards → scr_l → scr_<key> → scr_all → pointer. A broken app loses its own files and pointer entry ("failed"); a broken
 or too big shard costs only that month (listed in scr_l "failed" / "big"); file 2 and scr_all never depend on a shard.
@@ -605,8 +606,8 @@ def lost_span(meta, i, m, td):
 
 def lost_ids(meta, grp):
     """The reads of group `grp` a broken month file may have held: every one, but a read added to the fetch after the
-    store began (LATE_READS) only once the meta holds it — never fetched, it wrote no record (its unknown oldest day
-    must not stretch the history back to the month's 1st)."""
+    store began (LATE_READS) only once the meta holds its oldest filled day — before, it wrote no record (its unknown
+    oldest day must not stretch the history back to the month's 1st)."""
     return tuple(i for i in GROUPS.get(grp, ()) if i not in LATE_READS or _oldest(meta, i))
 
 
@@ -3446,7 +3447,8 @@ def _pa(v):
 #       🔻 d  Gira — Imp / user / day ≥ SIG_DROP under the period before (a month: the month before; else the same
 #             length just before), the row holding ≥ SIG_MAT of the app's ads, ≥ SIG_DAYS days with users on each side
 #             (screens: Σ ads ÷ Σ the screen's daily users, users_by_day's days; full-screen: AdMob impressions ÷ the
-#             app's daily users). Not for All time (nothing before it).
+#             app's daily users). Not judged (its count null) where no row has those days: All time (nothing before
+#             it), the app's first month, a young app's long window.
 SIG_TIME, SIG_RATE = 0.10, 0.20
 SIG_SHOW, SIG_WASTE = 0.50, 0.20
 SIG_DROP, SIG_MAT, SIG_DAYS = 0.20, 0.05, 7
@@ -3544,10 +3546,12 @@ def adm_days(app, pids):
 
 
 def _prev(lo, hi, kd):
-    """The period just before [lo, hi]: the month before for a month, else the same number of days before."""
+    """The period just before [lo, hi]: for a month (this month, a window that is one whole month) the calendar month
+    before lo's own — the app's first month, clamped to d0, is never compared with itself; else the same number of days
+    before."""
     a, b = _d(lo), _d(hi)
     if kd == "month" or (kd == "day" and a.day == 1 and b != a) or (a.day == 1 and b == _mlast(a)):
-        p = (a - timedelta(days=1)).replace(day=1)
+        p = (a.replace(day=1) - timedelta(days=1)).replace(day=1)
         return _iso(p), _iso(_mlast(p))
     n = (b - a).days + 1
     return _iso(a - timedelta(days=n)), _iso(a - timedelta(days=1))
@@ -3575,16 +3579,17 @@ class _Pre:
 
 
 def signals4(app, allf, wins, fs4, fsd):
-    """The three signals for every period of `wins` → ({key: {row id: [[code, …], …]}}, {key: [💡, ⚠️, 🔻]}): row ids
-    "s<screen index>" (screens) and "f<n>" (fs4's rows). 💡 ["b", time share, ads share]; ⚠️ ["w", unit, shown ÷
-    filled, not shown ÷ the app's fills, filled, shown]; 🔻 ["d", before, now, before's lo, before's hi] (Imp / user /
+    """The three signals for every period of `wins` → ({key: {row id: [[code, …], …]}}, {key: [💡, ⚠️, 🔻]}, a count
+    null where not judged): row ids "s<screen index>" (screens) and "f<n>" (fs4's rows). 💡 ["b", time share, ads
+    share]; ⚠️ ["w", unit, shown ÷ filled, not shown ÷ the app's fills, filled, shown] (+ the unit mix's first and last
+    day on a screen whose σ took the newest SIG_N days); 🔻 ["d", before, now, before's lo, before's hi] (Imp / user /
     day). A screen's units are its AdMob unit ids (one AdMob unit two GA4 names share — two cases, with and without a
     format — is ONE unit: σ per ids, as ab_tside) with σ = min(1, its GA4 ads on the screen ÷ the units read's GA4 ads
-    on those ids) over the period's whole unit-split days (under SIG_MIN: the newest SIG_N up to its end); a full-screen
-    row's: its AdMob units, each once. 🔻's materiality: the row's share of its kind's ads (screens: the screens' ads;
-    full-screen: the full-screen rows') in the period or in the one before, whichever is larger — a row whose ads
-    stopped is the one to flag. Sums over periods are prefix sums (_Pre): the build's time grows with the days, never
-    with days × periods."""
+    on those ids) over the period's whole unit-split days whose units read is whole too (under SIG_MIN: the newest SIG_N
+    up to its end); a full-screen row's: its AdMob units, each once. 🔻's materiality: the row's share of its kind's ads
+    (screens: the screens' ads; full-screen: the full-screen rows') in the period or in the one before, whichever is
+    larger — a row whose ads stopped is the one to flag. Sums over periods are prefix sums (_Pre): the build's time
+    grows with the days, never with days × periods."""
     ft, n_days = _iso(app.ft), len(app.days)
     scr = [c for c in app.screens if kind(c) == "s"]
     ci = {c: j for j, c in enumerate(scr)}
@@ -3706,6 +3711,7 @@ def signals4(app, allf, wins, fs4, fsd):
                     big = max((p for p in ps if p in X), key=lambda p: (X[p][1] - X[p][2], p))
                     sig.setdefault("f%d" % n_, []).append(
                         ["w", app.adm.ids[big]["name"], _r(im / mt, 4), _r((mt - im) / fills, 4), mt, im])
+        judged = False                           # 🔻: a row of either kind had its days on both sides (never All time)
         if kd != "all":                          # 🔻
             plo, phi = _prev(lo, hi, kd)
             phi_f = min(phi, ft)
@@ -3718,7 +3724,10 @@ def signals4(app, allf, wins, fs4, fsd):
                 mat = max(A[j] / ta if ta > 0 else 0, Ap[j] / tap if tap > 0 else 0)
                 a1, u1, n1 = U1[3 * t_:3 * t_ + 3]
                 a0, u0, n0 = U0[3 * t_:3 * t_ + 3]
-                if mat < SIG_MAT or n1 < SIG_DAYS or n0 < SIG_DAYS or not u1 or not u0:
+                if n1 < SIG_DAYS or n0 < SIG_DAYS or not u1 or not u0:
+                    continue
+                judged = True                    # (judged, even when under SIG_MAT)
+                if mat < SIG_MAT:
                     continue
                 cur, pre = a1 / u1, a0 / u0
                 if pre > 0 and cur <= (1 - SIG_DROP) * pre:
@@ -3729,7 +3738,10 @@ def signals4(app, allf, wins, fs4, fsd):
             for n_ in range(len(fs4)):
                 (a1, u1, n1), (a0, u0, n0) = T1[n_], T0[n_]
                 mat = max(a1 / t1 if t1 > 0 else 0, a0 / t0 if t0 > 0 else 0)
-                if mat < SIG_MAT or n1 < SIG_DAYS or n0 < SIG_DAYS or not u1 or not u0:
+                if n1 < SIG_DAYS or n0 < SIG_DAYS or not u1 or not u0:
+                    continue
+                judged = True                    # (on AdMob's days with users: GA4's by-screen days never needed)
+                if mat < SIG_MAT:
                     continue
                 cur, pre = a1 / u1, a0 / u0
                 if pre > 0 and cur <= (1 - SIG_DROP) * pre:
@@ -3740,13 +3752,14 @@ def signals4(app, allf, wins, fs4, fsd):
         for xs in sig.values():
             for x in xs:
                 c3["bwd".index(x[0])] += 1
-        # (not judged: no final whole day for 💡 · no AdMob fill for ⚠️ · All time, or under SIG_DAYS final days for 🔻)
+        # (not judged: no final whole day for 💡 · no AdMob fill for ⚠️ · for 🔻 no row with SIG_DAYS days with users on
+        # each side — All time, the first month, a young app's long window, users a day late on the last 7 days)
         days_f = PD.sum(lo, hi_f)[0] if lo <= hi_f else 0
         if not days_f:
             c3[0] = None
         if fills <= 0:
             c3[1] = None
-        if kd == "all" or days_f < SIG_DAYS:
+        if not judged:
             c3[2] = None
         cnt[key] = c3
     return out, cnt
@@ -3803,6 +3816,8 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
         sig4, sg4 = signals4(app, allf, wins, fs4, fsd)
         uf4 = period_users(data_dir, key)
         pu4 = pu_ship(app, uf4, wins)
+        # GA4's revenue is in the property's currency (the fetch's Admin API read); unknown — no users file or prop yet,
+        # a refused first read — is taken as USD (every property of the owner's is)
         cur4 = str(((uf4.get("prop") or {}).get("currency")) or "USD")
     except Exception as e:                       # v 4's numbers never cost the app its files: counted, ONE health line
         counts["v4"] = counts.get("v4", 0) + 1   # per build (run), the app ships without them ("—" with the why)
@@ -3895,8 +3910,8 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
              "adm": adm, "rows": rows2, "notes": notes, "ufmt": side["ufmt"],
              "pw": [list(x) for x in wins], "pu": pu4, "sig": sig4,
              "fs4": [[f, lab, [app.adm.ids[p]["name"] for p in ps]] for f, lab, ps in fs4], "fsd": fsd, "adt": adt}
-    if cur4 != "USD":                                # GA4's revenue in another currency: shipped, the page says so
-        body2["cur"] = cur4
+    if cur4 != "USD":                                # GA4's revenue in another currency: "cur" (the page hides that
+        body2["cur"] = cur4                          # revenue, never as $, and says why)
     # the users beside the ads: the top screens' users per final day ≤ ftU ("U", their screen indexes "Us": the screen
     # rows) and the app's daily active users per final day ≤ ftU ("au": GA4's own, the same stream; also in scr_all) —
     # or why the app has none ("auw": none · stream · cut)
@@ -3971,7 +3986,7 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
     if nvr:
         entry["nvr"] = {k: nvr[k] for k in ("mix", "within", "vpu")}
     # v 4: per day [GA4's revenue on every screen, AdMob's app total] (micros; None where missing), the app's users per
-    # period ("pt", the fetch's), the signals' counts per period ("sg")
+    # period ("pt", the fetch's), the signals' counts per period ("sg"; a count null: not judged)
     entry["rv"] = [None if (g_ is None and (k_ >= len(adt) or adt[k_] is None)) else
                    [None if g_ is None else sum(x[0] for x in g_.values()),
                     None if k_ >= len(adt) or adt[k_] is None else adt[k_][3]]

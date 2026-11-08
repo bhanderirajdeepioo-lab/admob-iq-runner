@@ -1709,6 +1709,27 @@ def test_an_unreadable_first_month_keeps_its_days_on_the_calendar(tmp_path):
     assert sb.lost_span(m, "a", "2026-11", td) is None and sb.lost_span(m, "a", "2026-13", td) is None
 
 
+def test_a_late_read_with_no_oldest_day_yet_is_never_marked_lost(tmp_path):
+    # m (LATE_READS: the fetch gained it after the store began) is in the meta, its backfill not started (no oldest
+    # day): a broken core month marks the other reads' days lost from their oldest day — never m's, and the history
+    # never moves back to the month's 1st
+    data, out, dash = build(tmp_path)
+    base = data / "ga4_screens"
+    (base / KEY / "core_2026-08.json.gz").write_bytes(gzip.compress(b"{oops"))
+    meta = gz(base / (KEY + ".json.gz"))
+    meta["reads"] = {i: {"oldest": "2026-08-10", "done": True} for i in ("t", "v", "w", "a")}
+    meta["reads"]["m"] = {"done": False}
+    write_json_gz_stable(str(base / (KEY + ".json.gz")), meta)
+    sb.run(dash, str(data), str(out), {}, NOW)
+    assert ", broken 1, " in sb.pop_line()
+    one = gz(out / "scr_all.json.gz")["apps"][AID]
+    assert one["d0"] == "2026-08-10" and one["st"]["a"].startswith("x" * 22 + "w") and set(one["st"]["m"]) == {"-"}
+    assert sb.lost_ids(meta, "core") == ("t", "v", "w", "a")
+    meta["reads"]["m"]["oldest"] = "2026-08-20"                         # its backfill under way: from its oldest day
+    assert sb.lost_ids(meta, "core") == ("t", "v", "w", "a", "m")
+    assert sb.lost_span(meta, "m", "2026-08", date(2026, 11, 4)) == ("2026-08-20", "2026-08-31")
+
+
 def test_switch_and_step(tmp_path, monkeypatch, capsys):
     assert sb.enabled({}) and not sb.enabled({"screens_tab": False})
     data, out, dash = build(tmp_path)
@@ -2442,6 +2463,20 @@ def test_v4_periods_are_the_fetchs_and_the_pages():
     assert sb._prev("2026-10-27", "2026-11-02", "roll") == ("2026-10-20", "2026-10-26")
 
 
+def test_v4_the_period_before_a_first_month_and_a_whole_month_window():
+    # the app's first month, clamped to d0: the calendar month before its own — never itself (cur == pre: "no drop")
+    assert sb._prev("2026-08-10", "2026-08-31", "month") == ("2026-07-01", "2026-07-31")
+    # a 30-day window that is one whole calendar month (td 2 Dec: 1–30 Nov, the month's key added first as "roll"):
+    # the month before, as for the month itself
+    w = {k: (lo, hi, kd) for k, lo, hi, kd in sb.pwin("2026-12-02", "2026-08-01")}
+    assert w["2026-11-01_2026-11-30"] == ("2026-11-01", "2026-11-30", "roll")
+    assert sb._prev(*w["2026-11-01_2026-11-30"]) == ("2026-10-01", "2026-10-31")
+    assert sb._prev("2026-09-01", "2026-09-30", "roll") == ("2026-08-01", "2026-08-31")
+    # else the same number of days just before, a 7-day window from a 1st too
+    assert sb._prev("2026-10-27", "2026-11-02", "roll") == ("2026-10-20", "2026-10-26")
+    assert sb._prev("2026-09-01", "2026-09-07", "roll") == ("2026-08-25", "2026-08-31")
+
+
 def test_v4_revenue_full_screen_rows_users_of_a_period(tmp_path):
     def day_fn(d):
         r = core_recs(d, {})
@@ -2608,3 +2643,131 @@ def test_v4_unjudged_counts_old_unit_mix_and_a_failure_kept_to_its_app(tmp_path,
     assert "scr v4 skipped: ValueError\n" in err and "made-up" not in err
     f2 = gz(out / ("scr_%s.json.gz" % KEY))
     assert f2["v"] == sb.V and f2["sig"] == {} and f2["pw"] == [] and len(f2["days"]) == len(_days("2026-08-01", "2026-11-04"))
+
+
+def test_v4_drop_count_is_null_where_no_row_could_be_judged(tmp_path):
+    # 🔻 needs SIG_DAYS days with users on BOTH sides: a period where no row had them ships its count null ("—"), never
+    # 0 ("judged, no drop"); 💡 and ⚠️ keep their own rules
+    data, out, dash = build(tmp_path / "a", {"show_w": 0.6})
+    sb.run(dash, str(data), str(out), {}, NOW)
+    sg = gz(out / "scr_all.json.gz")["apps"][AID]["sg"]
+    assert sg["2026-08-05_2026-11-02"] == [0, 0, None]               # Last 90: 4 days before it in the history
+    assert sg["2026-08-01_2026-08-31"] == [0, 0, None]               # the first month (d0 the 1st): July before d0
+    assert sg["2026-08-01_2026-11-04"][2] is None and sg["2026-10-27_2026-11-02"] == [0, 1, 1]
+    assert sg["2026-09-01_2026-09-30"] == sg["2026-10-01_2026-10-31"] == sg["2026-10-04_2026-11-02"] == [0, 0, 0]
+    # d0 mid-month: the first month (vs July, never itself) and the Last 90 clamped to d0
+    data, out, dash = build(tmp_path / "b", {"show_w": 0.6}, first="2026-08-10")
+    sb.run(dash, str(data), str(out), {}, NOW)
+    sg = gz(out / "scr_all.json.gz")["apps"][AID]["sg"]
+    assert sg["2026-08-10_2026-08-31"] == sg["2026-08-10_2026-11-02"] == [0, 0, None]
+    # the app's daily users a day late (ftU = ft − 1, not stale yet): Last 7 has 6 user days
+    data, out, dash = build(tmp_path / "c", {"show_w": 0.6})
+    uni_store(data, last="2026-11-01")
+    sb.run(dash, str(data), str(out), {}, NOW)
+    sg = gz(out / "scr_all.json.gz")["apps"][AID]["sg"]
+    assert sg["2026-10-27_2026-11-02"] == [0, 1, None] and sg["2026-10-04_2026-11-02"] == [0, 0, 0]
+    # a brand-new app (d0 3 Nov, td 20 Nov): All time is This month's key (kind "day"), Last 30 clamped to d0
+    now = datetime(2026, 11, 20, 6, 0, tzinfo=timezone.utc)
+    data, out, dash = build(tmp_path / "d", {"show_w": 0.6}, first="2026-11-03", last="2026-11-20", now=now,
+                            dash=dashboard({"show_w": 0.6}, last="2026-11-20", latest="2026-11-19"))
+    assert ("2026-11-03_2026-11-20", "2026-11-03", "2026-11-20", "day") in sb.pwin("2026-11-20", "2026-11-03")
+    sb.run(dash, str(data), str(out), {}, now)
+    sg = gz(out / "scr_all.json.gz")["apps"][AID]["sg"]
+    assert sg["2026-11-03_2026-11-20"] == sg["2026-11-03_2026-11-18"] == [0, 1, None]
+    assert sg["2026-11-12_2026-11-18"] == [0, 1, 0]                  # Last 7: 7 days before it, judged
+
+
+def test_v4_a_full_screen_drop_is_judged_on_admobs_own_days(tmp_path):
+    # October's ads by screen sampled (no final whole day: 💡 not judged) while AdMob and the app's daily users are
+    # complete; the back-press interstitial shows a third of its impressions in October: its 🔻 is judged on AdMob's
+    # days — the count is the 🔻 lines listed, never "—" above one
+    def day_fn(d):
+        r = core_recs(d, {})
+        if d[:7] == "2026-10":
+            r["a"] = {"st": "s", "smp": 0.5}
+        return r
+    data, out, dash = build(tmp_path, day_fn=day_fn)
+    for p in dash["placements"]:
+        if p["name"] == "zz_back_1":
+            for row in p["daily"]:
+                if row[0][:7] == "2026-10":
+                    row[2] //= 3
+    sb.run(dash, str(data), str(out), {}, NOW)
+    f2, one = gz(out / ("scr_%s.json.gz" % KEY)), gz(out / "scr_all.json.gz")["apps"][AID]
+    fb = "f%d" % [lab for _, lab, _ in f2["fs4"]].index("Back press")
+    assert [x[0] for x in f2["sig"]["2026-10-01_2026-10-31"][fb]] == ["d"]
+    assert one["sg"]["2026-10-01_2026-10-31"] == [None, 0, 1] and one["sg"]["2026-10-04_2026-11-02"][2] == 1
+    nd = {k: sum(1 for xs in f2["sig"].get(k, {}).values() for x in xs if x[0] == "d") for k in one["sg"]}
+    assert all(c[2] == nd[k] or (c[2] is None and not nd[k]) for k, c in one["sg"].items())
+
+
+def test_v4_waste_sigma_takes_only_days_both_reads_are_whole(tmp_path):
+    # unit_a shared half and half by MAIN and EDIT; AdMob: it fills 100 a day and shows 40, the app fills 125. On 29 Oct
+    # the units read is not whole (GA4 dropped rows) while the ads by screen are: σ leaves the day out of both its parts
+    # (300 ÷ 600, never 350 ÷ 600) — MAIN's ⚠️ numbers are those of a store whose 29 Oct ads by screen are sampled
+    def store(name, bad):
+        def day_fn(d):
+            r = core_recs(d, {})
+            r["a"]["r"] = [[MAIN, "Banner", "unit_a", 50], [EDIT, "Banner", "unit_a", 50],
+                           [EDIT, "Native advanced", "unit_n", 50]]
+            r["w"]["r"] = [["Banner", "unit_a", 100], ["Native advanced", "unit_n", 50]]
+            r["t"]["a"] = [["Banner", 100], ["Native advanced", 50]]
+            if d == "2026-10-29":
+                r.update(bad)
+            return r
+        data, out, dash = build(tmp_path / name, day_fn=day_fn)
+        for p in dash["placements"]:
+            for row in p["daily"]:                                   # imp, req, matched
+                row[2:5] = {"unit_a": [40, 110, 100], "unit_n": [20, 30, 25]}.get(p["name"], [0, 0, 0])
+        sb.run(dash, str(data), str(out), {}, NOW)
+        f2 = gz(out / ("scr_%s.json.gz" % KEY))
+        return f2, {(k, r): [x for x in xs if x[0] == "w"] for k, rs in f2["sig"].items() for r, xs in rs.items()
+                    if r[0] == "s"}
+    f2, w = store("w", {"w": {"st": "o", "g": "u", "cov": 0.9}})
+    _, w0 = store("a", {"a": {"st": "s", "smp": 0.5}})
+    sm = "s%d" % [c for c, _ in f2["screens"]].index(MAIN)
+    assert w[("2026-10-27_2026-11-02", sm)] == [["w", "unit_a", 0.4, 0.24, 350, 140]] and w == w0
+
+
+def test_v4_a_screen_with_no_ads_of_its_own_is_never_flagged_waste(tmp_path):
+    # GA4 stops splitting screens by unit on 15 Sep: σ comes from the split days before, and that old mix flags MAIN's
+    # banner (⚠️) in the last 7 days — unless the banner was removed in an update (20 Oct): no ads of its own in the
+    # period, never ⚠️ (still judged: 💡)
+    got = {}
+    for gone in (None, "2026-10-20"):
+        def day_fn(d, gone=gone):
+            r = core_recs(d, {"show_w": 0.6})
+            if d >= "2026-09-15":                                       # per screen only (grain c)
+                cs = [c for c in (MAIN, EDIT, ADACT, NS) if c != MAIN or not gone or d < gone]
+                r["a"] = {"st": "w", "g": "c", "r": [[c, sum(x[3] for x in r["a"]["r"] if x[0] == c)] for c in cs]}
+            return r
+        data, out, dash = build(tmp_path / str(gone), {"show_w": 0.6}, day_fn=day_fn)
+        sb.run(dash, str(data), str(out), {}, NOW)
+        f2, one = gz(out / ("scr_%s.json.gz" % KEY)), gz(out / "scr_all.json.gz")["apps"][AID]
+        sm = "s%d" % [c for c, _ in f2["screens"]].index(MAIN)
+        got[gone] = ([x[0] for x in f2["sig"]["2026-10-27_2026-11-02"][sm]], one["sg"]["2026-10-27_2026-11-02"],
+                     [k for k, rs in f2["sig"].items() for x in rs.get(sm, []) if x[0] == "w"])
+    assert "w" in got[None][0] and got[None][1][1] == 1                  # the banner kept: the old mix flags it
+    assert got["2026-10-20"] == (["b"], [1, 0, 0], [])
+
+
+def test_v4_currency_ships_only_when_not_usd(tmp_path):
+    # GA4's revenue is in the property's currency (the fetch's Admin API read, kept in the users file): file 2 names it
+    # only when it is not USD; unknown — no users file, no prop yet, a refused first read — is taken as USD
+    data, out, dash = build(tmp_path)
+    p = data / "ga4_screens" / KEY / "users.json.gz"
+    at = "2026-11-04T05:00:00Z"
+    got = {}
+    for lab, prop in (("EUR", {"currency": "EUR", "time_zone": "UTC", "at": at}),
+                      ("EUR, refused since", {"currency": "EUR", "time_zone": "UTC", "at": at, "err": 1}),
+                      ("USD", {"currency": "USD", "time_zone": "UTC", "at": at}),
+                      ("refused", {"at": at, "err": 1}), ("no prop", None), ("no file", False)):
+        if prop is False:
+            os.remove(p)
+        else:
+            write_json_gz_stable(str(p), dict({"v": 1, "w": {}}, **({"prop": prop} if prop else {})))
+        sb.run(dash, str(data), str(out), {}, NOW)
+        f2 = gz(out / ("scr_%s.json.gz" % KEY))
+        got[lab] = {k: f2[k] for k in f2 if k == "cur"}
+    assert got == {"EUR": {"cur": "EUR"}, "EUR, refused since": {"cur": "EUR"}, "USD": {}, "refused": {},
+                   "no prop": {}, "no file": {}}

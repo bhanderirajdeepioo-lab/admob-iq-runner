@@ -35,7 +35,11 @@ for that key), every sort header sorting its own column, the App total's rows, t
 v 4 (owner, 8 Nov 2026: "Naya logic banao"): the one table of Firebase's numbers (Users of the period, Views, Time / user,
 Ads, Revenue, its share) with the AdMob full-screen rows and the total, the signals card and cells, a Custom range and a
 sampled month saying why, the sort, the period's report (English, no money), All apps (Users, Views, Ads, Revenue,
-signals), the old status words gone from the page. Skipped where node is not installed. No real data."""
+signals), the old status words gone from the page; the review's cases (a stopped and a retired full-screen trigger, an
+app without AdMob full-screen rows, a failed v 4 build, another currency, GA4's grouped row, no ads-by-screen day, GA4's
+net negative, the counts not judged, no final day, the unit mix's days, the developer's copy: every "—" with its why).
+Skipped where node is not installed. No real data."""
+import html
 import json
 import math
 import os
@@ -732,3 +736,145 @@ def test_v4_today_a_month_before_the_app_and_their_reasons(out):
     assert "Is period me abhi koi final din nahi" in t["attn"] and "koi signal nahi" not in t["attn"]   # never "✅ none"
     assert t["rows"]["Back press"]["Ads"] == "—" and t["rows"]["Back press"]["Revenue"] == "—" and t["fsWhy"]
     assert "is period me is app ka data nahi (history" in v["before"] and "Custom period" not in v["before"]
+
+
+# ── v 4, the review's cases (8 Nov 2026): every "—" says why, the counts agree everywhere ─────────────────────────────────
+V4OFF = ('is build me Users / Signals / full-screen (AdMob) rows nahi bane — robot error, health me "scr v4"; agle build me '
+         'aayenge')
+NEGW = "GA4 ka net negative — GA4 ne pichhle din ke ads ghataye (apna correction)"
+SGW = "— = is period me judge nahi hua (All time pe 🔻 nahi · AdMob data nahi · final din kam)"
+
+
+def _c(row):
+    """A row's cells as {header: (text, title)}, the title unescaped."""
+    return {h: (c[0], html.unescape(c[1])) for h, c in row.items()}
+
+
+def test_v4_a_full_screen_trigger_whose_ads_stopped_keeps_its_drop(out):
+    # App resume served nothing from 27 Feb (AdMob zeros on complete days) and the build flags its 🔻: the row stays (Ads
+    # 0), and the card, the cell, the details and the report agree with scr_all's counts (All apps)
+    r = out["v4"]["review"]
+    a = _c(r["q30"]["App resume"])
+    assert (a["Ads"][0], a["Revenue"][0], a["%"][0], a["Signal"][0]) == ("0", "$0.00", "0.0%", "🔻 Imp / user −100%")
+    assert "💡 0 · ⚠️ 1 · 🔻 1" in r["q30card"] and r["all30"]["v4q"]["Signals"][0] == "💡 0 · ⚠️ 1 · 🔻 1"
+    assert 'data-sc-open="7">Details ▸' in r["q30card"] and r["q30open"]
+    assert r["q30dds"].startswith('<span title="Gira: Imp / user / day 0.20 → 0.00 (−100%) vs 28 Jan – 26 Feb 2026">')
+    assert "2. Full-screen: App resume — Dropped" in r["q30rep"] and "1. Full-screen: App resume — Dropped" in r["q30rep7"]
+    # a trigger retired long ago (served 1–20 Jan): no "not complete yet" row on Today / This month, none on 30 days; there
+    # on All time and on the month it served (the stopped one: where it served, or where its 🔻 is)
+    t = r["trig"]
+    assert t["today"] == t["tm"] == t["7"] == ["Back press"] and t["30"] == ["Back press", "App resume"]
+    assert t["all"] == t["mon:2026-01"] == ["Back press", "App resume", "Old splash"]
+    assert t["mon:2026-02"] == ["Back press", "App resume"]
+
+
+def test_v4_an_app_without_admob_full_screen_rows_keeps_its_ad_screens(out):
+    # Delta has no AdMob placements (as the build ships it: no full-screen rows): its ad screen is a row of GA4's numbers,
+    # tagged, opening the Ad screens item; the rows add up to the total; the note never says "yahan AdMob ke units se"
+    d = out["v4"]["review"]["d"]
+    r = {k: _c(v) for k, v in d["rows"].items()}
+    ad = r["Ad"]
+    assert (ad["Users"][0], ad["Views"][0], ad["Time / user"][0], ad["Ads"][0], ad["Revenue"][0], ad["%"][0]) == \
+        ("200", "12,000", "5m 00s", "900", "$9.00", "10.7%")
+    assert ad["Signal"] == ("—", "signals sirf app ki apni screens pe judge hote hain") and d["open"] == "4"
+    assert "Back press" not in r and "App resume" not in r and not d["more"]
+    rows = [v for k, v in r.items() if k != "Total (app)"]
+    assert sum(int(v["Ads"][0].replace(",", "")) for v in rows) == int(r["Total (app)"]["Ads"][0].replace(",", "")) == 5400
+    assert sum(float(v["Revenue"][0].lstrip("$")) for v in rows) == float(r["Total (app)"]["Revenue"][0].lstrip("$")) == 84.0
+    assert "AdActivity" not in d["note"] and "Is app ka AdMob data (placements) nahi — ad screens GA4 ke numbers se." in d["note"]
+    assert d["byViews"] == ["Main", "Editor", "Ad", "Other1", "(not set)", "Other (GA4 grouped)", "Total (app)"]
+    assert d["dds"] == '<small class="sc-faint">signals sirf app ki apni screens pe judge hote hain</small>'
+    assert out["v4"]["review"]["all30"]["Delta App"]["Revenue"] == ["—", "is app ka AdMob data nahi"]
+
+
+def test_v4_a_failed_v4_build_says_so(out):
+    # the build's v 4 failed for the app (no periods / users / signals / AdMob rows): a period inside its history says so
+    # — never "is period me is app ka data nahi" beside its own Views / Ads / Revenue; one before its first day still does
+    o = out["v4"]["review"]["off"]
+    m = _c(o["rows"]["Main"])
+    assert m["Users"] == m["Time / user"] == m["Signal"] == ("—", V4OFF)
+    assert (m["Views"][0], m["Ads"][0], m["Revenue"][0]) == ("32,145", "3,000", "$60.00")
+    assert _c(o["rows"]["Total (app)"])["Users"] == ("—", V4OFF) and "Ad" in o["rows"]          # (its ad screen: GA4's)
+    assert html.unescape(o["card"]).count(V4OFF) == 1 and "is period me is app ka data nahi" not in o["card"]
+    assert html.unescape(o["note"]).startswith("Users: " + V4OFF + ".") and "AdActivity" not in o["note"]
+    assert html.unescape(o["dds"]) == '<small class="sc-faint">%s</small>' % V4OFF
+    assert "This build could not make the users and signals of this app" in o["rep"]
+    assert "is period me is app ka data nahi (history 1 Jan 2026 se)" in o["before"] and V4OFF not in html.unescape(o["before"])
+    a = _c(out["v4"]["review"]["all30"]["v4off"])
+    assert a["Users"] == a["Signals"] == ("—", V4OFF) and a["Views"][0] == "70,245"
+    assert a["Revenue"] == ("—", 'is build me AdMob revenue nahi bana — robot error, health me "scr v4"; agle build me aayega')
+
+
+def test_v4_a_property_in_another_currency_says_why(out):
+    # GA4's revenue in the property's own currency is never shown as $: the screens' Revenue / % and the total "—" with
+    # why, one sentence in the note; the AdMob rows as before; the developer's copy says nothing of money; escaped once
+    e = out["v4"]["review"]["eur"]
+    w = "GA4 property ki currency EUR hai (USD nahi) — screens ka GA4 revenue yahan nahi dikhaya"
+    for n in ("Main", "Editor", "Other1", "Total (app)"):
+        c = _c(e["rows"][n])
+        assert c["Revenue"] == c["%"] == ("—", w), n
+    b = _c(e["rows"]["Back press"])
+    assert b["Revenue"] == ("$6.00", "") and b["%"] == ("6.5%", "AdMob total ka hissa")
+    assert ('Revenue: GA4 property ki currency EUR hai (USD nahi) — screens ka revenue "—", full-screen rows AdMob (USD) '
+            'se.') in e["note"] and "AdActivity" not in e["note"]
+    dv = out["v4"]["review"]["eurDev"]
+    assert "currency" not in dv["note"] and not dv["money"] and "Revenue" not in dv["heads"]
+    assert out["v4"]["review"]["devMoney"] == [False, False, False]              # (USD, no AdMob, All apps: no $ either)
+    c = out["v4"]["review"]["curEsc"]
+    assert "&lt;b&gt;X&lt;/b&gt;" in c["title"] and "&amp;" not in c["title"]
+    assert "currency &lt;b&gt;X&lt;/b&gt; hai" in c["note"] and "<b>X</b>" not in c["note"] and "&amp;" not in c["note"]
+
+
+def test_v4_ga4s_grouped_row_has_no_users(out):
+    # GA4 makes "(other)" per read: the period read's "(other)" users (its fold) are not the views reads' "(other)" — the
+    # grouped row's Users and Time / user stay "—" and say so (never the fold beside another read's views)
+    g = _c(out["v4"]["review"]["grouped"])
+    w = 'GA4 ka "(other)" har read me alag banta hai — users wala aur views / time wala "(other)" match nahi karte'
+    assert g["Users"] == g["Time / user"] == ("—", w) and g["Views"][0] == "600"
+
+
+def test_v4_no_ads_by_screen_day_and_a_negative_net(out):
+    r = out["v4"]["review"]
+    # Today: views and revenue but no ads by screen yet — the screens' Ads and the total "—" with why, never 0 (the AdMob
+    # row as before)
+    w = "is period ke screen-wise ads abhi GA4 se nahi aaye"
+    for n in ("Main", "Editor", "Other1", "(not set)", "Other (GA4 grouped)", "Total (app)"):
+        assert _c(r["qToday"][n])["Ads"] == ("—", w), n
+    assert (_c(r["qToday"]["Main"])["Views"][0], _c(r["qToday"]["Main"])["Revenue"][0]) == ("1,088", "$2.00")
+    assert _c(r["qToday"]["Back press"])["Ads"] == ("—", "AdMob ka din abhi poora nahi (~1–2 din baad)")
+    # GA4's net negative stays as GA4 gives it (real numbers only), with why: a row, the total, All apps
+    assert _c(r["qYday"]["Main"])["Ads"] == _c(r["qYday"]["Total (app)"])["Ads"] == ("-2", NEGW)
+    assert _c(r["q30"]["Other1"])["Ads"] == ("-1", NEGW) and _c(r["q30"]["Total (app)"])["Ads"] == ("5,399", "")
+    assert r["allYday"]["v4q"]["Ads"] == ["-2", NEGW] and _c(r["qYday"]["Editor"])["Ads"] == ("0", "")
+
+
+def test_v4_signals_not_judged_no_final_day_and_the_unit_mix(out):
+    r = out["v4"]["review"]
+    c = r["card"]
+    # ✅ only when no count of the period is null; all null: not judged, why per kind; some null: the judged ones named
+    assert "💡 0 · ⚠️ — · 🔻 0" in c["7"] and "✅ Judge hue signals (💡 🔻) me koi nahi · ⚠️ —: AdMob fill nahi" in c["7"]
+    assert "✅" not in c["60"] and ("Is period me signals judge nahi ho sake (💡 —: views / ads ka koi final whole din nahi · "
+                                    "⚠️ —: AdMob fill nahi · 🔻 —: dono taraf 7+ final din nahi).") in c["60"]
+    assert "✅ Is period me koi signal nahi" in c["mon:2026-02"]
+    assert "✅ Judge hue signals (💡 ⚠️) me koi nahi · 🔻 —: All time pe 🔻 nahi" in c["all"]
+    # All apps: a "—" in the counts says why (the card head's title)
+    assert r["all7"]["v4q"]["Signals"] == ["💡 0 · ⚠️ — · 🔻 0", SGW] and r["all30"]["v4q"]["Signals"][1] == ""
+    # no final day (Yesterday): its ⚠️ is never shown, never sorts or pins a row; the row's report says why
+    assert r["qYdaySig"] == [None] * len(r["qYdaySig"]) and _c(r["qYday"]["Other1"])["Signal"] == ("—", "abhi koi final din nahi")
+    assert r["qYdaySort"] == ["Main", "Editor", "Back press", "Other1", "(not set)", "Other (GA4 grouped)", "Total (app)"]
+    assert "Is period me abhi koi final din nahi — signals nahi, report nahi." in r["qYdayRep"]
+    assert "Is row pe is period me koi signal nahi" not in r["qYdayRep"]
+    # ⚠️'s unit mix from split days that end inside the period: said truthfully, and in the developer's report
+    assert _c(r["q30"]["Main"])["Signal"][1].endswith(" · screen pe units ka hissa 20 Feb – 1 Mar 2026 ke split dino se (is "
+                                                      "period ke apne split din kam the)")
+    assert "is period me GA4 ne screen × unit split nahi diya" not in r["q30card"]
+    assert ("unit_a: 40,000 filled, 10,000 shown (25%); not shown = 30.0% of all the app's fills; the units' share on the "
+            "screen from the split days 20 Feb – 1 Mar 2026 (the period had under 3 of its own)") in r["q30rep"]
+
+
+def test_v4_developer_copy_columns_and_how(out):
+    # an empty table spans the columns shown (owner 8, developer 6; All apps 7 / 6); How this works without Revenue / % in
+    # the developer's copy
+    e = out["v4"]["review"]["empty"]
+    assert (e["owner"], e["dev"], e["devHeads"], e["all"], e["devAll"]) == ("8", "6", 6, "7", "6")
+    assert e["how"] and not e["devHow"]
