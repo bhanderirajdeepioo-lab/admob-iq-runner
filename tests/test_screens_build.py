@@ -2701,6 +2701,61 @@ def test_v4_a_full_screen_drop_is_judged_on_admobs_own_days(tmp_path):
     assert all(c[2] == nd[k] or (c[2] is None and not nd[k]) for k, c in one["sg"].items())
 
 
+# the made-up store's periods (td 4 Nov, d0 1 Aug) where a row has SIG_DAYS days with users on both sides: the last 7 /
+# 30 / 60 days, September and October (All time has no side before it; August, the last 90 days, this month, today and
+# yesterday have under SIG_DAYS on a side)
+BOTH_SIDES = {"2026-10-27_2026-11-02", "2026-10-04_2026-11-02", "2026-09-04_2026-11-02", "2026-09-01_2026-09-30",
+              "2026-10-01_2026-10-31"}
+
+
+def test_v4_with_no_full_screen_row_the_screens_judge_the_drop_alone(tmp_path):
+    # an app with no AdMob full-screen rows (no AdMob units mapped): its screens' own days with users judge 🔻 alone — a
+    # number wherever a screen has SIG_DAYS of them on both sides (the 🔻 lines listed, never "—" above one), "—"
+    # elsewhere; ⚠️ "—" (no AdMob fill)
+    data, out, dash = build(tmp_path / "a", {"show_w": 0.6}, dash=dashboard({"show_w": 0.6}, placements=False))
+    sb.run(dash, str(data), str(out), {}, NOW)
+    f2, sg = gz(out / ("scr_%s.json.gz" % KEY)), gz(out / "scr_all.json.gz")["apps"][AID]["sg"]
+    assert f2["fs4"] == [] and sg["2026-10-27_2026-11-02"] == [0, None, 1]      # MAIN's ads per user fall from W0
+    assert sg["2026-09-01_2026-09-30"] == [0, None, 0] and {k for k, c in sg.items() if c[2] is not None} == BOTH_SIDES
+    nd = {k: sum(1 for xs in f2["sig"].get(k, {}).values() for x in xs if x[0] == "d") for k in sg}
+    assert all(c[2] == nd[k] or (c[2] is None and not nd[k]) for k, c in sg.items())
+    # … and a screen under SIG_MAT judges too: only EDIT has users by screen, at 5 ads a day (under SIG_MAT of the
+    # screens' ads) — nothing listed, its periods 0 ("judged, no drop"), never "—"
+    def day_fn(d):
+        r = core_recs(d, {})
+        r["a"]["r"] = [x if x[0] != EDIT else x[:3] + [5] for x in r["a"]["r"]]
+        r["uV"] = {"st": "w", "g": "c", "r": [[EDIT, 150, 100]]}
+        return r
+    data, out, dash = build(tmp_path / "b", dash=dashboard(placements=False), day_fn=day_fn)
+    sb.run(dash, str(data), str(out), {}, NOW)
+    sg = gz(out / "scr_all.json.gz")["apps"][AID]["sg"]
+    want = {k: 0 if k in BOTH_SIDES else None for k, *_ in sb.pwin("2026-11-04", "2026-08-01")}
+    assert {k: c[2] for k, c in sg.items()} == want
+
+
+def test_v4_a_drop_is_judged_before_its_materiality(tmp_path, monkeypatch):
+    # SIG_MAT above 1: no row of either kind is material — no 🔻 is listed (not even MAIN's drop in the last 7 days) —
+    # yet every period where a row had SIG_DAYS days with users on both sides was judged: 0, never "—"; the others stay
+    # "—". Both kinds (the made-up store), the screens alone (no daily users: no full-screen row has its days) and the
+    # full-screen rows alone (October's ads by screen sampled: in October, the last 7 and the last 30 days no screen has
+    # its days on both sides)
+    monkeypatch.setattr(sb, "SIG_MAT", 1.5)
+    def oct_sampled(d):
+        r = core_recs(d, {"show_w": 0.6})
+        if d[:7] == "2026-10":
+            r["a"] = {"st": "s", "smp": 0.5}
+        return r
+    got = {}
+    for name, kw in (("both", {}), ("screens", {"users": False}), ("full-screen", {"day_fn": oct_sampled})):
+        data, out, dash = build(tmp_path / name, {"show_w": 0.6}, **kw)
+        sb.run(dash, str(data), str(out), {}, NOW)
+        f2, sg = gz(out / ("scr_%s.json.gz" % KEY)), gz(out / "scr_all.json.gz")["apps"][AID]["sg"]
+        got[name] = ({k: c[2] for k, c in sg.items()},
+                     [x for rs in f2["sig"].values() for xs in rs.values() for x in xs if x[0] == "d"])
+    want = {k: 0 if k in BOTH_SIDES else None for k, *_ in sb.pwin("2026-11-04", "2026-08-01")}
+    assert got == {"both": (want, []), "screens": (want, []), "full-screen": (want, [])}
+
+
 def test_v4_waste_sigma_takes_only_days_both_reads_are_whole(tmp_path):
     # unit_a shared half and half by MAIN and EDIT; AdMob: it fills 100 a day and shows 40, the app fills 125. On 29 Oct
     # the units read is not whole (GA4 dropped rows) while the ads by screen are: σ leaves the day out of both its parts

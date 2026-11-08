@@ -52,7 +52,10 @@
 //     its 🔻, the counts agreeing everywhere), one retired long ago (never "not complete yet"), an app without AdMob
 //     full-screen rows (its ad screens as GA4 rows), a failed v 4 build, a property in another currency, GA4's grouped
 //     row, no ads-by-screen day, GA4's net negative, the counts the build could not judge, no final day, the unit mix's
-//     days, the developer's copy — every "—" with its why.
+//     days, the developer's copy — every "—" with its why. The second review's: a final month with no ads-by-screen day
+//     (GA4's copies) naming what WAS judged, 🔻's "—" by its days with users, the Ads "—"'s cause from the period's own
+//     days, All apps before an app's first day, the keep rule's pending days and 28-day edge (AdMob from mid-month), a
+//     failed v 4 on Custom, two ad screens as rows.
 // Prints ONE JSON report; tests/test_scr_frontend.py asserts on it.   usage: node scr_frontend.js <index.html>
 'use strict';
 const fs = require('fs'), vm = require('vm');
@@ -143,7 +146,8 @@ function mkAll(o) {
   // per period, the signals' counts
   e.rv = Array.from({ length: ND }, (_x, k) => (k > 87 ? [500000, null] : [3000000 + 1000 * k, o.noPlace ? null : 3100000 + 1000 * k]));
   e.pt = { [P30]: 9000, '2026-02-01_2026-02-28': 7000 };
-  e.sg = { [P30]: o.key === KEY.a ? [1, 1, 1] : [0, 0, 0] };
+  // (no AdMob placements and no users, as the build ships it: no fill → ⚠️ not judged, no day with users → 🔻 not judged)
+  e.sg = { [P30]: o.key === KEY.a ? [1, 1, 1] : o.noPlace ? [0, null, null] : [0, 0, 0] };
   if (o.nvr) e.nvr = o.nvr;
   return e;
 }
@@ -1199,23 +1203,36 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
       // "v4q": Alpha's file 2 with a full-screen trigger whose ads stopped (App resume: AdMob zeros from 27 Feb, its 🔻 in
       // the 30 days), one retired long ago (Old splash: served 1–20 Jan, zeros after), Today with views and revenue but no
       // ads by screen, GA4's net negative (Yesterday's Main, a day of Other1's), a ⚠️ whose unit mix comes from split days
-      // that end inside the period, a ⚠️ on Yesterday (no final day) and signal counts the build could not judge (null) ·
-      // "v4off": the build's v 4 failed for the app (file 2 without periods, users, signals or AdMob rows; scr_all's sg / pt
-      // empty, no AdMob day in rv)
-      const QK = 'a00000000010', OK = 'a00000000011', qn = 'scr_' + QK + '.json.gz', on2 = 'scr_' + OK + '.json.gz', P30K = '2026-02-27_2026-03-28';   // (P30: the dates here)
-      const xq = mkAll({ key: QK }), fq = mkF2({ key: QK, id: 'v4q' }), xo = mkAll({ key: OK }), fo = mkF2({ key: OK, id: 'v4off' });
+      // that end inside the period, a ⚠️ on Yesterday (no final day) and signal counts the build could not judge (null);
+      // January: GA4's ads by screen came as copies every day (grain c, the run AdMob-confirmed: the build ships r null) —
+      // a final month with no ads-by-screen day, its full-screen rows judged on AdMob's days (sg [null, 0, 0]); 1–3 Feb:
+      // GA4 sampled / cut the ads by screen, then one not read yet; two triggers whose last ad is 27 and 28 days before the
+      // last complete AdMob day (the keep rule's 28-day edge) · "v4off": the build's v 4 failed for the app (file 2
+      // without periods, users, signals or AdMob rows; scr_all's sg / pt empty, no AdMob day in rv) · "v4f": AdMob from
+      // 10 Feb (null before, as adm_days ships it), both triggers serving from 1 Mar only
+      const QK = 'a00000000010', OK = 'a00000000011', FK = 'a00000000012', qn = 'scr_' + QK + '.json.gz', on2 = 'scr_' + OK + '.json.gz', fn2 = 'scr_' + FK + '.json.gz', P30K = '2026-02-27_2026-03-28';   // (P30: the dates here)
+      const xq = mkAll({ key: QK }), fq = mkF2({ key: QK, id: 'v4q' }), xo = mkAll({ key: OK }), fo = mkF2({ key: OK, id: 'v4off' }), xf = mkAll({ key: FK }), ff = mkF2({ key: FK, id: 'v4f' });
       fq.fs4.push(['interstitial', 'Old splash', ['unit_d']]);
       fq.fsd[1] = fq.fsd[1].map((v, k) => (v && k >= 57 ? [0, 0, 0, 0] : v));
       fq.fsd.push(Array.from({ length: ND }, (_x, k) => (k > 87 ? null : k < 20 ? [50, 40, 30, 50000] : [0, 0, 0, 0])));
+      fq.fs4.push(['interstitial', 'Stop 27', ['unit_e']], ['interstitial', 'Stop 28', ['unit_f']]);   // (last ads: 2 Mar = kl − 27 · 1 Mar = kl − 28)
+      for (const e of [60, 59]) fq.fsd.push(Array.from({ length: ND }, (_x, k) => (k > 87 ? null : k >= 50 && k <= e ? [20, 16, 10, 20000] : [0, 0, 0, 0])));
       delete fq.days[88].a; fq.days[87].a = { g: 'fu', r: [[0, 0, -2]] }; fq.days[70].a.r.push([2, 0, -1]);
+      for (let k = 0; k < 31; k++) Object.assign(fq.days[k], { a: { g: 'c', r: null }, dup: [1, 0.5] });
+      [['s', 31], ['o', 32], ['-', 33]].forEach(([s, k]) => { delete fq.days[k].a; fq.days[k].st.a = s; });
       fq.sig = { [P30K]: { s0: [['w', 'unit_a', 0.25, 0.3, 40000, 10000, '2026-02-20', '2026-03-01']], f1: [['d', 0.2, 0, '2026-01-28', '2026-02-26']] },
         '2026-03-29_2026-03-29': { s2: [['w', 'unit_a', 0.1, 0.5, 900, 90]] } };
-      xq.sg = { [P30K]: [0, 1, 1], '2026-03-22_2026-03-28': [0, null, 0], '2026-01-28_2026-03-28': [null, null, null], '2026-02-01_2026-02-28': [0, 0, 0], '2026-01-01_2026-03-30': [0, 0, null] };
+      xq.sg = { [P30K]: [0, 1, 1], '2026-03-22_2026-03-28': [0, null, 0], '2026-01-28_2026-03-28': [null, null, null], '2026-02-01_2026-02-28': [0, 0, 0], '2026-01-01_2026-03-30': [0, 0, null],
+        '2026-01-01_2026-01-31': [null, 0, 0] };
       xq.ta[87] = [-2, 0, 0];
       Object.assign(fo, { pw: [], sig: {}, pu: {}, fs4: [], fsd: [], adt: [] }); Object.assign(xo, { sg: {}, pt: {}, rv: xo.rv.map(r => [r[0], null]) });
-      const n2a = 'scr_' + KEY.a + '.json.gz', rawA = _.FILES[n2a].raw, R4 = out.v4.review = {};
-      ALLF.apps.v4q = xq; ALLF.apps.v4off = xo; FILES[qn] = fq; FILES[on2] = fo; FILES['scr_l_' + QK + '.json.gz'] = mkL({ key: QK }); FILES['scr_l_' + OK + '.json.gz'] = mkL({ key: OK });
-      ctx.DATA.scr.apps.v4q = { key: QK, v: 'q', vl: 'q', from: D0, ft: FT }; ctx.DATA.scr.apps.v4off = { key: OK, v: 'o', vl: 'o', from: D0, ft: FT }; ctx.DATA.scr.fv = 'f16';
+      ff.adt = ff.adt.map((v, k) => (k < 40 ? null : v)); ff.fsd = ff.fsd.map(arr => arr.map((v, k) => (k < 40 ? null : v && k < 59 ? [0, 0, 0, 0] : v)));
+      for (const u in ff.adm) ff.adm[u] = ff.adm[u].map((v, k) => (k < 40 ? null : v));
+      const n2a = 'scr_' + KEY.a + '.json.gz', rawA = _.FILES[n2a].raw, n2d = 'scr_' + KEY.d + '.json.gz', rawD = _.FILES[n2d].raw, sgD = ALLF.apps[ID.d].sg[P30K], R4 = out.v4.review = {};
+      ALLF.apps.v4q = xq; ALLF.apps.v4off = xo; ALLF.apps.v4f = xf; FILES[qn] = fq; FILES[on2] = fo; FILES[fn2] = ff;
+      for (const k of [QK, OK, FK]) FILES['scr_l_' + k + '.json.gz'] = mkL({ key: k });
+      ctx.DATA.scr.apps.v4q = { key: QK, v: 'q', vl: 'q', from: D0, ft: FT }; ctx.DATA.scr.apps.v4off = { key: OK, v: 'o', vl: 'o', from: D0, ft: FT };
+      ctx.DATA.scr.apps.v4f = { key: FK, v: 'f', vl: 'f', from: D0, ft: FT }; ctx.DATA.scr.fv = 'f16';
       try {
         // the stopped trigger: kept in the period its 🔻 is in (Ads 0) — the card, the details and the report agree with
         // scr_all's counts; the retired one: only on the periods it served in
@@ -1241,12 +1258,51 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
         hh = await show4('v4off', { PER: '30' }); R4.off = { rows: cellsT(hh, 'sc-ttw').rows, card: cardOf(hh), note: noteOf(hh) };
         _.set({ OPEN: 0, SEC: 'ov' }); SCR.paint(); R4.off.dds = ddsOf(SCREEN.innerHTML); _.set({ OPEN: null });
         R4.off.rep = _.v4Report(xo, 'v4off', '2026-02-27', '2026-03-28'); R4.off.before = cardOf(await show4('v4off', { PER: 'mon:2025-12' }));
+        // … on a Custom range (its Users line is Custom's own): the note names the failure, once, beside GA4's ad rows
+        hh = await show4('v4off', { PER: 'cus', PF: '2026-03-01', PTO: '2026-03-20' }); R4.off.cus = { note: noteOf(hh), rows: rowsOf(hh) };
         // Delta (no AdMob placements, as the build ships it: no full-screen rows): its ad screen a row of GA4's numbers, the
-        // rows adding up to the total, sortable, its details; the note says why (no AdActivity sentence)
-        hh = await show4('Delta App', { PER: '30' }); R4.d = { rows: cellsT(hh, 'sc-ttw').rows, note: noteOf(hh), more: hh.includes('data-sc-v4more'),
+        // rows adding up to the total, sortable, its details; the note says why (no AdActivity sentence); its counts as the
+        // build ships them for such an app (⚠️ / 🔻 never judged)
+        hh = await show4('Delta App', { PER: '30' }); R4.d = { rows: cellsT(hh, 'sc-ttw').rows, note: noteOf(hh), more: hh.includes('data-sc-v4more'), card: cardOf(hh),
           open: (/<tr class="sc-clk[^"]*" data-sc-open="(\d+)"[^>]*><td class="sc-nm" title="AdActivity"><span class="sc-n">Ad <small class="sc-faint">ad screen · GA4<\/small>/.exec(hh) || [])[1] || null };
         tap4('views'); R4.d.byViews = rowsOf(SCREEN.innerHTML); tap4('rev');
         _.set({ OPEN: 4, SEC: 'ov' }); SCR.paint(); R4.d.dds = ddsOf(SCREEN.innerHTML); _.set({ OPEN: null });
+        // … with two ad screens as rows: the one "Ad screens" item stands for neither (no details, no tap)
+        const d2 = JSON.parse(JSON.stringify(rawD)); d2.screens.push(['x.y.NetAdActivity', 'ad']); d2.days.forEach(d => { if (d && d.v) d.v.push([6, 300, 900]); });
+        _.FILES[n2d].raw = d2; hh = await show4('Delta App', { PER: '30' });
+        R4.d2 = { open: _.v4Rows(ALLF.apps[ID.d], d2, '2026-02-27', '2026-03-28').rows.filter(z => z.k === 'ad').map(z => [z.name, z.open]),
+          tr: ['AdActivity', 'x\\.y\\.NetAdActivity'].map(c => (new RegExp('<tr([^>]*)><td class="sc-nm" title="' + c + '">').exec(hh) || [, null])[1]) };
+        _.FILES[n2d].raw = rawD;
+        // ── the second review's cases ──
+        // January (no ads-by-screen day: copies every day): the card names what WAS judged (the full-screen rows' ⚠️ 🔻) —
+        // never ✅, never a bare "not judged"; a screen's Signal, details and row report "not judged"; the screens' Ads and
+        // the total "—" with the copy cause; the app's report the same in English
+        hh = await show4('v4q', { PER: 'mon:2026-01' }); R4.jan = { card: cardOf(hh), rows: cellsT(hh, 'sc-ttw').rows, rep: _.v4Report(xq, 'v4q', '2026-01-01', '2026-01-31') };
+        _.set({ OPEN: 0, SEC: 'ov' }); SCR.paint(); R4.jan.dds = ddsOf(SCREEN.innerHTML);
+        _.set({ SEC: 'rep' }); SCR.paint(); hh = SCREEN.innerHTML; R4.jan.rowRep = hh.slice(hh.indexOf('id="sc-ddb"')); _.set({ OPEN: null, SEC: 'ov' });
+        // … every count null, then none shipped for the month: the plain "not judged" (scr_all read again: its fv); an app
+        // without AdMob full-screen rows (Delta, its days copies too; the build's ⚠️ 0 from the fill alone): no full-screen
+        // rows named either
+        xq.sg['2026-01-01_2026-01-31'] = [null, null, null]; ALLF.apps[ID.d].sg[P30K] = [null, 0, null]; ctx.DATA.scr.fv = 'f16b';
+        R4.janNull = { card: cardOf(await show4('v4q', { PER: 'mon:2026-01' })), rep: _.v4Report(xq, 'v4q', '2026-01-01', '2026-01-31') };
+        const d3 = JSON.parse(JSON.stringify(rawD)); d3.days.forEach(d => { if (d && d.a) d.a = { g: 'c', r: null }; });
+        _.FILES[n2d].raw = d3; R4.d3 = cardOf(await show4('Delta App', { PER: '30' })); _.FILES[n2d].raw = rawD; ALLF.apps[ID.d].sg[P30K] = sgD;
+        delete xq.sg['2026-01-01_2026-01-31']; ctx.DATA.scr.fv = 'f16c'; R4.janNone = cardOf(await show4('v4q', { PER: 'mon:2026-01' }));
+        xq.sg['2026-01-01_2026-01-31'] = [null, 0, 0]; ctx.DATA.scr.fv = 'f16d';
+        // the screens' Ads "—" names its cause from the period's own days: 30 Jan – 3 Feb = 2 copy days, 1 sampled + 1 cut,
+        // 1 not read yet
+        R4.mix = cellsT(await show4('v4q', { PER: 'cus', PF: '2026-01-30', PTO: '2026-02-03' }), 'sc-ttw').rows;
+        // the keep rule's 28-day edge on Today: the trigger whose last ad was 27 days before the last complete AdMob day
+        // stays ("—", not complete yet), the one 28 days before is retired
+        R4.edge = cellsT(await show4('v4q', { PER: 'today' }), 'sc-ttw').rows;
+        // v4f: a month whose first days came before AdMob's first — its triggers that had not begun are left out (never
+        // "0 · $0.00"), and with no AdMob row in it, no AdActivity sentence; a month wholly before AdMob keeps them, "—" and
+        // why; This month: their own days; Today keeps them (not complete yet)
+        R4.f = {}; for (const p of ['mon:2026-01', 'mon:2026-02', 'tm', 'today']) { hh = await show4('v4f', { PER: p }); R4.f[p] = { rows: cellsT(hh, 'sc-ttw').rows, note: noteOf(hh) }; }
+        // All apps on a month before every app's first day: each "—" names the history, never "not in yet"
+        R4.allPre = cellsT(await show4('', { PER: 'mon:2025-12' }), 'sc-atw').rows;
+        // How this works: 🔻's days are the days with users
+        hh = await show4('v4q', { PER: '30' }); R4.how = hh.slice(hh.indexOf('data-sc-fold="how"'));
         // GA4's grouped row: the period read's "(other)" users (fold) never beside the views reads' "(other)"
         R4.grouped = cellsT(await show4('Alpha App', { PER: '30' }), 'sc-ttw').rows['Other (GA4 grouped)'];
         // a GA4 property in another currency: the screens' revenue "—" with why (the AdMob rows as before); the developer's
@@ -1265,9 +1321,10 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
         ctx.window.__DEV_VIEW__ = true; hh = await show4('v4q', { PER: 'mon:2025-12' });
         Object.assign(R4.empty, { dev: span4(hh), devHeads: cellsT(hh, 'sc-ttw').hd.length, devHow: /<b>Revenue<\/b>|<b>%<\/b>/.test(how4(hh)), devAll: (/colspan="(\d+)"/.exec(_.allTable4([])) || [])[1] || null });
       } finally {
-        _.FILES[n2a].raw = rawA; ctx.window.__DEV_VIEW__ = false;
-        delete ALLF.apps.v4q; delete ALLF.apps.v4off; delete FILES[qn]; delete FILES[on2]; delete FILES['scr_l_' + QK + '.json.gz']; delete FILES['scr_l_' + OK + '.json.gz'];
-        delete ctx.DATA.scr.apps.v4q; delete ctx.DATA.scr.apps.v4off; ctx.DATA.scr.fv = 'f17'; ctx.APP = 'Alpha App'; _.set({ OPEN: null, SEC: 'ov', PER: '30' });
+        _.FILES[n2a].raw = rawA; _.FILES[n2d].raw = rawD; ALLF.apps[ID.d].sg[P30K] = sgD; ctx.window.__DEV_VIEW__ = false;
+        delete ALLF.apps.v4q; delete ALLF.apps.v4off; delete ALLF.apps.v4f; delete FILES[qn]; delete FILES[on2]; delete FILES[fn2];
+        for (const k of [QK, OK, FK]) delete FILES['scr_l_' + k + '.json.gz'];
+        delete ctx.DATA.scr.apps.v4q; delete ctx.DATA.scr.apps.v4off; delete ctx.DATA.scr.apps.v4f; ctx.DATA.scr.fv = 'f17'; ctx.APP = 'Alpha App'; _.set({ OPEN: null, SEC: 'ov', PER: '30' });
       }
       SCR.paint(); await tick(); SCR.paint();
     }
