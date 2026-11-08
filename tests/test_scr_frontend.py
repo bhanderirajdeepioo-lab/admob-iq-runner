@@ -40,7 +40,10 @@ app without AdMob full-screen rows, a failed v 4 build, another currency, GA4's 
 net negative, the counts not judged, no final day, the unit mix's days, the developer's copy: every "—" with its why);
 the second review's (a final month with no ads-by-screen day naming what WAS judged, 🔻's "—" by its days with users,
 the Ads "—"'s cause from the period's own days, All apps before an app's first day, the keep rule's pending days and its
-28-day edge, a failed v 4 on Custom, two ad screens as rows). Skipped where node is not installed. No real data."""
+28-day edge, a failed v 4 on Custom, two ad screens as rows); the third review's (a null 💡 = no screen judged, whatever the
+days' ads by screen, a full-screen 🔻 listed beside them, the card's tag, a full-screen row with no AdMob day, the store's
+unreadable days, the partial Ads note, All apps' Users "—" and a Custom range before an app's first day, the report's
+kinds). Skipped where node is not installed. No real data."""
 import html
 import json
 import math
@@ -745,7 +748,8 @@ def test_v4_today_a_month_before_the_app_and_their_reasons(out):
 V4OFF = ('is build me Users / Signals / full-screen (AdMob) rows nahi bane — robot error, health me "scr v4"; agle build me '
          'aayenge')
 NEGW = "GA4 ne yahan net negative diya (GA4 ka apna number; wajah GA4 nahi batata)"   # (GA4 gives no cause: none claimed)
-SGW = "— = is period me judge nahi hua (All time pe 🔻 nahi · AdMob data nahi · users wale din kam)"
+SGW = ("— = is period me judge nahi hua (💡: screen-wise ads ka koi final usable din nahi · ⚠️: AdMob fill / row nahi · 🔻: "
+       "All time pe nahi, ya dono taraf 7+ din users wale nahi)")
 
 
 def _c(row):
@@ -855,10 +859,11 @@ def test_v4_no_ads_by_screen_day_and_a_negative_net(out):
 def test_v4_signals_not_judged_no_final_day_and_the_unit_mix(out):
     r = out["v4"]["review"]
     c = r["card"]
-    # ✅ only when no count of the period is null; all null: not judged, why per kind; some null: the judged ones named
+    # ✅ only when no count of the period is null; a null 💡: no screen judged, the period's own cause (below); another null:
+    # the judged ones named
     assert "💡 0 · ⚠️ — · 🔻 0" in c["7"] and "✅ Judge hue signals (💡 🔻) me koi nahi · ⚠️ —: AdMob fill nahi" in c["7"]
-    assert "✅" not in c["60"] and ("Is period me signals judge nahi ho sake (💡 —: views / ads ka koi final whole din nahi · "
-                                    "⚠️ —: AdMob fill nahi · 🔻 —: dono taraf 7+ din users wale nahi).") in c["60"]
+    assert "✅" not in c["60"] and ("Is period me final dino me screen-wise ads ka koi poora din nahi — signals judge nahi ho "
+                                    "sake.") in c["60"]
     assert "✅ Is period me koi signal nahi" in c["mon:2026-02"]
     assert "✅ Judge hue signals (💡 ⚠️) me koi nahi · 🔻 —: All time pe 🔻 nahi" in c["all"]
     # All apps: a "—" in the counts says why (the card head's title)
@@ -926,15 +931,15 @@ def test_v4_a_drop_not_judged_names_the_days_with_users(out):
     # 🔻 is judged on days WITH USERS on both sides (screens: the screen's users · full-screen: AdMob's days + the app's
     # users): its "—" says that — never "final din" (both sides can have 7+ final days without users)
     r = out["v4"]["review"]
-    assert "🔻 —: dono taraf 7+ din users wale nahi" in r["card"]["60"] and "final din nahi)" not in r["card"]["60"]
-    assert SGW.endswith("· users wale din kam)") and r["all7"]["v4q"]["Signals"] == ["💡 0 · ⚠️ — · 🔻 0", SGW]
+    assert SGW.endswith("· 🔻: All time pe nahi, ya dono taraf 7+ din users wale nahi)")
+    assert r["all7"]["v4q"]["Signals"] == ["💡 0 · ⚠️ — · 🔻 0", SGW]
     assert ("aur dono taraf 7+ din jin par users the (screens: us screen ke users · full-screen: AdMob ke din + app ke "
             "users); All time pe nahi.") in r["how"] and "7+ final din" not in r["how"]
     # Delta (no AdMob placements, no users): its counts as the build ships them — 💡 judged, ⚠️ / 🔻 not, each with why
     d = r["d"]["card"]
     assert "💡 0 · ⚠️ — · 🔻 —" in d
     assert "✅ Judge hue signals (💡) me koi nahi · ⚠️ —: AdMob fill nahi · 🔻 —: dono taraf 7+ din users wale nahi" in d
-    assert r["all30"]["Delta App"]["Signals"] == ["💡 0 · ⚠️ — · 🔻 —", SGW]
+    assert "final din nahi)" not in d and r["all30"]["Delta App"]["Signals"] == ["💡 0 · ⚠️ — · 🔻 —", SGW]
 
 
 def test_v4_the_screens_ads_dash_names_its_cause(out):
@@ -997,3 +1002,127 @@ def test_v4_two_ad_screens_open_no_details(out):
     r = out["v4"]["review"]
     assert r["d2"]["open"] == [["Ad", None], ["NetAd", None]] and r["d2"]["tr"] == ["", ""]
     assert r["d"]["open"] == "4"                                                  # (one ad screen: its item, as before)
+
+
+# ── v 4, the third review's cases (8 Nov 2026): a null 💡 = no screen judged, whatever the days; each "—" its real cause ──
+GRAINW = "GA4 ne screen-wise ads format ke bina diye (inline ads alag nahi hote)"
+FINALW = "final dino me screen-wise ads ka koi poora din nahi"
+STOREW = "din build store ki month file padh nahi saka"
+FSJUDGED = "screens ke signals judge nahi ho sake · full-screen (AdMob) rows pe ⚠️ 🔻 judge hue: koi signal nahi."
+FSJUDGED_EN = ("the screens' signals could not be judged · the full-screen (AdMob) rows were judged on Ads wasted, Dropped: no "
+               "signal.")
+
+
+def test_v4_whole_grain_c_days_never_read_no_signal_on_the_screens(out):
+    # a month whole at grain c (GA4 gave the ads by screen without the format), the app judged on inline ads: the build's
+    # 💡 null, ⚠️ 🔻 0. Its ads by screen count in Ads, but no screen could be judged: no ✅, never "koi signal nahi" on a
+    # screen, and the cause is GA4's grain, never "no whole day"
+    t = out["v4"]["third"]
+    j = t["jan"]
+    assert "💡 — · ⚠️ 0 · 🔻 0" in j["card"] and "✅" not in j["card"]
+    assert "Is period me %s — %s" % (GRAINW, FSJUDGED) in j["card"] and "koi final whole din nahi" not in j["card"]
+    rows = {k: _c(v) for k, v in j["rows"].items()}
+    for n in ("Main", "Editor", "Other1"):
+        assert rows[n]["Signal"] == ("—", "is period me %s — judge nahi hua" % GRAINW), n
+    assert rows["Main"]["Ads"] == ("3,720", "") and rows["Total (app)"]["Ads"] == ("5,270", "")
+    assert rows["(not set)"]["Signal"] == ("—", "signals sirf app ki apni screens pe judge hote hain")
+    assert rows["Back press"]["Signal"] == ("—", "is period me koi signal nahi")            # (judged, on AdMob's own days)
+    assert j["dds"] == '<small class="sc-faint">is period me %s — judge nahi hua</small>' % GRAINW
+    assert "Is period me %s — is screen ke signals judge nahi hue, report nahi." % GRAINW in j["rowRep"]
+    assert "Is row pe is period me koi signal nahi" not in j["rowRep"]
+    assert j["rep"].endswith("GA4 gave the ads by screen without the format in this period — " + FSJUDGED_EN)
+    # the same month on an app judged on all formats: GA4's grain is not the cause
+    assert "Is period me %s — %s" % (FINALW, FSJUDGED) in t["allf"] and GRAINW not in t["allf"] and "✅" not in t["allf"]
+
+
+def test_v4_only_not_final_days_with_ads_by_screen_judge_no_screen(out):
+    # This month: every final day a GA4 copy, only Yesterday / Today with ads by screen (Ads 2/30): the card, a screen's
+    # Signal and the report say no final day had them; the note names the days left out for good
+    m = out["v4"]["third"]["tm"]
+    assert "Is period me %s — %s" % (FINALW, FSJUDGED) in m["card"] and "✅" not in m["card"]
+    assert _c(m["rows"]["Main"])["Signal"] == ("—", "is period me %s — judge nahi hua" % FINALW)
+    assert m["rep"].endswith("No final day with whole ads by screen in this period — " + FSJUDGED_EN)
+    assert "Is period me: Ads 2/30 din (28 din GA4 copy — screen-wise nahi gine) · " in m["note"]
+    assert out["v4"]["review"]["kinds"]["d60"].endswith("No final day with whole ads by screen in this period — the signals "
+                                                        "could not be judged.")          # (every count null: nothing named)
+
+
+def test_v4_a_full_screen_drop_beside_screens_never_judged(out):
+    # a listed full-screen 🔻 in such a month: the list stays, its line tagged as the table, the screens beside it not
+    # judged; the report lists it (no "not judged" line in its place)
+    f = out["v4"]["third"]["feb"]
+    assert "💡 — · ⚠️ 0 · 🔻 1" in f["card"] and "judge nahi ho sake" not in f["card"] and "✅" not in f["card"]
+    assert '<span class="sc-atn">App resume <small class="sc-faint">App open · full-screen</small></span>' in f["card"]
+    rows = {k: _c(v) for k, v in f["rows"].items()}
+    assert rows["App resume"]["Signal"][0] == "🔻 Imp / user −50%"
+    assert rows["Main"]["Signal"] == ("—", "is period me %s — judge nahi hua" % GRAINW)
+    assert "1. Full-screen: App resume — Dropped" in f["rep"]
+    assert "No signal" not in f["rep"] and "could not be judged" not in f["rep"]
+    # (a screen's line carries no tag: of Alpha's three, only the full-screen trigger's)
+    assert out["v4"]["attn"].count('· full-screen</small>') == 1 and "Interstitial · full-screen" in out["v4"]["attn"]
+
+
+def test_v4_a_full_screen_row_with_no_admob_day(out):
+    # no AdMob day in the period: its Signal and the details' header "not judged", its why (never "no signal"); the name's
+    # title holds no zero sums; no AdActivity sentence on such rows alone
+    r = out["v4"]["review"]
+    jan = r["f"]["mon:2026-01"]
+    w = "is period me AdMob ka data nahi"
+    for n in ("Back press", "App resume"):
+        assert _c(jan["rows"][n])["Signal"] == ("—", w + " — judge nahi hua"), n
+    assert _c(jan["rows"]["Back press"])["Screen / Ad"] == ("Back press", "AdMob units: unit_b · " + w)
+    assert r["f"]["janDds"] == '<small class="sc-faint">%s — judge nahi hua</small>' % w
+    assert "AdActivity" not in jan["note"] and "Back press" in jan["rows"]
+    # a row with AdMob days: its sums, as before
+    assert _c(r["jan"]["rows"]["Back press"])["Screen / Ad"][1] == ("AdMob units: unit_b · 3,100 requests · 2,480 fill · 1,271 "
+                                                                    "dikhe · AdMob ke 31/31 din")
+
+
+def test_v4_the_ads_dash_and_the_note_name_the_days_own_causes(out):
+    t = out["v4"]["third"]
+    # the store's month file unreadable: its own cause, never "not in yet"
+    for n in ("Main", "Total (app)"):
+        assert _c(t["x5"]["rows"][n])["Ads"] == ("—", "5/5 " + STOREW), n
+    # each cause with its days (and the note just counts them: the cells say why)
+    w = "1/5 %s · 1/5 din GA4 ne screen-wise rows kaat di / sample ki · 2/5 %s · 1/5 din abhi GA4 se nahi aaye" % (COPYW, STOREW)
+    assert _c(t["mix5"]["rows"]["Main"])["Ads"] == ("—", w) and "Ads 0/5 din." in t["mix5"]["note"]
+    # some days with ads by screen: the numbers are those days', the days left out for good named in the note
+    assert _c(t["part"]["rows"]["Main"])["Ads"] == ("360", "")
+    assert "Is period me: Ads 3/5 din (1 din GA4 copy — screen-wise nahi gine) (1 din GA4 ne kaat / sample kiye). " in t["part"]["note"]
+
+
+def test_v4_all_apps_users_why_is_never_the_signals(out):
+    # Yesterday is a dashboard period with no final day: "no final day" is the Signals cell's why alone (users need none)
+    a = _c(out["v4"]["third"]["allY"]["v4g"])
+    assert a["Users"] == ("—", "is period ke users abhi GA4 se padhe nahi (agle run me)")
+    assert a["Signals"] == ("—", "abhi koi final din nahi")
+
+
+def test_v4_all_apps_a_custom_range_before_an_apps_first_day(out):
+    # All apps' Custom range wholly before a young app's first day (picked reversed too): the row names its history, never
+    # the first day's numbers; the older app beside it keeps its numbers
+    t = out["v4"]["third"]
+    w = "is period me is app ka data nahi (history 1 Feb 2026 se)"
+    cw = "Custom period: users aur signals sirf dashboard ke periods pe"
+    for p in ("cusPre", "cusRev"):
+        a = _c(t[p]["v4y"])
+        for h in ("Users", "Views", "Ads", "Revenue", "Signals"):
+            assert a[h] == ("—", w), (p, h)
+        o = _c(t[p]["Alpha App"])
+        assert o["Views"] == ("36,504", "") and o["Users"] == o["Signals"] == ("—", cw), p
+    # the range's later end inside its history (reversed, or overlapping): the numbers of the days it has, Custom's own why
+    for p in ("cusEnd", "cusOver"):
+        a = _c(t[p]["v4y"])
+        assert a["Views"] == ("11,515", "") and a["Users"] == a["Signals"] == ("—", cw), p
+    assert t["devMoney"] == [False, False, False]                                  # (the developer's copy: no money on any)
+
+
+def test_v4_the_report_names_the_kinds_judged(out):
+    k = out["v4"]["review"]["kinds"]
+    assert k["d7"].endswith("No signal among the kinds judged (Room for ads, Dropped); not judged: Ads wasted (no AdMob fill "
+                            "or no row with fill).")
+    assert k["all"].endswith("No signal among the kinds judged (Room for ads, Ads wasted); not judged: Dropped (nothing before "
+                             "All time).")
+    assert k["delta"].endswith("No signal among the kinds judged (Room for ads); not judged: Ads wasted (no AdMob fill or no row "
+                               "with fill), Dropped (under 7 days with users on both sides).")
+    assert k["feb"].endswith("\n\nNo signal in this period.")                        # (every kind judged: as before)

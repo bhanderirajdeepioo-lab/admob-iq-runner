@@ -8569,8 +8569,8 @@ function repWait(id,key,need2){ const a=apPtr(id); if(!a) return fileGate(id,'l'
 // v 4: the row's report = its signals in the picked period (file 2 alone); before file 2: the same disabled Copy control
 function repWait4(id,key){ const a=apPtr(id); if(!a) return fileGate(id,'l'); return fErr(f2Name(a))?waitHtml(f2Name(a)):copyBox(null,key); }
 function repSec(x,id,i){ const f2=f2Of(id); if(!f2) return repWait4(id,'row'); const [lo,hi]=rng(x), t=v4Report(x,id,lo,hi,i), R=v4Rows(x,f2,lo,hi), it=(x.items||[])[i];
-  // (a screen in a period with no ads-by-screen day was never judged: said so, never "no signal")
-  return t?copyBox(t,'row'):`<p class="sc-note">${!R.fin?'Is period me abhi koi final din nahi — signals nahi, report nahi.':it&&it[1]==='s'&&!R.na?'Is period me screen-wise ads ka koi whole din nahi — is screen ke signals judge nahi hue, report nahi.':'Is row pe is period me koi signal nahi — report nahi.'}</p>`; }
+  // (a screen in a period no screen could be judged in: said so with the period's own cause, never "no signal")
+  return t?copyBox(t,'row'):`<p class="sc-note">${!R.fin?'Is period me abhi koi final din nahi — signals nahi, report nahi.':it&&it[1]==='s'&&R.scrNo?`Is period me ${R.scrWhy} — is screen ke signals judge nahi hue, report nahi.`:'Is row pe is period me koi signal nahi — report nahi.'}</p>`; }
 // ---- the folds ----
 function fold(k,title,hint,body){ return `<details class="sc-fold" data-sc-fold="${k}"${FOLD[k]?' open':''} ontoggle="SCR.fold('${k}',this.open)"><summary><span class="sc-chev">▸</span><span>${title}</span><span class="sc-fh">${hint}</span></summary><div class="sc-fin" id="sc-f-${k}">${body}</div></details>`; }
 function srcBody(x,id,lo,hi){ const L=lOf(id); if(!L) return fileGate(id,'l'); const by={}; let nd=0,bad=0;
@@ -8655,12 +8655,14 @@ const admLast=a=>{ let k=Array.isArray(a)?a.length-1:-1; while(k>=0&&a[k]==null)
 function v4Rows(x,f2,lo,hi){ let m=V4M.get(f2); if(!m||m.x!==x){ m={x,v:new Map(),kl:admLast(f2.adt)}; V4M.set(f2,m); } const mk=lo+'|'+hi; if(m.v.has(mk)) return m.v.get(mk);
   const sc=f2.screens||[], n=sc.length, V=new Array(n).fill(0), G=new Array(n).fill(0), A=new Array(n).fill(0), R=new Array(n).fill(0), RA=new Array(n).fill(0);
   // (beside na: nc = GA4 copy days — the read came, but at grain c the build drops screen-wise ads it cannot tell apart
-  // (r null) · nx = days whose ads by screen GA4 cut, sampled or thresholded (no a, its state o / s / t))
-  let nd=0, nv=0, na=0, nm=0, nc=0, nx=0;
+  // (r null) · nx = days whose ads by screen GA4 cut, sampled or thresholded (no a, its state o / s / t) · nb = days whose
+  // store month file the build could not read (no a, its state x) · ng = days GA4 gave the ads by screen without the
+  // format (grain c, r kept): they count in Ads)
+  let nd=0, nv=0, na=0, nm=0, nc=0, nx=0, nb=0, ng=0;
   fDays(f2,x,lo,hi,d=>{ nd++; if(!d) return;
     if(Array.isArray(d.v)){ nv++; for(const q of d.v){ if(q[0]<n){ V[q[0]]+=+q[1]||0; G[q[0]]+=+q[2]||0; } } }
-    const a=d.a; if(a&&Array.isArray(a.r)){ na++; for(const q of a.r){ if(q[0]<n) A[q[0]]+=a.g==='f'?(+q[1]||0)+(+q[2]||0)+(+q[3]||0):(+q[q.length-1]||0); } }
-    else if(a&&a.r==null) nc++; else if(!a&&d.st&&['o','s','t'].includes(d.st.a)) nx++;
+    const a=d.a; if(a&&Array.isArray(a.r)){ na++; if(a.g==='c') ng++; for(const q of a.r){ if(q[0]<n) A[q[0]]+=a.g==='f'?(+q[1]||0)+(+q[2]||0)+(+q[3]||0):(+q[q.length-1]||0); } }
+    else if(a&&a.r==null) nc++; else if(!a&&d.st&&['o','s','t'].includes(d.st.a)) nx++; else if(!a&&d.st&&d.st.a==='x') nb++;
     if(Array.isArray(d.m)){ nm++; for(const q of d.m){ if(q[0]<n){ R[q[0]]+=+q[1]||0; RA[q[0]]+=+q[2]||0; } } } });
   const key=pk(x,lo,hi), pw=pwOf(f2,key), pu=(f2.pu||{})[key]||null, us={}, fin=finals(x,lo,hi);
   if(pu&&Array.isArray(pu.u)) for(const q of pu.u) us[q[0]]=+q[1]||0;
@@ -8700,17 +8702,23 @@ function v4Rows(x,f2,lo,hi){ let m=V4M.get(f2); if(!m||m.x!==x){ m={x,v:new Map(
   const revWhy=cur?`GA4 property ki currency ${cur} hai (USD nahi) — screens ka GA4 revenue yahan nahi dikhaya`:hasM?'':'is period ka revenue abhi GA4 se nahi aaya';
   if(!hasM) for(const r of rows) if(r.t==='s') r.rev=null;
   // (no ads-by-screen day in the period: the screens' Ads unknown, never 0; the AdActivity revenue only beside AdMob's rows
-  // — the period's own: none in it, no sentence)
-  const tot={users:pu&&pu.tot!=null?+pu.tot:null,views:tV,eng:tG,ads:na?tA:null,rev:hasM?tR:null,adm:an?aR:null,adR:hasM&&!noFs&&rows.some(z=>z.t==='f')?adR:null,fsR};
+  // — the period's own, with AdMob days in it: none, no sentence)
+  const tot={users:pu&&pu.tot!=null?+pu.tot:null,views:tV,eng:tG,ads:na?tA:null,rev:hasM?tR:null,adm:an?aR:null,adR:hasM&&!noFs&&rows.some(z=>z.t==='f'&&z.dn)?adR:null,fsR};
   tot.tu=tot.users>0?tG/tot.users:null;
   // % = a screen's share of the app's GA4 revenue; a full-screen row's of AdMob's total (each source on its own days)
   for(const r of rows) r.sh=r.rev==null?null:r.t==='f'?(an&&aR>0?r.rev/aR:null):(hasM&&tR>0?r.rev/tR:null);
   // (no ads-by-screen day: the screens' Ads "—" names its cause from the period's own days — copies, GA4's cut / sampled
-  // rows, the rest not in yet)
+  // rows, the store's unreadable month file, the rest not in yet)
   const adWhy=na?'':[nc?`${nc}/${nd} din GA4 ne ads do baar bheje (copy) — format ke bina screen ki copy alag nahi hoti, isliye screens ke Ads nahi gine`:'',
-    nx?`${nx}/${nd} din GA4 ne screen-wise rows kaat di / sample ki`:'',nd-nc-nx>0?`${nd-nc-nx}/${nd} din abhi GA4 se nahi aaye`:''].filter(Boolean).join(' · ');
+    nx?`${nx}/${nd} din GA4 ne screen-wise rows kaat di / sample ki`:'',nb?`${nb}/${nd} din build store ki month file padh nahi saka`:'',nd-nc-nx-nb>0?`${nd-nc-nx-nb}/${nd} din abhi GA4 se nahi aaye`:''].filter(Boolean).join(' · ');
+  // (no screen could be judged in the period: no ads-by-screen day — or the build's null 💡, no final day any screen could be
+  // judged on though the period has ads by screen: GA4's grain c on an app judged on inline ads, or only not-final / not
+  // whole days have them)
+  const sg0=(x.sg||{})[key], scrNo=!!fin&&(!na||(Array.isArray(sg0)&&sg0[0]==null)), noF=ng&&!(f2.notes&&f2.notes.allf);
+  const scrWhy=!na?'screen-wise ads ka koi whole din nahi':noF?'GA4 ne screen-wise ads format ke bina diye (inline ads alag nahi hote)':'final dino me screen-wise ads ka koi poora din nahi';
+  const scrWhyEn=!na?'No whole day of ads by screen in this period':noF?'GA4 gave the ads by screen without the format in this period':'No final day with whole ads by screen in this period';
   // (v4off: a period inside the app's history whose file has no v 4 periods — the build's v 4 failed for this app this run)
-  const out={rows,tot,nd,nv,na,nm,nc,nx,fsn,key,pw,pu,sig:!!sig,fin,cur,revWhy,adWhy,noFs,
+  const out={rows,tot,nd,nv,na,nm,nc,nx,fsn,key,pw,pu,sig:!!sig,fin,cur,revWhy,adWhy,noFs,scrNo,scrWhy,scrWhyEn,
     v4off:!(Array.isArray(f2.pw)&&f2.pw.length)&&!(x.d0&&hi<x.d0)}; m.v.set(mk,out); return out; }
 // why a period has no users / signals (never a silent "—"); the build's v 4 failed for this app: said so (health "scr v4")
 const V4OFF='is build me Users / Signals / full-screen (AdMob) rows nahi bane — robot error, health me "scr v4"; agle build me aayenge';
@@ -8740,14 +8748,17 @@ const uWhy4=(z,uw)=>uw||(z.users==null&&z.t==='s'?(z.k==='g'?'GA4 ka "(other)" h
 // an Ads cell: the count as GA4 gives it — a negative net is said to be GA4's own number (GA4 gives no cause for it)
 const NEGW='GA4 ne yahan net negative diya (GA4 ka apna number; wajah GA4 nahi batata)';
 const adCell=(v,why)=>ok(v)&&v<0?`<td title="${E(NEGW)}">${N(v)}</td>`:v4Cell(v,N,why);
-// a screen's signals in a period with no ads-by-screen day: never judged (never "no signal")
-const NAW='is period me screen-wise ads ka koi whole din nahi — judge nahi hua';
-function v4Tr(z,R,uw){ const tg=z.t==='f'?`${E(FMTN[fmtOf(z.fmt)]||z.fmt)} · full-screen`:z.k==='ad'?'ad screen · GA4':'';
+// a screen's signals in a period no screen could be judged in: never judged, the period's own cause (never "no signal")
+const NAW=R=>`is period me ${R.scrWhy} — judge nahi hua`;
+// a full-screen trigger's small tag (the table's and the signals card's)
+const fsTag=z=>`${E(FMTN[fmtOf(z.fmt)]||z.fmt)} · full-screen`;
+function v4Tr(z,R,uw){ const tg=z.t==='f'?fsTag(z):z.k==='ad'?'ad screen · GA4':'';
   const nm=`<span class="sc-n">${z.nameH}${tg?` <small class="sc-faint">${tg}</small>`:''}</span>`;
-  const tt=z.t==='f'?`AdMob units: ${z.units.join(', ')} · ${N(z.rq)} requests · ${N(z.mt)} fill · ${N(z.ads)} dikhe · AdMob ke ${z.dn}/${z.dd} din`:(z.k==='s'||z.k==='ad'?z.c:'');
+  // (no AdMob day in the period: its why, never zero sums beside "—")
+  const tt=z.t==='f'?`AdMob units: ${z.units.join(', ')} · ${z.dn?`${N(z.rq)} requests · ${N(z.mt)} fill · ${N(z.ads)} dikhe · AdMob ke ${z.dn}/${z.dd} din`:z.why}`:(z.k==='s'||z.k==='ad'?z.c:'');
   // the Signal cell: the row's signals, else "—" and why (no final day · not a build period · a kind never judged · a
-  // screen with no ads-by-screen day · none)
-  const sw=!R.fin?'abhi koi final din nahi':z.sig==null?puWhy4(x4(),null,'','',R)||'':z.sig.length?'':z.t==='s'&&z.k!=='s'?'signals sirf app ki apni screens pe judge hote hain':z.t==='s'&&!R.na?NAW:'is period me koi signal nahi';
+  // screen no day could judge · a full-screen row with no AdMob day · none)
+  const sw=!R.fin?'abhi koi final din nahi':z.sig==null?puWhy4(x4(),null,'','',R)||'':z.sig.length?'':z.t==='s'&&z.k!=='s'?'signals sirf app ki apni screens pe judge hote hain':z.t==='s'&&R.scrNo?NAW(R):z.t==='f'&&!z.dn?z.why+' — judge nahi hua':'is period me koi signal nahi';
   const sg=R.fin&&z.sig&&z.sig.length?`<td class="sc-cz" title="${E(z.sig.map(sigLong).join(' · '))}">${z.sig.map(sigShort).join('<br>')}</td>`:`<td class="sc-cz"${sw?` title="${E(sw)}"`:''}>—</td>`;
   const ck=z.open!=null?` class="sc-clk${OPEN===z.open?' sc-on':''}" data-sc-open="${z.open}" aria-expanded="${OPEN===z.open}" tabindex="0"`:'';
   return `<tr${ck}><td class="sc-nm"${tt?` title="${E(tt)}"`:''}>${nm}</td>`
@@ -8761,7 +8772,8 @@ function v4Body(x,id,lo,hi){ const a2=apPtr(id), f2=f2Of(id); if(!a2) return fil
   // (the total's "—" with their why too: the users GA4 gave none of, the ads by screen not in, the revenue not in / not $)
   const dv=devV(), tuw=uw||'GA4 ne is period ke app ke users nahi diye', tsw=T.rev>0?'':T.rev==null?R.revWhy:'total revenue 0 — hissa nahi';
   const ttr=`<tr class="sc-tot"><td class="sc-nm"><span class="sc-n">Total (app)</span>${T.adm!=null&&!dv?`<small>AdMob ${MU(T.adm)}</small>`:''}</td>${v4Cell(T.users,N,tuw)}${v4Cell(T.views,N)}${v4Cell(T.tu,fmtT,T.users==null?tuw:'')}${adCell(T.ads,R.adWhy)}${dv?'':`${v4Cell(T.rev,MU,R.revWhy)}<td${tsw?` title="${E(tsw)}"`:''}>${T.rev>0?'100%':'—'}</td>`}<td></td></tr>`;
-  const cov=[R.nv<R.nd?`Views ${R.nv}/${R.nd} din`:'',R.na<R.nd?`Ads ${R.na}/${R.nd} din`:'',R.nm<R.nd&&!dv?`Revenue ${R.nm}/${R.nd} din`:'',
+  // (only some days with ads by screen: the numbers above are those days' — the days left out for good named)
+  const cov=[R.nv<R.nd?`Views ${R.nv}/${R.nd} din`:'',R.na<R.nd?`Ads ${R.na}/${R.nd} din${R.na&&R.nc?` (${R.nc} din GA4 copy — screen-wise nahi gine)`:''}${R.na&&R.nx?` (${R.nx} din GA4 ne kaat / sample kiye)`:''}`:'',R.nm<R.nd&&!dv?`Revenue ${R.nm}/${R.nd} din`:'',
     R.fsn>0&&R.fsn<R.nd?`Full-screen (AdMob) ${R.fsn}/${R.nd} din`:''].filter(Boolean);
   // (no AdMob full-screen rows: the note says why, once — a failed v 4 is already the Users line on a dashboard period;
   // on Custom that line is Custom's own, so the failure is named here)
@@ -8772,7 +8784,7 @@ function v4Body(x,id,lo,hi){ const a2=apPtr(id), f2=f2Of(id); if(!a2) return fil
 // the signals of the period, one line each (tap = that row's details)
 function sigCard(x,id,lo,hi){ return `<div class="card sc-card" id="sc-attn"><div id="sc-sgb">${sigBody(x,id,lo,hi)}</div></div>`; }
 // a signal count's "—": the build could not judge it in the period (its null; 🔻 counts days WITH users on both sides)
-const SGW='— = is period me judge nahi hua (All time pe 🔻 nahi · AdMob data nahi · users wale din kam)';
+const SGW='— = is period me judge nahi hua (💡: screen-wise ads ka koi final usable din nahi · ⚠️: AdMob fill / row nahi · 🔻: All time pe nahi, ya dono taraf 7+ din users wale nahi)';
 // the kinds the build judged in a period (scr_all "sg": a null count = not judged; no counts shipped = none known)
 const sgYes=(id,key)=>{ const s=((ALL&&ALL.apps[id]&&ALL.apps[id].sg)||{})[key]; return Array.isArray(s)?[0,1,2].filter(j=>s[j]!=null):[]; };
 function sigBody(x,id,lo,hi){ const f2=f2Of(id), a2=apPtr(id); if(!a2) return `<div class="ct"><h3>Signals</h3></div>${fileGate(id,'f2')}`; if(!f2) return `<div class="ct"><h3>Signals</h3></div>${a2&&fErr(f2Name(a2))?waitHtml(f2Name(a2)):'<p class="sc-note">⏳ aa rahe hain…</p>'}`;
@@ -8785,16 +8797,16 @@ function sigBody(x,id,lo,hi){ const f2=f2Of(id), a2=apPtr(id); if(!a2) return `<
   const sg0=((ALL&&ALL.apps[id]&&ALL.apps[id].sg)||{})[R.key], nul=j=>Array.isArray(sg0)&&sg0[j]==null, cv=j=>nul(j)?'—':c3[j];   // (— = not judged in it)
   const head=`<div class="ct"><h3>Signals · ${E(perName(PER))}</h3><span class="sc-faint" title="${E(SGW)}">${SIGI.b} ${cv(0)} · ${SIGI.w} ${cv(1)} · ${SIGI.d} ${cv(2)}</span></div>`;
   if(!L.length){ const K=j=>SIGI['bwd'[j]];
-    // (no ads-by-screen day: no screen could be judged — the kinds the build judged on the full-screen (AdMob) rows, on
+    // (no screen could be judged: the period's own cause — the kinds the build judged on the full-screen (AdMob) rows, on
     // AdMob's own days, named; none named without such rows)
-    if(!R.na){ const yes=R.noFs?[]:sgYes(id,R.key).map(K);
-      return `${head}<p class="sc-note">Is period me screen-wise ads ka koi whole din nahi — ${yes.length?`screens ke signals judge nahi ho sake · full-screen (AdMob) rows pe ${yes.join(' ')} judge hue: koi signal nahi`:'signals judge nahi ho sake'}.</p>`; }
+    if(R.scrNo){ const yes=R.noFs?[]:sgYes(id,R.key).map(K);
+      return `${head}<p class="sc-note">Is period me ${R.scrWhy} — ${yes.length?`screens ke signals judge nahi ho sake · full-screen (AdMob) rows pe ${yes.join(' ')} judge hue: koi signal nahi`:'signals judge nahi ho sake'}.</p>`; }
     // (✅ only when every kind was judged; a kind the build could not judge says why — 🔻: the build's days with users)
     const no=[0,1,2].filter(nul), why=j=>j===0?'views / ads ka koi final whole din nahi':j===1?'AdMob fill nahi':R.pw[3]==='all'?'All time pe 🔻 nahi':'dono taraf 7+ din users wale nahi';
     const nw=no.map(j=>`${K(j)} —: ${why(j)}`).join(' · ');
     return no.length===3?`${head}<p class="sc-note">Is period me signals judge nahi ho sake (${nw}).</p>`
       :no.length?`${head}<p class="sc-ok">✅ Judge hue signals (${[0,1,2].filter(j=>!nul(j)).map(K).join(' ')}) me koi nahi · ${nw}</p>`:`${head}<p class="sc-ok">✅ Is period me koi signal nahi</p>`; }
-  return `${head}${L.map(q=>{ const o=q.z.open; return `<div class="sc-at"><span class="sc-atn">${q.z.nameH}</span><span class="sc-atr">${sigShort(q.s)}</span>${o!=null?`<button type="button" class="sc-lnk" data-sc-open="${o}">Details ▸</button>`:''}<small>${E(sigLong(q.s))}</small></div>`; }).join('')}`
+  return `${head}${L.map(q=>{ const o=q.z.open; return `<div class="sc-at"><span class="sc-atn">${q.z.nameH}${q.z.t==='f'?` <small class="sc-faint">${fsTag(q.z)}</small>`:''}</span><span class="sc-atr">${sigShort(q.s)}</span>${o!=null?`<button type="button" class="sc-lnk" data-sc-open="${o}">Details ▸</button>`:''}<small>${E(sigLong(q.s))}</small></div>`; }).join('')}`
     +`<p class="sc-note">Line pe "Details ▸" = us row ki details · niyam: neeche ❓ How this works.</p>`; }
 // a display item → its v 4 row's signals for the period (the drill-down's header): a screen by its class, a trigger by
 // its label and format; none for an aggregate row (Not recorded, GA4 grouped, Ad screens: never judged — said so)
@@ -8803,7 +8815,7 @@ function v4SigOf(x,f2,i,lo,hi){ const it=(x.items||[])[i]; if(!it||!f2) return '
   if(!R.fin) return '<small class="sc-faint">abhi koi final din nahi — signals nahi</small>';
   if(it[1]==='ns'||it[1]==='g'||it[1]==='ad') return '<small class="sc-faint">signals sirf app ki apni screens pe judge hote hain</small>';
   const z=R.rows.find(r=>it[1]==='fs'?r.t==='f'&&r.name===it[0]&&fmtOf(r.fmt)===fmtOf(it[2]):r.t==='s'&&r.k==='s'&&r.c===it[0]);
-  return z&&z.sig&&z.sig.length?z.sig.map(s=>`<span title="${E(sigLong(s))}">${sigShort(s)}</span>`).join(' · '):`<small class="sc-faint">${it[1]==='s'&&!R.na?NAW:'is period me koi signal nahi'}</small>`; }
+  return z&&z.sig&&z.sig.length?z.sig.map(s=>`<span title="${E(sigLong(s))}">${sigShort(s)}</span>`).join(' · '):`<small class="sc-faint">${it[1]==='s'&&R.scrNo?NAW(R):z&&z.t==='f'&&!z.dn?z.why+' — judge nahi hua':'is period me koi signal nahi'}</small>`; }
 // the developer report for the period (English, no money): every signal with what to check
 const SIGCK={b:'Users spend a large share of their time on this screen but see almost no ads: check whether an ad slot (banner / native) fits it, and that the ad is not switched off by remote config or a version check.',
   w:'Ads are loaded (filled) but most are never shown: load closer to the moment of showing, do not preload on every open, check the view is attached and visible, and that preloaded ads do not expire before they show.',
@@ -8817,14 +8829,20 @@ function v4Report(x,id,lo,hi,i){ const f2=f2Of(id); if(!f2) return null; const R
   let n=0; for(const z of sortV4(R.rows)) for(const s of (mine(z)?z.sig:null)||[]){ n++;
     const what=s[0]==='b'?`${PSH(s[1])} of the app's screen time, ${PSH(s[2])} of its ads`:s[0]==='w'?`${s[1]}: ${N(s[4])} filled, ${N(s[5])} shown (${PI(s[2])}); not shown = ${PSH(s[3])} of all the app's fills${okD(s[6])&&okD(s[7])?`; the units' share on the screen from the split days ${rg(s[6],s[7],true)} (the period had under 3 of its own)`:''}`:`impressions per user per day ${PU(s[1])} → ${PU(s[2])} (${PCH(s[1],s[2])}) vs ${rg(s[3],s[4],true)}`;
     o.push('',`${n}. ${z.t==='f'?'Full-screen: ':'Screen: '}${z.t==='s'?z.c:z.name} — ${SIGEN[s[0]]}`,`   ${what}`,`   Check: ${SIGCK[s[0]]}`); }
-  // (no ads-by-screen day: the screens never judged — the kinds judged on the full-screen (AdMob) rows named, as the card)
-  if(!n){ if(it) return null; const yes=R.na||R.noFs?[]:sgYes(id,R.key).map(j=>SIGEN['bwd'[j]]);
-    o.push('',R.na?'No signal in this period.':`No whole day of ads by screen in this period — ${yes.length?`the screens' signals could not be judged · the full-screen (AdMob) rows were judged on ${yes.join(', ')}: no signal`:'the signals could not be judged'}.`); }
+  // (no screen could be judged: the period's own cause, the kinds judged on the full-screen (AdMob) rows named, as the card;
+  // else a kind the build could not judge says why: "no signal" only of the kinds it did)
+  if(!n){ if(it) return null; const K=j=>SIGEN['bwd'[j]], yes=R.noFs||!R.scrNo?[]:sgYes(id,R.key).map(K), sg=(x.sg||{})[R.key], no=Array.isArray(sg)?[0,1,2].filter(j=>sg[j]==null):[];
+    const why=j=>j===0?'no final day with usable ads by screen':j===1?'no AdMob fill or no row with fill':R.pw[3]==='all'?'nothing before All time':'under 7 days with users on both sides';
+    o.push('',R.scrNo?`${R.scrWhyEn} — ${yes.length?`the screens' signals could not be judged · the full-screen (AdMob) rows were judged on ${yes.join(', ')}: no signal`:'the signals could not be judged'}.`
+      :no.length?`No signal among the kinds judged (${[0,1,2].filter(j=>!no.includes(j)).map(K).join(', ')}); not judged: ${no.map(j=>`${K(j)} (${why(j)})`).join(', ')}.`:'No signal in this period.'); }
   return o.join('\n'); }
 // All apps: Users (the period's, the app), Views, Ads (GA4), Revenue (AdMob), the signals' counts — each "—" with its
 // why (an empty sg for a period not before the app's first day: the build's v 4 failed for the app this run)
 function appRow4(r){ const x=r.x, z={r,users:null,views:null,ads:null,rev:null,sg:null,lo:'',hi:''};
   if(!x.d0||!okD(x.ft)){ const w='is app ka Screens data abhi aa raha hai (history bhar rahi hai)'; return Object.assign(z,{why:w,uwhy:w,rwhy:w,vwhy:w}); }
+  // (a Custom range that ends before the app's first day — rng would clamp it onto that day: the history named, never that
+  // day's numbers; the range's end is the later of the two, it can be picked reversed)
+  const cE=PER==='cus'&&okD(PTO)?(okD(PF)&&PF>PTO?PF:PTO):''; if(cE&&cE<x.d0){ const w=preWhy4(x); return Object.assign(z,{why:w,uwhy:w,rwhy:w,vwhy:w}); }
   const [lo,hi]=rng(x), key=pk(x,lo,hi); let v=0,a=0,rv=0,nv=0,nr=0,na=0;
   spanK(x,lo,hi,k=>{ const V=(x.V||[])[k]; if(Array.isArray(V)){ nv++; for(const q of V) if(q!=null) v+=+q||0; }
     const t=(x.ta||[])[k]; if(Array.isArray(t)){ na++; a+=(+t[0]||0)+(+t[1]||0)+(+t[2]||0); }
@@ -8835,7 +8853,7 @@ function appRow4(r){ const x=r.x, z={r,users:null,views:null,ads:null,rev:null,s
   const off=!!x.sg&&typeof x.sg==='object'&&!Object.keys(x.sg).length&&!pre, fin=finals(x,lo,hi);
   const why=!(x.sg&&key in x.sg)?(PER==='cus'?'Custom period: users aur signals sirf dashboard ke periods pe':off?V4OFF:pre?hw:'is period me is app ka data nahi'):!fin?'abhi koi final din nahi':'';
   return Object.assign(z,{lo,hi,users:x.pt&&key in x.pt?+x.pt[key]:null,views:nv?v:null,ads:na?a:null,rev:nr?rv:null,sg:fin&&x.sg&&Array.isArray(x.sg[key])?x.sg[key]:null,why,
-    uwhy:x.pt&&key in x.pt?'':why||'is period ke users abhi GA4 se padhe nahi (agle run me)',vwhy:pre?hw:'',
+    uwhy:x.pt&&key in x.pt?'':x.sg&&key in x.sg?'is period ke users abhi GA4 se padhe nahi (agle run me)':why,vwhy:pre?hw:'',   // (users need no final day: the signals' why stays theirs)
     rwhy:nr?'':pre?hw:off?'is build me AdMob revenue nahi bana — robot error, health me "scr v4"; agle build me aayega'
       :(x.rv||[]).some(m=>Array.isArray(m)&&m[1]!=null)?'is period me AdMob ka koi poora din nahi':'is app ka AdMob data nahi'}); }
 let SORT4={k:'rev',dir:-1};

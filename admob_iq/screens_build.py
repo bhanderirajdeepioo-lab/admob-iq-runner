@@ -3580,10 +3580,11 @@ class _Pre:
 
 def signals4(app, allf, wins, fs4, fsd):
     """The three signals for every period of `wins` → ({key: {row id: [[code, …], …]}}, {key: [💡, ⚠️, 🔻]}, a count
-    null where not judged): row ids "s<screen index>" (screens) and "f<n>" (fs4's rows). 💡 ["b", time share, ads
-    share]; ⚠️ ["w", unit, shown ÷ filled, not shown ÷ the app's fills, filled, shown] (+ the unit mix's first and last
-    day on a screen whose σ took the newest SIG_N days); 🔻 ["d", before, now, before's lo, before's hi] (Imp / user /
-    day). A screen's units are its AdMob unit ids (one AdMob unit two GA4 names share — two cases, with and without a
+    null where not judged — ⚠️: no row with fill): row ids "s<screen index>" (screens) and "f<n>" (fs4's rows). 💡 ["b",
+    time share, ads share]; ⚠️ ["w", unit, shown ÷ filled, not shown ÷ the app's fills, filled, shown] (+ the unit mix's
+    first and last day on a screen whose σ took the newest SIG_N days); 🔻 ["d", before, now, before's lo, before's hi]
+    (Imp / user / day).
+    A screen's units are its AdMob unit ids (one AdMob unit two GA4 names share — two cases, with and without a
     format — is ONE unit: σ per ids, as ab_tside) with σ = min(1, its GA4 ads on the screen ÷ the units read's GA4 ads
     on those ids) over the period's whole unit-split days whose units read is whole too (under SIG_MIN: the newest SIG_N
     up to its end); a full-screen row's: its AdMob units, each once. 🔻's materiality: the row's share of its kind's ads
@@ -3675,6 +3676,7 @@ def signals4(app, allf, wins, fs4, fsd):
         # ⚠️
         X = {pid: PX[pid].sum(lo, hi) for pid in pids}
         fills = sum(x[1] for x in X.values())
+        jw = False                               # a row of either kind had fill (the app's fills alone judge nothing)
         if fills > 0:
             sw = [d for d in fu if lo <= d <= hi]
             S = sw if len(sw) >= SIG_MIN else [d for d in fu if d <= hi][-SIG_N:]
@@ -3701,12 +3703,14 @@ def signals4(app, allf, wins, fs4, fsd):
                     im += sg * xi
                     if sg * (xm - xi) > bw:
                         best, bw = ids, sg * (xm - xi)
+                jw = jw or mt > 0                # (judged, even when it wastes too little to flag)
                 if mt > 0 and im / mt < SIG_SHOW and mt - im >= SIG_WASTE * fills and best is not None:
                     sig.setdefault("s%d" % app.six[c], []).append(
                         ["w", names.get(best) or app.adm.ids[best[0]]["name"], _r(im / mt, 4), _r((mt - im) / fills, 4),
                          round(mt), round(im)] + (old_mix or []))       # (+ the unit mix's days when not the period's)
             for n_, (f, lab, ps) in enumerate(fs4):
                 mt, im = sum(X[p][1] for p in ps if p in X), sum(X[p][2] for p in ps if p in X)
+                jw = jw or mt > 0                # (its units filled: GA4's by-screen days never needed)
                 if mt > 0 and im / mt < SIG_SHOW and mt - im >= SIG_WASTE * fills:
                     big = max((p for p in ps if p in X), key=lambda p: (X[p][1] - X[p][2], p))
                     sig.setdefault("f%d" % n_, []).append(
@@ -3752,12 +3756,12 @@ def signals4(app, allf, wins, fs4, fsd):
         for xs in sig.values():
             for x in xs:
                 c3["bwd".index(x[0])] += 1
-        # (not judged: no final whole day for 💡 · no AdMob fill for ⚠️ · for 🔻 no row with SIG_DAYS days with users on
-        # each side — All time, the first month, a young app's long window, users a day late on the last 7 days)
+        # (not judged: no final whole day for 💡 · no row with fill for ⚠️ · for 🔻 no row with SIG_DAYS days with users
+        # on each side — All time, the first month, a young app's long window, users a day late on the last 7 days)
         days_f = PD.sum(lo, hi_f)[0] if lo <= hi_f else 0
         if not days_f:
             c3[0] = None
-        if fills <= 0:
+        if fills <= 0 or not jw:
             c3[1] = None
         if not judged:
             c3[2] = None

@@ -55,7 +55,10 @@
 //     days, the developer's copy — every "—" with its why. The second review's: a final month with no ads-by-screen day
 //     (GA4's copies) naming what WAS judged, 🔻's "—" by its days with users, the Ads "—"'s cause from the period's own
 //     days, All apps before an app's first day, the keep rule's pending days and 28-day edge (AdMob from mid-month), a
-//     failed v 4 on Custom, two ad screens as rows.
+//     failed v 4 on Custom, two ad screens as rows. The third review's: a null 💡 = no screen judged, whatever the days'
+//     ads by screen (GA4's grain c, a copy month with Yesterday / Today in), a full-screen 🔻 listed beside them, the card's
+//     tag, a full-screen row with no AdMob day, the store's unreadable days, the partial Ads note, All apps' Users "—" and
+//     a Custom range before an app's first day, the report's kinds.
 // Prints ONE JSON report; tests/test_scr_frontend.py asserts on it.   usage: node scr_frontend.js <index.html>
 'use strict';
 const fs = require('fs'), vm = require('vm');
@@ -1299,10 +1302,15 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
         // "0 · $0.00"), and with no AdMob row in it, no AdActivity sentence; a month wholly before AdMob keeps them, "—" and
         // why; This month: their own days; Today keeps them (not complete yet)
         R4.f = {}; for (const p of ['mon:2026-01', 'mon:2026-02', 'tm', 'today']) { hh = await show4('v4f', { PER: p }); R4.f[p] = { rows: cellsT(hh, 'sc-ttw').rows, note: noteOf(hh) }; }
+        // … a full-screen row with no AdMob day in the month: never judged — its details' header too
+        await show4('v4f', { PER: 'mon:2026-01' }); _.set({ OPEN: 6, SEC: 'ov' }); SCR.paint(); R4.f.janDds = ddsOf(SCREEN.innerHTML); _.set({ OPEN: null });
         // All apps on a month before every app's first day: each "—" names the history, never "not in yet"
         R4.allPre = cellsT(await show4('', { PER: 'mon:2025-12' }), 'sc-atw').rows;
         // How this works: 🔻's days are the days with users
         hh = await show4('v4q', { PER: '30' }); R4.how = hh.slice(hh.indexOf('data-sc-fold="how"'));
+        // the report with no signal listed: the kinds judged, the others with why (all judged: as before; a null 💡: no screen)
+        R4.kinds = { d7: _.v4Report(xq, 'v4q', '2026-03-22', '2026-03-28'), all: _.v4Report(xq, 'v4q', '2026-01-01', '2026-03-30'), feb: _.v4Report(xq, 'v4q', '2026-02-01', '2026-02-28'),
+          d60: _.v4Report(xq, 'v4q', '2026-01-28', '2026-03-28'), delta: _.v4Report(ALLF.apps[ID.d], ID.d, '2026-02-27', '2026-03-28') };
         // GA4's grouped row: the period read's "(other)" users (fold) never beside the views reads' "(other)"
         R4.grouped = cellsT(await show4('Alpha App', { PER: '30' }), 'sc-ttw').rows['Other (GA4 grouped)'];
         // a GA4 property in another currency: the screens' revenue "—" with why (the AdMob rows as before); the developer's
@@ -1327,6 +1335,53 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
         delete ctx.DATA.scr.apps.v4q; delete ctx.DATA.scr.apps.v4off; delete ctx.DATA.scr.apps.v4f; ctx.DATA.scr.fv = 'f17'; ctx.APP = 'Alpha App'; _.set({ OPEN: null, SEC: 'ov', PER: '30' });
       }
       SCR.paint(); await tick(); SCR.paint();
+      // ── v 4, the third review's cases: "v4g" — January whole at grain c (GA4 gave the ads by screen without the format, the app
+      // judged on inline ads: the build's 💡 null, ⚠️ 🔻 0), February the same with a full-screen 🔻, This month every final
+      // day a copy with only Yesterday / Today's ads by screen in; "v4y": first day 1 Feb (All apps' Custom before it) ──
+      {
+        const GK = 'a00000000013', YK = 'a00000000014', gn = 'scr_' + GK + '.json.gz', gl = 'scr_l_' + GK + '.json.gz', FEB = '2026-02-01_2026-02-28', R5 = out.v4.third = {};
+        const xg = mkAll({ key: GK }), fg = mkF2({ key: GK, id: 'v4g' }), xy = mkAll({ key: YK });
+        for (let k = 0; k < 59; k++) fg.days[k].a = { g: 'c', r: [[0, 120], [1, 50]] };
+        for (let k = 59; k < 87; k++) fg.days[k].a = { g: 'c', r: null };
+        fg.sig[FEB] = { f1: [['d', 0.2, 0.1, '2026-01-04', '2026-01-31']] };
+        xg.sg = { '2026-01-01_2026-01-31': [null, 0, 0], [FEB]: [null, 0, 1], '2026-03-01_2026-03-30': [null, 0, 0], '2026-03-29_2026-03-29': [0, 0, 0] };
+        Object.assign(xy, { d0: '2026-02-01', vis: xy.vis.slice(31), V: xy.V.slice(31), A: xy.A.slice(31), ta: xy.ta.slice(31), rv: xy.rv.slice(31), dk: xy.dk.slice(31) });
+        for (const r in xy.st) { xy.st[r] = xy.st[r].slice(31); xy.bf[r] = ['2026-02-01', true]; }
+        ALLF.apps.v4g = xg; ALLF.apps.v4y = xy; FILES[gn] = fg; FILES[gl] = mkL({ key: GK });
+        ctx.DATA.scr.apps.v4g = { key: GK, v: 'g', vl: 'g', from: D0, ft: FT }; ctx.DATA.scr.apps.v4y = { key: YK, v: 'y', vl: 'y', from: '2026-02-01', ft: FT }; ctx.DATA.scr.fv = 'f18';
+        try {
+          // January: the screens never judged, GA4's grain the cause — the card, a Signal, the details' header, the two reports
+          hh = await show4('v4g', { PER: 'mon:2026-01' }); await tick(8); hh = await show4('v4g', { PER: 'mon:2026-01' });
+          R5.jan = { card: cardOf(hh), rows: cellsT(hh, 'sc-ttw').rows, rep: _.v4Report(xg, 'v4g', '2026-01-01', '2026-01-31') };
+          _.set({ OPEN: 0, SEC: 'ov' }); SCR.paint(); R5.jan.dds = ddsOf(SCREEN.innerHTML);
+          _.set({ SEC: 'rep' }); SCR.paint(); hh = SCREEN.innerHTML; R5.jan.rowRep = hh.slice(hh.indexOf('id="sc-ddb"')); _.set({ OPEN: null, SEC: 'ov' });
+          // … the same month on an app judged on all formats: GA4's grain is not the cause
+          const rawG = _.FILES[gn].raw; _.FILES[gn].raw = Object.assign({}, rawG, { notes: Object.assign({}, rawG.notes, { allf: 2 }) });
+          R5.allf = cardOf(await show4('v4g', { PER: 'mon:2026-01' })); _.FILES[gn].raw = rawG;
+          // February: a full-screen 🔻 listed — the list stays (tagged as the table), the screens beside it never judged
+          hh = await show4('v4g', { PER: 'mon:2026-02' }); R5.feb = { card: cardOf(hh), rows: cellsT(hh, 'sc-ttw').rows, rep: _.v4Report(xg, 'v4g', '2026-02-01', '2026-02-28') };
+          // This month: ads by screen on Yesterday / Today only, every final day a copy
+          hh = await show4('v4g', { PER: 'tm' }); R5.tm = { card: cardOf(hh), rows: cellsT(hh, 'sc-ttw').rows, note: noteOf(hh), rep: _.v4Report(xg, 'v4g', '2026-03-01', '2026-03-30') };
+          // the Ads "—" and the note from the days' own causes: 1–5 Feb the store's month file unreadable · 6–10 Feb each cause
+          // (no ads-by-screen day) · 11–15 Feb three days with ads by screen beside a cut one and a copy
+          const fx = JSON.parse(JSON.stringify(rawG)), noA = (k, s) => { delete fx.days[k].a; fx.days[k].st.a = s; };
+          for (const k of [31, 32, 33, 34, 35, 36, 37]) noA(k, 'x');
+          noA(38, 'o'); noA(39, '-'); fx.days[40].a = { g: 'c', r: null }; noA(41, 's'); fx.days[42].a = { g: 'c', r: null };
+          _.FILES[gn].raw = fx; const cusG = async (f, t) => { const h2 = await show4('v4g', { PER: 'cus', PF: f, PTO: t }); return { rows: cellsT(h2, 'sc-ttw').rows, note: noteOf(h2) }; };
+          R5.x5 = await cusG('2026-02-01', '2026-02-05'); R5.mix5 = await cusG('2026-02-06', '2026-02-10'); R5.part = await cusG('2026-02-11', '2026-02-15'); _.FILES[gn].raw = rawG;
+          // All apps: Users on a dashboard period without them (Yesterday: "no final day" is the signals' why alone) · a Custom
+          // range before v4y's first day (and picked reversed) · one whose later end is inside it (reversed, overlapping)
+          R5.allY = cellsT(await show4('', { PER: 'yday' }), 'sc-atw').rows;
+          const allC = async (f, t) => cellsT(await show4('', { PER: 'cus', PF: f, PTO: t }), 'sc-atw').rows;
+          R5.cusPre = await allC('2026-01-05', '2026-01-20'); R5.cusRev = await allC('2026-01-20', '2026-01-05'); R5.cusEnd = await allC('2026-02-05', '2026-01-20'); R5.cusOver = await allC('2026-01-20', '2026-02-05');
+          // the developer's copy: no money on any of them
+          ctx.window.__DEV_VIEW__ = true; R5.devMoney = [(await show4('v4g', { PER: 'mon:2026-01' })).includes('$'), (await show4('v4g', { PER: 'mon:2026-02' })).includes('$'), (await show4('', { PER: 'cus', PF: '2026-01-05', PTO: '2026-01-20' })).includes('$')];
+        } finally {
+          ctx.window.__DEV_VIEW__ = false; delete ALLF.apps.v4g; delete ALLF.apps.v4y; delete FILES[gn]; delete FILES[gl];
+          delete ctx.DATA.scr.apps.v4g; delete ctx.DATA.scr.apps.v4y; ctx.DATA.scr.fv = 'f19'; ctx.APP = 'Alpha App'; _.set({ OPEN: null, SEC: 'ov', PER: '30' });
+        }
+        SCR.paint(); await tick(); SCR.paint();
+      }
     }
     // hub card none: the pointer alone never loads a file
     out.ready = SCR.ready();

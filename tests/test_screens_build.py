@@ -2806,6 +2806,75 @@ def test_v4_a_screen_with_no_ads_of_its_own_is_never_flagged_waste(tmp_path):
     assert got["2026-10-20"] == (["b"], [1, 0, 0], [])
 
 
+def test_v4_waste_count_is_null_where_no_row_had_fill(tmp_path):
+    # ⚠️ is judged on a row with fill: a screen with ads of its own in the period whose units filled, or a full-screen
+    # row whose units filled. The app's fills on units no row carries judge nothing — the count null ("—"), never 0
+    # ("judged, no waste"); wherever a row had fill a number, the ⚠️ lines listed
+    def no_ads(d):
+        r = core_recs(d, {})
+        r["a"]["r"], r["w"]["r"], r["t"]["a"] = [], [], []
+        return r
+    def sampled(d):
+        r = core_recs(d, {})
+        r["a"] = {"st": "s", "smp": 0.5}
+        return r
+    def ads_stop(d):                                                    # per screen only from 15 Sep, none from 20 Oct
+        r = core_recs(d, {})
+        if d >= "2026-09-15":
+            r["a"] = {"st": "w", "g": "c", "r": [] if d >= "2026-10-20" else
+                      [[c, sum(x[3] for x in r["a"]["r"] if x[0] == c)] for c in (MAIN, EDIT, ADACT, NS)]}
+        return r
+    def banner_native(dash):                                            # no full-screen unit in AdMob
+        dash["placements"] = [p for p in dash["placements"] if FMT[p["name"]] in ("banner", "native")]
+    def full_screen_unfilled(dash):
+        for p in dash["placements"]:
+            if FMT[p["name"]] not in ("banner", "native"):
+                for row in p["daily"]:
+                    row[2:5] = [0, 0, 0]                                # imp, req, matched
+    def only_unit_b_fills(dash):                                        # a banner unit GA4 shows on no screen
+        for p in dash["placements"]:
+            for row in p["daily"]:
+                row[2:5] = [0, 0, 0]
+        dash["placements"].append({"id": IDS["unit_b"], "name": "unit_b", "app": "App A", "account": "pub-0",
+                                   "format": "banner",
+                                   "daily": [[d, 0, 90, 110, 100, 0] for d in _days("2026-07-01", "2026-11-04")]})
+    def signals(name, edit=None, sc=None, day_fn=None):
+        data, out, dash = build(tmp_path / name, sc, day_fn=day_fn)
+        if edit:
+            edit(dash)
+        sb.run(dash, str(data), str(out), {}, NOW)
+        f2, sg = gz(out / ("scr_%s.json.gz" % KEY)), gz(out / "scr_all.json.gz")["apps"][AID]["sg"]
+        assert sum(x[1] for x in f2["adt"][_ix("2026-10-01"):_ix("2026-11-01")]) > 0     # October: the app's fills
+        return f2, sg, {k: c[1] for k, c in sg.items()}
+    nulls = dict.fromkeys(k for k, *_ in sb.pwin("2026-11-04", "2026-08-01"))
+    # banner / native units fill; no ads by screen, no full-screen unit
+    f2, _, w = signals("a", banner_native, day_fn=no_ads)
+    assert f2["fs4"] == [] and w == nulls
+    # the full-screen rows there, none with fill; the ads by screen sampled on every day
+    f2, _, w = signals("b", full_screen_unfilled, day_fn=sampled)
+    assert len(f2["fs4"]) == 2 and w == nulls
+    # the screens have ads of their own, their units fill nothing: only a unit no row carries does
+    f2, sg, w = signals("c", only_unit_b_fills)
+    assert len(f2["fs4"]) == 2 and sg["2026-10-01_2026-10-31"][0] == 0 and w == nulls
+    # the screens' ads stopped: σ's old mix has fill, but no screen has ads of its own in the last 7 days
+    f2, _, w = signals("d", banner_native, day_fn=ads_stop)
+    assert f2["fs4"] == [] and w["2026-10-27_2026-11-02"] is None and w["2026-09-01_2026-09-30"] == 0
+    # one row of either kind is enough: the screens alone (Yesterday's ads by screen are not final: no row judged) …
+    f2, sg, w = signals("e", banner_native, {"show_w": 0.6})
+    assert f2["fs4"] == [] and sg["2026-10-27_2026-11-02"] == [0, 1, 1] and sg["2026-09-01_2026-09-30"] == [0, 0, 0]
+    assert w["2026-11-03_2026-11-03"] is None
+    # … the full-screen rows alone (no ads by screen on any day)
+    f2, sg, w = signals("f", day_fn=sampled)
+    assert len(f2["fs4"]) == 2 and sg["2026-10-01_2026-10-31"][:2] == [None, 0]
+    # the made-up store, as ever: ⚠️ null on Today alone (AdMob's day not complete), the count the ⚠️ lines listed
+    f2, sg, w = signals("std", sc={"show_w": 0.6})
+    want = {k: 0 for k in nulls}
+    want.update({"2026-10-27_2026-11-02": 1, "2026-11-01_2026-11-04": 1, "2026-11-04_2026-11-04": None})
+    assert w == want and sg["2026-10-27_2026-11-02"] == [0, 1, 1]
+    nw = {k: sum(1 for xs in f2["sig"].get(k, {}).values() for x in xs if x[0] == "w") for k in sg}
+    assert all(c == nw[k] or (c is None and not nw[k]) for k, c in w.items())
+
+
 def test_v4_currency_ships_only_when_not_usd(tmp_path):
     # GA4's revenue is in the property's currency (the fetch's Admin API read, kept in the users file): file 2 names it
     # only when it is not USD; unknown — no users file, no prop yet, a refused first read — is taken as USD
