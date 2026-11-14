@@ -11,7 +11,7 @@ developer copy; a hostile app name escaped; cpx- classes only; and the wiring in
 the scoreboard, the level rows it marks, the Agent decisions list, the owner's buttons; nothing of it without its fields.
 ⚖️ Breakeven (owner, 14 Nov 2026; spec_be_tab §5 + the agreed additions, tests/cpx_fixture.js be()): the tab after Countries,
 its own file fetched only when it opens, the 14 newest install days with every cell and every "—"'s why, a day opened (its
-countries, "data kam" + the names on tap, the ROAS card with its values printed on the points, the index row), one day at a
+countries, "data kam" + the names on tap, the ROAS card with its values printed on the points), the period's days, one day at a
 time, keep(), the missing / refused / hostile / developer cases, and the layout a 375 px phone needs.
 Skipped where node is not installed. No real data."""
 import json
@@ -983,7 +983,7 @@ def test_agent_wiring_literals():
     assert "AGD=null;" in m and "'AGD' in o" in m
 
 
-# ── ⚖️ Breakeven (owner, 14 Nov 2026): per app × country breakeven for the app's newest 14 install days — the build's file
+# ── ⚖️ Breakeven (owner, 14 Nov 2026): per app × country breakeven for every install day of the screen's period — the build's file
 # (spec_be_tab §5 + the agreed additions) printed as it is; tests/cpx_fixture.js be() has the closed forms used here ──
 BE_A = "be_c0000000000a.json.gz"
 BE_DAYS = [d.isoformat() for d in days("2026-03-15", "2026-03-29") if d != date(2026, 3, 20)][::-1]   # newest first, 20 Mar not judged
@@ -1011,19 +1011,19 @@ def test_breakeven_tab_is_after_countries_and_loads_lazily(out):
 def test_breakeven_table_rows_cells_and_every_dash_says_why(out):
     t = out["be"]["table"]
     # the answer first (Breakeven, Ab tak: in view on a phone beside the sticky date), then the curve, then the inputs
-    assert [h[0] for h in t["head"][:9]] == ["Date", "Breakeven", "Ab tak", "ROAS 30 din", "ROAS 90 din", "ROAS 180 din", "Covered", "Spend", "Installs"]
-    assert t["head"][3][1] == "andaze se 30 din tak kamai ÷ spend (100% = breakeven)"
+    assert [h[0] for h in t["head"]] == ["Date", "Breakeven", "Ab tak", "ROAS 30 din", "ROAS 90 din", "ROAS 180 din", "Spend", "Installs"]   # no "Covered": read as "spend recovered" (owner)
+    assert t["head"][3][1] == "30 din tak kamai ÷ spend (100% = breakeven) — din guzar chuke to asli, warna andaza"
     rows = {r["d"]: r for r in t["rows"]}
     assert [r["d"] for r in t["rows"]] == BE_DAYS and t["open"] == 0 and not t["ch"]
     for d, r in rows.items():
         c = r["cells"]
-        assert c[7] == "₹50.0k" and c[8] == "1,600" and r["exp"] == "false"           # ₹ as billed: the day's $ × its own ₹/$ = ₹50,000
+        assert c[6] == "₹50.0k" and c[7] == "1,600" and len(c) == 8 and r["exp"] == "false"           # ₹ as billed: the day's $ × its own ₹/$ = ₹50,000
         assert ("⏳" in c[0]) == (BE_AGE[d] < 4)                                       # provisional: under 4 days old (26–29 Mar)
         assert c[0].startswith("%d Mar" % int(d[8:]))
         if d not in ("2026-03-15", "2026-03-24"):
             assert c[2] == "abhi nahi · ROAS %s day %d tak" % (_pct(0.10 + 0.02 * BE_AGE[d]), BE_AGE[d])
         if d not in ("2026-03-15", "2026-03-16", "2026-03-17", "2026-03-26", "2026-03-27", "2026-03-28"):
-            assert c[1] == "day 95 80%: day 50–170" and c[3:7] == ["40.0%", "96.0%", "✓ 180.0%", "85%"]   # ROAS off the curve: ✓ at 100 %+
+            assert c[1] == "day 95 80%: day 50–170" and c[3:6] == ["40.0%", "96.0%", "✓ 180.0%"]   # ROAS off the curve: ✓ at 100 %+
             assert r["badges"] == ["cpx-good"]                                          # (under 100 %: plain, never red)
             assert "andaze se 30 din tak ROAS 40.0% — 100% se kam: abhi breakeven nahi" in r["titles"]
             assert "andaze se 180 din tak ROAS 180.0% — 100% ya zyada: breakeven" in r["titles"]
@@ -1032,17 +1032,16 @@ def test_breakeven_table_rows_cells_and_every_dash_says_why(out):
     assert rows["2026-03-16"]["cells"][1] == "day 95"                                  # no band: the day alone, never a made-up range
     r = rows["2026-03-17"]                                                              # at its floor: "≥" what it has made already
     assert r["cells"][3:6] == ["≥ 34.0%", "96.0%", "✓ 180.0%"]
-    assert "andaze se 30 din tak ROAS kam se kam 34.0% — 100% se kam: abhi breakeven nahi (itna to ho chuka hai — model isse kam keh raha tha)" in r["titles"]
+    assert "ab tak (abhi final nahi): 30 din tak ROAS kam se kam 34.0% — 100% se kam: abhi breakeven nahi (itna to ho chuka hai — model isse kam keh raha tha)" in r["titles"]
     # 15 Mar broke even on day 12 (its curve past 100 % at all three)
     r = rows["2026-03-15"]
-    assert r["cells"][1:6] == ["day 12", "✅ BE ho gaya: day 12", "✓ 235.0%", "✓ 260.0%", "✓ 280.0%"] and r["badges"] == ["cpx-good"] * 3
+    assert r["cells"][1:6] == ["day 12 asli", "✅ BE ho gaya: day 12", "✓ 235.0%", "✓ 260.0%", "✓ 280.0%"] and r["badges"] == ["cpx-good"] * 3   # its real day
     # 24 Mar: no ROAS so far — "—" and why
     r = rows["2026-03-24"]
     assert r["cells"][2] == "abhi nahi · ROAS — day 5 tak" and "abhi tak ka ROAS nahi aaya" in r["titles"]
     # 26 Mar: only IN covered (60 %: half or more, not amber), its range open to the curve's end
     r = rows["2026-03-26"]
-    assert r["cells"][1] == "day 160 80%: day 90–180+" and r["cells"][3:7] == ["25.0%", "60.0%", "✓ 110.0%", "60%"] and r["wat"] == 1   # (the ⏳ only)
-    assert any("baaki 40% ka andaza nahi (data kam)" in x for x in r["titles"])
+    assert r["cells"][1] == "day 160 80%: day 90–180+" and r["cells"][3:6] == ["25.0%", "60.0%", "✓ 110.0%"] and r["wat"] == 1   # (the ⏳ only)
     assert "10 me se 8 baar breakeven is range me (180+ = 180 din ke andaze ke aage)" in r["titles"]   # its band's reach, not the curve's 270
     # 27 Mar: a curve to 60 days — ROAS 90 / 180 beyond it, no median crossing
     r = rows["2026-03-27"]
@@ -1051,17 +1050,15 @@ def test_breakeven_table_rows_cells_and_every_dash_says_why(out):
     assert "ROAS ka andaza 60 din tak hi bana (purane din utne hi) — usme 100% tak nahi pahuncha" in r["titles"]
     # 28 Mar: nothing covered ("app" absent) — every answer "—" with its why, never a throw
     r = rows["2026-03-28"]
-    assert r["cells"][1] == "—" and r["cells"][3:7] == ["—", "—", "—", "0%"] and r["badges"] == [] and r["wat"] == 2   # (⏳ + the amber 0 %: under half covered)
-    assert r["titles"].count("koi country covered nahi — data kam, andaza nahi") == 4
-    assert "koi country covered nahi — data kam: 20 se kam asli-BE wale purane din, ya is din ka CPI / eCPM unke purane din ki range ke bahar (ya aaya hi nahi)" in r["titles"]
+    assert r["cells"][1] == "—" and r["cells"][3:6] == ["—", "—", "—"] and r["badges"] == [] and r["wat"] == 1   # (the ⏳ only)
     # the $ view: the file's own $ at each day's rate
     assert out["be"]["table_usd"] == [[d, "$%d" % round(50000 * fxd(date.fromisoformat(d)))] for d in BE_DAYS]
     # how sure + the note under the table
     assert t["sure"] == "Is app ka andaza kitna pakka: 30 din 58% · 90 din 66% · 180 din 71% sahi · kaun din pehle BE karega: 64% sahi"
     assert t["fn"][0] == "Purane 120 install din pe parkha (back-test): BE wale aur na-BE wale din me se sahi din kitni baar pehchana · 50% = tukka, 100% = hamesha sahi · andaza 30 Mar ke data se, calibration 28 Mar."
     n = t["fn"][-1]
-    for w in ("ROAS 30 / 90 / 180 din = andaze se utne din tak kamai ÷ spend (✓ = 100% ya zyada = breakeven) · Breakeven din isi curve se", "covered countries ke ROAS curves unke spend share se jod ke",
-              "countries ke BE din ka average nahi", "sirf naye 14 install din", "⏳ = abhi final nahi (4 din se kam purana)"):
+    for w in ("ROAS 30 / 90 / 180 din = utne din tak kamai ÷ spend — jo din guzar chuke (final) unka asli, aage ka andaza (✓ = 100% ya zyada = breakeven; ≥ = itna to ho chuka) · Breakeven din: BE ho chuka to asli, warna isi curve se", "benchmark wali countries ke ROAS curves unke spend share se jod ke",
+              "countries ke BE din ka average nahi", "saare Google Ads spend wale install din, naya upar (30-30 karke; bina spend wale din yahan nahi)", "spend $5 se kam / 30 se kam naye users wale din: sirf asli numbers, andaza nahi", "⏳ = abhi final nahi (4 din se kam purana)"):
         assert w in n, w
 
 
@@ -1069,10 +1066,10 @@ def test_breakeven_day_opened_countries_data_kam_and_the_card(out):
     b = out["be"]
     d = b["d25"]                                                                        # $ view, 25 Mar (age 4)
     assert d["row"]["on"] and d["row"]["exp"] == "true" and d["n"] == 1 and not d["pv"]
-    assert d["cty_h4"] == "Covered countries (2)"
-    assert d["cty"]["head"] == ["Country", "Spend share", "CPI", "eCPM (first session)", "BE chance 30 din", "BE chance 90 din", "BE chance 180 din", "Breakeven"]
-    assert d["cty"]["rows"] == [["[IN] Name IN", "60%", "$0.31", "$4.00", "✗ 12%", "✓ 55%", "✓ 81%", "day 75 80%: day 40–160"],
-                                ["[US] Name US", "25%", "$0.62", "$9.60", "✗ 5%", "✗ 30%", "✓ 62%", "day 140 80%: day 70–210+"]]
+    assert d["cty_h4"] == "Countries with a benchmark (2)"
+    assert d["cty"]["head"] == ["Country", "Spend share", "CPI", "Breakeven"]          # only what he agreed (no chances, no eCPM)
+    assert d["cty"]["rows"] == [["[IN] Name IN", "60%", "$0.31", "day 75 80%: day 40–160"],
+                                ["[US] Name US", "25%", "$0.62", "day 140 80%: day 70–210+"]]
     assert "10 me se 8 baar breakeven is range me (210+ = country ke dekhe hue 210 din ke aage)" in d["cty"]["titles"]   # beyond its watched limit
     k = 50000 / (50000 * fxd(date(2026, 3, 25)))                                        # the ₹ view: CPI $ × that day's ₹/$
     assert [r[2] for r in b["d25i"]["cty"]["rows"]] == ["₹%.1f" % (0.31 * k), "₹%.1f" % (0.62 * k)] == ["₹26.3", "₹52.5"]
@@ -1093,33 +1090,28 @@ def test_breakeven_day_opened_countries_data_kam_and_the_card(out):
     for i, (p, q) in enumerate(zip(s["nt"], s["db"])):                                  # the benchmark: below its point where the day's sits above it, else above
         assert p["x"] == q["x"] and ((p["y"] > q["y"]) if i < 4 else (p["y"] < q["y"]))
     assert c["vs"] == "4 din: ROAS 16.0% vs benchmark 15.0% → +7%"                     # the last day both have
-    assert c["idx"]["head"] == ["Index · din", "1", "2", "3", "4", "7", "14"]           # the revenue ON day k ÷ day 1's × 100, rounded
-    assert c["idx"]["rows"] == [["Is din", "100", "60", "45", "38", "—", "—"], ["Benchmark", "100", "55", "42", "35", "25", "15"]]
-    assert c["idx"]["titles"][0] == "us din ki kamai ÷ install ke din (1 din) ki kamai × 100"
-    assert c["idx"]["titles"].count("install ko abhi itne din nahi hue") == 2
+    assert c["idx"] is None                                                            # no revenue index (owner: his index is an eCPM one)
     assert any("1 din = sirf install ka din" in x for x in c["fn"])
     # 15 Mar: broke even by day 14 — its card above the 100 % line, the index of its own curve
     f = b["d15"]["card"]
     assert [p["v"] for p in f["svg"]["pt"]] == ["35.0%", "52.0%", "63.0%", "72.0%", "90.0%", "108.0%"]
-    assert f["idx"]["rows"][0] == ["Is din", "100", "49", "31", "26", "20", "11"]        # its own index (48.6 · 31.4 · 25.7 · 20 · 11.4)
     assert f["vs"] == "14 din: ROAS 108.0% vs benchmark 35.0% → +209%"
     assert b["d21"]["card"]["none"] and b["d21"]["card"]["svg"] is None                  # no card: said, nothing drawn
     # 23 Mar: a country with unknown eCPM / chances / days — each "—" with its own why; US's median past its watched 210 days
     r = b["d23"]["cty"]
-    assert r["rows"][0] == ["[IN] Name IN", "60%", "₹26.3", "—", "—", "✓ 55%", "—", "—"]
-    assert r["rows"][1][7] == "data se aage (> 210 din)" and "country ka purana data sirf 210 din tak dekha — median breakeven usse aage" in r["titles"]
-    for w in ("first session ka eCPM nahi aaya", "30 din ka calibration nahi bana — andaza nahi", "180 din ka calibration nahi bana — andaza nahi",
-              "is country ka breakeven andaza nahi bana"):
+    assert r["rows"][0] == ["[IN] Name IN", "60%", "₹26.3", "—"]
+    assert r["rows"][1][3] == "data se aage (> 210 din)" and "country ka purana data sirf 210 din tak dekha — median breakeven usse aage" in r["titles"]
+    for w in ("is country ka breakeven andaza nahi bana",):
         assert w in r["titles"], w
     # 26 Mar (provisional): one country covered, 40 % of the spend "data kam"
     g = b["d26"]
-    assert g["pv"] and g["cty_h4"] == "Covered countries (1)" and g["cty"]["rows"][0][2] == "₹%.1f" % (0.31 * 50000 / (50000 * fxd(date(2026, 3, 26))))
+    assert g["pv"] and g["cty_h4"] == "Countries with a benchmark (1)" and g["cty"]["rows"][0][2] == "₹%.1f" % (0.31 * 50000 / (50000 * fxd(date(2026, 3, 26))))
     assert g["kam"] == "40% spend: data kam (2 countries + baaki chhote) — naam dekho"
     # 28 Mar: nothing covered — said, all of its spend "data kam", its card still there (provisional)
     h = b["d28"]
-    assert h["pv"] and h["cty"] is None and h["note"].startswith("Is din koi country covered nahi")
+    assert h["pv"] and h["cty"] is None and h["note"].startswith("Is din kisi country ka benchmark nahi")
     assert h["kam"] == "100% spend: data kam (3 countries + baaki chhote) — naam dekho"
-    assert h["card"]["vs"] == "2 din: ROAS 12.0% vs benchmark 11.0% → +9%" and h["card"]["idx"]["rows"][0] == ["Is din", "100", "60", "—", "—", "—", "—"]
+    assert h["card"]["vs"] == "2 din: ROAS 12.0% vs benchmark 11.0% → +9%" and h["card"]["idx"] is None
     assert any(x.startswith("⏳ Abhi final nahi") for x in h["card"]["fn"])              # the provisional note in the details
     q = b["d29"]["card"]["svg"]                                                         # age 0: one point; the benchmark's own labels above its points
     assert [p["v"] for p in q["pt"]] == ["10.0%"] and all(p["y"] < d0["y"] for p, d0 in zip(q["nt"][1:], q["db"][1:]))
@@ -1147,15 +1139,14 @@ def test_breakeven_missing_failed_and_refused_files(out):
     assert g["after"] == ["be_c0000000000c.json.gz"]
     assert g["text2"].startswith("Is app ka andaza kitna pakka: abhi kehne ke liye din kam (sirf 3 din parkhe).")
     sp = 120 * 10000 / (10000 * fxd(date(2026, 3, 25)))
-    assert g["rows"][0]["cells"] == ["25 Mar", "day 30 80%: day 20–60", "abhi nahi · ROAS 25.0% day 4 tak", "✓ 100.0%", "✓ 140.0%", "✓ 170.0%", "100%", "₹%.1fk" % (sp / 1e3), "300"]
-    assert "poora spend covered — har country ka benchmark (20+ asli-BE wale purane din) aur is din ka CPI / eCPM uski range me" in g["rows"][0]["titles"]
+    assert g["rows"][0]["cells"] == ["25 Mar", "day 30 80%: day 20–60", "abhi nahi · ROAS 25.0% day 4 tak", "✓ 100.0%", "✓ 140.0%", "✓ 170.0%", "₹%.1fk" % (sp / 1e3), "300"]
     assert not g["kam"]                                                                 # nothing uncovered: no "data kam" line
     assert [p["v"] for p in g["card"]["svg"]["pt"]] == ["20.0%"] and g["card"]["svg"]["nt"] == [] and g["card"]["vs"] == ""
-    assert g["card"]["idx"]["rows"][1] == ["Benchmark"] + ["—"] * 6 and any("Benchmark ke liye purane din kam." in x for x in g["card"]["fn"])
+    assert g["card"]["idx"] is None and any("Benchmark ke liye purane din kam." in x for x in g["card"]["fn"])
     assert b["delta"] == {"text": "Is build me is app ki Breakeven file nahi bani.", "loads": []}   # no entry
     assert b["eps"] == {"text": "Is build me is app ki Breakeven file nahi bani.", "loads": [], "a": None}   # a bad key / file name: never fetched
     assert b["beta"] == ("Is app ka andaza kitna pakka: abhi kehne ke liye din kam. andaza 30 Mar ke data se, calibration 28 Mar. "
-                         "Is app ke naye install din me koi judge layak din nahi (spend $5+ aur 30+ naye users) — Breakeven ka andaza nahi.")
+                         "Is app ka koi judge layak install din nahi (spend $5+ aur 30+ naye users) — Breakeven ka andaza nahi.")
     for k in ("wrong_key", "wrong_v", "wrong_days"):                                    # another key / version / shape: refused
         assert b[k] == "⚠️ Data load nahi hua. Try again", k
     assert b["bad_ptr"] == {"text": "🔌 Is build me Breakeven data nahi bana — agle robot run me aayega.", "loads": []}
@@ -1167,12 +1158,12 @@ def test_breakeven_hostile_text_is_escaped_and_junk_is_a_dash(out):
     assert h["raw"] == [] and h["esc"] == [True, True]
     assert [r["d"] for r in h["rows"]] == ["2026-03-26", "2026-03-25"]                  # a day with a bad date is dropped
     j = h["rows"][0]                                                                    # every value junk: "—" + why, never NaN / a raw string
-    assert j["cells"] == ["26 Mar", "—", "abhi nahi · ROAS —", "—", "—", "—", "—", "—", "—"]
+    assert j["cells"] == ["26 Mar", "—", "abhi nahi · ROAS —", "—", "—", "—", "—", "—"]
     assert j["titles"] == ["breakeven ka andaza nahi aaya", "abhi tak ka ROAS nahi aaya"] + ["is din ka andaza nahi aaya"] * 3 + [
-        "covered share nahi aaya", "spend nahi aaya", "Google Ads installs nahi aaye"]
+        "spend nahi aaya", "Google Ads installs nahi aaye"]
     assert h["rows"][1]["cells"][2] == "—" and "is din ka abhi tak ka data nahi aaya" in h["rows"][1]["titles"]   # an unknown "now" word
     assert h["sure"] == "Is app ka andaza kitna pakka: 30 din 55% · 90 din — · 180 din — sahi · kaun din pehle BE karega: 60% sahi"   # points scale too
-    assert h["d25"]["names"].count("Name") == 2 and "Is din koi country covered nahi" in h["d26"] and "Is din ka ROAS card nahi bana." in h["d26"]
+    assert h["d25"]["names"].count("Name") == 2 and "Is din kisi country ka benchmark nahi" in h["d26"] and "Is din ka ROAS card nahi bana." in h["d26"]
     assert "data kam" not in h["d26"]
 
 
@@ -1187,9 +1178,9 @@ def test_breakeven_fits_a_phone(out):
     wide at the box's left before and after a 220 px sideways scroll, the page itself 375 px — no sideways scroll.)"""
     y = out["be"]["layout"]
     assert y["same"]                                                                    # the layout is the CSS's: one render for every width
-    assert y["tables"] == ["cpx-x cpx-bex", "cpx-x", "cpx-x"]                           # every table in a scroll box (days, countries, index)
-    assert y["bed"] == {"td": "TD", "cls": "cpx-bedc", "span": "9", "box": True}         # the details: one cell across the 9 columns
-    assert y["head"] == 9 and set(y["cells"]) == {9}
+    assert y["tables"] == ["cpx-x cpx-bex", "cpx-x"]                                    # every table in a scroll box (days, countries)
+    assert y["bed"] == {"td": "TD", "cls": "cpx-bedc", "span": "8", "box": True}         # the details: one cell across the 8 columns
+    assert y["head"] == 8 and set(y["cells"]) == {8}
     assert y["svgs"] == [["cpx-svg cpx-bes", "0 0 320 168", None, None, None]]          # a viewBox, no fixed size / style
     assert not y["style"] and y["widths"] == 0
     p = _page()
@@ -1238,11 +1229,79 @@ def test_breakeven_rupee_rate_and_the_fold_marker(out):
     assert f == {"kam": "15% spend: data kam (1 country + baaki chhote) — naam chhupao", "names": "[BR] Name BR 10% · baaki chhote countries 5%"}
 
 
-def test_breakeven_covered_share_words_come_from_the_exact_value(out):
-    c = out["be"]["cov"]                       # 0.4 % covered is not "none"; 99.6 % is not "all" (its "data kam" shows)
-    assert c[0][0] == "<1%" and c[0][1].startswith("is din ke spend ka <1% un countries ka jinka andaza bana") and c[0][1].endswith("baaki >99% ka andaza nahi (data kam)")
-    assert c[1][0] == ">99%" and c[1][1].startswith("is din ke spend ka >99% un countries") and c[1][1].endswith("baaki <1% ka andaza nahi (data kam)")
-    assert c[2][0] == "0%" and c[2][1].startswith("koi country covered nahi — data kam")
-    assert c[3][0] == "100%" and c[3][1].startswith("poora spend covered")
-    assert c[4][0] == "60%" and c[4][1].endswith("baaki 40% ka andaza nahi (data kam)") and c[5][0] == "1%"
+def test_breakeven_shows_every_install_day_30_at_a_time(out):
+    """Every install day, not the newest 14 (owner: "31 Oct tak hi kyu? baki ke din?"): newest first whatever the screen's
+    picker, 30 at a time with "Show 30 more" as Day-wise."""
+    p = out["be"]["per"]
+    assert p["7/30"] == p["all/30"] == {"d": BE_DAYS, "more": False}                  # the picker does not cut them
+    assert p["14/5"] == {"d": BE_DAYS[:5], "more": True}                                # 5 shown of 14: "Show 30 more"
+
+
+def test_breakeven_lived_ages_are_real_not_the_model(out):
+    """An old install day: the ROAS of the ages it has lived with final cells (the build's "real") is its REAL one — "asli",
+    never "≥" — and only an age at / past its so-far age, at its ROAS so far, is the floor ("≥")."""
+    a, b = out["be"]["lived"]
+    assert a["cells"][3:6] == ["38.0%", "≥ 60.0%", "90.0%"]
+    assert "asli: 30 din tak ROAS 38.0% — 100% se kam: breakeven nahi hua" in a["titles"]
+    assert "ab tak (abhi final nahi): 90 din tak ROAS kam se kam 60.0% — 100% se kam: abhi breakeven nahi (itna to ho chuka hai — model isse kam keh raha tha)" in a["titles"]   # (a floor is never "andaze se")
+    assert b["cells"][3:6] == ["—", "≥ 60.0%", "90.0%"] and not any(x.startswith("asli:") for x in b["titles"])   # no cell at 30: never the model's number
+
+
+def test_breakeven_real_days_by_their_kind_and_never_100_percent_under_100(out):
+    """The ROI row's own breakeven, by kind: exact ("day N asli"), a daily cell not final ("day N final nahi", never "asli"),
+    ≤ a 30-day column ("≤ day N asli"), ≤ its so-far read ("≤ day N asli"); an older file's false = "≤". A model value of
+    99.97 % prints 99.9 %, never "100.0%" beside "100% se kam"."""
+    k = out["be"]["kinds"]
+    assert k["x"]["cells"][1:3] == ["day 40 asli", "✅ BE ho gaya: day 40"]
+    assert k["nf"]["cells"][1:3] == ["day 40 final nahi", "✅ BE ho gaya: day 40 final nahi"]
+    assert "is din ka number abhi final nahi — badal sakta hai" in k["nf"]["titles"]
+    assert k["b"]["cells"][1:3] == ["≤ day 60 asli", "✅ BE ho gaya: ≤ day 60"] and "asli: is din ya usse pehle hua — exact din ka number nahi" in k["b"]["titles"]
+    assert k["s"]["cells"][1:3] == ["≤ day 45 asli", "✅ BE ho gaya: ≤ day 45"]
+    assert k["old"]["cells"][1:3] == k["b"]["cells"][1:3]
+    # a broken-even day: its so-far read (day 45, 130 %) floors the ages past it — "≥" on the ✓ too
+    assert k["x"]["cells"][3:6] == ["—", "✓ ≥ 130.0%", "✓ 150.0%"]   # 30 ≤ day 45 with no cell: never the model's number as "ab tak"
+    assert '30 din ka data abhi final nahi (2–3 din me asli) — ab tak ka ROAS "Ab tak" me' in k["x"]["titles"]
+    assert "ab tak (abhi final nahi): 90 din tak ROAS kam se kam 130.0% — 100% ya zyada: breakeven (itna to ho chuka hai — model isse kam keh raha tha)" in k["x"]["titles"]
+    # a day with no benchmark: an age it has lived (90 ≤ 95) not final yet says so, never "kisi country ka benchmark nahi"
+    nf = k["nofit"]
+    assert nf["cells"][3:6] == ["—", "—", "—"]
+    assert nf["titles"].count('30 din ka data abhi final nahi (2–3 din me asli) — ab tak ka ROAS "Ab tak" me') == 1
+    assert "kisi country ka benchmark nahi — data kam, andaza nahi" in nf["titles"]                 # (180 > 95: not lived)
+    near = k["near"]
+    assert near["cells"][3] == "99.9%" and "andaze se 30 din tak ROAS 99.9% — 100% se kam: abhi breakeven nahi" in near["titles"]
+    c = out["be"]["ctyk"]
+    assert "day 30 asli" in c[0] and "≤ day 30 asli" in c[1] and "day 30 final nahi" in c[2] and "day 30 80%: day 20–60" in c[3]
+
+
+def test_breakeven_bn_kind_not_final_column_and_unjudged_days_and_country_lived_past(out):
+    """A breakeven on a 30-day column not final yet: "≤ day N final nahi", never "asli"; a country that lived past its
+    benchmark's limit without breaking even: "day N tak nahi" (asli / final nahi); a day under $5 / 30 new users: its
+    real numbers only, every "—" saying so; a card value of 99.97 % prints 99.9 %."""
+    k = out["be"]["kinds2"]
+    assert k["bn"]["cells"][1:3] == ["≤ day 60 final nahi", "✅ BE ho gaya: ≤ day 60 final nahi"]
+    assert not any(x.startswith("asli") for x in k["bn"]["titles"][:2])
+    u = k["unjudged"]
+    assert u["cells"][1] == "—" and "is din spend $5 se kam ya 30 se kam naye users — andaza nahi" in u["titles"]
+    assert k["unjudged_det"].startswith("Is din spend $5 se kam ya 30 se kam naye users — countries ka andaza nahi")
+    c = out["be"]["ctyk2"]
+    assert "day 400 tak nahi asli" in c[0] and "day 400 tak nahi final nahi" in c[1] and "≤ day 60 final nahi" in c[2]
+    assert out["be"]["card999"] == ["99.9%"]
+
+
+def test_breakeven_lower_bounds_say_whether_they_are_final_and_lived_cells_show_their_own_number(out):
+    """A "≥" floor rests on the so-far read: "asli" only when that read is final (now[3] / now[5] = 1), else "ab tak (abhi
+    final nahi)", never "andaze se"; a lived, not-final age shows the day's own cell (x.prov), never the model's number;
+    a broken-even day (final kind) with no model at an age past its day is "✓ ≥ 100.0%" asli; a not-final kind never "asli";
+    an old day with no curve that never paid back by day 360+ says "day N tak nahi" in Breakeven."""
+    f = out["be"]["fin"]
+    assert "asli: 90 din tak ROAS kam se kam 60.0% — 100% se kam: abhi breakeven nahi (itna to ho chuka hai — model isse kam keh raha tha)" in f["floor_final"]["titles"]
+    assert f["prov"]["cells"][3] == "41.0%" and any(x.startswith("ab tak (abhi final nahi): 30 din tak ROAS 41.0%") for x in f["prov"]["titles"])
+    assert f["least_x"]["cells"][4:6] == ["✓ ≥ 100.0%", "✓ ≥ 100.0%"] and "asli: 90 din tak ROAS kam se kam 100.0% — 100% ya zyada: breakeven (itna to ho chuka hai — yahan andaza nahi)" in f["least_x"]["titles"]
+    assert not any(x.startswith("asli") for x in f["least_nf"]["titles"])
+    assert f["old_nocurve"]["cells"][1] == "day 400 tak nahi asli"
+
+
+def test_breakeven_a_zero_width_range_is_not_printed(out):
+    z = out["be"]["zw"]
+    assert z["app"] == "day 61" and z["cty"] == "day 61"                                   # (lo = hi = the day: no "80%: day 61–61")
 

@@ -263,7 +263,7 @@ function agent(fx) {
 }
 // ── ⚖️ Breakeven (spec_be_tab §5 + the agreed additions, in the shapes admob_iq/be_build.py writes: the pointer DATA.be, the
 // file's skill in points, a country row [cc, share, CPI, eCPM_fs, P30, P90, P180, median, low, high, its watched limit] with a
-// day past that limit null, the card's idx / bidx = the revenue ON day k ÷ day 1's × 100, a folded "…" uncovered entry) laid
+// day past that limit null, the card's ROAS so far vs its benchmark, a folded "…" uncovered entry) laid
 // onto a build() output: DATA.be and one be_<key>.json.gz per app that has one. Made-up numbers in closed forms (hand math):
 //   * origin 30 Mar 2026; Alpha's newest 14 judged install days 15–29 Mar (20 Mar not judged: no row); age = days to 29 Mar (the
 //     ROI file's newest day): 26–29 Mar are under 4 days old (provisional);
@@ -271,8 +271,7 @@ function agent(fx) {
 //     60 % + US 25 % (cov 0.85), uncovered BR 6 % · SA 3 % · AE 2 % + the folded rest 4 %; the app curve to 270 days at ROAS
 //     40 % / 96 % / 180 % on days 30 / 90 / 180, its breakeven day 95 (80 %: 50–170); IN's days 75 (40–160) within its 360 watched days, US's high end
 //     past its 210; ROAS so far 0.10 + 0.02 × age (card day k = age k − 1, shown once the day is that old), the benchmark
-//     0.09 + 0.02 × age; the revenue index 100 · 60.2 · 45 · 37.8 · 25 · 15.3 (benchmark 100 · 55.4 · 42.1 · 35 · 24.6 · 14.7) —
-//     made-up, independent of the ROAS numbers (the page prints both as they come); the special days: 15 Mar broke even on day
+//     0.09 + 0.02 × age; the special days: 15 Mar broke even on day
 //     12 (the build answers its real day, no range; its curve 235 % / 260 % / 280 %, its own card up to 108 %), 21 Mar no card, 23 Mar IN with unknown eCPM / chances / days and US's
 //     median past its watched 210 days, 24 Mar no ROAS so far, 26 Mar only IN covered (cov 0.60, ROAS 25 % / 60 % / 110 %, breakeven 160, its
 //     band to 180 days: its range open at 180), 16 Mar no band (the day alone), 17 Mar ROAS 30 at its floor (≥ 34 %), 27 Mar a curve to 60 days only (ROAS 90 / 180 past it, no median crossing), 28 Mar nothing covered;
@@ -284,8 +283,7 @@ function be(fx) {
   const { DATA, FILES } = fx, O = '2026-03-30', NEW = '2026-03-29', CAL = '2026-03-28', K = [1, 2, 3, 4, 7, 14];
   const GRID = [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270, 360], r4 = v => Math.round(v * 1e4) / 1e4, ageOf = x => nD(x, NEW) - 1;
   const roas = a => r4(0.10 + 0.02 * a), bench = a => r4(0.09 + 0.02 * a);
-  const IDX = [100, 60.2, 45, 37.8, 25, 15.3], BIDX = [100, 55.4, 42.1, 35, 24.6, 14.7];
-  const card = (ag, R, I) => ({ roas: K.map(k => (k - 1 <= ag ? R(k - 1) : null)), bench: K.map(k => bench(k - 1)), idx: K.map((k, i) => (k - 1 <= ag ? (I || IDX)[i] : null)), bidx: BIDX.slice() });
+  const card = (ag, R) => ({ roas: K.map(k => (k - 1 <= ag ? R(k - 1) : null)), bench: K.map(k => bench(k - 1)) });
   // the app curve: through (0, 0.1) and its ROAS v at 30 / 90 / 180 days, straight between them (on at the 90 → 180 slope past
   // 180), at the grid ages up to its limit; its breakeven day ≈ where it crosses 100 % (the page reads ROAS 30 / 90 / 180 off it)
   const pw = (a, v) => { const X = [0, 30, 90, 180], Y = [0.1, v[0], v[1], v[2]]; let i = 0; while (i < 2 && a > X[i + 1]) i++; return Y[i] + (Y[i + 1] - Y[i]) * (a - X[i]) / (X[i + 1] - X[i]); };
@@ -295,7 +293,7 @@ function be(fx) {
   const day = x => { const ag = ageOf(x), o = { d: x, age: ag, sp: r2(50000 * fxd(x)), inst: 1600, cov: 0.85, app: app([95, 50, 170], 270, [0.4, 0.96, 1.8]),
       unc: [['BR', 0.06], ['SA', 0.03], ['AE', 0.02], ['…', 0.04]], cty: [IN.slice(), US.slice()], card: card(ag, roas), now: ['no', ag, roas(ag)] };
     if (x === '2026-03-15') { const R = { 0: 0.35, 1: 0.52, 2: 0.63, 3: 0.72, 6: 0.9, 13: 1.08 };
-      Object.assign(o, { app: app([12, null, null], 360, [2.35, 2.6, 2.8]), card: card(ag, a => R[a], [100, 48.6, 31.4, 25.7, 20, 11.4]), now: ['be', 12] }); }
+      Object.assign(o, { app: app([12, null, null], 360, [2.35, 2.6, 2.8]), card: card(ag, a => R[a]), now: ['be', 12, true] }); }
     if (x === '2026-03-21') delete o.card;
     if (x === '2026-03-23') o.cty = [['IN', 0.6, 0.31, null, null, 0.55, null, null, null, null, null], ['US', 0.25, 0.62, 9.6, 0.05, 0.3, 0.62, null, null, null, 210]];
     if (x === '2026-03-24') o.now = ['no', ag, null];
@@ -313,7 +311,7 @@ function be(fx) {
   file('z', { skill: { auc: [55, H, null], c: 60.4, n: 30 }, days: [
     { d: '2026-03-25', age: 4, sp: 48.5, inst: 200, cov: 0.5, app: app([80, 40, null], 120, [0.4, 1.1, 1.5]), unc: [[H, 0.3], ['"><b>x</b>', 0.2]],
       cty: [[H, 0.5, 0.24, 2.0, 0.2, 0.6, null, 80, 40, -120]], now: [H, 3],
-      card: { roas: [0.1, H, null, null, null, null], bench: [0.09, 0.11, 0.13, 0.15, 0.21, 0.35], idx: [100, null, null, null, null, null], bidx: [100, 122.2, 144.4, 166.7, 233.3, 388.9] } },
+      card: { roas: [0.1, H, null, null, null, null], bench: [0.09, 0.11, 0.13, 0.15, 0.21, 0.35] } },
     { d: H, age: 1, sp: 1 },
     { d: '2026-03-26', age: '<i>', sp: '<b>9</b>', inst: H, cov: H, app: { roas: [H, H, H, H, H, H, H, H, H, H, H], be: [H], lim: H }, unc: H, cty: H, card: H, now: ['no', H, H] }] });
   const ent = k => ({ key: KEYS[k], file: 'be_' + KEYS[k] + '.json.gz', v: 'b' + KEYS[k].slice(-6), n: (FILES['be_' + KEYS[k] + '.json.gz'] || { days: [] }).days.length, cov: 0.8 });

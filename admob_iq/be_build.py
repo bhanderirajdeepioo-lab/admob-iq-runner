@@ -1,8 +1,10 @@
-"""📐 Breakeven — the build step of the CPI vs eCPM screen's Breakeven tab (owner, 14 Nov 2026: "har app ka har country
+"""⚖️ Breakeven — the build step of the CPI vs eCPM screen's Breakeven tab (owner, 14 Nov 2026: "har app ka har country
 ka alag", "koi assumption pe nahi chalna he, data ke sath hi chalna he", "haan isi tarah banao"; the 14-day card:
-"haan ROAS wala rakho, index bhi chhote me saath rakhna"). Per app × country a breakeven benchmark learned only from
-the app's own past install days — what each day's CPI and first-session eCPM were, and when (if ever) its installs paid
-their Google Ads cost back — and for each of the app's newest 14 install days, when that day breaks even.
+"haan ROAS wala rakho"; after it went live: every install day, not the newest 14 ("31 Oct tak hi kyu? baki ke din?"),
+and no daily revenue index — his "index" is an eCPM one, the returning-eCPM step). Per app × country a breakeven
+benchmark learned only from the app's own past install days — what each day's CPI and first-session eCPM were, and when
+(if ever) its installs paid their Google Ads cost back — and for each of the app's judged install days, when that day
+breaks even (the page shows the days of its period).
 
   inputs (read only, one app in memory at a time): this build's roi_<key>.json.gz (through dashboard["roi"] only, never
   a listing of the folder: "rows" = the All row of every install day, "cd" "packs" = the same rows per country, see
@@ -25,8 +27,7 @@ their Google Ads cost back — and for each of the app's newest 14 install days,
   not answered: no past day there — never extrapolated). K3: log(BE + 1) = a + b·log CPI + c·log eCPM_fs + σ·ε, right-censored normal
   errors (Schmee–Hahn EM). Its ROAS curve: per GRID age, Huber → bot → Huber of log ROAS(age) on the same inputs over
   the days that reached that age (the kept residuals' 10 / 90 % = its range), up to the first age with < 20 kept days
-  (the curve's limit). The app's own median past curve (the bot, then the median of log ROAS per age) and the median
-  of its days' daily revenue index (day 1 = 100) are the card's benchmark.
+  (the curve's limit). The app's own median past curve (the median of log ROAS per age) is the card's benchmark.
   calibration (once a UTC day, data/be_tab/calib.json with its date): the same fits at every month start over the
   history (rolling, no look-ahead), every judged install day of that month answered, the truth = what is known now →
   isotonic maps (PAVA) of K3's P(BE ≤ H) to the real share for H = 30 / 90 / 180 (a day old enough to know: age ≥
@@ -42,12 +43,14 @@ their Google Ads cost back — and for each of the app's newest 14 install days,
   K3 P's and days (null past the longest age its data watched, that limit beside it); the uncovered countries as their
   spend share (no benchmark, or a CPI / eCPM_fs outside it: "x % spend: data kam"; the ones under 0.5 % as one "…"
   rest); the card: ROAS so far at days 1, 2, 3, 4,
-  7, 14 against the app's median past curve, the day's daily revenue index beside it. A day under 4 days old (age < 4)
+  7, 14 against the app's median past curve. A day under 4 days old (age < 4)
   is provisional: GA4's country and first-session reads are not final yet, and neither are Google Ads' installs (the
   CPI: installs read at age 0–1 were a median 0.91 of their final count, ≈ 1.00 from age 2; the back-test answers
-  with final inputs) — the page marks it. An observed ROAS so far floors the day's curve from its age on (a cumulative
-  ROAS never falls; from its real BE day on it is ≥ 100 %), and a day that already broke even answers its real day
-  (no range); the 80 % range only as far as the band reaches (beyond it: no end, never the median line).
+  with final inputs) — the page marks it. The grid ages a day has lived carry its REAL cumulative ROAS (never the
+  model's: an old install day's ROAS at 30 / 90 / 180 is what it made); past them its ROAS so far floors the curve (a
+  cumulative ROAS never falls; from its real BE day on it is ≥ 100 %) and caps any unlived age before it; a day that
+  already broke even answers its real day (no range); the 80 % range only as far as the band reaches (beyond it: no
+  end, never the median line).
   skill (the page's "how sure"), on the app's back-test days (what the tab would have said then, scored on what is
   known now): AUC at 30 / 90 / 180 of the app curve's ROAS(H) against "broke even within H?" (of a day that did and
   one that did not, how often the one that did scored higher; ties ½; ≥ 10 days on each side, else null) — not the
@@ -57,11 +60,21 @@ their Google Ads cost back — and for each of the app's newest 14 install days,
 
   site/be_<key>.json.gz  {"v", "key", "origin", "grid", "calib" (its day), "skill": {"auc", "c", "n"}, "days": [{"d",
                           "age", "sp" (USD), "inst" (Google Ads installs), "cov" (covered share of the day's country
-                          spend), "app": {"be": [median, low, high] (days; null = no crossing within "lim"),
-                          "lim", "roas" / "lo" / "hi" (the curve and its band at the grid ages ≤ lim)} (absent: nothing covered), "unc": [[cc, share], …,
-                          ["…", rest]], "cty": [[cc, share, CPI, eCPM_fs, P30, P90, P180, median, low, high, lim], …],
-                          "card": {"roas", "bench", "idx", "bidx"}, "now": ["be", BE day] | ["no", age, ROAS so far]}]}
-                          (the newest 14 judged install days, oldest first)
+                          spend), "real" (the day's REAL ROAS at the grid ages from final cells, whatever its
+                          coverage; null where not lived / not final; trailing nulls trimmed — the page shows these as
+                          "asli", never the model), "app": {"be": [median, low, high] (days; null = no crossing
+                          within "lim"; a day that broke even: [its real day, null, null]), "lim", "roas" / "lo" /
+                          "hi" (the curve and its band at the grid ages ≤ lim: real where final, bounded by what it
+                          made elsewhere)} (absent: nothing covered), "unc": [[cc, share], …, ["…", rest]], "cty":
+                          [[cc, share, CPI, eCPM_fs, P30, P90, P180, median, low, high, lim, rk], …] (rk 1 / 2 / 3:
+                          the country broke even — median = its real day: exact / "≤" / not final yet; 0: K3's days
+                          given it has not broken even by its own so-far age; 4: ≤ a 30-day column not final yet;
+                          5 / 6: it lived past K3's limit without breaking even — median = its so-far age, final /
+                          not final yet), "jd" 0 (only on a day under $5 / 30 new users: no model, no countries — its
+                          real numbers only), "card": {"roas", "bench"}, "now": ["be", BE day, kind ("x" exact / "nf" not final
+                          / "b" ≤ a column / "s" ≤ its so far), so-far age, ROAS so far] (the ROI row's own) | ["no",
+                          so-far age, ROAS so far, final? (1: older than LAG days)]}]} (every install day with
+                          spend, oldest first)
   dashboard["be"]        {"v", "origin", "calib", "apps": {app id: {"key", "file", "v", "n", "cov"}}}
 
 run(dashboard, data_dir, out_dir, s, now) → HEADER_PATHS (["/be_*"], ONE splat rule) or [] (no app / a failure: the
@@ -102,7 +115,6 @@ SETTLE, LAG = 30, 3
 MIN_KEPT = 20                        # a covered country: ≥ 20 kept real-BE days; a curve age / median: ≥ 20 days
 ZBOT = 3.0                           # the bot: |robust z| > 3 dropped
 ROAS_FLOOR = 1e-3
-NEWEST = 14
 PROV = 4                             # a day under 4 days old is provisional (age < 4)
 REST = 0.005                         # uncovered countries under 0.5 % of the day's spend: one "…" entry
 REST_CC = "…"
@@ -125,9 +137,15 @@ class NoCalib(Exception):
 class _R:
     """One install day (the All row or one country's) as the models read it: sp / cum / oc rounded to 4 places, eCPM_fs
     to 5 (as the back-test); c = log CPI, e = log eCPM_fs; lo / hi / be = BE in (lo, hi], be its day; obs = the last age
-    observed, oc its cumulative revenue; cum = cumulative revenue at the GRID ages (judged rows); d = the daily
-    cells."""
-    __slots__ = ("day", "X", "n", "na", "sp", "cpi", "c", "e", "lo", "hi", "be", "obs", "oc", "cum", "d", "jd")
+    observed, oc its cumulative revenue; cum = cumulative revenue at the GRID ages (judged rows). What the page shows as
+    REAL (never the model): fin = the cumulative revenue at the GRID ages from FINAL cells only (d before df, the 30-day
+    columns m before mf, the complete t checkpoints); sfa / sfv = the latest "so far" read (the later of the last
+    observed point and the row's own s through sd: an age and a cumulative revenue, maybe not final); rbe = the ROI
+    row's own breakeven as (day, kind): "x" exact (a final daily cell), "nf" a daily cell not final yet, "b" "≤ that day"
+    (a final 30-day column / a checkpoint), "bn" "≤ that day" on a 30-day column not final yet, "s" "≤ its so-far age"
+    (the so-far read paid back, no cell pins the day)."""
+    __slots__ = ("day", "X", "n", "na", "sp", "cpi", "c", "e", "lo", "hi", "be", "obs", "oc", "cum", "jd", "fin", "sfa",
+                 "sfv", "rbe")
 
 
 def _pts(r):
@@ -145,7 +163,7 @@ def _pts(r):
     return pts
 
 
-def _row(r, ecpm, full, keep_d=False):
+def _row(r, ecpm, full):
     sp0 = r[3]
     pts = _pts(r)
     lo = hi = clo = chi = None
@@ -171,11 +189,52 @@ def _row(r, ecpm, full, keep_d=False):
     if full:
         at = dict(pts)
         x.cum = [None if at.get(a) is None else round(at[a], 4) for a in GRID]
+        x.fin = _fin(r)
     else:
-        x.cum = None
-    x.d = r[4] if keep_d else None
+        x.cum = x.fin = None
+    x.sfa, x.sfv = x.obs, x.oc
+    sd = r[9] if len(r) > 9 else None
+    if isinstance(sd, str) and len(sd) == 10 and isinstance(r[8], (int, float)):
+        try:
+            a = date.fromisoformat(sd).toordinal() - x.X
+        except ValueError:
+            a = None
+        mm = (r[14] if len(r) > 14 else None) or []
+        if a is not None and a > T[-1] and a != 30 * (len(mm) + 1):
+            a = T[-1]                          # the install-day read stops at day 365 (roi_build: min(sd, X + 365))
+        if a is not None and a >= 0 and (x.sfa is None or a > x.sfa):
+            x.sfa, x.sfv = a, max(round(r[8], 4), x.oc or 0.0)    # (a later read never below the last point)
+    b = r[10] if len(r) > 10 else None
+    x.rbe = None
+    if isinstance(b, list) and len(b) == 2 and isinstance(b[0], (int, float)):
+        L, dd = int(b[0]), r[4] or []
+        mm, mf = (r[14] if len(r) > 14 else None) or [], (r[15] if len(r) > 15 else 0) or 0
+        k = L // 30 - 2 if L >= 60 and L % 30 == 0 else -1
+        x.rbe = (L, "x" if b[1] else "nf" if L < len(dd) and dd[L] is not None and dd[L] >= sp0
+                 else "bn" if 0 <= k < len(mm) and k >= mf and mm[k] is not None and mm[k] >= sp0 else "b")
+    elif x.sfv is not None and x.sfa is not None and x.sfv >= sp0:
+        x.rbe = (x.sfa, "s")                   # its so-far read already paid back, no cell pins the day: "≤ that day"
     x.jd = sp >= MIN_SP and x.n >= MIN_N
     return x
+
+
+def _fin(r):
+    """The row's cumulative revenue at the GRID ages from FINAL cells only (None where not final / not lived)."""
+    d, df, t = r[4] or [], r[5] or 0, r[7] or []
+    m = (r[14] if len(r) > 14 else None) or []
+    mf = (r[15] if len(r) > 15 else 0) or 0
+    out = []
+    for a in GRID:
+        v = None
+        if a < len(d) and a < df:
+            v = d[a]
+        k = a // 30 - 2 if a >= 60 and a % 30 == 0 else -1
+        if v is None and 0 <= k < len(m):          # the 30-day column first (the ROI row's own breakeven reads it):
+            v = m[k] if k < mf else None            # not final = not real (never the checkpoint in its place)
+        elif v is None and a in T and T.index(a) < len(t):
+            v = t[T.index(a)]                       # (complete only; where no column reaches)
+        out.append(None if v is None else round(v, 4))
+    return out
 
 
 def _usable(r):
@@ -205,9 +264,9 @@ def _read(path):
         return json.load(f)
 
 
-def load(out_dir, data_dir, key, fn, full=True):
-    """One app → (newest, the All rows, {cc: rows}), spend > 0 only, by day. full=False (a build that neither fits nor
-    calibrates): the countries' rows of the newest 14 judged days only (the rest is never read into rows)."""
+def load(out_dir, data_dir, key, fn):
+    """One app → (newest, the All rows, {cc: rows}), spend > 0 only, by day — every day (the tab answers every judged
+    install day)."""
     body = _read(os.path.join(out_dir, fn))
     st = gv.load_store(os.path.join(data_dir, gv.DIR, key + ".json.gz"))
     days = (st or {}).get("days") or {}
@@ -220,14 +279,11 @@ def load(out_dir, data_dir, key, fn, full=True):
                 ia += im
         if ia > 0:
             nv_app[day] = ra / ia * 1000
-    app = [_row(r, nv_app.get(r[0]), True, True) for r in body.get("rows") or []
+    app = [_row(r, nv_app.get(r[0]), True) for r in body.get("rows") or []
            if len(r) >= 14 and r[3] is not None and r[3] > 0]
     app.sort(key=lambda r: r.X)
-    want = None if full else {r.day for r in [r for r in app if r.jd][-NEWEST:]}
     nv_cc = {}
     for day, rv in days.items():
-        if want is not None and day not in want:
-            continue
         for k, cc, rev, im in (rv or {}).get("c") or []:
             if k == "n":
                 e = nv_cc.setdefault(cc, {}).setdefault(day, [0.0, 0])
@@ -244,7 +300,7 @@ def load(out_dir, data_dir, key, fn, full=True):
                 continue
             ncc = nv_cc.get(cc) or {}
             for r in rows:
-                if len(r) < 14 or r[3] is None or r[3] <= 0 or (want is not None and r[0] not in want):
+                if len(r) < 14 or r[3] is None or r[3] <= 0:
                     continue
                 v = ncc.get(r[0])
                 e = v[0] / v[1] * 1000 if v and v[1] > 0 else None
@@ -456,6 +512,11 @@ def _iso_map(xs, ys):
     return [[round(a, 5), round(b, 4)] for a, b in zip(cx, cy)]
 
 
+def _cal_xy(m):
+    """A calibration map [[x, p], …] as iso_pred's (xs, ps); None: an empty map."""
+    return ([a for a, _ in m], [b for _, b in m]) if m else None
+
+
 def _cal_p(m, s):
     """A calibration map [[x, p], …] at s (None: an empty map)."""
     return iso_pred(([a for a, _ in m], [b for _, b in m]), s) if m else None
@@ -633,6 +694,30 @@ def _crossing_at(ages, vals, obs=None, so=None):
     return crossing(ages, vals)
 
 
+def _cty_days(ages, mid, clo, chi, x):
+    """A country's [median, low, high] day off its own ROAS curve and band (log ROAS at the grid ages), bounded by its
+    own so-far read like the app line (pinned at its age, capped before, floored after; never a day at or before it);
+    the first whole day each reaches 100 % (None: not within the curve)."""
+    so = x.sfv / x.sp if x.sfv is not None and x.sfa is not None and x.sp > 0 else None
+
+    def bound(lv):
+        out = []
+        for a, v in zip(ages, lv):
+            v = math.exp(v)
+            if so is not None:
+                v = max(v, so) if a > x.sfa else (so if a == x.sfa else min(v, so))
+            out.append(v if not out else max(v, out[-1]))
+        return out
+    ob = (x.sfa, so) if so is not None and so < 1.0 else (None, None)
+    d = [_crossing_at(ages, bound(lv), *ob) for lv in (mid, chi, clo)]          # (the high band: the early end)
+    if x.sfa is not None:
+        d = [None if v is None else max(v, x.sfa + 1.0) for v in d]
+    if d[0] is not None:
+        d[1] = None if d[1] is None else min(d[1], d[0])
+        d[2] = None if d[2] is None else max(d[2], d[0])
+    return [_day(v) for v in d]
+
+
 def combine(parts):
     """The owner's rule: [(spend, ages, log ROAS)] of a day's covered countries → (ages, app ROAS): each country's ROAS
     weighted by its share of the covered spend and summed, a curve that stops earlier carried at its last value (a
@@ -650,21 +735,18 @@ def combine(parts):
     return ages, roas
 
 
-def _rev(d, a):
-    """The cohort's revenue ON age a (cumulative d[a] − d[a − 1]); None where not observed yet."""
-    if d is None or a >= len(d) or d[a] is None:
-        return None
-    if a == 0:
-        return d[0]
-    return None if d[a - 1] is None else d[a] - d[a - 1]
-
-
 def _r(v, n):
     return None if v is None else round(v, n)
 
 
+def _rr(v):
+    """A ROAS to 4 places, never 1.0 for a value still under 100 % (0.99996 → 0.9999: no false "✓ 100.0%")."""
+    return None if v is None else (min(round(v, 4), 0.9999) if v < 1.0 else round(v, 4))
+
+
 def _day(v):
-    return None if v is None else int(round(v))
+    """The first whole day at or past v (a crossing at 89.3 is day 90: never a day the curve is still under 100 %)."""
+    return None if v is None else int(math.ceil(v - 1e-9))
 
 
 def _iso(o):
@@ -696,25 +778,14 @@ def fit(app, cty, O):
                     "cv": [[j, [round(v, 6) for v in b], round(q10, 5), round(q90, 5), n, round(m, 5)]
                            for j, b, q10, q90, n, m in cf],
                     "rng": g}
-    med, idx = [], []                     # the app's median past curve; the median of its days' revenue index
+    med = []                              # the app's median past curve (the card's benchmark)
     for j, a in enumerate(GRID):
         v = [math.log(max(r.cum[j] / r.sp, ROAS_FLOOR)) for r in app
              if r.jd and r.cum and r.cum[j] is not None and r.X + max(a + LAG, SETTLE) <= O]
         if len(v) < MIN_KEPT:
             break
         med.append([j, round(rmed(v), 5), len(v)])
-    for j in CARD_J:
-        a, v = GRID[j], []
-        for r in app:
-            if not r.jd or r.X + max(a + LAG, SETTLE) > O:
-                continue
-            d0, rv = _rev(r.d, 0), _rev(r.d, a)
-            if d0 and d0 > 0 and rv is not None:
-                v.append(math.log(max(rv, 0.01 * d0) / d0))         # (a day of ~0 revenue floored at 1 % of day 1)
-        if len(v) < MIN_KEPT:
-            break
-        idx.append([j, round(rmed(v), 5), len(v)])
-    return {"v": V, "origin": _iso(O), "fits": fits, "app_med": med, "app_idx": idx}
+    return {"v": V, "origin": _iso(O), "fits": fits, "app_med": med}
 
 
 # ── calibration (daily, all apps): the rolling back-test, its maps, the skill ───────────────────────────────────────
@@ -894,8 +965,9 @@ def skill(A):
 # ── predict (every build) ───────────────────────────────────────────────────────────────────────────────────────────
 
 def _pin(newest, app, cty):
-    """What predict needs of one app: the newest 14 judged install days and their countries' rows."""
-    rows = [r for r in app if r.jd][-NEWEST:]
+    """What predict needs of one app: every install day with spend (the judged ones get the model; the others only their
+    real numbers) and its countries' rows."""
+    rows = list(app)
     want = {r.day for r in rows}
     byday = {}
     for cc, rs in cty.items():
@@ -906,17 +978,16 @@ def _pin(newest, app, cty):
 
 
 def predict(key, fc, cal, pin, sk=None):
-    """One app's newest days from its fits + the calibration → its be_<key>.json.gz body (see the module doc)."""
+    """One app's judged install days from its fits + the calibration → its be_<key>.json.gz body (see the module doc)."""
     newest, rows, byday = pin
     nw = date.fromisoformat(newest).toordinal()
-    pit, band = cal.get("pit") or {}, cal.get("band") or {}
+    band = cal.get("band") or {}
+    cmh = {H: _cal_xy((cal.get("cty") or {}).get(str(H))) for H in HS}         # (each map's arrays once, not per call)
     medm = {j: m for j, m, _ in fc.get("app_med") or []}
-    idxm = {j: m for j, m, _ in fc.get("app_idx") or []}
-    bidx = [None if j not in idxm else round(100.0 * math.exp(idxm[j]), 1) for j in CARD_J]
-    bench = [None if j not in medm else round(math.exp(medm[j]), 4) for j in CARD_J]
+    bench = [None if j not in medm else _rr(math.exp(medm[j])) for j in CARD_J]
     days = []
     for r in rows:
-        cs = byday.get(r.day, {})
+        cs = byday.get(r.day, {}) if r.jd else {}  # (a day under $5 / 30 new users: no model — only its real numbers)
         tot = sum(x.sp for x in cs.values()) or 1.0
         parts, unc, rest, ctys = [], [], 0.0, []
         for cc, x in sorted(cs.items(), key=lambda kv: -kv[1].sp):
@@ -927,16 +998,17 @@ def predict(key, fc, cal, pin, sk=None):
                 else:
                     rest += x.sp / tot
                 continue
-            ages, mid, _, _ = curve_predict(f["cv"], x.c, x.e)
+            ages, mid, clo, chi = curve_predict(f["cv"], x.c, x.e)
             b0, b1, b2, s_, tmax = f["k3"][:5]
             mu = b0 + b1 * x.c + b2 * x.e
-            pk = [_cal_p((cal.get("cty") or {}).get(str(H)), p_le(mu, s_, H)) for H in HS]
-            if all(isinstance(pit.get(q), (int, float)) and 0.0 < pit[q] < 1.0 for q in ("0.5", "0.1", "0.9")):
-                qd = [max(0.0, math.exp(min(mu + s_ * ninv(pit[q]), 50.0)) - 1)                  # (a day ≥ 0; e^50:
-                      for q in ("0.5", "0.1", "0.9")]                                              #  past any limit)
-                days_ = [*[None if v > tmax else round(v) for v in qd], tmax]
-            else:                                # the calibration has no level: no day answer (never "past its limit")
-                days_ = [None, None, None, None]
+            pk = [iso_pred(cmh[H], p_le(mu, s_, H)) if cmh[H] else None for H in HS]   # (K3's chances: kept, not shown)
+            clim = ages[-1]                      # its curve's limit (the longest age its data watched there)
+            if x.rbe is not None:                # it broke even: its real day (the ROI row's), no range — never a model's
+                days_ = [x.rbe[0], None, None, clim, {"x": 1, "b": 2, "s": 2, "nf": 3, "bn": 4}[x.rbe[1]]]
+            elif x.sfa is not None and x.sfa >= clim:    # it lived past its curve without breaking even: that real fact
+                days_ = [x.sfa, None, None, clim, 5 if x.sfa <= nw - x.X - LAG else 6]
+            else:                                # its OWN curve — the one the app line adds up (one curve, one answer:
+                days_ = _cty_days(ages, mid, clo, chi, x) + [clim, 0]   # the app never before all its countries)
             parts.append((x.sp, ages, mid))
             ctys.append([cc, round(x.sp / tot, 4), round(x.cpi, 4), round(math.exp(x.e), 3), *[_r(v, 3) for v in pk],
                          *days_])
@@ -945,46 +1017,67 @@ def predict(key, fc, cal, pin, sk=None):
         csp = sum(p[0] for p in parts)
         out = {"d": r.day, "age": nw - r.X, "sp": round(r.sp, 2), "inst": r.na, "cov": round(csp / tot, 4),
                "unc": unc, "cty": ctys}
+        rl = [None if not r.fin or v is None else _rr(v / r.sp) for v in (r.fin or [])]
+        while rl and rl[-1] is None:
+            rl.pop()
+        out["real"] = rl                          # the day's REAL ROAS at the grid ages from final cells (any coverage)
+        pv = [None if not r.cum or r.cum[j] is None or (r.fin and j < len(r.fin) and r.fin[j] is not None)
+              else _rr(r.cum[j] / r.sp) for j in range(len(GRID))]
+        while pv and pv[-1] is None:
+            pv.pop()
+        if pv:
+            out["prov"] = pv                      # lived, not final yet: the page's "ab tak (abhi final nahi)"
         if parts and csp > 0:
             ages, roas = combine(parts)
-            so = r.oc / r.sp if r.oc is not None and r.obs is not None and r.sp > 0 else None
-            yet = r.hi is None                    # not broken even by its age so far
+            sa = r.sfa                            # its latest so-far read: age, ROAS
+            so = r.sfv / r.sp if r.sfv is not None and sa is not None and r.sp > 0 else None
+            yet = r.rbe is None                   # not broken even by its so-far age (the ROI row's own answer, or its so far)
+            real = [None if not r.fin or r.fin[j] is None else r.fin[j] / r.sp for j in range(len(ages))]
+            prov = [None if not r.cum or r.cum[j] is None or r.obs is None or a > r.obs else r.cum[j] / r.sp
+                    for j, a in enumerate(ages)]  # lived but maybe not final: a floor
 
-            def fl(a, v):                         # what the day has really made bounds its curve:
+            def fl(a, v, j):                      # what the day has really made is its curve where final, and
+                if real[j] is not None:           # bounds it elsewhere:
+                    return real[j]
                 if so is not None:
-                    if a > r.obs or (a == r.obs and not yet):
-                        v = max(v, so)            # a cumulative ROAS never falls below it …
-                    elif yet:
-                        v = so if a == r.obs else min(v, so)      # … and was at most it before (under 100 %)
-                if not yet and a >= r.hi:
+                    if a > sa:
+                        v = max(v, so)            # a cumulative ROAS never falls below its so far …
+                    else:
+                        v = so if a == sa else min(v, so)         # … and was at most it before
+                if prov[j] is not None:
+                    v = max(v, prov[j])           # a lived, not final cell: at least what it shows
+                if not yet and a >= r.rbe[0]:
                     v = max(v, 1.0)               # from its real BE day on: 100 % or more
                 return v
             k = next((i for i, a in enumerate(ages) if str(a) not in band), len(ages))   # the band's reach (a prefix)
-            lo = [fl(a, v * math.exp(band[str(a)][1])) if i < k else None for i, (a, v) in enumerate(zip(ages, roas))]
-            hi = [fl(a, v * math.exp(band[str(a)][2])) if i < k else None for i, (a, v) in enumerate(zip(ages, roas))]
-            roas = [fl(a, v) for a, v in zip(ages, roas)]                  # below what is already observed
-            ob = (r.obs, so) if yet else (None, None)
+            lo = [fl(a, v * math.exp(band[str(a)][1]), i) if i < k else None for i, (a, v) in enumerate(zip(ages, roas))]
+            hi = [fl(a, v * math.exp(band[str(a)][2]), i) if i < k else None for i, (a, v) in enumerate(zip(ages, roas))]
+            roas = [fl(a, v, i) for i, (a, v) in enumerate(zip(ages, roas))]   # real where lived, bounded after
+            for arr in (roas, lo, hi):                # a model age never below the age before it (a real one stays as
+                for i in range(1, len(arr)):          # GA4 / the cube gave it, a tiny dip included)
+                    if real[i] is None and arr[i] is not None and arr[i - 1] is not None and arr[i] < arr[i - 1]:
+                        arr[i] = arr[i - 1]
+            ob = (sa, so) if yet else (None, None)
             be = _crossing_at(ages, roas, *ob)
             be_lo = _crossing_at(ages[:k], hi[:k], *ob)    # (no band there: no end — never the median line as a range)
             be_hi = _crossing_at(ages[:k], lo[:k], *ob)
+            if yet and sa is not None:                # not broken even by its so-far age: the earliest day left is the next
+                be, be_lo, be_hi = (None if v is None else max(v, sa + 1.0) for v in (be, be_lo, be_hi))
             if be is not None:                        # the range holds its own median (a biased band could miss it)
                 be_lo = None if be_lo is None else min(be_lo, be)
                 be_hi = None if be_hi is None else max(be_hi, be)
             if not yet:                               # it already broke even: its real day is the answer (no range)
-                be, be_lo, be_hi = r.be, None, None
+                be, be_lo, be_hi = r.rbe[0], None, None
             out["app"] = {"be": [_day(v) for v in (be, be_lo, be_hi)], "lim": ages[-1],
-                          "roas": [round(v, 4) for v in roas], "lo": [_r(v, 4) for v in lo],
-                          "hi": [_r(v, 4) for v in hi]}
-        d0 = _rev(r.d, 0)
-        idx = [None] * len(CARD_J)
-        if d0 and d0 > 0:
-            for i, j in enumerate(CARD_J):
-                rv = _rev(r.d, GRID[j])
-                idx[i] = None if rv is None else round(100.0 * rv / d0, 1)
-        out["card"] = {"roas": [None if (not r.cum or r.cum[j] is None) else round(r.cum[j] / r.sp, 4) for j in CARD_J],
-                       "bench": bench, "idx": idx, "bidx": bidx}
-        out["now"] = (["be", _day(r.be)] if r.hi is not None else
-                      ["no", r.obs, None if r.oc is None else round(r.oc / r.sp, 4)])
+                          "roas": [_rr(v) for v in roas], "lo": [_rr(v) for v in lo], "hi": [_rr(v) for v in hi]}
+        out["card"] = {"roas": [None if (not r.cum or r.cum[j] is None) else _rr(r.cum[j] / r.sp) for j in CARD_J],
+                       "bench": bench}
+        sfr = None if r.sfv is None else _rr(r.sfv / r.sp)
+        sff = 1 if r.sfa is not None and r.sfa <= nw - r.X - LAG else 0       # its so-far read final? ("asli")
+        out["now"] = (["be", r.rbe[0], r.rbe[1], r.sfa, sfr, sff] if r.rbe is not None else
+                      ["no", r.sfa, sfr, sff])     # the ROI row's own answer (+ its so-far read: the page's "≥")
+        if not r.jd:
+            out["jd"] = 0                          # (under $5 / 30 new users: no model, its real numbers only)
         days.append(out)
     sk = sk or {"auc": [None] * len(HS), "c": None, "n": 0}
     return {"v": V, "key": key, "origin": fc["origin"], "grid": list(GRID), "calib": cal.get("built"),
@@ -1113,7 +1206,7 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             try:
                 fc = load_fits(data_dir, key)
                 refit = fc is None or fc["origin"] != today
-                newest, app, cty = load(out_dir, data_dir, key, fn, full=refit or need)
+                newest, app, cty = load(out_dir, data_dir, key, fn)
                 if not newest:
                     continue
                 if refit:

@@ -22,7 +22,7 @@
 //     the plain fixture (no agent field) rendering none of it;
 //   * 🎯 Breakeven (cpx_fixture.js be(): spec_be_tab §5 + the agreed additions): the tab after Countries, its file fetched only
 //     when it opens (⏳ / ⚠️ + Try again, a late file filling its slot), the 14 days newest first with every cell and every "—"'s
-//     why, a day opened (countries, "data kam" + names on tap, the ROAS card's printed points and the index row), one day at a
+//     why, a day opened (countries, "data kam" + names on tap, the ROAS card's printed points), the period's days, one day at a
 //     time, keep(), the missing / refused / hostile / developer cases, and the layout facts a phone needs (miniDom).
 // Prints ONE JSON report; tests/test_cpx_frontend.py asserts on it.   usage: node cpx_frontend.js <index.html>
 'use strict';
@@ -772,10 +772,37 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     BO.table = { rows: rowsOf(hA), head: [...hA.matchAll(/<th([^>]*)>([^<]*)<\/th>/g)].map(m => [m[2], dec((m[1].match(/title="([^"]*)"/) || [])[1] || '')]),
       sure: txt((hA.match(/<p class="cpx-vd">([\s\S]*?)<\/p>/) || [])[1] || ''), fn: [...hA.matchAll(/<p class="cpx-fn">([\s\S]*?)<\/p>/g)].map(m => txt(m[1])),
       open: (hA.match(/class="cpx-bedr"/g) || []).length, ch: hA.includes('data-cpx-ch') };
-    CURV = 'USD'; BO.table_usd = rowsOf(await beGo({ OPEN: ID.a })).map(r => [r.d, r.cells[7]]); CURV = 'INR';
-    // a day opened: its countries, the "data kam" line (names on tap), its ROAS card (values printed on the points) + the index
+    CURV = 'USD'; BO.table_usd = rowsOf(await beGo({ OPEN: ID.a })).map(r => [r.d, r.cells[6]]); CURV = 'INR';
+    BO.per = {}; for (const [k, n] of [['7', 30], ['all', 30], ['14', 5]]) { const h = await beGo({ OPEN: ID.a, PER: k, DN: n }); BO.per[k + '/' + n] = { d: rowsOf(h).map(r => r.d), more: /data-cpx-more="1"/.test(h) }; }   // every day whatever the picker; 30 at a time
+    { const G = [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270, 360], cv = [0.1, 0.12, 0.14, 0.16, 0.2, 0.28, 0.38, 0.6, 0.6, 0.7, 0.9, 1.0, 1.1];   // an old day: lived ages real (the build's "seen")
+      const day = (real) => ({ d: '2026-01-10', age: 78, sp: 100, inst: 10, real, app: { be: [270, null, null], lim: 360, roas: cv.slice(), lo: [], hi: [] }, unc: [], cty: [], now: ['no', 75, 0.6] });
+      BO.lived = [cv.slice(0, 8), []].map(rl => { const r = rowsOf(_.beRow(day(rl), 'Alpha', G))[0]; return { cells: r.cells, titles: r.titles }; }); }
+    { const G = [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270, 360], cv = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.9997, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7];   // the ROI's kinds of breakeven
+      const one = (now, app, real) => { const r = rowsOf(_.beRow({ d: '2026-02-10', age: 50, sp: 100, inst: 10, real: real || [], app, unc: [], cty: [], now }, 'Alpha', G))[0]; return { cells: r.cells, titles: r.titles }; };
+      const A = { be: [40, null, null], lim: 360, roas: cv.slice(), lo: [], hi: [] };
+      BO.kinds = { x: one(['be', 40, 'x', 45, 1.3], A), nf: one(['be', 40, 'nf', 45, 1.3], A), b: one(['be', 60, 'b', 45, 1.3], A), s: one(['be', 45, 's', 45, 1.02], A),
+        old: one(['be', 60, false, 45, 1.3], A), nofit: one(['no', 95, 0.7], null), near: one(['no', 20, 0.5], { be: [31, null, null], lim: 360, roas: cv.slice(), lo: [], hi: [] }) };
+      BO.ctyk = [1, 2, 3, 0].map(rk => txt(_.beDet({ d: '2026-02-10', age: 50, cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, 30, rk ? null : 20, rk ? null : 60, 400, rk]], unc: [], now: ['no', 20, 0.5] }, 1, false))); }
+    { const G = [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270, 360], cv = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7];
+      const one = (x) => { const r = rowsOf(_.beRow(Object.assign({ d: '2026-02-10', age: 70, sp: 100, inst: 10, real: [], unc: [], cty: [] }, x), 'Alpha', G))[0]; return { cells: r.cells, titles: r.titles }; };
+      BO.kinds2 = { bn: one({ app: { be: [60, null, null], lim: 360, roas: cv.slice(), lo: [], hi: [] }, now: ['be', 60, 'bn', 66, 1.2] }),
+        unjudged: one({ jd: 0, now: ['no', 66, 0.7, 1] }),
+        unjudged_det: txt(_.beDet({ d: '2026-02-10', age: 70, jd: 0, cty: [], unc: [], now: ['no', 66, 0.7, 1] }, 1, false)) };
+      BO.ctyk2 = [5, 6, 4].map(rk => txt(_.beDet({ d: '2026-02-10', age: 450, cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, rk === 4 ? 60 : 400, null, null, 400, rk]], unc: [], now: ['no', 440, 0.5, 1] }, 1, false)));
+      const cd = _.beCard({ roas: [0.2, 0.4, 0.6, 0.8, 0.9, 0.9997], bench: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6] });
+      BO.card999 = [...cd.matchAll(/14 din: ROAS <b>([^<]*)<\/b>/g)].map(m => m[1]); }
+    { const G = [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270, 360], cv = [0.1, 0.12, 0.14, 0.16, 0.2, 0.28, 0.38, 0.5, 0.55, 0.7, 0.9, 1.0, 1.1];
+      const one = (x) => { const r = rowsOf(_.beRow(Object.assign({ d: '2026-01-10', age: 80, sp: 100, inst: 10, real: [], unc: [], cty: [] }, x), 'Alpha', G))[0]; return { cells: r.cells, titles: r.titles }; };
+      const A = { be: [270, null, null], lim: 360, roas: cv.map((v, i) => (G[i] >= 90 ? Math.max(v, 0.6) : v)), lo: [], hi: [] };
+      BO.fin = { floor_final: one({ app: A, now: ['no', 75, 0.6, 1] }),
+        prov: one({ app: A, prov: [null, null, null, null, null, null, 0.41], now: ['no', 75, 0.6, 1] }),
+        least_x: one({ jd: 0, now: ['be', 40, 'x', 45, 1.3, 1] }), least_nf: one({ jd: 0, now: ['be', 40, 'nf', 45, 1.3, 0] }),
+        old_nocurve: one({ age: 410, now: ['no', 400, 0.7, 1] }) }; }
+    BO.zw = { app: txt(_.beRow({ d: '2026-01-10', age: 80, sp: 100, inst: 10, real: [], unc: [], cty: [], app: { be: [61, 61, 61], lim: 360, roas: [], lo: [0.1], hi: [0.1] }, now: ['no', 60, 0.99, 1] }, 'Alpha', [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270, 360]).match(/<td>([\s\S]*?)<\/td>/g)[1].replace(/<[^>]+>/g, '')),
+      cty: txt((_.beDet({ d: '2026-01-10', age: 80, cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, 61, 61, 61, 360, 0]], unc: [], now: ['no', 60, 0.99, 1] }, 1, false).match(/<td>(<b>day[\s\S]*?)<\/td>/) || [])[1] || '') };
+    // a day opened: its countries, the "data kam" line (names on tap), its ROAS card (values printed on the points)
     const dayAt = async (d, o) => { const h = await beGo(Object.assign({ OPEN: ID.a, BOPEN: d }, o || {})); const x = bedOf(h) || '';
-      return { row: rowsOf(h).find(r => r.d === d), n: (h.match(/class="cpx-bedr"/g) || []).length, cty: tblOf(x, '<h4 class="cpx-h4">Covered countries'), cty_h4: txt((x.match(/<h4 class="cpx-h4">(Covered countries[^<]*)</) || [])[1] || ''),
+      return { row: rowsOf(h).find(r => r.d === d), n: (h.match(/class="cpx-bedr"/g) || []).length, cty: tblOf(x, '<h4 class="cpx-h4">Countries with a benchmark'), cty_h4: txt((x.match(/<h4 class="cpx-h4">(Countries with a benchmark[^<]*)</) || [])[1] || ''),
         kam: txt((x.match(/<p class="cpx-vm"><span title="[^"]*">([\s\S]*?)<\/p>/) || [])[1] || ''), kam_t: dec((x.match(/<p class="cpx-vm"><span title="([^"]*)"/) || [])[1] || ''),
         names: txt((x.match(/<p class="cpx-fn cpx-beu">([\s\S]*?)<\/p>/) || [])[1] || ''), note: txt((x.match(/<p class="cpx-note">([\s\S]*?)<\/p>/) || [])[1] || ''),
         pv: x.includes('⏳ <b>Abhi final nahi</b>'), card: cardOf(h), html: x }; };
@@ -807,7 +834,7 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     const fC = 'be_' + KEY.c + '.json.gz';
     FX.FILES[fC] = { v: 1, key: KEY.c, origin: '2026-03-30', grid: [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270, 360], calib: '2026-03-28', skill: { auc: [null, null, null], c: null, n: 3 },
       days: [{ d: '2026-03-25', age: 4, sp: 120, inst: 300, cov: 1, app: { be: [30, 20, 60], lim: 360, roas: [0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 1.2, 1.4, 1.5, 1.7, 1.8, 1.9], lo: [], hi: [] }, unc: [],
-        cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, 30, 20, 60]], card: { roas: [0.2, null, null, null, null, null], bench: [null, null, null, null, null, null], idx: [100, null, null, null, null, null], bidx: [null, null, null, null, null, null] }, now: ['no', 4, 0.25] }] };
+        cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, 30, 20, 60]], card: { roas: [0.2, null, null, null, null, null], bench: [null, null, null, null, null, null] }, now: ['no', 4, 0.25] }] };
     LOADS = []; SCREEN._on.click[0]({ target: { closest: s => s === '[data-cpx-retry]' ? { dataset: { cpxRetry: fC } } : null } }); await settle(); CPX.paint();
     _.set({ BOPEN: '2026-03-25' }); CPX.paint(); const hC2 = tbOf(SCREEN.innerHTML); BER.push(hC2);
     Object.assign(BO.gamma, { after: beL(), text2: txt(hC2), rows: rowsOf(hC2), card: cardOf(hC2), kam: (bedOf(hC2) || '').includes('data kam') });
@@ -825,8 +852,7 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     CURV = 'INR'; BO.k = { day: _.beK('Alpha App', '2026-03-25'), none: _.beK('Nope App', '2026-03-25') };
     const BC0 = ctx.baseCur, UI0 = FX.DATA.usd_inr; ctx.baseCur = () => 'INR'; FX.DATA.usd_inr = 80; BO.k.base = _.beK('Alpha App', '2026-03-25');
     delete FX.DATA.usd_inr; BO.k.base_none = _.beK('Alpha App', '2026-03-25');
-    { const hK = await beGo({ OPEN: ID.a, BOPEN: '2026-03-25' }); BO.k.row = rowsOf(hK).find(r => r.d === '2026-03-25').cells[7]; BO.k.cpi = tblOf(bedOf(hK) || '', '<h4 class="cpx-h4">Covered countries').rows.map(r => r[2]); }
-    BO.cov = [0.004, 0.996, 0, 1, 0.6, 0.0051].map(v => { const h = _.beCov(v); return [txt(h), dec((h.match(/title="([^"]*)"/) || [])[1] || '')]; });   // the words from the exact share
+    { const hK = await beGo({ OPEN: ID.a, BOPEN: '2026-03-25' }); BO.k.row = rowsOf(hK).find(r => r.d === '2026-03-25').cells[6]; BO.k.cpi = tblOf(bedOf(hK) || '', '<h4 class="cpx-h4">Countries with a benchmark').rows.map(r => r[2]); }
     ctx.baseCur = BC0; FX.DATA.usd_inr = UI0;
     { const D0 = FX.FILES[fA].days, i = D0.findIndex(x => x.d === '2026-03-25'), u0 = D0[i].unc; D0[i].unc = [['BR', 0.1], ['...', 0.05]];
       const hF = await beGo({ OPEN: ID.a, BOPEN: '2026-03-25', BUNC: true }); BO.fold = { kam: txt((hF.match(/<p class="cpx-vm"><span title="[^"]*">([\s\S]*?)<\/p>/) || [])[1] || ''),
@@ -835,7 +861,7 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     const hZ = await beGo({ OPEN: ID.z }), hZ1 = await beGo({ OPEN: ID.z, BOPEN: '2026-03-25', BUNC: true }), hZ2 = await beGo({ OPEN: ID.z, BOPEN: '2026-03-26' }), HZ = hZ + hZ1 + hZ2;
     BO.hostile = { raw: ['<img src=x onerror=alert(8)>', '"><b>x</b>', '<i>', '<b>9</b>'].filter(s => HZ.includes(s)), esc: ['&lt;img src=x onerror=alert(8)&gt;', '&quot;&gt;&lt;b&gt;x&lt;/b&gt;'].map(s => HZ.includes(s)),
       rows: rowsOf(hZ).map(r => ({ d: r.d, cells: r.cells, titles: r.titles })), sure: txt((hZ.match(/<p class="cpx-vd">([\s\S]*?)<\/p>/) || [])[1] || ''),
-      d25: { cty: tblOf(bedOf(hZ1) || '', '<h4 class="cpx-h4">Covered countries'), names: txt((hZ1.match(/<p class="cpx-fn cpx-beu">([\s\S]*?)<\/p>/) || [])[1] || ''), card: cardOf(hZ1) },
+      d25: { cty: tblOf(bedOf(hZ1) || '', '<h4 class="cpx-h4">Countries with a benchmark'), names: txt((hZ1.match(/<p class="cpx-fn cpx-beu">([\s\S]*?)<\/p>/) || [])[1] || ''), card: cardOf(hZ1) },
       d26: txt(bedOf(hZ2) || '') };
     // the developer copy: nothing (no pointer, no fetch, no screen)
     ctx.window.__DEV_VIEW__ = true; reset(); LOADS = []; _.set({ OPEN: ID.a, TAB: 'be' }); CPX.paint(); await settle();

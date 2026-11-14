@@ -3050,7 +3050,7 @@ h2.cpx-h{font-size:20px;margin:0 0 3px;font-weight:800}.cpx-d{margin:0;color:var
 .cpx-lms{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));margin-top:8px}
 .cpx-lm{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12.5px;font-variant-numeric:tabular-nums}
 .cpx-lm .cpx-k{color:var(--faint);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
-/* ⚖️ Breakeven: the newest 14 install days (a tap opens one under its row: its countries + the 14-day ROAS card) */
+/* ⚖️ Breakeven: the period's install days (a tap opens one under its row: its countries + the 14-day ROAS card) */
 .cpx-bex{container-type:inline-size}   /* the box measures its own visible width: an open day is exactly that wide (sticky at its left edge) while a wide table scrolls under it — never wider than the screen */
 .cpx-t .cpx-ben{text-align:right}
 .cpx-bet tr>:first-child{position:sticky;left:0;z-index:1;background:var(--raise)}.cpx-bet tr>th:first-child{background:var(--panel2)}   /* the date (a country) stays in view while a phone scrolls the row; a head cell keeps the head's colour */
@@ -3060,9 +3060,8 @@ h2.cpx-h{font-size:20px;margin:0 0 3px;font-weight:800}.cpx-d{margin:0;color:var
 .cpx-bedb:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 .cpx-bet tr.cpx-bedr>td.cpx-bedc{position:static;padding:0;white-space:normal;background:var(--raise)}
 .cpx-bed{position:sticky;left:0;box-sizing:border-box;width:100%;width:100cqi;padding:4px 10px 12px;border-bottom:1px dashed var(--line2)}
-.cpx-becd{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));align-items:start}   /* the card and its index side by side where both fit, else one under the other */
+.cpx-becd{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));align-items:start}   /* the card (one column; room for a second panel: the returning-eCPM step) */
 .cpx-svg.cpx-bes{max-width:400px}
-.cpx-t.cpx-bei{font-size:12px;width:auto}.cpx-t.cpx-bei th,.cpx-t.cpx-bei td{padding:5px 7px}   /* the index row: small, beside the card (a phone: under it, whole at 375 px) */
 .cpx-svg .cpx-be1{stroke:var(--good);stroke-width:1.2;stroke-dasharray:2 3}.cpx-svg .cpx-be1t{fill:var(--good);font-size:11px;font-weight:700}
 .cpx-svg circle.cpx-bep{fill:var(--panel2);stroke:var(--ink2);stroke-width:1.4}
 .cpx-beu{overflow-wrap:anywhere}
@@ -9557,13 +9556,13 @@ function ctyHtml(r,F){ const [lo,hi]=span(r); if(lo>hi) return '<p class="cpx-no
   const rest=rs.sp_inr>0.5?`<tr class="cpx-rest"><td>Rest</td><td>${tot.sp_inr>0?Math.round(rs.sp_inr/tot.sp_inr*100)+'%':'—'}<small>${fM(rs.sp_inr,rs.sp_usd)}</small></td><td>—</td><td>—</td><td>—</td><td></td></tr>`:'';   // (only its spend and share: no CPI — it would mix two install counts)
   return (rowsC.length?`<div class="cpx-x"><table class="cpx-t"><thead><tr><th>Country</th><th>Spend share</th><th title="cost ÷ Google Ads downloads">CPI</th><th title="AdMob country report (gross)">eCPM</th><th title="${E(GAPW)}">${GAPN}</th><th>Alarm</th></tr></thead><tbody>${body}${rest}</tbody></table></div>`:'<p class="cpx-note">Is period me country-wise spend nahi.</p>')
     +`<p class="cpx-fn">${E(perDates(lo,hi))} · Normal = country ka khula alarm ho to uska baseline, warna period se pehle ke 28 din.${okD(nt.admob_cty_from)&&lo<nt.admob_cty_from?` AdMob country data ${E(fdy(nt.admob_cty_from))} se hai — usse pehle ka eCPM nahi.`:''}</p>`; }
-// ---- ⚖️ Breakeven (owner, 14 Nov 2026): for each of the app's NEWEST 14 install days its predicted ROAS at 30 / 90 / 180 days
-// and the day it pays back — both off the same app curve (one curve, one answer) —, the countries covered (each with its own
-// benchmark's chances and day) and "x % spend: data kam" for the rest; tap a day: its countries and the
-// 14-day card "ROAS ab tak" vs the app's benchmark curve with the revenue index (day 1 = 100) beside it. The build's
-// (admob_iq/be_build.py, spec_be_tab §5): DATA.be + be_<key>.json.gz, loaded only when this tab opens. The app answer is the
-// build's own — the covered countries' predicted ROAS curves summed by spend share, never an average of their BE days: the page
-// prints it, it never recomputes it. The period picker does not apply (always the newest 14 install days) ----
+// ---- ⚖️ Breakeven (owner, 14 Nov 2026): EVERY judged install day, newest on top, 30 at a time as Day-wise ("31 Oct tak hi
+// kyu? baki ke din?"): the day it pays back and its ROAS at 30 / 90 / 180 days — REAL where the day has lived them (final
+// cells, the ROI row's own breakeven day: "asli"), else off the app curve (one curve, one answer); tap a day: the countries with a benchmark (spend share, CPI, their day —
+// only what he agreed: "faltu ki chiz bina puchhe" took out the chance and eCPM columns and the revenue index), "x % spend:
+// data kam" for the rest, and the 14-day card "ROAS ab tak" vs the app's benchmark curve. The build's (admob_iq/be_build.py):
+// DATA.be + be_<key>.json.gz, loaded only when this tab opens. The app answer is the build's own — the covered countries'
+// predicted ROAS curves summed by spend share, never an average of their BE days: the page prints it, never recomputes it ----
 const BEK=[1,2,3,4,7,14];                                                   // the card's days (day k = age k − 1: day 1 = the install day)
 const num=v=>typeof v==='number'&&isFinite(v)?v:null;                      // a number of the file (anything else: unknown)
 const bePct=v=>Math.round(v*100)+'%';
@@ -9580,42 +9579,49 @@ function beK(nm,x){ const d=DD(); let b='USD', dt=false; try{ b=baseCur(); dt=!!
   return k>0&&isFinite(k)?k:null; }
 const beSp=(v,k)=>VIN()&&k?fI(v*k):fU(v), beCpi=(v,k)=>VIN()&&k?fCpi(v*k):'$'+v.toFixed(v<0.1?3:2);   // (no rate: the file's $ as it is)
 const beFold=c=>c==='…'||c==='...';                                         // the folded small countries ("baaki chhote")
-// a chance: ✓ (50 % or more: more likely than not) / ✗ + the calibrated %; unknown: "—" + why
 // the app's ROAS at an age H off its predicted curve ("roas" at the grid ages ≤ its limit): ✓ at 100 % or more (= its
 // breakeven day is at or before H: one curve, one answer); past the curve's limit: "—" + why
 const BEG=[0,1,2,3,6,13,30,60,90,120,180,270,360];                          // the build's GRID (the file's "grid" wins)
 function beRo(A,G,H){ const i=G.indexOf(H), r=A&&Array.isArray(A.roas)?A.roas:[]; return i>=0&&i<r.length?num(r[i]):null; }
-// so = the day's real ROAS so far (not broken even yet): a value at it is the build's floor — "≥" (it has made that already)
-function beRoC(v,H,why,so){ if(v==null) return beDash(why); const fl=so!=null&&Math.abs(v-so)<5e-5;
-  const t=E('andaze se '+H+' din tak ROAS '+(fl?'kam se kam ':'')+fR(v)+(v>=1?' — 100% ya zyada: breakeven':' — 100% se kam: abhi breakeven nahi')+(fl?' (itna to ho chuka hai — model isse kam keh raha tha)':''));
-  return v>=1?`<span class="cpx-sw cpx-good" title="${t}">✓ ${fR(v)}</span>`:`<span title="${t}">${fl?'≥ ':''}${fR(v)}</span>`; }
-function bePc(p,H,why){ const v=num(p); if(v==null) return beDash(why); const y=v>=0.5;
-  return `<span class="cpx-sw ${y?'cpx-good':'cpx-bad'}" title="${E(bePct(v)+' chance ki '+H+' din me is din ka spend wapas aa jaye (breakeven)')}">${y?'✓':'✗'} ${bePct(v)}</span>`; }
+// a ROAS cell in one of four states: "real" (final cells: "asli"), "nf" (an age it has lived, not final yet: "ab tak"),
+// "floor" (an age past its so-far read where the build raised the model to it: "≥", the model said less), "model"
+const beRf=v=>v<1&&fR(v)==='100.0%'?'99.9%':fR(v);                          // (never "100.0%" for a value still under 100 %)
+// fin: the so-far read behind a "≥" is final (asli) or not ("ab tak (abhi final nahi)") — a lower bound is never "andaze se"
+function beRoC(v,H,why,st,fin){ if(v==null) return beDash(why); const ls=st==='least', fl=st==='floor'||ls, y=v>=1;
+  const t=E((st==='real'||fl&&fin?'asli: ':st==='nf'||fl?'ab tak (abhi final nahi): ':'andaze se ')+H+' din tak ROAS '+(fl?'kam se kam ':'')+beRf(v)
+    +(y?' — 100% ya zyada: breakeven':' — 100% se kam: '+(st==='real'?'breakeven nahi hua':'abhi breakeven nahi'))+(ls?' (itna to ho chuka hai — yahan andaza nahi)':fl?' (itna to ho chuka hai — model isse kam keh raha tha)':''));
+  return y?`<span class="cpx-sw cpx-good" title="${t}">✓ ${fl?'≥ ':''}${beRf(v)}</span>`:`<span title="${t}">${fl?'≥ ':''}${beRf(v)}</span>`; }
 // the app's breakeven: the median day (day N = N days after the install day, as the ROI tab's Breakeven) + its 80 % range (a
 // null end: no crossing within the curve's limit → "lim+"); no median crossing: "data se aage (> lim din)"
 function beAppBe(A,G){ const L=num(A.lim)!=null?Math.round(A.lim):null, b=Array.isArray(A.be)?A.be.map(num):[], m=b[0], lo=b[1], hi=b[2];
   const k=(Array.isArray(A.lo)?A.lo:[]).reduce((j,v,i)=>num(v)!=null?i:j,-1), BL=k>=0&&k<G.length&&num(G[k])!=null?Math.round(G[k]):null;   // the band's reach
   if(m==null) return L==null?beDash('breakeven ka andaza nahi aaya'):`<span title="${E('ROAS ka andaza '+L+' din tak hi bana (purane din utne hi) — usme 100% tak nahi pahuncha')}">data se aage (&gt; ${L} din)</span>`;
-  const r=lo!=null&&(hi!=null||BL!=null)?`<small title="10 me se 8 baar breakeven is range me${hi==null?' ('+BL+'+ = '+BL+' din ke andaze ke aage)':''}">80%: day ${Math.round(lo)}–${hi!=null?Math.round(hi):BL+'+'}</small>`:'';
+  const r=lo!=null&&(hi!=null||BL!=null)&&!(hi!=null&&Math.round(lo)===Math.round(hi))?`<small title="10 me se 8 baar breakeven is range me${hi==null?' ('+BL+'+ = '+BL+' din ke andaze ke aage)':''}">80%: day ${Math.round(lo)}–${hi!=null?Math.round(hi):BL+'+'}</small>`:'';
   return `<b>day ${Math.round(m)}</b>${r}`; }
 // a country's days: [median, low, high] + its watched limit L (the longest age its data saw): a day past L is null (an older
 // shape: −L); no L and null: no answer
-function beCtyBe(m0,lo0,hi0,L0){ const m=num(m0), lo=num(lo0), hi=num(hi0), L=num(L0)!=null&&L0>0?Math.round(L0):null;
+function beCtyBe(m0,lo0,hi0,L0,rk){ const m=num(m0), lo=num(lo0), hi=num(hi0), L=num(L0)!=null&&L0>0?Math.round(L0):null;
+  if(rk>=1&&rk<=4&&m!=null&&m>=0) return beDayTxt(m,['','x','b','nf','bn'][rk],true);   // its own real day
+  if((rk===5||rk===6)&&m!=null&&m>=0) return beNot(m,rk===5);                // it lived past the benchmark's limit without it
   const past=v=>v!=null&&v<0?Math.round(-v):v==null?L:null;                // the limit a day is past (null: not past / not known)
   if(m==null&&L==null) return beDash('is country ka breakeven andaza nahi bana');
   if(m==null||m<0){ const P=past(m); return `<span title="${E('country ka purana data sirf '+P+' din tak dekha — median breakeven usse aage')}">data se aage (&gt; ${P} din)</span>`; }
   const hv=hi!=null&&hi>=0?String(Math.round(hi)):past(hi)!=null?past(hi)+'+':null;
-  return `<b>day ${Math.round(m)}</b>`+(lo!=null&&lo>=0&&hv!=null?`<small title="10 me se 8 baar breakeven is range me${/\+$/.test(hv)?' ('+hv+' = country ke dekhe hue '+hv.slice(0,-1)+' din ke aage)':''}">80%: day ${Math.round(lo)}–${hv}</small>`:''); }
+  return `<b>day ${Math.round(m)}</b>`+(lo!=null&&lo>=0&&hv!=null&&hv!==String(Math.round(lo))?`<small title="10 me se 8 baar breakeven is range me${/\+$/.test(hv)?' ('+hv+' = country ke dekhe hue '+hv.slice(0,-1)+' din ke aage)':''}">80%: day ${Math.round(lo)}–${hv}</small>`:''); }
 const bePs=x=>x<=0?'0%':x>=1?'100%':x<0.005?'<1%':x>0.995?'>99%':Math.round(x*100)+'%';   // a share in words: "0%" / "100%" only when exactly
-function beCov(c){ const v=num(c); if(v==null) return beDash('covered share nahi aaya'); const p=bePs(v);
-  const w=v<=0?'koi country covered nahi — data kam: 20 se kam asli-BE wale purane din, ya is din ka CPI / eCPM unke purane din ki range ke bahar (ya aaya hi nahi)':v>=1?'poora spend covered — har country ka benchmark (20+ asli-BE wale purane din) aur is din ka CPI / eCPM uski range me'
-    :`is din ke spend ka ${p} un countries ka jinka andaza bana (20+ asli-BE wale purane din, CPI / eCPM unki range me) — baaki ${bePs(1-v)} ka andaza nahi (data kam)`;
-  return `<span${v<0.5?' class="cpx-wat"':''} title="${E(w)}">${E(p)}</span>`; }
-// today: ["be", day] broke even · ["no", age, ROAS so far]
+// today (the ROI row's own answer): ["be", day, kind, so-far age, ROAS so far] broke even — kind "x" exact, "nf" its daily cell
+// not final yet, "b" ≤ a 30-day column / checkpoint, "s" ≤ its so-far read (an older file: true / false = "x" / "b") ·
+// ["no", so-far age, ROAS so far]
+const beKind=n=>n[2]===true||n[2]==='x'?'x':n[2]==='nf'||n[2]==='s'||n[2]==='bn'?n[2]:'b';
+const BEKT={x:'',nf:'is din ka number abhi final nahi — badal sakta hai',b:'is din ya usse pehle hua — exact din ka number nahi',bn:'30 din ke hisse me hua, uska number abhi final nahi — is din tak',s:'ab tak ke read me spend wapas — din ka exact pata nahi, is din tak'};
+const beNf=k=>k==='nf'||k==='bn';                                           // (not final: never "asli")
+const beDayTxt=(L,k,asli)=>`<b${BEKT[k]?` title="${E((asli&&!beNf(k)?'asli: ':'')+BEKT[k])}"`:asli?' title="asli: is din spend wapas aa gaya"':''}>${k==='b'||k==='s'||k==='bn'?'≤ ':''}day ${Math.round(L)}</b>${beNf(k)?' <small>final nahi</small>':asli?' <small>asli</small>':''}`;
+// "day N tak nahi": the day (or a country) has lived N days without its spend coming back — real; "final nahi" while that read is not final
+const beNot=(N,fin)=>`<span title="${E((fin?'asli: ':'ab tak (abhi final nahi): ')+'day '+Math.round(N)+' tak spend wapas nahi aaya')}">day ${Math.round(N)} tak nahi</span> <small>${fin?'asli':'final nahi'}</small>`;
 function beNow(n){ const no=beDash('is din ka abhi tak ka data nahi aaya'); if(!Array.isArray(n)) return no;
-  if(n[0]==='be'&&num(n[1])!=null) return `<b class="cpx-good">✅ BE ho gaya: day ${Math.round(n[1])}</b>`;
+  if(n[0]==='be'&&num(n[1])!=null){ const k=beKind(n); return `<b class="cpx-good"${BEKT[k]?` title="${E(BEKT[k])}"`:''}>✅ BE ho gaya: ${k==='b'||k==='s'||k==='bn'?'≤ ':''}day ${Math.round(n[1])}</b>${beNf(k)?' <small>final nahi</small>':''}`; }
   if(n[0]!=='no') return no; const a=num(n[1]), v=num(n[2]);
-  return `abhi nahi · ROAS ${v!=null?`<b>${fR(v)}</b>`:beDash('abhi tak ka ROAS nahi aaya')}${a!=null?`<small>day ${Math.round(a)} tak</small>`:''}`; }
+  return `abhi nahi · ROAS ${v!=null?`<b>${beRf(v)}</b>`:beDash('abhi tak ka ROAS nahi aaya')}${a!=null?`<small>day ${Math.round(a)} tak${n[3]===0?' (final nahi)':''}</small>`:''}`; }
 // "how sure": the back-test's skill for this app (AUC at 30 / 90 / 180 days, C) — a fraction or points
 function beSure(F,P){ const s=F.skill&&typeof F.skill==='object'&&!Array.isArray(F.skill)?F.skill:null, au=s&&Array.isArray(s.auc)?s.auc.map(num):[], n=s?num(s.n):null;
   const pt=v=>v==null?null:Math.round(v<=1?v*100:v), B=[0,1,2].map(i=>pt(au[i])), C=pt(s?num(s.c):null);
@@ -9636,29 +9642,24 @@ function beSvg(r,b){ const W=320, H=168, Lm=26, Rm=26, Tp=26, Bm=34, vs=r.concat
   const pb=pth(b), pr=pth(r); if(pb) o.push(`<path d="${pb}" class="cpx-nl"/>`); if(pr) o.push(`<path d="${pr}" class="cpx-ln cpx-l2"/>`);
   b.forEach((v,i)=>{ if(v!=null) o.push(`<circle cx="${f1(X(i))}" cy="${f1(Y(v))}" r="3" class="cpx-bep"/>`); });
   r.forEach((v,i)=>{ if(v!=null) o.push(`<circle cx="${f1(X(i))}" cy="${f1(Y(v))}" r="3.4" class="cpx-dot cpx-l2"/>`); });
-  const lab=(i,v,up,c)=>o.push(`<text x="${f1(X(i))}" y="${f1(Math.max(12,Math.min(H-Bm+16,Y(v)+(up?-8:15))))}" class="${c}" text-anchor="middle">${E(fR(v))}</text>`);
+  const lab=(i,v,up,c)=>o.push(`<text x="${f1(X(i))}" y="${f1(Math.max(12,Math.min(H-Bm+16,Y(v)+(up?-8:15))))}" class="${c}" text-anchor="middle">${E(beRf(v))}</text>`);
   for(let i=0;i<6;i++){ const rv=r[i], bv=b[i], ru=rv!=null&&(bv==null||rv>=bv); if(rv!=null) lab(i,rv,ru,'cpx-pt'); if(bv!=null) lab(i,bv,rv==null||!ru,'cpx-nt'); }
   o.push('<text x="6" y="16" class="cpx-tt">ROAS ab tak</text></svg>'); return o.join(''); }
-function beIdx(I,J,r){ if(!I&&!J) return ''; const i0=I||[null,null,null,null,null,null], j0=J||[null,null,null,null,null,null];
-  const c=(v,w)=>`<td class="cpx-ben">${v!=null?Math.round(v):beDash(w)}</td>`;
-  return `<div><div class="cpx-x"><table class="cpx-t cpx-bei"><thead><tr><th title="us din ki kamai ÷ install ke din (1 din) ki kamai × 100">Index · din</th>${BEK.map(k=>`<th class="cpx-ben">${k}</th>`).join('')}</tr></thead><tbody>`
-    +`<tr><td>Is din</td>${i0.map((v,i)=>c(v,r[i]==null?'install ko abhi itne din nahi hue':'1 din ki kamai 0 — index nahi banta')).join('')}</tr>`
-    +`<tr><td>Benchmark</td>${j0.map(v=>c(v,'benchmark ke liye purane din kam')).join('')}</tr></tbody></table></div>`
-    +'<p class="cpx-fn">Index = us din ki kamai, install ke din (1 din) ki kamai = 100 maan ke — kamai kitni tezi se ghatti hai (sirf shape, level nahi).</p></div>'; }
 function beCard(cd){ const ar=k=>cd&&typeof cd==='object'&&Array.isArray(cd[k])&&cd[k].length===6?cd[k].map(num):null, R=ar('roas'), B=ar('bench');
   const hd='<h4 class="cpx-h4">ROAS ab tak · pehle 14 din</h4>'; if(!R&&!B) return hd+'<p class="cpx-note">Is din ka ROAS card nahi bana.</p>';
   const nn=[null,null,null,null,null,null], r=R||nn, b=B||nn, j=[5,4,3,2,1,0].find(i=>r[i]!=null&&b[i]>0);
-  const vs=j!=null?`<p class="cpx-vm">${BEK[j]} din: ROAS <b>${fR(r[j])}</b> vs benchmark ${fR(b[j])} → <span class="cpx-dl ${dCls('ROAS_G',r[j]/b[j]-1)}">${fP(r[j]/b[j]-1)}</span></p>`:'';
-  return hd+vs+`<div class="cpx-becd"><div class="cpx-chw">${beSvg(r,b)}</div>${beIdx(ar('idx'),ar('bidx'),r)}</div>`
+  const vs=j!=null?`<p class="cpx-vm">${BEK[j]} din: ROAS <b>${beRf(r[j])}</b> vs benchmark ${beRf(b[j])} → <span class="cpx-dl ${dCls('ROAS_G',r[j]/b[j]-1)}">${fP(r[j]/b[j]-1)}</span></p>`:'';
+  return hd+vs+`<div class="cpx-becd"><div class="cpx-chw">${beSvg(r,b)}</div></div>`
     +`<p class="cpx-fn">━ is din · ┄ benchmark = is app ke purane install din ka median ROAS (usi din tak) · 100% = spend wapas (breakeven) · N din = install ke din se N din ki kul kamai ÷ spend (1 din = sirf install ka din).${b.every(v=>v==null)?' Benchmark ke liye purane din kam.':''}</p>`; }
 // the open day: its covered countries, one "data kam" line for the rest (the names on tap), its ROAS card
 function beDet(x,k,pv){ const o=[], C=(Array.isArray(x.cty)?x.cty:[]).filter(c=>Array.isArray(c)&&typeof c[0]==='string'&&c[0]).sort((p,q)=>(num(q[1])||0)-(num(p[1])||0));
   if(pv) o.push('<p class="cpx-fn">⏳ <b>Abhi final nahi</b> — ye install din 4 din se kam purana hai: GA4 ki country aur first-session report abhi badal sakti hai, aur Google Ads ke installs bhi 1–2 din me poore judte hain (CPI abhi thoda zyada dikh sakta hai) — andaza bhi badlega.</p>');
-  if(C.length) o.push(`<h4 class="cpx-h4">Covered countries (${C.length})</h4><div class="cpx-x"><table class="cpx-t"><thead><tr><th>Country</th><th class="cpx-ben">Spend share</th><th class="cpx-ben" title="Google Ads spend ÷ installs">CPI</th><th class="cpx-ben" title="GA4 first session: kamai ÷ impressions × 1000">eCPM (first session)</th>${[30,90,180].map(H=>`<th class="cpx-ben" title="is country ke benchmark se ${H} din me breakeven ka chance (✓ = 50% ya zyada)">BE chance ${H} din</th>`).join('')}<th title="is country ke benchmark se breakeven ka din (80% range)">Breakeven</th></tr></thead><tbody>`
-    +C.map(c=>{ const sh=num(c[1]), cp=num(c[2]), ec=num(c[3]);
-      return `<tr><td>${E(ctyName(c[0]))}</td><td class="cpx-ben">${sh!=null?E(bePs(sh)):beDash('spend share nahi aaya')}</td><td class="cpx-ben">${cp!=null?beCpi(cp,k):beDash('CPI nahi aaya')}</td><td class="cpx-ben">${ec!=null?fE(ec):beDash('first session ka eCPM nahi aaya')}</td>`
-        +[30,90,180].map((H,i)=>`<td class="cpx-ben">${bePc(c[4+i],H,H+' din ka calibration nahi bana — andaza nahi')}</td>`).join('')+`<td>${beCtyBe(c[7],c[8],c[9],c[10])}</td></tr>`; }).join('')+'</tbody></table></div>');
-  else o.push('<p class="cpx-note">Is din koi country covered nahi — 20 se kam asli-BE wale purane din, ya is din ka CPI / eCPM unke purane din ki range ke bahar (ya aaya hi nahi), isliye andaza nahi.</p>');
+  if(C.length) o.push(`<h4 class="cpx-h4">Countries with a benchmark (${C.length})</h4><div class="cpx-x"><table class="cpx-t"><thead><tr><th>Country</th><th class="cpx-ben">Spend share</th><th class="cpx-ben" title="Google Ads spend ÷ installs">CPI</th><th title="is country ka breakeven: BE ho chuka to asli din, warna benchmark se (80% range)">Breakeven</th></tr></thead><tbody>`
+    +C.map(c=>{ const sh=num(c[1]), cp=num(c[2]);
+      return `<tr><td>${E(ctyName(c[0]))}</td><td class="cpx-ben">${sh!=null?E(bePs(sh)):beDash('spend share nahi aaya')}</td><td class="cpx-ben">${cp!=null?beCpi(cp,k):beDash('CPI nahi aaya')}</td>`
+        +`<td>${beCtyBe(c[7],c[8],c[9],c[10],c[11])}</td></tr>`; }).join('')+'</tbody></table></div>');
+  else o.push(x.jd===0?'<p class="cpx-note">Is din spend $5 se kam ya 30 se kam naye users — countries ka andaza nahi (sirf asli numbers).</p>'
+    :'<p class="cpx-note">Is din kisi country ka benchmark nahi — 20 se kam asli-BE wale purane din, ya is din ka CPI / eCPM unke purane din ki range ke bahar (ya aaya hi nahi), isliye andaza nahi.</p>');
   const U=(Array.isArray(x.unc)?x.unc:[]).filter(u=>Array.isArray(u)&&typeof u[0]==='string'&&u[0]&&num(u[1])!=null), us=U.reduce((s,u)=>s+u[1],0);
   if(U.length&&us>0){ const fo=U.filter(u=>beFold(u[0])).reduce((s,u)=>s+u[1],0), nm=U.filter(u=>!beFold(u[0])).sort((p,q)=>q[1]-p[1]), n=nm.length;
     o.push(`<p class="cpx-vm"><span title="data kam = us country ke 20 se kam asli-BE wale purane din, ya is din ka CPI / eCPM unke purane din ki range ke bahar (ya aaya hi nahi) — uska andaza nahi lagaya, app ke answer me nahi">${E(bePs(us))} spend: data kam</span> (${n} ${n===1?'country':'countries'}${fo>0?' + baaki chhote':''}) — <button type="button" class="cpx-lnk" data-cpx-beu="1" aria-expanded="${BUNC}">${BUNC?'naam chhupao':'naam dekho'}</button></p>`
@@ -9667,27 +9668,42 @@ function beDet(x,k,pv){ const o=[], C=(Array.isArray(x.cty)?x.cty:[]).filter(c=>
   return `<div class="cpx-bed" id="cpx-bed">${o.join('')}</div>`; }
 // one install day's row (+ its details right under it when open)
 function beRow(x,nm,G){ const on=BOPEN===x.d, A=x.app&&typeof x.app==='object'&&!Array.isArray(x.app)?x.app:null, ag=num(x.age), pv=ag!=null&&ag<4, sp=num(x.sp), k=VIN()?beK(nm,x.d):1;
-  const lim=A?num(A.lim):null, so=Array.isArray(x.now)&&x.now[0]==='no'?num(x.now[2]):null;   // (its ROAS so far: the curve's floor)
-  const why=H=>!A?'koi country covered nahi — data kam, andaza nahi':lim!=null&&H>lim?'data itne din aage nahi dekha — ROAS ka andaza sirf '+Math.round(lim)+' din tak bana'
+  const lim=A?num(A.lim):null, N=Array.isArray(x.now)?x.now:[], no=N[0]==='no', sa=num(N[no?1:3]), so=num(N[no?2:4]);   // its latest so-far read
+  const RL=Array.isArray(x.real)?x.real:[], rv=H=>{ const i=G.indexOf(H); return i>=0?num(RL[i]):null; };   // its REAL ROAS (final cells)
+  const why=H=>x.jd===0?'is din spend $5 se kam ya 30 se kam naye users — andaza nahi':!A?'kisi country ka benchmark nahi — data kam, andaza nahi':lim!=null&&H>lim?'data itne din aage nahi dekha — ROAS ka andaza sirf '+Math.round(lim)+' din tak bana'
     :'is din ka andaza nahi aaya';   // (past the curve's limit; else nothing to read)
+  const PV=Array.isArray(x.prov)?x.prov:[], pvv=H=>{ const i=G.indexOf(H); return i>=0?num(PV[i]):null; };   // lived, not final
+  const bd=N[0]==='be'?num(N[1]):null, bk=bd!=null?beKind(N):'', bfin=bk==='x'||bk==='b', sfin=(no?N[3]:N[5])===1;
+  const least=H=>bd!=null&&H>=bd?(bfin?beRoC(1,H,'','least',true):beRoC(Math.max(so!=null?so:1,1),H,'','least',sfin&&bk==='s')):null;   // broke even: ≥ 100 %
+  const cell=H=>{ const r=rv(H); if(r!=null) return beRoC(r,H,'','real');                             // lived + final: asli
+    const v=A?beRo(A,G,H):null, nfw=H+' din ka data abhi final nahi (2–3 din me asli) — ab tak ka ROAS "Ab tak" me';
+    if(sa!=null&&H<=sa){ const p=pvv(H); return p!=null?beRoC(p,H,'','nf'):H===sa&&so!=null?beRoC(so,H,'','nf'):least(H)||beDash(nfw); }   // lived, not final: its own number
+    if(v!=null) return beRoC(v,H,why(H),so!=null&&Math.abs(v-so)<5e-5?'floor':'model',sfin);   // ahead: the model ("≥" at its so far)
+    return least(H)||beDash(why(H)); };
+  const beCell=N[0]==='be'&&num(N[1])!=null?beDayTxt(N[1],beKind(N),true)
+    :no&&sa!=null&&(so==null||so<1)&&(A?lim!=null&&sa>=lim&&!(Array.isArray(A.be)&&num(A.be[0])!=null):sa>=G[G.length-1])?beNot(sa,N[3]===1)   // lived past its curve / every curve
+    :A?beAppBe(A,G):beDash(why(0));
   return `<tr class="cpx-ber${on?' cpx-beon':''}" data-cpx-bed="${E(x.d)}"><td><button type="button" class="cpx-bedb" data-cpx-bed="${E(x.d)}" aria-expanded="${on}">${E(fd(x.d))}</button>`
       +`${pv?' <span class="cpx-wat" title="abhi final nahi — 4 din se kam purana (GA4 country / first-session data aur Google Ads installs abhi badal sakte hain)">⏳</span>':''}</td>`
-    +`<td>${A?beAppBe(A,G):beDash(why(0))}</td><td>${beNow(x.now)}</td>`            // the answer first: in view on a phone too
-    +[30,90,180].map(H=>`<td class="cpx-ben">${beRoC(beRo(A,G,H),H,why(H),so)}</td>`).join('')
-    +`<td class="cpx-ben">${beCov(x.cov)}</td><td class="cpx-ben">${sp==null?beDash('spend nahi aaya'):beSp(sp,k)}</td><td class="cpx-ben">${num(x.inst)!=null?fN(x.inst):beDash('Google Ads installs nahi aaye')}</td></tr>`
-    +(on?`<tr class="cpx-bedr"><td class="cpx-bedc" colspan="9">${beDet(x,k,pv)}</td></tr>`:''); }
+    +`<td>${beCell}</td><td>${beNow(x.now)}</td>`            // the answer first: in view on a phone too
+    +[30,90,180].map(H=>`<td class="cpx-ben">${cell(H)}</td>`).join('')
+    +`<td class="cpx-ben">${sp==null?beDash('spend nahi aaya'):beSp(sp,k)}</td><td class="cpx-ben">${num(x.inst)!=null?fN(x.inst):beDash('Google Ads installs nahi aaye')}</td></tr>`
+    +(on?`<tr class="cpx-bedr"><td class="cpx-bedc" colspan="8">${beDet(x,k,pv)}</td></tr>`:''); }
 function beHtml(r){ const P=beP(); if(!P) return '<p class="cpx-note cpx-wait">🔌 Is build me Breakeven data nahi bana — agle robot run me aayega.</p>';
   const a=beA(r.id); if(!a) return '<p class="cpx-note cpx-wait">Is build me is app ki Breakeven file nahi bani.</p>';
   const st=FILES[a.file], F=beF(r.id);
   if(!F) return st&&st.err?`<p class="cpx-note cpx-wait">⚠️ Data load nahi hua. <button type="button" class="cpx-lnk" data-cpx-retry="${E(a.file)}">Try again</button></p>`:'<p class="cpx-note cpx-wait">⏳ Loading…</p>';
   const G=Array.isArray(F.grid)&&F.grid.length&&F.grid.every(v=>typeof v==='number'&&isFinite(v))?F.grid:BEG;
-  const seen=new Set(), D=F.days.filter(x=>x&&typeof x==='object'&&okD(x.d)&&!seen.has(x.d)&&!!seen.add(x.d)).sort((p,q)=>p.d<q.d?1:-1).slice(0,14);   // newest first
-  if(!D.length) return beSure(F,P)+'<p class="cpx-note">Is app ke naye install din me koi judge layak din nahi (spend $5+ aur 30+ naye users) — Breakeven ka andaza nahi.</p>';
-  const hd='<tr><th>Date</th><th title="andaze se ROAS 100% kis din (80% range)">Breakeven</th><th title="aaj tak ka asli hisaab">Ab tak</th>'
-    +[30,90,180].map(H=>`<th class="cpx-ben" title="andaze se ${H} din tak kamai ÷ spend (100% = breakeven)">ROAS ${H} din</th>`).join('')
-    +'<th class="cpx-ben" title="din ke spend ka kitna hissa un countries ka jinka andaza ban sakta hai">Covered</th><th class="cpx-ben">Spend</th><th class="cpx-ben" title="Google Ads installs">Installs</th></tr>';
-  return beSure(F,P)+`<div class="cpx-x cpx-bex" id="cpx-bex"><table class="cpx-t cpx-bet"><thead>${hd}</thead><tbody>${D.map(x=>beRow(x,r.name,G)).join('')}</tbody></table></div>`
-    +'<p class="cpx-fn"><b>ROAS 30 / 90 / 180 din</b> = andaze se utne din tak kamai ÷ spend (✓ = 100% ya zyada = breakeven) · Breakeven din isi curve se · <b>App ka answer</b> = covered countries ke ROAS curves unke spend share se jod ke (countries ke BE din ka average nahi) · sirf naye 14 install din (period ka asar nahi) · ⏳ = abhi final nahi (4 din se kam purana) · day N = install ke N din baad (day 0 = install ka din). Din pe tap = countries + ROAS card.</p>'; }
+  const seen=new Set(), D=F.days.filter(x=>x&&typeof x==='object'&&okD(x.d)&&!seen.has(x.d)&&!!seen.add(x.d)).sort((p,q)=>p.d<q.d?1:-1);   // every day, newest first
+  if(!D.length) return beSure(F,P)+'<p class="cpx-note">Is app ka koi judge layak install din nahi (spend $5+ aur 30+ naye users) — Breakeven ka andaza nahi.</p>';
+  const show=D.slice(0,DN);   // (30 at a time, as Day-wise: "Show 30 more")
+  const hd='<tr><th>Date</th><th title="spend wapas kis din: BE ho chuka to asli din, warna andaze se ROAS 100% kis din (80% range)">Breakeven</th><th title="aaj tak ka hisaab (pichhle 2–3 din ka abhi badal sakta hai)">Ab tak</th>'
+    +[30,90,180].map(H=>`<th class="cpx-ben" title="${H} din tak kamai ÷ spend (100% = breakeven) — din guzar chuke to asli, warna andaza">ROAS ${H} din</th>`).join('')
+    +'<th class="cpx-ben">Spend</th><th class="cpx-ben" title="Google Ads installs">Installs</th></tr>';
+  return beSure(F,P)+`<div class="cpx-x cpx-bex" id="cpx-bex"><table class="cpx-t cpx-bet"><thead>${hd}</thead><tbody>${show.map(x=>beRow(x,r.name,G)).join('')}</tbody></table></div>`
+    +(D.length>DN?`<button type="button" class="cpx-more" data-cpx-more="1">Show 30 more</button>`:'')
+    +'<p class="cpx-fn">Upar ka date picker is tab pe lagu nahi — yahan saare spend wale install din.</p>'
+    +'<p class="cpx-fn"><b>ROAS 30 / 90 / 180 din</b> = utne din tak kamai ÷ spend — jo din guzar chuke (final) unka asli, aage ka andaza (✓ = 100% ya zyada = breakeven; ≥ = itna to ho chuka) · Breakeven din: BE ho chuka to asli, warna isi curve se · <b>App ka answer</b> = benchmark wali countries ke ROAS curves unke spend share se jod ke (countries ke BE din ka average nahi) · saare Google Ads spend wale install din, naya upar (30-30 karke; bina spend wale din yahan nahi) · spend $5 se kam / 30 se kam naye users wale din: sirf asli numbers, andaza nahi · ⏳ = abhi final nahi (4 din se kam purana) · day N = install ke N din baad (day 0 = install ka din). Din pe tap = countries + ROAS card.</p>'; }
 // ---- 🎯 Campaigns: status, bidding (the tROAS target on the period's last day, "not known" before the archive), spend, installs,
 // CPI and D0 ROAS vs normal, its own alarm line ----
 function campHtml(r,F){ const [lo,hi]=span(r); if(lo>hi) return '<p class="cpx-note">Is period ke din abhi final nahi — campaigns t tak.</p>';
@@ -10155,7 +10171,7 @@ function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector
   const c=cal(); perLoad(c.d0,c.td); const [lo,hi]=rng();
   if(!isDef(lo,hi)&&allName(p)&&(!ALLF.raw||ALLF.v!==p.fv)) ensureAll(()=>{ if(onScreen()) late(()=>paint()); });
   let L=rows(lo,hi); const one=!!APP;
-  if(one){ L=L.slice(0,1); if(L[0]){ if(OPEN!==L[0].id){ OPEN=L[0].id; TAB=TAB||'ch'; } } }
+  if(one){ L=L.slice(0,1); if(L[0]){ if(OPEN!==L[0].id){ OPEN=L[0].id; TAB=TAB||'ch'; DN=30; AGD=null; BOPEN=null; BUNC=false; } } }   // (another app: nothing of the last one stays open)
   else if(OPEN!=null&&!L.some(r=>r.id===OPEN)) setOpen(null);
   if(OPEN!=null) ensureApp(OPEN);
   if(OPEN!=null&&TAB==='be') ensureBe(OPEN);   // (its own file, only once its tab is open)
@@ -10187,7 +10203,7 @@ function hubVerdict(name){ const p=ptr(); if(!p||!Object.keys(p.apps).some(k=>p.
 return {ptr, render, paint, show:showMe, left, alarmN, alertNote, card, hubVerdict,
   _:{rg, fd, rng, isDef, sums, rows, rowOf, judge, normal, hLvl, lossG, epOf, eps, now3, perRestore, perLoad, keep, cal, fI, fU, fP, series, cSeries, ctyList, ctyOf, dayRows, dayHtml, ctyHtml, verdict, moneyLine, tabBody, ALLF, FILES, CHD,
     lvCheck, lvOf, lvV, lvActs, levelsHtml, tipHtml, chart, LVQ:()=>LVQ, PEND:()=>PEND, agTag, agRows, agBoard, agBt, agNums, agDetHtml, agListHtml, propLines,
-    beP, beA, beF, beK, beHtml, beRow, beDet, beCard, beSvg, beSure, beCov, ensureBe, TABS,
+    beP, beA, beF, beK, beHtml, beRow, beDet, beCard, beSvg, beSure, ensureBe, TABS,
     get:()=>({PER,PF,PTO,OPEN,TAB,DN,CTY,LVF,LVSET,LVBUSY,AGD,BOPEN,BUNC}), set:o=>{ if('AGD' in o) AGD=o.AGD; if('BOPEN' in o) BOPEN=o.BOPEN; if('BUNC' in o) BUNC=!!o.BUNC; if('LVBUSY' in o) LVBUSY=!!o.LVBUSY; if('LVF' in o) LVF=o.LVF; if('LVSET' in o) LVSET=o.LVSET; if('LVQ' in o) LVQ=o.LVQ; if('PEND' in o) PEND=o.PEND; if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o) OPEN=o.OPEN; if('TAB' in o) TAB=o.TAB; if('DN' in o) DN=o.DN; if('PREAD' in o) PREAD=o.PREAD; if('CTY' in o) CTY=o.CTY; }}};
 })();
 function renderCpx(){ return CPX.render(); }
