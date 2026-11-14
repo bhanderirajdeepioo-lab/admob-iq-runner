@@ -750,7 +750,7 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
       return { view: (s.match(/viewBox="([^"]*)"/) || [])[1], pt: lab('cpx-pt'), nt: lab('cpx-nt'), ax: lab('cpx-ax').map(z => z.v), dr: dot('cpx-dot cpx-l2'), db: dot('cpx-bep'),
         be1: (s.match(/<line [^>]*class="cpx-be1"\/>/) || [''])[0].length > 0, be1t: lab('cpx-be1t').map(z => z.v), paths: [...s.matchAll(/<path d="([^"]*)" class="([^"]*)"/g)].map(z => [z[2], z[1].split(/[ML]/).filter(Boolean).length]),
         title: lab('cpx-tt').map(z => z.v), ch: s.includes('data-cpx-ch') }; };
-    const cardOf = h => { const d = bedOf(h) || ''; return { svg: svgOf(d), idx: tblOf(d, '<table class="cpx-t cpx-bei">'), vs: txt((d.match(/<h4 class="cpx-h4">ROAS ab tak[^<]*<\/h4>(?:<p class="cpx-vm">([\s\S]*?)<\/p>)?/) || [])[1] || ''),
+    const cardOf = h => { const d = bedOf(h) || ''; return { svg: svgOf(d), idx: tblOf(d, '<table class="cpx-t cpx-bei">'), vs: txt((d.match(/<h4 class="cpx-h4">ROAS so far[^<]*<\/h4>(?:<p class="cpx-vm">([\s\S]*?)<\/p>)?/) || [])[1] || ''),
       none: d.includes('Is din ka ROAS card nahi bana'), fn: [...d.matchAll(/<p class="cpx-fn">([\s\S]*?)<\/p>/g)].map(m => txt(m[1])) }; };
     // an older build: no DATA.be — the tab is there, says so, and nothing is fetched
     LOADS = []; const h0 = await beGo({ OPEN: ID.a });
@@ -790,7 +790,12 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
         unjudged_det: txt(_.beDet({ d: '2026-02-10', age: 70, jd: 0, cty: [], unc: [], now: ['no', 66, 0.7, 1] }, 1, false)) };
       BO.ctyk2 = [5, 6, 4].map(rk => txt(_.beDet({ d: '2026-02-10', age: 450, cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, rk === 4 ? 60 : 400, null, null, 400, rk]], unc: [], now: ['no', 440, 0.5, 1] }, 1, false)));
       const cd = _.beCard({ roas: [0.2, 0.4, 0.6, 0.8, 0.9, 0.9997], bench: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6] });
-      BO.card999 = [...cd.matchAll(/14 din: ROAS <b>([^<]*)<\/b>/g)].map(m => m[1]); }
+      BO.card999 = [...cd.matchAll(/14 days: ROAS <b>([^<]*)<\/b>/g)].map(m => m[1]); }
+    { const cf = _.beCard({ roas: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7], bench: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6], fin: [1, 1, 1, 1, 0, 0] });
+      BO.cardfin = { hollow: (cf.match(/cpx-benf/g) || []).length, vs: txt((cf.match(/<p class="cpx-vm">([\s\S]*?)<\/p>/) || [])[1] || '') };
+      const G = [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270, 360];
+      const r = rowsOf(_.beRow({ d: '2026-01-10', age: 47, sp: 100, inst: 10, real: [], unc: [], cty: [], jd: 0, now: ['be', 45, 's', 45, 1.02, 0] }, 'Alpha', G))[0];
+      BO.sn = { cells: r.cells, titles: r.titles }; }
     { const G = [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270, 360], cv = [0.1, 0.12, 0.14, 0.16, 0.2, 0.28, 0.38, 0.5, 0.55, 0.7, 0.9, 1.0, 1.1];
       const one = (x) => { const r = rowsOf(_.beRow(Object.assign({ d: '2026-01-10', age: 80, sp: 100, inst: 10, real: [], unc: [], cty: [] }, x), 'Alpha', G))[0]; return { cells: r.cells, titles: r.titles }; };
       const A = { be: [270, null, null], lim: 360, roas: cv.map((v, i) => (G[i] >= 90 ? Math.max(v, 0.6) : v)), lo: [], hi: [] };

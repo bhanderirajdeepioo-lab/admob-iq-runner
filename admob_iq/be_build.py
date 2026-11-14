@@ -71,7 +71,7 @@ breaks even (the page shows the days of its period).
                           given it has not broken even by its own so-far age; 4: ≤ a 30-day column not final yet;
                           5 / 6: it lived past K3's limit without breaking even — median = its so-far age, final /
                           not final yet), "jd" 0 (only on a day under $5 / 30 new users: no model, no countries — its
-                          real numbers only), "card": {"roas", "bench"}, "now": ["be", BE day, kind ("x" exact / "nf" not final
+                          real numbers only), "card": {"roas", "bench", "fin" (1 final / 0 not final yet)}, "now": ["be", BE day, kind ("x" exact / "nf" not final
                           / "b" ≤ a column / "s" ≤ its so far), so-far age, ROAS so far] (the ROI row's own) | ["no",
                           so-far age, ROAS so far, final? (1: older than LAG days)]}]} (every install day with
                           spend, oldest first)
@@ -1004,7 +1004,8 @@ def predict(key, fc, cal, pin, sk=None):
             pk = [iso_pred(cmh[H], p_le(mu, s_, H)) if cmh[H] else None for H in HS]   # (K3's chances: kept, not shown)
             clim = ages[-1]                      # its curve's limit (the longest age its data watched there)
             if x.rbe is not None:                # it broke even: its real day (the ROI row's), no range — never a model's
-                days_ = [x.rbe[0], None, None, clim, {"x": 1, "b": 2, "s": 2, "nf": 3, "bn": 4}[x.rbe[1]]]
+                k = x.rbe[1] if x.rbe[1] != "s" or x.sfa <= nw - x.X - LAG else "bn"     # (a not-final so-far read: not asli)
+                days_ = [x.rbe[0], None, None, clim, {"x": 1, "b": 2, "s": 2, "nf": 3, "bn": 4}[k]]
             elif x.sfa is not None and x.sfa >= clim:    # it lived past its curve without breaking even: that real fact
                 days_ = [x.sfa, None, None, clim, 5 if x.sfa <= nw - x.X - LAG else 6]
             else:                                # its OWN curve — the one the app line adds up (one curve, one answer:
@@ -1071,7 +1072,7 @@ def predict(key, fc, cal, pin, sk=None):
             out["app"] = {"be": [_day(v) for v in (be, be_lo, be_hi)], "lim": ages[-1],
                           "roas": [_rr(v) for v in roas], "lo": [_rr(v) for v in lo], "hi": [_rr(v) for v in hi]}
         out["card"] = {"roas": [None if (not r.cum or r.cum[j] is None) else _rr(r.cum[j] / r.sp) for j in CARD_J],
-                       "bench": bench}
+                       "bench": bench, "fin": [1 if r.fin and r.fin[j] is not None else 0 for j in CARD_J]}   # (final points)
         sfr = None if r.sfv is None else _rr(r.sfv / r.sp)
         sff = 1 if r.sfa is not None and r.sfa <= nw - r.X - LAG else 0       # its so-far read final? ("asli")
         out["now"] = (["be", r.rbe[0], r.rbe[1], r.sfa, sfr, sff] if r.rbe is not None else

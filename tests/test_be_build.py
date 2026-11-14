@@ -352,7 +352,8 @@ def test_the_shapes_the_page_reads(built):
         assert sum(x[1] for x in d["cty"]) + sum(x[1] for x in d["unc"]) == pytest.approx(1.0, abs=0.002)
         assert d["cov"] == pytest.approx(sum(x[1] for x in d["cty"]), abs=0.002)
         c = d["card"]
-        assert set(c) == {"roas", "bench"} and all(len(v) == 6 for v in c.values())     # (no revenue index: owner)
+        assert set(c) == {"roas", "bench", "fin"} and all(len(v) == 6 for v in c.values())   # (no revenue index: owner)
+        assert all(f in (0, 1) and (f == 0 or v is not None) for f, v in zip(c["fin"], c["roas"]))   # final ⇒ a value
         seen = [i for i, j in enumerate(be.CARD_J) if be.GRID[j] <= d["age"]]
         assert [i for i, v in enumerate(c["roas"]) if v is not None] == seen   # (null where not observed yet)
         assert all(v is not None for v in c["bench"])
