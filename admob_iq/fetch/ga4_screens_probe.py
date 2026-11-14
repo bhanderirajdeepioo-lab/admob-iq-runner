@@ -32,6 +32,12 @@ ROUND 4 (owner, 8 Nov 2026, Firebase's own "Pages and screens" export beside the
          days; plus each property's currency and time zone (Admin API). The workflow input `days` pins the ALT days to
          ISO dates (the last day of a 31-day month: "31 days" = that month; a shorter month needs its own range).
 
+ROUND 5 (owner, 14 Nov 2026: from 11 Nov GA4 folded a share of the big apps' screen-wise data into "(other)" — the users by
+         screen 13–15 %, the ads by screen no longer tying their day totals; "dono karo": find what came with it): one
+         day each, the users by class and by screen name, the views by screen name, the events by name and the users by
+         app version, their rows kept (KEEP_N); the workflow input `apps` = "fold" picks every app whose users by
+         screen GA4 folded over the fetch's FOLD_OK on a day of the newest FOLD_DAYS, + the CONTROL app.
+
 Output: ga4/screens_probe.json in the PRIVATE repo only (dp.write_private). PUBLIC LOG: a counts-only heartbeat and ONE
 result line of counts — no names, ids, dates or numbers of the data. Quota: the Screens fetch's own App and floors
 (ga4_screens.quota_gate: a property stops when a token bucket is under 60 %, so the hourly builds keep theirs); one request
@@ -62,6 +68,8 @@ TOP_WHOLE = 5                           # … its whole "a" days with the most e
 NEWEST = 5                              # … and its newest final days
 LIMIT = 100000                          # rows per request (a day's split is far smaller; rowCount says if not)
 KEEP_ROWS = 120                         # an ALT answer's top rows kept for EQ
+KEEP_N = {"uv_c": 1000, "uv_sn": 1000, "v_sn": 1000, "ev_n": 300, "ver_u": 300}   # round 5: (nearly) every row
+FOLD_DAYS = 10                          # apps = "fold": a users by screen record folded in the newest 10 days
 WORKERS = 8                             # properties side by side
 HEARTBEAT_SEC = 60
 SC, PP, PS, SN = gs.SC, "unifiedPagePathScreen", "unifiedPageScreen", "unifiedScreenName"
@@ -161,6 +169,12 @@ KINDS = {
     "us_c365": (False, (SC,), USR, "p", 365),
     "us_c1000": (False, (SC,), USR, "p", 1000),
     "us_t1000": (False, (), USR, "p", 1000),
+    # round 5 (14 Nov: GA4's fold from 11 Nov — which new screen names, events or app versions came with it?)
+    "uv_c": (True, (SC,), USR, "p"),            # the fetch's "uV" (users by class, one day)
+    "uv_sn": (True, (SN,), USR, "p"),
+    "v_sn": (True, (SN,), PV, "p"),
+    "ev_n": (True, (EVN,), EC, "p"),            # every event of the stream by name
+    "ver_u": (True, (VER,), USR, "p"),
 }
 SWEEP_KINDS = ("c", "u", "t_prop")
 # a split kind → the day total (a kind above) its rows must add up to: the same metric under the same filter
@@ -171,8 +185,8 @@ REF = {"c": "t", "cf": "t", "u": "t", "c_nodate": "t", "pp": "t", "ps": "t", "sn
        "ppv": "t_views", "ppeng": "t_eng", "nppf": "t", "npp": "t", "nppv": "t_views", "rppf": "t", "rpp": "t",
        "rppv": "t_views", "cppf": "t", "cpp": "t", "cppv": "t_views", "ncf": "t",
        "ppI": "tI", "ppFS": "tFS", "ppB": "tB", "ppI31": "tI31", "ppU": "t", "ppU31": "t31",
-       "rv_c31": "t_rv31", "rva_c31": "t_rva31", "rv_pp31": "t_rv31", "rv_c": "t_rv"}
-KEEP_KINDS = frozenset(k for k, v in KINDS.items() if v[1] and v[1][0] in (SC, PP, PS, SN))
+       "rv_c31": "t_rv31", "rva_c31": "t_rva31", "rv_pp31": "t_rv31", "rv_c": "t_rv", "v_sn": "t_views", "ev_n": "t_all"}
+KEEP_KINDS = frozenset(k for k, v in KINDS.items() if v[1] and v[1][0] in (SC, PP, PS, SN)) | frozenset(("ev_n", "ver_u"))
 TAG_RE = re.compile(r"[a-z0-9]{1,12}")
 DAY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -366,11 +380,24 @@ def _final_end(tz, now):
     return today - timedelta(days=gs.FINAL_LAG)
 
 
+def folded(data_dir, key, now):
+    """Did GA4 fold this app's users by screen ("uV", the small months and recent) into "(other)" over the fetch's
+    FOLD_OK on a day of the newest FOLD_DAYS?"""
+    lo = (now.date() - timedelta(days=FOLD_DAYS)).isoformat()
+    recs = {}
+    for _, _, days in gs.iter_months(data_dir, key, "small"):
+        recs.update({d: r.get("uV") for d, r in days.items() if d >= lo and isinstance(r, dict)})
+    recs.update({d: r.get("uV") for d, r in gs.load_recent(data_dir, key).items() if d >= lo and isinstance(r, dict)})
+    return any(isinstance(u, dict) and u.get("st") == "p" and float(u.get("f") or 0) > gs.FOLD_OK for u in recs.values())
+
+
 def choose(data_dir, now, want=None):
-    """The app keys to probe: `want` (a set of lower-case tokens) when given, else every app with a final "a" day not
-    whole + the CONTROL app → ([key], control key or None)."""
+    """The app keys to probe: `want` (a set of lower-case tokens) when given — "fold": every app whose users by screen GA4
+    folded lately (folded) + the CONTROL app — else every app with a final "a" day not whole + the CONTROL app →
+    ([key], control key or None)."""
     keys = gs.store_keys(data_dir)
-    if want:
+    fold = want == {"fold"}
+    if want and not fold:
         out = []
         for k in keys:
             m = gs.load_meta(data_dir, k) or {}
@@ -383,7 +410,7 @@ def choose(data_dir, now, want=None):
         days = store_days(data_dir, k)
         fe = _final_end(m.get("time_zone"), now).isoformat()
         ok = [d for d in sorted(days) if d <= fe and gs._whole(days[d].get("t"))]
-        if any(not gs._whole(days[d].get("a")) for d in ok):
+        if folded(data_dir, k, now) if fold else any(not gs._whole(days[d].get("a")) for d in ok):
             bad.append(k)
         elif ok:
             ev = _i((days[ok[-1]].get("t") or {}).get("ev"))
@@ -421,7 +448,7 @@ def probe_app(ga, run, it, data_dir, now, keep, opts=None):
             rec, vals = ask(ga, run, k, gu._d(d), sid)
             res["ans"].append(rec)
             if vals and k in keep and d in alt:
-                res["rows"]["%s|%s" % (k, d)] = dict(sorted(vals.items(), key=lambda kv: -kv[1])[:KEEP_ROWS])
+                res["rows"]["%s|%s" % (k, d)] = dict(sorted(vals.items(), key=lambda kv: -kv[1])[:KEEP_N.get(k, KEEP_ROWS)])
     except gf.Stop as e:
         res["stopped"] = (e.args or ["stop"])[0]
         run.bump("stopped")

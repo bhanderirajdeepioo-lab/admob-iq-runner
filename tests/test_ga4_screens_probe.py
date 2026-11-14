@@ -267,3 +267,22 @@ def test_round_4_revenue_in_micros_period_users_pinned_days_and_the_currency(mon
             assert "date" not in dims and n in (31, 1000)         # a period: unique users, never per day
             seen.add((tuple(dims), n, r["endDate"]))
     assert ((sp.SC,), 31, "2026-10-31") in seen and ((), 31, "2026-09-30") in seen and ((sp.SC,), 1000, "2026-10-31") in seen
+
+
+def test_round_5_kinds_and_the_fold_pick(monkeypatch, tmp_path):
+    # (14 Nov: GA4 folded big apps' screen-wise data into "(other)" from 11 Nov) the users by class and by screen name, the
+    # views by screen name, the events by name and the users by app version, one day each — their rows kept (KEEP_N);
+    # apps = "fold": the apps whose users by screen GA4 folded over FOLD_OK lately, + the control
+    assert sp.KINDS["uv_c"] == (True, (gs.SC,), "activeUsers", "p") and sp.KINDS["uv_sn"][1] == ("unifiedScreenName",)
+    assert sp.KINDS["v_sn"][2] == "screenPageViews" and sp.KINDS["ev_n"][1] == (gs.EVN,) and sp.KINDS["ver_u"][1] == (gs.VER,)
+    assert {"uv_c", "uv_sn", "v_sn", "ev_n", "ver_u"} <= sp.KEEP_KINDS and sp.KEEP_N["uv_sn"] >= 1000
+    assert sp.REF["v_sn"] == "t_views" and sp.REF["ev_n"] == "t_all"
+    data, _ = _setup(monkeypatch, tmp_path)
+    root, now = os.path.join(data, gs.DIR), datetime(2026, 11, 14, 6, 0, tzinfo=timezone.utc)
+    fold = {"st": "p", "g": "c", "f": 0.14, "r": [["x.y.MainActivity", 1, 100], ["(other)", 1, 16]]}
+    _gz(gs.recent_path(root, gu.file_key(BAD)), {"v": gs.STORE_V, "days": {"2026-11-12": {"uV": fold}}})
+    _gz(gs.recent_path(root, gu.file_key(CTRL)), {"v": gs.STORE_V, "days": {"2026-11-12": {"uV": dict(fold, f=0.004)}}})
+    keys, ctrl = sp.choose(data, now, {"fold"})
+    assert keys == [gu.file_key(BAD), gu.file_key(CTRL)] and ctrl == gu.file_key(CTRL)
+    assert sp.folded(data, gu.file_key(BAD), now) and not sp.folded(data, gu.file_key(CTRL), now)
+    assert not sp.folded(data, gu.file_key(BAD), datetime(2026, 11, 30, tzinfo=timezone.utc))   # older than FOLD_DAYS
