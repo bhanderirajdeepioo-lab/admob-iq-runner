@@ -19,7 +19,11 @@
 //   * 🤖 the level agent (cpx_fixture.js agent(): AGENT SPEC §6.3–§6.6 ship fields): the row tag per status word, the lines
 //     under the verdict, History · Levels (scoreboard, the blocked / on-hold / reverted level rows, Agent decisions with the
 //     details on tap and keep()), the owner's buttons and POST bodies, hostile text, the dev view, money never summed — and
-//     the plain fixture (no agent field) rendering none of it.
+//     the plain fixture (no agent field) rendering none of it;
+//   * 🎯 Breakeven (cpx_fixture.js be(): spec_be_tab §5 + the agreed additions): the tab after Countries, its file fetched only
+//     when it opens (⏳ / ⚠️ + Try again, a late file filling its slot), the 14 days newest first with every cell and every "—"'s
+//     why, a day opened (countries, "data kam" + names on tap, the ROAS card's printed points and the index row), one day at a
+//     time, keep(), the missing / refused / hostile / developer cases, and the layout facts a phone needs (miniDom).
 // Prints ONE JSON report; tests/test_cpx_frontend.py asserts on it.   usage: node cpx_frontend.js <index.html>
 'use strict';
 const fs = require('fs'), vm = require('vm'), path = require('path');
@@ -79,7 +83,7 @@ function lay(R, cw, cols) { const W = (cw - (cols - 1) * 8) / cols, H = W * 176 
     if (v) v._r = { left: 16 + (k % cols) * (W + 8), top: 400 + j * 900 + Math.floor(k / cols) * (H + 8), width: W, height: H }; }));
   R.querySelectorAll('svg').forEach(v => { if (!v._r) v._r = { left: 16, top: 2400, width: W, height: H }; }); }
 const SCREEN = el('cpx');
-let ON = 'cpx', LOADS = [], FAIL = new Set(), SCROLL = [], LS = null, LS_THROW = false, PUSHED = [], DROPPED = [], CURV = 'INR', SHOWN = [];
+let ON = 'cpx', LOADS = [], URLS = [], FAIL = new Set(), SCROLL = [], LS = null, LS_THROW = false, PUSHED = [], DROPPED = [], CURV = 'INR', SHOWN = [];
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 let FX = build();
 const ctx = {
@@ -99,7 +103,7 @@ const ctx = {
   roasDaily: e => (e && ((CURV === 'USD' && e.daily_dated) || e.daily)) || {},
   valFlag: cc => '[' + cc + ']', valCtyName: cc => 'Name ' + cc,
   show: id => { SHOWN.push(id); },   // (the page's own; the module calls it as window.show)
-  fetchGzJson: url => { const f = String(url).split('?')[0]; LOADS.push(f); if (FAIL.has(f) || !(f in FX.FILES)) return Promise.reject(new Error('net')); return Promise.resolve(JSON.parse(JSON.stringify(FX.FILES[f]))); },
+  fetchGzJson: url => { const f = String(url).split('?')[0]; LOADS.push(f); URLS.push(String(url)); if (FAIL.has(f) || !(f in FX.FILES)) return Promise.reject(new Error('net')); return Promise.resolve(JSON.parse(JSON.stringify(FX.FILES[f]))); },
 };
 ctx.window.show = ctx.show;
 vm.createContext(ctx);
@@ -722,6 +726,139 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
       board: txt(o2).includes('🤖 Agent since'), list: o2.includes('Agent decisions') || o2.includes('cpx-agr'), reject: [...o2.matchAll(/data-cpx-lvact="reject" data-cpx-lvid="([^"]+)"/g)].map(m => m[1]),
       how: lvRows(o2).map(r => r.cells[4]), accept: (o3.match(/data-cpx-lvact="accept"[^>]*>([^<]*)</) || [])[1], wrap: o2.includes('cpx-agw') };
     FX = build(); ctx.DATA = FX.DATA; delete ctx.fetch;
+    // ── 🎯 Breakeven (spec_be_tab §5 + the agreed additions → the page; tests/cpx_fixture.js be()) ──
+    const BO = {}; out.be = BO;
+    const BER = [];                                                            // every Breakeven render (classes / ids / words)
+    const tbOf = h => { const i = h.indexOf('id="cpx-tb">'); if (i < 0) return ''; const j = h.indexOf('<div class="cpx-row', i), k = h.indexOf('<p class="cpx-ft">', i);   // the tab body only (to the next app's row / the footer)
+      const e = [j, k].filter(x => x > 0).sort((x, y) => x - y)[0]; return h.slice(i + 12, e == null ? h.length : e); };
+    const dec = s => String(s).replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    const beGo = async (o) => { reset(); _.set(Object.assign({ TAB: 'be', BOPEN: null, BUNC: false }, o || {})); CPX.paint(); await settle(); CPX.paint(); const h = tbOf(SCREEN.innerHTML); BER.push(h); return h; };
+    const tabsOf = h => [...h.matchAll(/class="cpx-tab" role="tab" data-cpx-tab="([a-z]+)" aria-selected="(true|false)">([^<]*)</g)].map(m => [m[1], m[2] === 'true', m[3]]);
+    const beL = () => LOADS.filter(f => /^be_|x\.json/.test(f));
+    const cellsOf = r => [...r.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(c => txt(c[1]));
+    const rowsOf = h => [...h.matchAll(/<tr class="(cpx-ber[^"]*)" data-cpx-bed="([^"]+)">([\s\S]*?)<\/tr>/g)].map(m => ({ d: dec(m[2]), on: m[1].includes('cpx-beon'), cells: cellsOf(m[3]),
+      titles: [...m[3].matchAll(/title="([^"]*)"/g)].map(t => dec(t[1])), badges: [...m[3].matchAll(/<span class="cpx-sw (cpx-good|cpx-bad)"/g)].map(b => b[1]),
+      wat: (m[3].match(/class="cpx-wat"/g) || []).length, exp: (m[3].match(/aria-expanded="(true|false)"/) || [])[1] }));
+    // the open day's details (from its box to the next day's row / the table's end)
+    const bedOf = h => { const i = h.indexOf('<div class="cpx-bed"'); if (i < 0) return null; const j = h.indexOf('<tr class="cpx-ber', i), e = j < 0 ? h.lastIndexOf('</tbody></table></div>') : j; return h.slice(i, e); };
+    const tblOf = (h, head) => { const i = h.indexOf(head); if (i < 0) return null; const t = h.slice(i, h.indexOf('</table>', i));
+      return { head: [...t.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map(m => m[1]), rows: [...t.matchAll(/<tr><td>([\s\S]*?)<\/tr>/g)].map(m => cellsOf('<td>' + m[1])),
+        titles: [...t.matchAll(/title="([^"]*)"/g)].map(m => dec(m[1])) }; };
+    const svgOf = h => { const m = h.match(/<svg class="cpx-svg cpx-bes"[\s\S]*?<\/svg>/); if (!m) return null; const s = m[0], at = (t, k) => +((t.match(new RegExp(' ' + k + '="([^"]*)"')) || [])[1]);
+      const lab = c => [...s.matchAll(new RegExp('<text [^>]*class="' + c + '"[^>]*>([^<]*)<', 'g'))].map(z => ({ v: z[1], x: at(z[0], 'x'), y: at(z[0], 'y') }));
+      const dot = c => [...s.matchAll(new RegExp('<circle [^>]*class="' + c + '"[^>]*/>', 'g'))].map(z => ({ x: at(z[0], 'cx'), y: at(z[0], 'cy') }));
+      return { view: (s.match(/viewBox="([^"]*)"/) || [])[1], pt: lab('cpx-pt'), nt: lab('cpx-nt'), ax: lab('cpx-ax').map(z => z.v), dr: dot('cpx-dot cpx-l2'), db: dot('cpx-bep'),
+        be1: (s.match(/<line [^>]*class="cpx-be1"\/>/) || [''])[0].length > 0, be1t: lab('cpx-be1t').map(z => z.v), paths: [...s.matchAll(/<path d="([^"]*)" class="([^"]*)"/g)].map(z => [z[2], z[1].split(/[ML]/).filter(Boolean).length]),
+        title: lab('cpx-tt').map(z => z.v), ch: s.includes('data-cpx-ch') }; };
+    const cardOf = h => { const d = bedOf(h) || ''; return { svg: svgOf(d), idx: tblOf(d, '<table class="cpx-t cpx-bei">'), vs: txt((d.match(/<h4 class="cpx-h4">ROAS ab tak[^<]*<\/h4>(?:<p class="cpx-vm">([\s\S]*?)<\/p>)?/) || [])[1] || ''),
+      none: d.includes('Is din ka ROAS card nahi bana'), fn: [...d.matchAll(/<p class="cpx-fn">([\s\S]*?)<\/p>/g)].map(m => txt(m[1])) }; };
+    // an older build: no DATA.be — the tab is there, says so, and nothing is fetched
+    LOADS = []; const h0 = await beGo({ OPEN: ID.a });
+    BO.old = { text: txt(h0), loads: beL(), tabs: tabsOf(SCREEN.innerHTML) };
+    // the build with the Breakeven files
+    FX = FXM.be(build()); ctx.DATA = FX.DATA;
+    reset(); _.set({ OPEN: ID.a, TAB: 'ch', BOPEN: null }); LOADS = []; URLS = []; CPX.paint(); await settle(); CPX.paint();
+    BO.lazy = { ch: beL(), tabs: tabsOf(SCREEN.innerHTML) };
+    const tabTap = k => SCREEN._on.click[0]({ target: { closest: s => s === '[data-cpx-tab]' ? { dataset: { cpxTab: k }, classList: { contains: c => c === 'cpx-tab' } } : null } });
+    tabTap('be'); Object.assign(BO.lazy, { tab: _.get().TAB, wait: txt(tbOf(SCREEN.innerHTML)), on_tap: beL(), urls: URLS.filter(u => u.startsWith('be_')) });
+    await settle(); CPX.paint(); BO.lazy.loaded = beL(); BO.lazy.table = SCREEN.innerHTML.includes('id="cpx-bex"');
+    tabTap('ch'); tabTap('be'); await settle(); BO.lazy.again = beL().length;                       // back to the tab: the same file, no second fetch
+    // a late file fills its slot (arrive(): the tab body)
+    const SLB = { 'cpx-vls': { innerHTML: '' }, 'cpx-tb': { innerHTML: '' } }, gidB = ctx.document.getElementById; ctx.document.getElementById = k => SLB[k] || null;
+    reset(); _.set({ OPEN: ID.a, TAB: 'be', BOPEN: null }); CPX.paint(); const lw = txt(tbOf(SCREEN.innerHTML)); await settle();
+    BO.arrive = { wait: lw, slot: SLB['cpx-tb'].innerHTML.includes('id="cpx-bex"') }; ctx.document.getElementById = gidB;
+    // the table (₹ view, then $)
+    CURV = 'INR'; const hA = await beGo({ OPEN: ID.a });
+    BO.table = { rows: rowsOf(hA), head: [...hA.matchAll(/<th([^>]*)>([^<]*)<\/th>/g)].map(m => [m[2], dec((m[1].match(/title="([^"]*)"/) || [])[1] || '')]),
+      sure: txt((hA.match(/<p class="cpx-vd">([\s\S]*?)<\/p>/) || [])[1] || ''), fn: [...hA.matchAll(/<p class="cpx-fn">([\s\S]*?)<\/p>/g)].map(m => txt(m[1])),
+      open: (hA.match(/class="cpx-bedr"/g) || []).length, ch: hA.includes('data-cpx-ch') };
+    CURV = 'USD'; BO.table_usd = rowsOf(await beGo({ OPEN: ID.a })).map(r => [r.d, r.cells[7]]); CURV = 'INR';
+    // a day opened: its countries, the "data kam" line (names on tap), its ROAS card (values printed on the points) + the index
+    const dayAt = async (d, o) => { const h = await beGo(Object.assign({ OPEN: ID.a, BOPEN: d }, o || {})); const x = bedOf(h) || '';
+      return { row: rowsOf(h).find(r => r.d === d), n: (h.match(/class="cpx-bedr"/g) || []).length, cty: tblOf(x, '<h4 class="cpx-h4">Covered countries'), cty_h4: txt((x.match(/<h4 class="cpx-h4">(Covered countries[^<]*)</) || [])[1] || ''),
+        kam: txt((x.match(/<p class="cpx-vm"><span title="[^"]*">([\s\S]*?)<\/p>/) || [])[1] || ''), kam_t: dec((x.match(/<p class="cpx-vm"><span title="([^"]*)"/) || [])[1] || ''),
+        names: txt((x.match(/<p class="cpx-fn cpx-beu">([\s\S]*?)<\/p>/) || [])[1] || ''), note: txt((x.match(/<p class="cpx-note">([\s\S]*?)<\/p>/) || [])[1] || ''),
+        pv: x.includes('⏳ <b>Abhi final nahi</b>'), card: cardOf(h), html: x }; };
+    CURV = 'USD'; BO.d25 = await dayAt('2026-03-25'); BO.d25u = await dayAt('2026-03-25', { BUNC: true }); CURV = 'INR';
+    BO.d25i = await dayAt('2026-03-25');
+    for (const d of ['2026-03-15', '2026-03-21', '2026-03-23', '2026-03-26', '2026-03-28', '2026-03-29']) BO['d' + d.slice(8)] = await dayAt(d);
+    for (const k in BO) if (/^d\d\d/.test(k)) delete BO[k].html;
+    // taps through the screen's own handler: one day open at a time, the same day again closes it, a non-date does nothing; the names
+    await beGo({ OPEN: ID.a }); const st = () => ({ open: _.get().BOPEN, unc: _.get().BUNC, n: (SCREEN.innerHTML.match(/class="cpx-bedr"/g) || []).length,
+      exp: [...SCREEN.innerHTML.matchAll(/class="cpx-bedb" data-cpx-bed="([^"]+)" aria-expanded="true"/g)].map(m => m[1]) });
+    BO.taps = [];
+    clickD('[data-cpx-bed]', { cpxBed: '2026-03-25' }); BO.taps.push(st());
+    clickD('[data-cpx-beu]'); BO.taps.push(Object.assign(st(), { names: SCREEN.innerHTML.includes('class="cpx-fn cpx-beu"') }));
+    clickD('[data-cpx-bed]', { cpxBed: '2026-03-15' }); BO.taps.push(st());                          // another day: the first closes, its names too
+    clickD('[data-cpx-bed]', { cpxBed: '2026-03-15' }); BO.taps.push(st());                          // the same day again: closed
+    clickD('[data-cpx-bed]', { cpxBed: '"><x>' }); BO.taps.push(st());                               // not a date: nothing
+    tapId = ID.b; _.set({ BOPEN: '2026-03-25', BUNC: true }); tap('[data-cpx-app]'); BO.taps.push(Object.assign(st(), { app: _.get().OPEN, tab: _.get().TAB }));   // another app: its Chart, nothing open
+    // keep(): the tapped day stays where it was (1280 / 375); the page's height held through the repaint
+    BO.keep = {};
+    for (const w of [1280, 375]) { await beGo({ OPEN: ID.a }); ctx.window.innerWidth = w; SCROLL = []; let n = 0; const QS = [];
+      const ROW = { getBoundingClientRect: () => ({ top: n++ === 0 ? 300 : 420 }) }; SCREEN.querySelector = s => { QS.push(s); return s === '[data-cpx-bed="2026-03-25"]' ? ROW : null; };
+      clickD('[data-cpx-bed]', { cpxBed: '2026-03-25' }); BO.keep[w] = { dy: SCROLL.slice(), open: _.get().BOPEN, held: SCREEN.style.minHeight, sel: [...new Set(QS)] };
+      n = 0; SCROLL = []; QS.length = 0; SCREEN.querySelector = s => { QS.push(s); return s === '[data-cpx-beu]' ? ROW : null; };
+      clickD('[data-cpx-beu]'); BO.keep[w].beu = { dy: SCROLL.slice(), unc: _.get().BUNC, sel: [...new Set(QS)] }; SCREEN.querySelector = () => null; }
+    ctx.window.innerWidth = 1280;
+    // missing / failed / refused: Gamma's file is not there (⚠️ + Try again, then it loads), Delta has no entry, Epsilon a bad key
+    // (never fetched), Beta no judged day; a file of another key / another version refused; a bad pointer = an older build
+    LOADS = []; const hC = await beGo({ OPEN: ID.c }); BO.gamma = { text: txt(hC), retry: (hC.match(/data-cpx-retry="([^"]+)"/) || [])[1], loads: beL() };
+    const fC = 'be_' + KEY.c + '.json.gz';
+    FX.FILES[fC] = { v: 1, key: KEY.c, origin: '2026-03-30', grid: [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270, 360], calib: '2026-03-28', skill: { auc: [null, null, null], c: null, n: 3 },
+      days: [{ d: '2026-03-25', age: 4, sp: 120, inst: 300, cov: 1, app: { be: [30, 20, 60], lim: 360, roas: [0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 1.2, 1.4, 1.5, 1.7, 1.8, 1.9], lo: [], hi: [] }, unc: [],
+        cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, 30, 20, 60]], card: { roas: [0.2, null, null, null, null, null], bench: [null, null, null, null, null, null], idx: [100, null, null, null, null, null], bidx: [null, null, null, null, null, null] }, now: ['no', 4, 0.25] }] };
+    LOADS = []; SCREEN._on.click[0]({ target: { closest: s => s === '[data-cpx-retry]' ? { dataset: { cpxRetry: fC } } : null } }); await settle(); CPX.paint();
+    _.set({ BOPEN: '2026-03-25' }); CPX.paint(); const hC2 = tbOf(SCREEN.innerHTML); BER.push(hC2);
+    Object.assign(BO.gamma, { after: beL(), text2: txt(hC2), rows: rowsOf(hC2), card: cardOf(hC2), kam: (bedOf(hC2) || '').includes('data kam') });
+    LOADS = []; BO.delta = { text: txt(await beGo({ OPEN: ID.d })), loads: beL() };
+    LOADS = []; BO.eps = { text: txt(await beGo({ OPEN: ID.e })), loads: beL(), a: _.beA(ID.e) };
+    BO.beta = txt(await beGo({ OPEN: ID.b }));
+    const fA = 'be_' + KEY.a + '.json.gz', FA0 = FX.FILES[fA];
+    FX.FILES[fA] = Object.assign({}, FA0, { key: 'ffffffffffff' }); BO.wrong_key = txt(await beGo({ OPEN: ID.a }));
+    FX.FILES[fA] = Object.assign({}, FA0, { v: 2 }); BO.wrong_v = txt(await beGo({ OPEN: ID.a }));
+    FX.FILES[fA] = Object.assign({}, FA0, { days: 'x' }); BO.wrong_days = txt(await beGo({ OPEN: ID.a })); FX.FILES[fA] = FA0;
+    const BP0 = FX.DATA.be; FX.DATA.be = Object.assign({}, BP0, { v: 2 }); LOADS = []; BO.bad_ptr = { text: txt(await beGo({ OPEN: ID.a })), loads: beL() };
+    FX.DATA.be = Object.assign({}, BP0, { apps: [] }); BO.bad_apps = txt(await beGo({ OPEN: ID.a })); FX.DATA.be = BP0;
+    // the ₹ rate of a day: the day's own (DATA) · the one rate when DATA has no spend that day · a ₹ base: the page's usd_inr · no
+    // rate: the file's $ as it is (never a wrong ₹); a "..." fold marker = "…"
+    CURV = 'INR'; BO.k = { day: _.beK('Alpha App', '2026-03-25'), none: _.beK('Nope App', '2026-03-25') };
+    const BC0 = ctx.baseCur, UI0 = FX.DATA.usd_inr; ctx.baseCur = () => 'INR'; FX.DATA.usd_inr = 80; BO.k.base = _.beK('Alpha App', '2026-03-25');
+    delete FX.DATA.usd_inr; BO.k.base_none = _.beK('Alpha App', '2026-03-25');
+    { const hK = await beGo({ OPEN: ID.a, BOPEN: '2026-03-25' }); BO.k.row = rowsOf(hK).find(r => r.d === '2026-03-25').cells[7]; BO.k.cpi = tblOf(bedOf(hK) || '', '<h4 class="cpx-h4">Covered countries').rows.map(r => r[2]); }
+    BO.cov = [0.004, 0.996, 0, 1, 0.6, 0.0051].map(v => { const h = _.beCov(v); return [txt(h), dec((h.match(/title="([^"]*)"/) || [])[1] || '')]; });   // the words from the exact share
+    ctx.baseCur = BC0; FX.DATA.usd_inr = UI0;
+    { const D0 = FX.FILES[fA].days, i = D0.findIndex(x => x.d === '2026-03-25'), u0 = D0[i].unc; D0[i].unc = [['BR', 0.1], ['...', 0.05]];
+      const hF = await beGo({ OPEN: ID.a, BOPEN: '2026-03-25', BUNC: true }); BO.fold = { kam: txt((hF.match(/<p class="cpx-vm"><span title="[^"]*">([\s\S]*?)<\/p>/) || [])[1] || ''),
+        names: txt((hF.match(/<p class="cpx-fn cpx-beu">([\s\S]*?)<\/p>/) || [])[1] || '') }; D0[i].unc = u0; }
+    // hostile text (Zeta's file): escaped everywhere, a day with a bad date dropped, a day of junk values all "—"
+    const hZ = await beGo({ OPEN: ID.z }), hZ1 = await beGo({ OPEN: ID.z, BOPEN: '2026-03-25', BUNC: true }), hZ2 = await beGo({ OPEN: ID.z, BOPEN: '2026-03-26' }), HZ = hZ + hZ1 + hZ2;
+    BO.hostile = { raw: ['<img src=x onerror=alert(8)>', '"><b>x</b>', '<i>', '<b>9</b>'].filter(s => HZ.includes(s)), esc: ['&lt;img src=x onerror=alert(8)&gt;', '&quot;&gt;&lt;b&gt;x&lt;/b&gt;'].map(s => HZ.includes(s)),
+      rows: rowsOf(hZ).map(r => ({ d: r.d, cells: r.cells, titles: r.titles })), sure: txt((hZ.match(/<p class="cpx-vd">([\s\S]*?)<\/p>/) || [])[1] || ''),
+      d25: { cty: tblOf(bedOf(hZ1) || '', '<h4 class="cpx-h4">Covered countries'), names: txt((hZ1.match(/<p class="cpx-fn cpx-beu">([\s\S]*?)<\/p>/) || [])[1] || ''), card: cardOf(hZ1) },
+      d26: txt(bedOf(hZ2) || '') };
+    // the developer copy: nothing (no pointer, no fetch, no screen)
+    ctx.window.__DEV_VIEW__ = true; reset(); LOADS = []; _.set({ OPEN: ID.a, TAB: 'be' }); CPX.paint(); await settle();
+    BO.dev = { p: _.beP(), a: _.beA(ID.a), html: SCREEN.innerHTML, loads: beL() }; ctx.window.__DEV_VIEW__ = false;
+    // phone width: every table of the tab inside a scroll box (.cpx-x), the open day in a box of the table's box (td colspan 9 →
+    // .cpx-bed: its CSS keeps it exactly the box's visible width), the card an SVG that scales (a viewBox, no fixed size), no inline
+    // style / width anywhere; the rows all 9 cells
+    const hP = await beGo({ OPEN: ID.a, BOPEN: '2026-03-15', BUNC: true }); ctx.window.innerWidth = 375; const hP2 = await beGo({ OPEN: ID.a, BOPEN: '2026-03-15', BUNC: true }); ctx.window.innerWidth = 1280;
+    { const RD = miniDom(hP), anc = (e, f) => { for (let x = e.parentNode; x && x.tagName !== '#R'; x = x.parentNode) if (f(x)) return x; return null; };
+      const bed = RD.querySelector('.cpx-bed'), td = bed && bed.parentNode, main = RD.querySelector('table');
+      BO.layout = { same: hP === hP2, tables: RD.querySelectorAll('table').map(t => { const b = anc(t, x => x.cls().includes('cpx-x')); return b ? b.getAttribute('class') : null; }),
+        bed: bed ? { td: td.tagName, cls: td.getAttribute('class'), span: td.getAttribute('colspan'), box: !!anc(bed, x => x.cls().includes('cpx-bex')) } : null,
+        svgs: RD.querySelectorAll('svg').map(s => [s.getAttribute('class'), s.getAttribute('viewBox'), s.getAttribute('width'), s.getAttribute('height'), s.getAttribute('style')]),
+        style: /\sstyle="/.test(hP), widths: (hP.match(/\swidth="[^"]*"/g) || []).length,
+        head: main.querySelectorAll('th').length - (bed ? bed.querySelectorAll('th').length : 0),
+        cells: RD.querySelectorAll('tr.cpx-ber').map(r => r.children.filter(c => c.tagName === 'TD').length) }; }
+    // every render: cpx- classes only (the new ones defined in the page's CSS), ids unique per render, no junk words
+    const BH = BER.join('');
+    BO.classes = [...new Set((BH.match(/class="[^"]*"/g) || []).flatMap(c => c.slice(7, -1).split(/\s+/)).filter(Boolean))];
+    BO.dup_ids = BER.map(h => [...h.matchAll(/\sid="([^"]*)"/g)].map(m => m[1])).filter(L => L.length !== new Set(L).size);
+    BO.ids = [...new Set([...BH.matchAll(/\sid="([^"]*)"/g)].map(m => m[1]))];
+    BO.bad_words = ['undefined', 'NaN', '[object Object]', 'Infinity', 'null'].filter(w => BER.some(h => txt(h).includes(w)));
+    FX = build(); ctx.DATA = FX.DATA;
   } catch (e) { errors.push(String(e && e.stack || e)); }
   console.log(JSON.stringify({ errors, out }));
 })();

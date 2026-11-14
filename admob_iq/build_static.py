@@ -691,6 +691,29 @@ def _cpi_step(dashboard, data_dir, out_dir, s):
         return []
 
 
+@_sc.timed("be_tab")
+def _be_step(dashboard, data_dir, out_dir, s):
+    """📐 Breakeven tab of the CPI vs eCPM screen (admob_iq.be_build: per app × country a breakeven benchmark learned
+    from the app's own past install days, the newest 14 install days answered): its lazy files from this build's
+    roi_<key> files and country packs (one app at a time) + the private GA4 first-session stores, its daily caches in
+    data/be_tab, its pointer and ONE counts-only line → its _headers path (one splat rule). Switched off (BE_TAB=false)
+    or failing: its files removed, nothing else changes."""
+    try:
+        from . import be_build as beb
+        if not beb.enabled(s):
+            beb.off(out_dir)
+            return []
+        paths = beb.run(dashboard, data_dir, out_dir, s)
+        line = beb.pop_line()
+        if line:
+            print(line, file=sys.stderr)
+        return list(paths)
+    except Exception as e:
+        dashboard.pop("be", None)
+        print(f"be skipped: {type(e).__name__}", file=sys.stderr)
+        return []
+
+
 @_sc.timed("source_tab")
 def _source_step(dashboard, data_dir, out_dir, s):
     """💰 Revenue by source (admob_iq.source_build, a section of the Install value tab): its lazy files from the private
@@ -2049,6 +2072,10 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     # alarm engine on every app, campaign and country): its lazy files from this build's ROAS block + the files above —
     # OPTIONAL (CPI_TAB) and failure-isolated; without Google Ads data it leaves no file behind
     aud_paths = aud_paths + _cpi_step(dashboard, data_dir, out_dir, s)
+    # 📐 Breakeven tab (CPI vs eCPM: per app × country the breakeven benchmark, the newest 14 install days answered): its
+    # lazy files from the ROI files above (one app at a time) + the GA4 first-session stores, its daily fit and
+    # calibration cached in data/be_tab — OPTIONAL (BE_TAB) and failure-isolated; without ROI files it leaves no file
+    aud_paths = aud_paths + _be_step(dashboard, data_dir, out_dir, s)
 
     _sc.step("intraday")
     # 📈 eCPM "same time yesterday": this build's point of today's totals so far (data/ecpm_intraday.json) — never for

@@ -261,4 +261,63 @@ function agent(fx) {
   F('z').lv = {};
   return fx;
 }
-module.exports = { build, agent, addD, nD, days };
+// ── ⚖️ Breakeven (spec_be_tab §5 + the agreed additions, in the shapes admob_iq/be_build.py writes: the pointer DATA.be, the
+// file's skill in points, a country row [cc, share, CPI, eCPM_fs, P30, P90, P180, median, low, high, its watched limit] with a
+// day past that limit null, the card's idx / bidx = the revenue ON day k ÷ day 1's × 100, a folded "…" uncovered entry) laid
+// onto a build() output: DATA.be and one be_<key>.json.gz per app that has one. Made-up numbers in closed forms (hand math):
+//   * origin 30 Mar 2026; Alpha's newest 14 judged install days 15–29 Mar (20 Mar not judged: no row); age = days to 29 Mar (the
+//     ROI file's newest day): 26–29 Mar are under 4 days old (provisional);
+//   * Alpha's spend = its ₹50,000 a day in $ at the day's own rate (the build()'s dated $: 610 / 590), 1,600 installs; covered IN
+//     60 % + US 25 % (cov 0.85), uncovered BR 6 % · SA 3 % · AE 2 % + the folded rest 4 %; the app curve to 270 days at ROAS
+//     40 % / 96 % / 180 % on days 30 / 90 / 180, its breakeven day 95 (80 %: 50–170); IN's days 75 (40–160) within its 360 watched days, US's high end
+//     past its 210; ROAS so far 0.10 + 0.02 × age (card day k = age k − 1, shown once the day is that old), the benchmark
+//     0.09 + 0.02 × age; the revenue index 100 · 60.2 · 45 · 37.8 · 25 · 15.3 (benchmark 100 · 55.4 · 42.1 · 35 · 24.6 · 14.7) —
+//     made-up, independent of the ROAS numbers (the page prints both as they come); the special days: 15 Mar broke even on day
+//     12 (the build answers its real day, no range; its curve 235 % / 260 % / 280 %, its own card up to 108 %), 21 Mar no card, 23 Mar IN with unknown eCPM / chances / days and US's
+//     median past its watched 210 days, 24 Mar no ROAS so far, 26 Mar only IN covered (cov 0.60, ROAS 25 % / 60 % / 110 %, breakeven 160, its
+//     band to 180 days: its range open at 180), 16 Mar no band (the day alone), 17 Mar ROAS 30 at its floor (≥ 34 %), 27 Mar a curve to 60 days only (ROAS 90 / 180 past it, no median crossing), 28 Mar nothing covered;
+//   * Beta: no judged day, the skill all null (the build's default); Gamma: a pointer entry whose file is missing; Delta: no
+//     entry; Epsilon: a bad key (never fetched); Zeta: hostile text in the codes, the "now" word, the skill and one whole day
+//     (and the prototype's older country shape: no limit, a day past it as −limit).
+//   usage: const fx = build(); be(fx);
+function be(fx) {
+  const { DATA, FILES } = fx, O = '2026-03-30', NEW = '2026-03-29', CAL = '2026-03-28', K = [1, 2, 3, 4, 7, 14];
+  const GRID = [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270, 360], r4 = v => Math.round(v * 1e4) / 1e4, ageOf = x => nD(x, NEW) - 1;
+  const roas = a => r4(0.10 + 0.02 * a), bench = a => r4(0.09 + 0.02 * a);
+  const IDX = [100, 60.2, 45, 37.8, 25, 15.3], BIDX = [100, 55.4, 42.1, 35, 24.6, 14.7];
+  const card = (ag, R, I) => ({ roas: K.map(k => (k - 1 <= ag ? R(k - 1) : null)), bench: K.map(k => bench(k - 1)), idx: K.map((k, i) => (k - 1 <= ag ? (I || IDX)[i] : null)), bidx: BIDX.slice() });
+  // the app curve: through (0, 0.1) and its ROAS v at 30 / 90 / 180 days, straight between them (on at the 90 → 180 slope past
+  // 180), at the grid ages up to its limit; its breakeven day ≈ where it crosses 100 % (the page reads ROAS 30 / 90 / 180 off it)
+  const pw = (a, v) => { const X = [0, 30, 90, 180], Y = [0.1, v[0], v[1], v[2]]; let i = 0; while (i < 2 && a > X[i + 1]) i++; return Y[i] + (Y[i + 1] - Y[i]) * (a - X[i]) / (X[i + 1] - X[i]); };
+  const curve = (lim, v, f) => GRID.filter(a => a <= lim).map(a => r4(pw(a, v) * f));
+  const app = (b, lim, v) => ({ be: b, lim, roas: curve(lim, v, 1), lo: curve(lim, v, 0.7), hi: curve(lim, v, 1.4) });
+  const IN = ['IN', 0.6, 0.31, 4.0, 0.12, 0.55, 0.81, 75, 40, 160, 360], US = ['US', 0.25, 0.62, 9.6, 0.05, 0.3, 0.62, 140, 70, null, 210];   // US: the high end past its watched 210 days
+  const day = x => { const ag = ageOf(x), o = { d: x, age: ag, sp: r2(50000 * fxd(x)), inst: 1600, cov: 0.85, app: app([95, 50, 170], 270, [0.4, 0.96, 1.8]),
+      unc: [['BR', 0.06], ['SA', 0.03], ['AE', 0.02], ['…', 0.04]], cty: [IN.slice(), US.slice()], card: card(ag, roas), now: ['no', ag, roas(ag)] };
+    if (x === '2026-03-15') { const R = { 0: 0.35, 1: 0.52, 2: 0.63, 3: 0.72, 6: 0.9, 13: 1.08 };
+      Object.assign(o, { app: app([12, null, null], 360, [2.35, 2.6, 2.8]), card: card(ag, a => R[a], [100, 48.6, 31.4, 25.7, 20, 11.4]), now: ['be', 12] }); }
+    if (x === '2026-03-21') delete o.card;
+    if (x === '2026-03-23') o.cty = [['IN', 0.6, 0.31, null, null, 0.55, null, null, null, null, null], ['US', 0.25, 0.62, 9.6, 0.05, 0.3, 0.62, null, null, null, 210]];
+    if (x === '2026-03-24') o.now = ['no', ag, null];
+    if (x === '2026-03-26') { Object.assign(o, { cov: 0.6, cty: [IN.slice()], unc: [['US', 0.25], ['BR', 0.1], ['…', 0.05]], app: app([160, 90, null], 270, [0.25, 0.6, 1.1]) });
+      o.app.lo = o.app.lo.map((v, i) => (GRID[i] > 180 ? null : v)); o.app.hi = o.app.hi.map((v, i) => (GRID[i] > 180 ? null : v)); }   // its band reaches 180 days
+    if (x === '2026-03-16') Object.assign(o.app, { be: [95, null, null], lo: o.app.lo.map(() => null), hi: o.app.hi.map(() => null) });   // no band at all
+    if (x === '2026-03-17') o.app.roas[GRID.indexOf(30)] = roas(ag);   // the build's floor: ROAS 30 = what the day has made by day 13 (≥)
+    if (x === '2026-03-27') o.app = app([null, 45, null], 60, [0.45, 0.8, 1.2]);
+    if (x === '2026-03-28') { delete o.app; Object.assign(o, { cov: 0, cty: [], unc: [['IN', 0.6], ['US', 0.25], ['BR', 0.1], ['…', 0.05]] }); }
+    return o; };
+  const file = (k, o) => { const f = 'be_' + KEYS[k] + '.json.gz'; FILES[f] = Object.assign({ v: 1, key: KEYS[k], origin: O, grid: GRID, calib: CAL }, o); return f; };
+  file('a', { skill: { auc: [58.3, 66, 71.2], c: 64.4, n: 120 }, days: days('2026-03-15', NEW).filter(x => x !== '2026-03-20').map(day) });
+  file('b', { skill: { auc: [null, null, null], c: null, n: 0 }, days: [] });
+  const H = '<img src=x onerror=alert(8)>';
+  file('z', { skill: { auc: [55, H, null], c: 60.4, n: 30 }, days: [
+    { d: '2026-03-25', age: 4, sp: 48.5, inst: 200, cov: 0.5, app: app([80, 40, null], 120, [0.4, 1.1, 1.5]), unc: [[H, 0.3], ['"><b>x</b>', 0.2]],
+      cty: [[H, 0.5, 0.24, 2.0, 0.2, 0.6, null, 80, 40, -120]], now: [H, 3],
+      card: { roas: [0.1, H, null, null, null, null], bench: [0.09, 0.11, 0.13, 0.15, 0.21, 0.35], idx: [100, null, null, null, null, null], bidx: [100, 122.2, 144.4, 166.7, 233.3, 388.9] } },
+    { d: H, age: 1, sp: 1 },
+    { d: '2026-03-26', age: '<i>', sp: '<b>9</b>', inst: H, cov: H, app: { roas: [H, H, H, H, H, H, H, H, H, H, H], be: [H], lim: H }, unc: H, cty: H, card: H, now: ['no', H, H] }] });
+  const ent = k => ({ key: KEYS[k], file: 'be_' + KEYS[k] + '.json.gz', v: 'b' + KEYS[k].slice(-6), n: (FILES['be_' + KEYS[k] + '.json.gz'] || { days: [] }).days.length, cov: 0.8 });
+  DATA.be = { v: 1, origin: O, calib: CAL, apps: { [IDS.a]: ent('a'), [IDS.b]: ent('b'), [IDS.c]: ent('c'), [IDS.e]: { key: 'NOT-HEX', file: '../x.json.gz', v: 'x', n: 1, cov: 1 }, [IDS.z]: ent('z') } };
+  return fx;
+}
+module.exports = { build, agent, be, addD, nD, days };

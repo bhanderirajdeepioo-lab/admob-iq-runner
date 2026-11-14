@@ -97,6 +97,9 @@ def settings() -> dict:
         # 📉 CPI vs eCPM tab (cpi.json.gz + cpi_<key>.json.gz: Google Ads CPI vs AdMob eCPM and D0 ROAS per app, the
         # alarm and its alerts): CPI_TAB=false removes its files and pointer without a code push
         "cpi_tab": _env("CPI_TAB", "true").lower() == "true",
+        # ⚖️ Breakeven tab of the CPI vs eCPM screen (be_<key>.json.gz per app; its fit and calibration cached daily in
+        # data/be_tab): BE_TAB=false removes its files and pointer without a code push (the caches stay)
+        "be_tab": _env("BE_TAB", "true").lower() == "true",
         # 🗂 Review Studio: the Review tab's Studio (review/studio/<day>.json.gz, one lazy file per review day, frozen with
         # that day's cards; never an alert) — off: no file, no pointer, the older Review tab exactly as before
         "review_studio": _env("REVIEW_STUDIO", "true").lower() == "true",
