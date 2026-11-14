@@ -1126,3 +1126,14 @@ def test_v4_the_report_names_the_kinds_judged(out):
     assert k["delta"].endswith("No signal among the kinds judged (Room for ads); not judged: Ads wasted (no AdMob fill or no row "
                                "with fill), Dropped (under 7 days with users on both sides).")
     assert k["feb"].endswith("\n\nNo signal in this period.")                        # (every kind judged: as before)
+
+
+def test_ga4_withholding_the_users_by_screen_is_a_note_on_the_tab(out):
+    # scr_all "ug" (GA4 folded a share of the users by screen into "(other)"): one line on All apps (the apps on hover)
+    # and under the app page's crumb — the read runs, so never the red "robot" banner; nothing without it
+    g = out["v4"]["ga4"]
+    assert g["none"] is False and g["gone"] is True
+    assert g["all"].startswith("⚠️ GA4 ne 20 Mar se 1 app ka screen-wise data adhoora diya (users ka 14% \"(other)\" me)")
+    assert "Robot theek chal raha hai" in g["all"] and "Alpha App" in g["allTitle"]
+    assert g["app"].startswith("⚠️ GA4 ne 20 Mar se is app ka screen-wise data adhoora diya (users ka 14% \"(other)\" me)")
+    assert g["order"]                                                   # under the crumb, above the period bar

@@ -993,8 +993,10 @@ class App:
         self.td = _today(meta, now)
         self.ft = self.td - timedelta(days=2)
         # the users beside the ads (set_users): app daily users {day: n} and screen users {day: {class: n}} on final
-        # days ≤ ftU, the Uninstall store's why when it gave none, and ftU (every status window ends there)
+        # days ≤ ftU, the Uninstall store's why when it gave none, and ftU (every status window ends there); au_end = the
+        # daily users' own last day, ug = GA4 withholding the users by screen after ftU (users_ga4: a note, not a failure)
         self.au, self.su, self.auw, self.ftu = {}, {}, None, self.ft
+        self.au_end, self.ug = None, None
         real = sorted(d for d, r in days.items() if r)
         self.d0 = real[0] if real else None
         # a core month file that cannot be read (broken: [(grp, month, error type)]) keeps its days on the calendar
@@ -1690,6 +1692,7 @@ def set_users(app, au, auw, su):
     s = [d for d in (su or {}) if d <= ft]
     ends = [max(x) for x in (a, s) if x]
     app.ftu = _d(min(ends)) if ends else app.ft
+    app.au_end = max(a) if a else None
     f = _iso(app.ftu)
     app.au = {d: n for d, n in (au or {}).items() if d <= f and n}
     app.su = {d: u for d, u in (su or {}).items() if d <= f}
@@ -1699,10 +1702,40 @@ def set_users(app, au, auw, su):
 
 def stale_users(app):
     """True when the users behind this app's numbers are late or missing: no daily users (none / another stream / GA4
-    cut the report), ftU more than a day before ft (the users read stopped), or daily users but no whole screen users
-    day at all once the app has 3 final days (a new read, or one always thresholded / sampled: ftU then ends on the
-    last daily users day, so no lag shows, yet every screen row is N/A)."""
-    return not app.au or (app.ft - app.ftu).days > 1 or (not app.su and len(app.final) >= 3)
+    cut the report), ftU more than a day before ft (the users read stopped — unless GA4 itself withheld the users by
+    screen on those days: users_ga4, a note on the page, never this health line), or daily users but no whole screen
+    users day at all once the app has 3 final days (a new read, or one always thresholded / sampled: ftU then ends on
+    the last daily users day, so no lag shows, yet every screen row is N/A)."""
+    return not app.au or ((app.ft - app.ftu).days > 1 and not app.ug) or (not app.su and len(app.final) >= 3)
+
+
+GA4_ST = frozenset(("p", "o", "t", "s"))   # a users by screen record GA4 itself kept from whole (fold, cut, threshold, sample)
+
+
+def users_ga4(app, data_dir, recent):
+    """GA4 itself withholding this app's users by screen (owner, 14 Nov 2026: GA4 started folding big apps' screen-wise
+    data into "(other)" from 11 Nov — "robot me error" was the wrong word): ftU more than a day before ft while the
+    app's daily users are on time, and EVERY day after ftU up to ft − 1 has its users by screen record (uV, recent or
+    its small month) stored in a GA4 state — folded over FOLD_OK, cut, thresholded or sampled. The read runs; the users
+    move on by themselves once GA4 gives a whole day. → {"from": the first such day, "f": the largest folded share
+    (None: none stored), "n": the days}, or None (on time, or a day not read: the read stopped — stale_users)."""
+    ft, fu = app.ft, app.ftu
+    if (ft - fu).days <= 1 or not app.au_end or (ft - _d(app.au_end)).days > 1:
+        return None
+    days = [_iso(fu + timedelta(days=i)) for i in range(1, (ft - fu).days)]
+    recs = {d: recent[d]["uV"] for d in days if isinstance(recent.get(d), dict) and isinstance(recent[d].get("uV"), dict)}
+    for m in sorted({d[:7] for d in days if d not in recs}):
+        try:
+            with open(_month_path(data_dir, app.key, "small", m), "rb") as f:
+                md = _parse_month(f.read())
+        except Exception:
+            continue
+        recs.update({d: md[d]["uV"] for d in days if d not in recs and d[:7] == m and isinstance(md.get(d), dict)
+                     and isinstance(md[d].get("uV"), dict)})
+    if any(d not in recs or recs[d].get("st") not in GA4_ST or _whole(recs[d]) for d in days):
+        return None
+    fs = [float(recs[d]["f"]) for d in days if isinstance(recs[d].get("f"), (int, float))]
+    return {"from": days[0], "f": round(max(fs), 4) if fs else None, "n": len(days)}
 
 
 def screen_series_u(app, c, allf):
@@ -3784,6 +3817,7 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
     # (the small group's uV, read without registering a class); ftU = the last final day with both
     au, auw = app_users(meta, data_dir)
     set_users(app, au, auw, screen_users(app, data_dir, recent))
+    app.ug = users_ga4(app, data_dir, recent)
     rows, ast = statuses(app)
     report_rows = {rid: row for rid, row, _, _, _, _, st in rows if st["word"] in ("Worse", "Watch")}
     causes = {}
@@ -3987,6 +4021,8 @@ def build_app(meta, data_dir, out_dir, now, dashboard, by_id, counts, broken=Non
         entry["au"] = aul
     else:
         entry["auw"] = app.auw or "none"
+    if app.ug:                                       # GA4 withholding the users by screen after ftU: the page's note
+        entry["ug"] = [app.ug["from"], app.ug["f"], app.ug["n"]]
     if nvr:
         entry["nvr"] = {k: nvr[k] for k in ("mix", "within", "vpu")}
     # v 4: per day [GA4's revenue on every screen, AdMob's app total] (micros; None where missing), the app's users per

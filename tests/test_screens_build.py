@@ -2895,3 +2895,48 @@ def test_v4_currency_ships_only_when_not_usd(tmp_path):
         got[lab] = {k: f2[k] for k in f2 if k == "cur"}
     assert got == {"EUR": {"cur": "EUR"}, "EUR, refused since": {"cur": "EUR"}, "USD": {}, "refused": {},
                    "no prop": {}, "no file": {}}
+
+
+def test_ga4_withholding_the_users_by_screen_is_a_note_not_a_failed_step(tmp_path, capsys):
+    # GA4 folds a share of the users by screen into "(other)" from 28 Oct (the daily users on time): ftU stops at 27 Oct,
+    # but no "scr users skipped" line — the page's note ("ug": from, the largest share, the days) says why; the days
+    # come from the October month file (28–30 Oct) and recent (31 Oct, 1 Nov) alike
+    fold = {"st": "p", "g": "c", "f": 0.14, "r": [[MAIN, 300, 170], [EDIT, 150, 85], ["(other)", 80, 45]]}
+
+    def day_fn(d):
+        r = users_day(d)
+        if d >= "2026-10-28":
+            r["uV"] = dict(fold, f=0.12 if d == "2026-10-30" else 0.14)
+        return r
+    data, out, dash = build(tmp_path)
+    write_store(data, day_fn=day_fn)
+    capsys.readouterr()
+    sb.run(dash, str(data), str(out), {}, NOW)
+    err = capsys.readouterr().err
+    assert "skipped" not in err
+    one = gz(out / "scr_all.json.gz")["apps"][AID]
+    # (27 Oct: the fixture's thresholded day — GA4 too): 27 Oct … 1 Nov (ft − 1)
+    assert one["ftu"] == "2026-10-26" and one["ug"] == ["2026-10-27", 0.14, 6]
+    # a day after ftU with no users by screen record at all: the read stopped — the health line, no note
+    def gap_fn(d):
+        r = day_fn(d)
+        if d == "2026-10-31":
+            r.pop("uV")
+        return r
+    data2, out2 = tmp_path / "d2", tmp_path / "s2"
+    out2.mkdir()
+    write_store(data2, day_fn=gap_fn, layers=False)                 # (users_day carries the layers: none added back)
+    (data2 / "app_store_ids.json").write_text(json.dumps({"by_id": {}}))
+    capsys.readouterr()
+    sb.run(dash, str(data2), str(out2), {}, NOW)
+    assert "scr users skipped: StaleUsersWarning\n" in capsys.readouterr().err
+    assert "ug" not in gz(out2 / "scr_all.json.gz")["apps"][AID]
+    # the daily users late themselves (GA4 folding too): the read is ours — the line
+    data3, out3 = tmp_path / "d3", tmp_path / "s3"
+    out3.mkdir()
+    write_store(data3, day_fn=day_fn)
+    uni_store(data3, last="2026-10-29")
+    (data3 / "app_store_ids.json").write_text(json.dumps({"by_id": {}}))
+    capsys.readouterr()
+    sb.run(dash, str(data3), str(out3), {}, NOW)
+    assert "scr users skipped: StaleUsersWarning\n" in capsys.readouterr().err

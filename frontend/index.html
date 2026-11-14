@@ -2813,6 +2813,7 @@ body[data-screen="scr"] #smp-pick{display:inline-flex}
 .sc-note{color:var(--muted);font-size:12px;line-height:1.5;margin:0 0 10px;max-width:860px}.sc-note b{color:var(--ink2)}
 .sc-sub{color:var(--faint);font-size:11.5px;margin:2px 0 10px}.sc-faint{color:var(--faint);font-size:11.5px;font-weight:500}
 .sc-ok{margin:0 0 8px;color:var(--good);font-weight:700}
+.sc-note.sc-ga4{color:var(--watch);margin:0 0 10px}
 .sc-x{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .sc-crumb{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 12px;color:var(--muted);font-size:12px}.sc-crumb small{color:var(--faint)}.sc-crumb>.sc-own{flex-basis:100%;margin-top:-4px;color:var(--muted)}
 .sc-back{min-height:36px;padding:4px 12px;border-radius:9px;border:1px solid var(--line2);background:var(--raise);color:var(--ink);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
@@ -8047,10 +8048,17 @@ function allTable(rows){ const cols=[['rank','App · status'],['dau','Daily user
     +`<td>${N(z.dau)}</td><td>${impCell(z)}</td><td${z.low==null?' title="file me nahi"':''}>${z.low==null?'—':z.low?`<b class="sc-dn">${z.low}</b><small>${nTxt(z.lowS,z.lowT)}</small>`:'0'}</td><td>${z.wn||'—'}</td><td>${z.an||'—'}</td><td>${histCell(z.r.x)}</td></tr>`).join('')
     ||'<tr><td colspan="7" class="sc-faint">Koi app nahi</td></tr>';
   return `<div class="sc-tw sc-x" id="sc-atw"><table class="sc-t"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`; }
+// GA4 withholding the users by screen (scr_all "ug" [from, the largest share folded into "(other)", days]; owner, 14 Nov
+// 2026): a data note on this tab, never the red "robot" banner — the read runs; the users move on once GA4 gives whole days
+const ugPct=g=>Array.isArray(g)&&ok(g[1])?Math.round(g[1]*100)+'%':'';
+function ga4Note(L){ const G=L.filter(r=>r.x&&Array.isArray(r.x.ug)&&okD(r.x.ug[0])); if(!G.length) return '';
+  const from=G.map(r=>r.x.ug[0]).sort()[0], ps=G.map(r=>r.x.ug[1]).filter(ok).map(v=>Math.round(v*100)).sort((a,b)=>a-b), till=G.map(r=>r.x.ftu).filter(okD).sort()[0];
+  const sh=ps.length?` (users ka ${ps[0]===ps[ps.length-1]?ps[0]:ps[0]+'–'+ps[ps.length-1]}% "(other)" me)`:'';
+  return `<p class="sc-note sc-ga4" title="${E(G.map(r=>r.name).join(' · '))}">⚠️ GA4 ne ${fd(from)} se ${G.length} ${G.length===1?'app':'apps'} ka screen-wise data adhoora diya${sh} — un apps ke screen-wise users aur 🔻 Gira ${till?fd(till)+' tak':'ruke'}. Robot theek chal raha hai; GA4 poora dega to apne aap aage badhenge.</p>`; }
 function allHtml(){ const L=apps(); if(!L.length) return '<div class="card sc-card"><p class="sc-note">Abhi kisi app ka Screens data nahi aaya — history bhar rahi hai.</p></div>';
   const ref=refCal(L); if(!ref.ft) return '<div class="card sc-card"><p class="sc-note">Abhi kisi app ka Screens data nahi aaya — history bhar rahi hai.</p></div>';
   perLoad(ref.d0,ref.td); const rows=L.map(appRow4);
-  return `<div class="card sc-card sc-stk" id="sc-stk">${perCtl(ref)}</div>`
+  return `<div class="card sc-card sc-stk" id="sc-stk">${perCtl(ref)}</div>`+ga4Note(L)
     +`<div class="card sc-card"><div class="ct"><h3>Data coverage</h3><span class="sc-faint">har piece kitne apps pe poora (whole) aaya</span></div>${covHtml(L)}</div>`
     +`<div class="card sc-card"><div class="ct"><h3>All apps</h3><span class="sc-faint">app pe tap = us app ke screens · column pe tap = sort</span></div>${allTable4(rows)}</div>`
     +`<p class="sc-note">GA4 data till ${fdy(ref.ft)} (aakhri 2 din GA4 me abhi badalte hain). <b>Users</b> = GA4 Active users, is period me unique · <b>Ads</b> = GA4 ad impressions${devV()?'':' · <b>Revenue</b> = AdMob'} · <b>Signals</b> = ${SIGI.b} Ads ki jagah · ${SIGI.w} Ads waste · ${SIGI.d} Gira (is period ke).</p>`; }
@@ -8877,8 +8885,9 @@ function appHtml(id){ const x=ALL.apps[id], a=Array.isArray(x.app)?x.app:[];
   // v 4: the crumb carries no status word any more (the signals card says what is wrong, for the picked period)
   const crumb=`<div class="sc-crumb"><button type="button" class="sc-back" data-sc-all="1">← All apps</button><span>history ${x.d0?'from '+fdy(x.d0):'not yet'} · GA4 data till ${okD(x.ft)?fdy(x.ft):'—'}</span></div>`;
   if(!x.d0||!(x.vis||[]).length){ const h=histFrom(x,['v'])||{}; return crumb+`<div class="card sc-card"><p class="sc-note">Is app ka Screens data abhi aa raha hai — history bhar rahi hai: ${fdy(x.ft||h.from||'')} tak.</p></div>`; }
-  const [lo,hi]=rng(x);
-  return crumb+`<div class="card sc-card sc-stk" id="sc-stk">${perCtl(x)}</div>`+sigCard(x,id,lo,hi)+v4Table(x,id,lo,hi)+ddHtml(x,id,lo,hi)
+  const [lo,hi]=rng(x), ug=Array.isArray(x.ug)&&okD(x.ug[0])?x.ug:null;
+  const gn=ug?`<p class="sc-note sc-ga4">⚠️ GA4 ne ${fd(ug[0])} se is app ka screen-wise data adhoora diya${ugPct(ug)?` (users ka ${ugPct(ug)} "(other)" me)`:''} — screen-wise users aur 🔻 Gira ${okD(x.ftu)?fd(x.ftu)+' tak':'ruke'}. Robot theek chal raha hai; GA4 poora dega to apne aap aage badhenge.</p>`:'';
+  return crumb+gn+`<div class="card sc-card sc-stk" id="sc-stk">${perCtl(x)}</div>`+sigCard(x,id,lo,hi)+v4Table(x,id,lo,hi)+ddHtml(x,id,lo,hi)
     +`<div class="sc-folds" id="sc-folds">${foldsHtml(x,id,lo,hi)}</div>`; }
 // ---- the chart: imp / user / day (line: Σ ads ÷ Σ the row's users per bucket) + the row's users (bars, second axis) + the
 // normal (dashed), printed: latest + average; an aggregate row (no users): ads / 100 views + views. A point only where the

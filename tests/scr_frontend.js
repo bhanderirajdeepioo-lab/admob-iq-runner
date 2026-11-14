@@ -1188,6 +1188,13 @@ const names = h => [...h.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"/g)].
         for (const m of t.matchAll(/<tr class="sc-clk" data-sc-app="([^"]+)"[^>]*>(.*?)<\/tr>/g)) { const tds = [...m[2].matchAll(/<td[^>]*>(.*?)<\/td>/g)].map(q => q[1].replace(/<[^>]+>/g, '').trim()); rows[m[1]] = Object.fromEntries(hd.map((x2, j) => [x2, tds[j]])); }
         return { hd, rows }; })();
       out.v4.all = A4;
+      // GA4 withholding the users by screen (scr_all "ug"): a note on All apps and the app page, none without it
+      out.v4.ga4 = { none: hh.includes('sc-ga4') };
+      ALLF.apps[ID.a].ug = ['2026-03-20', 0.14, 6]; ctx.DATA.scr.fv = 'fga1'; SCR.paint(); await tick(); SCR.paint(); hh = SCREEN.innerHTML; out.v4.ga4.all = (/<p class="sc-note sc-ga4"[^>]*>(.*?)<\/p>/.exec(hh) || [, ''])[1];
+      out.v4.ga4.allTitle = (/<p class="sc-note sc-ga4" title="([^"]*)"/.exec(hh) || [, ''])[1];
+      ctx.APP = 'Alpha App'; SCR.paint(); await tick(8); SCR.paint(); hh = SCREEN.innerHTML; out.v4.ga4.app = (/<p class="sc-note sc-ga4">(.*?)<\/p>/.exec(hh) || [, ''])[1];
+      out.v4.ga4.order = hh.indexOf('sc-ga4') > hh.indexOf('sc-crumb') && hh.indexOf('sc-ga4') < hh.indexOf('id="sc-stk"');
+      delete ALLF.apps[ID.a].ug; ctx.DATA.scr.fv = 'fga2'; SCR.paint(); await tick(); SCR.paint(); out.v4.ga4.gone = !SCREEN.innerHTML.includes('sc-ga4'); ctx.APP = '';
       ctx.APP = 'Hostile App'; SCR.paint(); await tick(8); SCR.paint(); hh = SCREEN.innerHTML; const tw = hh.slice(hh.indexOf('id="sc-ttw"'), hh.indexOf('</table>', hh.indexOf('id="sc-ttw"')));
       out.v4.hostile = tw.includes('&lt;img src=x onerror=alert(1)&gt;') && !tw.includes('<img src=x');
       ctx.APP = 'Alpha App'; _.set({ PER: '30' }); SCR.paint();
