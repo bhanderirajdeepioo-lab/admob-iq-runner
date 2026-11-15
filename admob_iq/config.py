@@ -191,6 +191,16 @@ def settings() -> dict:
         # GA4_CUBE_BUDGET_SEC = its own seconds per build (no read is started past it)
         "ga4_cube": _env("GA4_CUBE", "false").lower() == "true",
         "ga4_cube_budget_sec": _int_env(("GA4_CUBE_BUDGET_SEC",), 150),
+        # ⚖️ Breakeven's returning-session eCPM: GA4 ad revenue + impressions of each install day's users on their days
+        # 1, 2, 3, 6 and 13 by country (fetch.ga4_cecpm: one read an activity day, final days folded once into
+        # activity-month files, the last 3 days every 6 hours, the history newest first). Off: nothing of it is read,
+        # written or printed; GA4_CECPM_BUDGET_SEC = its own seconds per build (unset: 0 → the module's: more while the
+        # history is being read, less after)
+        "ga4_cecpm": _env("GA4_CECPM", "false").lower() == "true",
+        "ga4_cecpm_budget_sec": _int_env(("GA4_CECPM_BUDGET_SEC",), 0),
+        # … its card part (be_ecpm: the eCPM index day 1 = the first session, against the country's benchmark):
+        # GA4_CECPM_USE=false = the reads go on, the Breakeven files exactly as without it
+        "ga4_cecpm_use": _env("GA4_CECPM_USE", "false").lower() == "true",
         # 🖼️ Screens: GA4 views and ad impressions per screen class per day, every layer (fetch.ga4_screens: the recent
         # days every 3 / 12 hours, the history newest first; runs after every other GA4 step, stricter quota floors).
         # Off: nothing of it is read, written or printed; GA4_SCREENS_BUDGET_SEC = its own seconds per build (unset: 0 →

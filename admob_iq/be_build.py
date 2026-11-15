@@ -1201,6 +1201,15 @@ def _auc(pts):
 
 # ── predict (every build) ───────────────────────────────────────────────────────────────────────────────────────────
 
+def _cty_of(pin):
+    """The country rows of a pin's days → {cc: [rows]} (be_ecpm's read)."""
+    out = {}
+    for cs in pin[2].values():
+        for cc, x in cs.items():
+            out.setdefault(cc, []).append(x)
+    return out
+
+
 def _pin(newest, app, cty, adm=None):
     """What predict needs of one app: every install day with spend (the judged ones get the model; the others only their
     real numbers) and its countries' rows."""
@@ -1564,11 +1573,25 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
         need = old is None or old.get("cv") != CALV or (old.get("tried") or old["built"]) != today   # the first build
         A, C, held, bodies = [], [], [], {}                     # of the UTC day (or an older calibration's content)
         RB, CB, SKL, GA, GC, GK = {}, {}, {}, {}, {}, {}
-        n = {"refit": 0, "fail": 0}
+        n = {"refit": 0, "fail": 0, "ec": 0, "ec_fail": 0, "ec_stale": 0}
         cal = old
+        bec = None
+        if (s or {}).get("ga4_cecpm_use") and (s or {}).get("ga4_cecpm"):   # the card's eCPM index (be_ecpm,
+            from . import be_ecpm as bec                        # GA4_CECPM_USE with its reads on): off, nothing of it is
+            #                                                     read or written
 
         def _predict(aid, key, fc, pin):
             body = predict(key, fc, cal, pin, (cal.get("skill") or {}).get(key))
+            if bec is not None:
+                try:                                            # (its stores read again here: never held for every app)
+                    m = bec.load(data_dir, key, _cty_of(pin))
+                    if m is not None:
+                        n["ec_stale"] += bool(bec.attach(body, pin, fc, m, O))
+                        n["ec"] += 1
+                    del m
+                except Exception as e:                          # costs the card's eCPM part only
+                    n["ec_fail"] += 1
+                    bec._fail(e)
             unc = {cc for cs in pin[2].values() for cc in cs} - set(fc["fits"])      # (the folded ones too)
             bodies[aid] = (key, fc, body, len(unc))
 
@@ -1583,6 +1606,17 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                     fc = fit(app, cty, O)
                     save_fits(data_dir, key, fc)
                     n["refit"] += 1
+                if bec is not None and (refit or fc.get("ec_v") != bec.stamp()):
+                    try:                                        # the eCPM benchmark: with the day's fit (once; again
+                        m = bec.load(data_dir, key, cty)        # when its rule changed)
+                        if m is not None:
+                            fc["ec"], fc["ec_v"] = bec.bench(cty, m, O, app), bec.stamp()
+                            fc["ec_h"] = not m.get("done")      # (made while GA4's history was being read)
+                            save_fits(data_dir, key, fc)
+                        del m
+                    except Exception as e:
+                        n["ec_fail"] += 1
+                        bec._fail(e)
                 if need:
                     F = {}                                 # (one fit per month start, shared by the two back-tests)
                     a_, c_ = backtest(key, newest, app, cty, F)
@@ -1631,6 +1665,8 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                 except Exception as e:
                     n["fail"] += 1
                     _fail(e)
+        if bec is not None and n["ec_stale"]:                   # GA4's reads stopped for an app: the banner, once
+            print("be ecpm skipped: StaleWarning", file=sys.stderr)
         os.makedirs(out_dir, exist_ok=True)
         ptr, keep, nd, cov, unc = {}, set(), 0, 0, 0
         for aid, (key, fc, body, nu) in sorted(bodies.items(), key=lambda kv: kv[1][0]):
@@ -1650,9 +1686,11 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             cov += len(fc["fits"])
             unc += nu
         _clean(out_dir, keep)
-        LINE = "be: apps %d, days %d, covered %d, uncovered %d, refit %s, calib %s%s" % (
+        LINE = "be: apps %d, days %d, covered %d, uncovered %d, refit %s, calib %s%s%s" % (
             len(ptr), nd, cov, unc, "yes" if n["refit"] else "no", "yes" if ran else "no",
-            (", failed %d" % n["fail"]) if n["fail"] else "")
+            (", failed %d" % n["fail"]) if n["fail"] else "",
+            (", ecpm apps %d, ecpm failed %d, ecpm stale %d" % (n["ec"], n["ec_fail"], n["ec_stale"]))
+            if bec is not None else "")
         if not ptr:
             return []
         dashboard["be"] = {"v": V, "origin": today, "calib": cal.get("built"), "apps": ptr}

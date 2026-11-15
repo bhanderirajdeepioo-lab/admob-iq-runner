@@ -793,6 +793,30 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
       BO.card999 = [...cd.matchAll(/14 days: ROAS <b>([^<]*)<\/b>/g)].map(m => m[1]); }
     { const cf = _.beCard({ roas: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7], bench: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6], fin: [1, 1, 1, 1, 0, 0] });
       BO.cardfin = { hollow: (cf.match(/cpx-benf/g) || []).length, vs: txt((cf.match(/<p class="cpx-vm">([\s\S]*?)<\/p>/) || [])[1] || '') };
+      // the card's eCPM index (be_ecpm: day 1 = the first session = 100; SYNTHETIC numbers)
+      const cdx = { roas: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7], bench: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6] };
+      const ec = { e: [5.0, 1.75, 1.6, 1.5, 1.35, null], x: [100, 35, 32, 30, 27, null], b: [100, 44, 40, 38, 34, null],
+        be: [5.5, 2.4, 2.2, 2.1, 1.9, null], cv: [1, 0.8, 0.8, 0.8, 0.7, 0], w: '.....y', wb: '......', p: '000010', q: '001000' };
+      const ce = _.beCard(cdx, ec), c0 = _.beCard(cdx), cbad = _.beCard(cdx, { x: [1, 2], b: 'no', e: null }), cnull = _.beCard(cdx, null);
+      const ecn = { e: [null, null, null, null, null, null], x: [null, null, null, null, null, null], b: [null, null, null, null, null, null],
+        be: [null, null, null, null, null, null], cv: [0, 0, 0, 0, 0, 0], w: 'cccccc', wb: 'hhhhhh', p: '000000', q: '000000' };
+      const cn = _.beCard(cdx, ecn), cp = _.beCard(cdx, Object.assign({}, ec, { pl: 1, cv: [null, null, null, null, null, null] }));
+      BER.push(ce, c0, cn, cp);
+      const svgs = ce.match(/<svg[\s\S]*?<\/svg>/g) || [];
+      BO.ec = { vms: [...ce.matchAll(/<p class="cpx-vm">([\s\S]*?)<\/p>/g)].map(m => txt(m[1])), svgs: svgs.length,
+        labels: svgs.length > 1 ? [...svgs[1].matchAll(/<text[^>]*class="cpx-(?:pt|nt)"[^>]*>([^<]*)<\/text>/g)].map(m => m[1]) : [],
+        hollow: svgs.length > 1 ? (svgs[1].match(/cpx-benf/g) || []).length : -1,
+        title: svgs.length > 1 ? txt((svgs[1].match(/class="cpx-tt">([^<]*)</) || [])[1] || '') : '',
+        cells: [...(ce.match(/<table class="cpx-t cpx-bect">[\s\S]*?<\/table>/) || [''])[0].matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map(m => cellsOf(m[1])),
+        titles: [...((ce.match(/<table class="cpx-t cpx-bect">[\s\S]*?<\/table>/) || [''])[0]).matchAll(/class="cpx-nv" title="([^"]*)"/g)].map(t => dec(t[1])),
+        fn: (ce.match(/<p class="cpx-fn">eCPM = [\s\S]*?<\/p>/) || [''])[0].length > 0,
+        vcls: (ce.match(/eCPM index <b>[^<]*<\/b> vs benchmark [0-9]+ → <span class="cpx-dl ([^"]*)"/) || [])[1] || '',
+        nf: (ce.match(/<small title="([^"]*)">not final<\/small>/) || [])[1] || '',
+        none: { titles: [...((cn.match(/<table class="cpx-t cpx-bect">[\s\S]*?<\/table>/) || [''])[0]).matchAll(/class="cpx-nv" title="([^"]*)"/g)].map(t => dec(t[1])),
+          miss: txt((cn.match(/<p class="cpx-fn">eCPM index abhi nahi: ([\s\S]*?)<\/p>/) || [])[1] || ''), vms: (cn.match(/eCPM index <b>/g) || []).length },
+        pooled: { note: txt((cp.match(/<p class="cpx-fn"><b>Saari countries mila ke<\/b>([\s\S]*?)<\/p>/) || [])[1] || ''),
+          vm: txt((cp.match(/<p class="cpx-vm">(\d+ days: eCPM index[\s\S]*?)<\/p>/) || [])[1] || ''), plain: ce.includes('Saari countries mila ke') },
+        same: c0 === cbad && c0 === cnull && !c0.includes('eCPM index') && !c0.includes('cpx-bect') };
       const G = [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270, 360];
       const r = rowsOf(_.beRow({ d: '2026-01-10', age: 47, sp: 100, inst: 10, real: [], unc: [], cty: [], jd: 0, now: ['be', 45, 's', 45, 1.02, 0] }, 'Alpha', G))[0];
       BO.sn = { cells: r.cells, titles: r.titles }; }
@@ -869,7 +893,8 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     CURV = 'INR'; BO.k = { day: _.beK('Alpha App', '2026-03-25'), none: _.beK('Nope App', '2026-03-25') };
     const BC0 = ctx.baseCur, UI0 = FX.DATA.usd_inr; ctx.baseCur = () => 'INR'; FX.DATA.usd_inr = 80; BO.k.base = _.beK('Alpha App', '2026-03-25');
     delete FX.DATA.usd_inr; BO.k.base_none = _.beK('Alpha App', '2026-03-25');
-    { const hK = await beGo({ OPEN: ID.a, BOPEN: '2026-03-25' }); BO.k.row = rowsOf(hK).find(r => r.d === '2026-03-25').cells[6]; BO.k.cpi = tblOf(bedOf(hK) || '', '<h4 class="cpx-h4">Countries with a benchmark').rows.map(r => r[2]); }
+    { const hK = await beGo({ OPEN: ID.a, BOPEN: '2026-03-25' }); BO.k.row = rowsOf(hK).find(r => r.d === '2026-03-25').cells[6];
+      BO.ecOpen = { panel: (bedOf(hK) || '').includes('eCPM index (1 day = 100)'), table: (bedOf(hK) || '').includes('<table class="cpx-t cpx-bect">') }; BO.k.cpi = tblOf(bedOf(hK) || '', '<h4 class="cpx-h4">Countries with a benchmark').rows.map(r => r[2]); }
     ctx.baseCur = BC0; FX.DATA.usd_inr = UI0;
     { const D0 = FX.FILES[fA].days, i = D0.findIndex(x => x.d === '2026-03-25'), u0 = D0[i].unc; D0[i].unc = [['BR', 0.1], ['...', 0.05]];
       const hF = await beGo({ OPEN: ID.a, BOPEN: '2026-03-25', BUNC: true }); BO.fold = { kam: txt((hF.match(/<p class="cpx-vm"><span title="[^"]*">([\s\S]*?)<\/p>/) || [])[1] || ''),

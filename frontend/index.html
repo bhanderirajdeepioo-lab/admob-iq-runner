@@ -3062,6 +3062,7 @@ h2.cpx-h{font-size:20px;margin:0 0 3px;font-weight:800}.cpx-d{margin:0;color:var
 .cpx-bed{position:sticky;left:0;box-sizing:border-box;width:100%;width:100cqi;padding:4px 10px 12px;border-bottom:1px dashed var(--line2)}
 .cpx-becd{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));align-items:start}   /* the card (one column; room for a second panel: the returning-eCPM step) */
 .cpx-svg.cpx-bes{max-width:400px}
+.cpx-t.cpx-bect{width:auto}                                                    /* the card's eCPM $ table (be_ecpm) */
 .cpx-svg .cpx-be1{stroke:var(--good);stroke-width:1.2;stroke-dasharray:2 3}.cpx-svg .cpx-be1t{fill:var(--good);font-size:11px;font-weight:700}
 .cpx-svg circle.cpx-bep{fill:var(--panel2);stroke:var(--ink2);stroke-width:1.4}
 .cpx-svg circle.cpx-dot.cpx-benf{fill:var(--panel2);stroke-width:1.8}   /* a card point not final yet: hollow */
@@ -9654,12 +9655,49 @@ function beSvg(r,b,FN){ const W=320, H=168, Lm=26, Rm=26, Tp=26, Bm=34, vs=r.con
   const lab=(i,v,up,c)=>o.push(`<text x="${f1(X(i))}" y="${f1(Math.max(12,Math.min(H-Bm+16,Y(v)+(up?-8:15))))}" class="${c}" text-anchor="middle">${E(beRf(v))}</text>`);
   for(let i=0;i<6;i++){ const rv=r[i], bv=b[i], ru=rv!=null&&(bv==null||rv>=bv); if(rv!=null) lab(i,rv,ru,'cpx-pt'); if(bv!=null) lab(i,bv,rv==null||!ru,'cpx-nt'); }
   o.push('<text x="6" y="16" class="cpx-tt">ROAS so far</text></svg>'); return o.join(''); }
-function beCard(cd){ const ar=k=>cd&&typeof cd==='object'&&Array.isArray(cd[k])&&cd[k].length===6?cd[k].map(num):null, R=ar('roas'), B=ar('bench'), FN=ar('fin');
+// the card's eCPM index (be_ecpm, owner 14–15 Nov 2026: day 1 = the FIRST session's eCPM = 100; day N = the same users' eCPM
+// that day ÷ day 1's × 100; the benchmark = each country's own past install days, combined by the day's spend share with the
+// SAME countries and weights as this day's) — every point's value printed; a "—" says why (the file's letter)
+const BEW={y:'install ko abhi itne din nahi hue',w:'is din ka eCPM GA4 se abhi aa raha hai (abhi final nahi, ya purana data bhar raha hai)',f:'GA4 se is din ka data nahi aaya — eCPM ka fetch kuch din se ruka hua hai',s:'GA4 ne sampled data diya — asli poora data nahi, isliye nahi dikhaya',l:'GA4 ne us din ka data apne pehle wale reads se bahut kam diya (adhoora) — isliye nahi dikhaya',o:'GA4 ne us din kuch rows "(other)" me jod di — is country ka hissa nahi mila',t:'GA4 ne us din kam users wali rows chhupa di ho sakti hain (thresholding) — is country ka hissa nahi mila',n:'impressions kam (1,000 se kam) — eCPM bharosemand nahi',z:'pehle session ka eCPM 0 — index nahi banta',x:'us din in users se koi ad impression nahi',k:'is din ka country-wise spend nahi aaya — index nahi banta',c:'jin countries ka index bana unka benchmark nahi bana',b:'benchmark ke liye purane din kam (20 se kam)',h:'purane din ka eCPM GA4 se abhi aa raha hai (history bhar rahi hai) — benchmark baad me banega'};
+const beWhy=(w,i)=>BEW[typeof w==='string'?w[i]:'']||'nahi aaya';
+function beEcOk(ec){ const a=k=>ec&&typeof ec==='object'&&Array.isArray(ec[k])&&ec[k].length===6; return a('x')&&a('b')&&a('e'); }
+// the share of the day's spend the index stands for: under 99.5 % → "x % spend: data kam" (the tab's own words)
+const beUnc=(cv,i)=>cv&&cv[i]!=null&&cv[i]<0.995?1-cv[i]:0;
+function beEcSvg(x,b,P,cv){ const W=320, H=168, Lm=26, Rm=26, Tp=26, Bm=34, vs=x.concat(b).filter(v=>v!=null), top=Math.max(100,...vs)*1.12;
+  const X=i=>Lm+(W-Lm-Rm)*i/5, Y=v=>Tp+(H-Tp-Bm)*(1-Math.min(Math.max(v,0),top)/top), f1=v=>v.toFixed(1), fi=v=>String(Math.round(v));
+  const pth=A=>{ let d='', up=false; A.forEach((v,i)=>{ if(v==null){ up=false; return; } d+=(up?'L':'M')+f1(X(i))+' '+f1(Y(v))+' '; up=true; }); return d.trim(); };
+  const o=[`<svg class="cpx-svg cpx-bes" viewBox="0 0 ${W} ${H}" role="img" aria-label="eCPM index vs benchmark">`];
+  BEK.forEach((k,i)=>o.push(`<text x="${f1(X(i))}" y="${H-5}" class="cpx-ax" text-anchor="middle">${k===1?'1 day':k+' days'}</text>`));
+  const pb=pth(b), px=pth(x); if(pb) o.push(`<path d="${pb}" class="cpx-nl"/>`); if(px) o.push(`<path d="${px}" class="cpx-ln cpx-l2"/>`);
+  b.forEach((v,i)=>{ if(v!=null) o.push(`<circle cx="${f1(X(i))}" cy="${f1(Y(v))}" r="3" class="cpx-bep"/>`); });
+  x.forEach((v,i)=>{ if(v==null) return; const u=beUnc(cv,i);
+    o.push(`<circle cx="${f1(X(i))}" cy="${f1(Y(v))}" r="3.4" class="cpx-dot cpx-l2${P[i]==='1'?' cpx-benf':''}">${u>0?`<title>${E(bePs(u)+' spend: data kam')}</title>`:''}</circle>`); });   // (hollow: not final yet)
+  const lab=(i,v,up,c)=>o.push(`<text x="${f1(X(i))}" y="${f1(Math.max(12,Math.min(H-Bm+16,Y(v)+(up?-8:15))))}" class="${c}" text-anchor="middle">${E(fi(v))}</text>`);
+  for(let i=0;i<6;i++){ const xv=x[i], bv=b[i], xu=xv!=null&&(bv==null||xv>=bv); if(xv!=null) lab(i,xv,xu,'cpx-pt'); if(bv!=null&&!(i===0&&xv!=null)) lab(i,bv,xv==null||!xu,'cpx-nt'); }
+  o.push('<text x="6" y="16" class="cpx-tt">eCPM index (1 day = 100)</text></svg>'); return o.join(''); }
+function beEc(ec){ if(!beEcOk(ec)) return null; const x=ec.x.map(num), b=ec.b.map(num), e=ec.e.map(num), nn=[null,null,null,null,null,null];
+  const be=Array.isArray(ec.be)&&ec.be.length===6?ec.be.map(num):nn, cv=Array.isArray(ec.cv)&&ec.cv.length===6?ec.cv.map(num):null;
+  const P=typeof ec.p==='string'&&ec.p.length===6?ec.p:'000000', Q=typeof ec.q==='string'&&ec.q.length===6?ec.q:'000000', w=ec.w, wb=ec.wb, d=i=>BEK[i]===1?'1 day':BEK[i]+' days';
+  const unc=i=>{ const u=beUnc(cv,i); return u>0?` <small title="${E('eCPM index aur benchmark sirf un countries se jinka '+d(i)+' pe index aur benchmark dono bane — baaki spend ka eCPM data kam')}">(${E(bePs(u))} spend: data kam)</small>`:''; };
+  const j=[5,4,3,2,1].find(i=>x[i]!=null&&b[i]>0&&P[i]!=='1');                 // (the verdict: final points only)
+  const vs=j!=null?`<p class="cpx-vm">${d(j)}: eCPM index <b>${Math.round(x[j])}</b> vs benchmark ${Math.round(b[j])} → <span class="cpx-dl ${dCls('ECPM',x[j]/b[j]-1)}">${fP(x[j]/b[j]-1)}</span>${unc(j)}</p>`:'';
+  const mine=(v,i)=>v==null?beDash(beWhy(w,i)):(Q[i]==='1'?`<span title="${E("GA4 ne us din kuch rows '(other)' me jod di ya chhupa di (thresholding) — sab users ka poora data nahi")}">≈ </span>`:'')
+    +E(fE(v))+(P[i]==='1'?` <small title="${E(BEKT.nf)}">not final</small>`:'');
+  const bm=(v,i)=>v==null?beDash(beWhy(typeof wb==='string'&&wb[i]&&wb[i]!=='.'?wb:w,i)):E(fE(v));
+  const tb=`<div class="cpx-x"><table class="cpx-t cpx-bect"><thead><tr><th>eCPM $</th>${BEK.map((k,i)=>`<th class="cpx-ben">${d(i)}</th>`).join('')}</tr></thead><tbody>`
+    +`<tr><td>This day</td>${e.map((v,i)=>`<td class="cpx-ben">${mine(v,i)}</td>`).join('')}</tr>`
+    +`<tr><td>Benchmark</td>${be.map((v,i)=>`<td class="cpx-ben">${bm(v,i)}</td>`).join('')}</tr></tbody></table></div>`;
+  const k1=x.findIndex((v,i)=>i>0&&v==null), miss=x.slice(1).every(v=>v==null)?`<p class="cpx-fn">eCPM index abhi nahi: ${E(beWhy(w,k1))}.</p>`:'';
+  const pl=ec.pl===1?'<p class="cpx-fn"><b>Saari countries mila ke</b> — is app ka country-wise eCPM GA4 sirf sample karke deta hai (jis din app ke 1 crore se zyada events hote hain), aur sample asli se bahut alag nikla; isliye yahan install din ke saare users ka exact eCPM hai, aur benchmark bhi isi app ke purane install dino ka, saari countries mila ke.</p>':'';
+  return {vs:vs+pl, svg:`<div class="cpx-chw">${beEcSvg(x,b,P,cv)}</div>`, tb:tb+miss}; }
+function beCard(cd,ec){ const ar=k=>cd&&typeof cd==='object'&&Array.isArray(cd[k])&&cd[k].length===6?cd[k].map(num):null, R=ar('roas'), B=ar('bench'), FN=ar('fin');
   const hd='<h4 class="cpx-h4">ROAS so far · first 14 days</h4>'; if(!R&&!B) return hd+'<p class="cpx-note">Is din ka ROAS card nahi bana.</p>';
   const nn=[null,null,null,null,null,null], r=R||nn, b=B||nn, fin=i=>!FN||FN[i]===1, j=[5,4,3,2,1,0].find(i=>r[i]!=null&&b[i]>0&&fin(i));   // (the verdict: final points only)
   const vs=j!=null?`<p class="cpx-vm">${BEK[j]===1?'1 day':BEK[j]+' days'}: ROAS <b>${beRf(r[j])}</b> vs benchmark ${beRf(b[j])} → <span class="cpx-dl ${dCls('ROAS_G',r[j]/b[j]-1)}">${fP(r[j]/b[j]-1)}</span></p>`:'';
-  return hd+vs+`<div class="cpx-becd"><div class="cpx-chw">${beSvg(r,b,FN)}</div></div>`
-    +`<p class="cpx-fn">━ is din · ┄ benchmark = is app ke purane install din ka median ROAS (usi din tak) · 100% = spend wapas (breakeven) · N days = install ke din se N din ki kul kamai ÷ spend (1 day = sirf install ka din; table ka "day N" = install ke N din baad) · khokhla point = abhi final nahi (verdict sirf final point pe).${b.every(v=>v==null)?' Benchmark ke liye purane din kam.':''}</p>`; }
+  const C=beEc(ec);
+  return hd+vs+(C?C.vs:'')+`<div class="cpx-becd"><div class="cpx-chw">${beSvg(r,b,FN)}</div>${C?C.svg:''}</div>`+(C?C.tb:'')
+    +`<p class="cpx-fn">━ is din · ┄ benchmark = is app ke purane install din ka median ROAS (usi din tak) · 100% = spend wapas (breakeven) · N days = install ke din se N din ki kul kamai ÷ spend (1 day = sirf install ka din; table ka "day N" = install ke N din baad) · khokhla point = abhi final nahi (verdict sirf final point pe).${b.every(v=>v==null)?' Benchmark ke liye purane din kam.':''}</p>`
+    +(C?'<p class="cpx-fn">eCPM = kamai ÷ ad impressions × 1000 (GA4, isi install din ke users ki) · 1 day = pehla session (= 100) · 2 / 3 / 4 / 7 / 14 days = wahi users us din (returning sessions) · Index, eCPM $ aur benchmark = jin countries ka benchmark bana, unke us din ke spend share se (dono taraf same countries, same weights; baaki spend: "data kam") · benchmark = har country ke apne purane install din ka median (30 din se purane) · khokhla point / not final = GA4 abhi bhar raha hai · ≈ = GA4 ne us din kuch rows jod di / chhupa di.</p>':''); }
 // a day with a hole date in its first week (the build's _holes: GA4 lost that date's revenue on every older cohort while
 // AdMob's own revenue was normal — a gap in the data, never a real outage): its real ROAS, and the curve shifted to it,
 // are low by what GA4 lost
@@ -9678,7 +9716,7 @@ function beDet(x,k,pv){ const o=[], C=(Array.isArray(x.cty)?x.cty:[]).filter(c=>
   if(U.length&&us>0){ const fo=U.filter(u=>beFold(u[0])).reduce((s,u)=>s+u[1],0), nm=U.filter(u=>!beFold(u[0])).sort((p,q)=>q[1]-p[1]), n=nm.length;
     o.push(`<p class="cpx-vm"><span title="data kam = us country ke 20 se kam asli-BE wale purane din, ya is din ka CPI / eCPM unke purane din ki range ke bahar (ya aaya hi nahi) — uska andaza nahi lagaya, app ke answer me nahi">${E(bePs(us))} spend: data kam</span> (${n} ${n===1?'country':'countries'}${fo>0?' + baaki chhote':''}) — <button type="button" class="cpx-lnk" data-cpx-beu="1" aria-expanded="${BUNC}">${BUNC?'Hide names':'Show names'}</button></p>`
       +(BUNC?`<p class="cpx-fn cpx-beu">${nm.slice(0,8).map(u=>E(ctyName(u[0]))+' '+bePct(u[1])).concat(n>8?['+'+(n-8)+' aur']:[],fo>0?['baaki chhote countries '+bePct(fo)]:[]).join(' · ')}</p>`:'')); }
-  o.push(beCard(x.card));
+  o.push(beCard(x.card,x.ec));
   return `<div class="cpx-bed" id="cpx-bed">${o.join('')}</div>`; }
 // one install day's row (+ its details right under it when open)
 function beRow(x,nm,G){ const on=BOPEN===x.d, A=x.app&&typeof x.app==='object'&&!Array.isArray(x.app)?x.app:null, ag=num(x.age), pv=ag!=null&&ag<4, sp=num(x.sp), k=VIN()?beK(nm,x.d):1;

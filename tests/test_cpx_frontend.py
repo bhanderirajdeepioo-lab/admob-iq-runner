@@ -1345,3 +1345,38 @@ def test_breakeven_kitna_pakka_on_day_1_7_14_and_the_data_check_mark(out):
     css = p[p.index("<style>"):p.index("</style>")]
     assert ".cpx-fn b.cpx-chk,.cpx-t td small.cpx-chk{color:var(--watch)" in css   # (amber in the row and the opened day:
     # .cpx-t td small is muted, .cpx-fn b is ink)
+
+
+def test_breakeven_card_ecpm_index_day_1_is_the_first_session(out):
+    """The card's eCPM panel (be_ecpm): the verdict on the newest FINAL card day with both (+ the spend it does not
+    cover: "x % spend: data kam"), the index chart with every value printed (hollow where not final), the $ table —
+    This day and Benchmark over the same countries and weights, "not final" / "≈" marks, every "—" saying why — and a
+    card without (or with a malformed) "ec" exactly as before (SYNTHETIC numbers)."""
+    ec = out["be"]["ec"]
+    assert ec["vms"][0].startswith("14 days: ROAS")
+    assert ec["vms"][1] == "4 days: eCPM index 30 vs benchmark 38 → −21% (20% spend: data kam)"   # day 7: not final
+    assert ec["vcls"] == "cpx-bad"
+    assert ec["svgs"] == 2 and ec["title"] == "eCPM index (1 day = 100)" and ec["hollow"] == 1
+    assert ec["labels"][:2] == ["100", "35"] and "44" in ec["labels"] and "30" in ec["labels"]
+    assert ec["cells"][1] == ["This day", "$5.00", "$1.75", "≈ $1.60", "$1.50", "$1.35 not final", "—"]   # ([0]: header)
+    assert ec["cells"][2] == ["Benchmark", "$5.50", "$2.40", "$2.20", "$2.10", "$1.90", "—"]
+    assert ec["titles"] == ["install ko abhi itne din nahi hue"] * 2 and ec["nf"] == "is din ka number abhi final nahi — badal sakta hai"
+    assert ec["none"]["vms"] == 0 and ec["none"]["miss"] == "jin countries ka index bana unka benchmark nahi bana."
+    assert ec["none"]["titles"][:6] == ["jin countries ka index bana unka benchmark nahi bana"] * 6
+    assert ec["none"]["titles"][6:] == ["purane din ka eCPM GA4 se abhi aa raha hai (history bhar rahi hai) — benchmark baad me banega"] * 6
+    assert ec["fn"] and ec["same"]
+    assert out["be"]["ecOpen"] == {"panel": True, "table": True}           # (the open day passes its "ec" to the card)
+    pl = ec["pooled"]                                                      # every country together: said, no "data kam"
+    assert pl["note"].startswith("— is app ka country-wise eCPM GA4 sirf sample karke deta hai") and not pl["plain"]
+    assert pl["vm"] == "4 days: eCPM index 30 vs benchmark 38 → −21%"
+
+
+def test_breakeven_ecpm_reason_words_cover_every_letter_and_the_impressions_floor():
+    """Every reason letter be_ecpm writes has its words on the page, and "n" names be_ecpm's own floor."""
+    import re as _re
+    from admob_iq import be_ecpm as bec
+    html = open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8").read()
+    m = _re.search(r"const BEW=\{(.*?)\};", html)
+    keys = set(_re.findall(r"(?:^|,)([a-z]):'", m.group(1)))
+    assert set(bec.WHY) <= keys
+    assert "%s se kam" % format(bec.MIN_IMP, ",") in m.group(1)

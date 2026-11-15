@@ -358,6 +358,19 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                       file=sys.stderr)
         except Exception as e:
             print("ga4 cube skipped: %s" % type(e).__name__, file=sys.stderr)
+    if s.get("ga4_cecpm"):                              # ⚖️ Breakeven's returning eCPM (GA4_CECPM): each install day's
+        try:                                            # users by country on their later days — after the cube, before
+            from .fetch import ga4_cecpm as gce         # Screens; own reads, store and budget, a failure costs it only
+            with _sc.stage("ga4_cecpm"):
+                st_ce = gce.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                        budget=s.get("ga4_cecpm_budget_sec") or None)
+                print(gce.log_line(st_ce), file=sys.stderr)
+                if st_ce.get("error"):                  # its own bug: the health banner's line too
+                    print("ga4 cohort ecpm skipped: %s" % st_ce["error"], file=sys.stderr)
+                elif (st_ce.get("counts") or {}).get("stuck"):      # an app failing run after run: the banner too
+                    print("ga4 cohort ecpm skipped: StuckAppError", file=sys.stderr)
+        except Exception as e:
+            print("ga4 cohort ecpm skipped: %s" % type(e).__name__, file=sys.stderr)
     if s.get("ga4_screens"):                            # 🖼️ Screens (GA4_SCREENS): views and ad impressions per screen
         try:                                            # class per day, every layer — AFTER every other GA4 step (it
             from .fetch import ga4_screens as gsn       # takes only what they leave: stricter quota floors); own store,

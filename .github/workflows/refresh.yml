@@ -232,6 +232,14 @@ jobs:
           GA4_CUBE_U_C_SEC:     ${{ vars.GA4_CUBE_U_C_SEC }}
           GA4_CUBE_U_C_CAP:     ${{ vars.GA4_CUBE_U_C_CAP }}
           GA4_CUBE_U_APP_CALLS: ${{ vars.GA4_CUBE_U_APP_CALLS }}
+          # ⚖️ Breakeven's returning-session eCPM (admob_iq/fetch/ga4_cecpm.py; data/ga4_cecpm/ in the private repo, kept
+          # for good): GA4 ad revenue + impressions of each install day's users on their later days, by country.
+          # GA4_CECPM=false stops the reads without a code push; GA4_CECPM_BUDGET_SEC = its seconds per build (empty: the
+          # module's, more while the history is being read)
+          GA4_CECPM:            ${{ vars.GA4_CECPM || 'true' }}
+          GA4_CECPM_BUDGET_SEC: ${{ vars.GA4_CECPM_BUDGET_SEC }}
+          # … the Breakeven card's eCPM index from it: GA4_CECPM_USE=true shows it (off: the tab's files as without it)
+          GA4_CECPM_USE:        ${{ vars.GA4_CECPM_USE || 'false' }}
           # 🖼️ Screens (admob_iq/fetch/ga4_screens.py; data/ga4_screens/ in the private repo, kept for good): GA4 views and
           # ad impressions per screen class per day with every layer, read AFTER every other GA4 step under stricter
           # quota floors. GA4_SCREENS=false stops the reads without a code push; GA4_SCREENS_BUDGET_SEC = its seconds per

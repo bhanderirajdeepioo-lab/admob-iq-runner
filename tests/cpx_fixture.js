@@ -297,6 +297,8 @@ function be(fx) {
     if (x === '2026-03-21') delete o.card;
     if (x === '2026-03-23') o.cty = [['IN', 0.6, 0.31, null, null, 0.55, null, null, null, null, null], ['US', 0.25, 0.62, 9.6, 0.05, 0.3, 0.62, null, null, null, 210]];
     if (x === '2026-03-24') o.now = ['no', ag, null];
+    if (x === '2026-03-25') o.ec = { x: [100, 40, 36, 33, null, null], b: [100, 42, 38, 35, null, null], e: [6.2, 2.48, 2.23, 2.05, null, null],
+      be: [6.0, 2.52, 2.28, 2.1, null, null], cv: [0.85, 0.85, 0.85, 0.85, 0, 0], w: '....yy', wb: '......', p: '000100', q: '000000' };   // (be_ecpm's shape)
     if (x === '2026-03-26') { Object.assign(o, { cov: 0.6, cty: [IN.slice()], unc: [['US', 0.25], ['BR', 0.1], ['…', 0.05]], app: app([160, 90, null], 270, [0.25, 0.6, 1.1]) });
       o.app.lo = o.app.lo.map((v, i) => (GRID[i] > 180 ? null : v)); o.app.hi = o.app.hi.map((v, i) => (GRID[i] > 180 ? null : v)); }   // its band reaches 180 days
     if (x === '2026-03-16') Object.assign(o.app, { be: [95, null, null], lo: o.app.lo.map(() => null), hi: o.app.hi.map(() => null) });   // no band at all
