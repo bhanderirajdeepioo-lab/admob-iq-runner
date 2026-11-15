@@ -19,9 +19,13 @@ Store, kept for good: data/ga4_nvr/<key>.json.gz (private repo)
      "days": {YYYY-MM-DD: {"u": [[nvr, format, ad unit, revenue, impressions], …], "c": [[nvr, cc, revenue, impressions], …],
                            "s": [[nvr, sessions, users], …]}}     (nvr: "n" new · "r" returning · "x" not set; [] = nothing)
      "mark": {YYYY-MM-DD: "s" (read from a GA4 sample) | "t" (subject to thresholding)},
+     "rr": {YYYY-MM-DD: 1} (a final day read once more alone for its sampled mark),
      "backfill": {"oldest": the oldest day read, "done": reached the app's history start}}
 Per app and run (at most MAX_CALLS calls; the property's quota floors as the Audience fetch's; the run's budget):
   * every REFRESH_HOURS the last RECENT_DAYS days (today included: GA4 still adds to them) — replaced whole;
+  * a day that left that window still marked "s" (GA4 sampled the still-changing range — a busy app's raw events) is read
+    once more ALONE when final, newest first (whole from GA4's daily tables), "rr": {day: 1} keeping it from being asked
+    twice (one that stays sampled keeps its mark);
   * the backfill: CHUNK_DAYS at a time, newest first, from the day before the recent window back to the app's history
     start (the Uninstall store's). Days older than RECENT_DAYS are final in GA4.
 Switched by GA4_NVR. Never raises; never prints (log_line: counts only).
@@ -122,6 +126,20 @@ def step_app(ga, store, today, hs, now):
             mark.pop(d, None)
         mark.update(mk)
         store["recent_at"] = now_iso
+        did = True
+    # a FINAL day still marked sampled — read while GA4 was still filling it: a busy app's newest days come back sampled
+    # (GA4 answers a still-changing range from its raw events), a final day whole — is read once more, ALONE, newest
+    # first (the Breakeven card's day 1 = this store's first session: owner, 16 Nov 2026, "isme bhi milna hi chahiye").
+    # "rr" keeps the days read so, so one that stays sampled is never asked again.
+    rr = store.setdefault("rr", {})
+    edge = recent - timedelta(days=1)
+    for d in sorted((d for d, v in mark.items() if v == "s" and d not in rr and first <= gu._d(d) <= edge),
+                    reverse=True):
+        got, mk = read(ga, gu._d(d), gu._d(d))
+        days[d] = got[d]
+        mark.pop(d, None)
+        mark.update(mk)
+        rr[d] = 1
         did = True
     bf = store.setdefault("backfill", {})
     while not bf.get("done"):

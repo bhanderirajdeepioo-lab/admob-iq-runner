@@ -264,7 +264,7 @@ def test_the_owners_rule_sums_the_countries_curves_never_averages_their_be_days(
     # … and through predict(): the app line says day 70; the countries' own K3 days, B's past its watched limit
     def flat(curve):                                             # a curve that is the same whatever CPI / eCPM
         return [[j, [math.log(v), 0.0, 0.0], -0.2, 0.2, 40, math.log(v)] for j, v in enumerate(curve)]
-    fc = {"origin": "2031-01-01", "app_med": [], "fits": {
+    fc = {"origin": "2031-01-01", "fits": {
         "AA": {"k3": [math.log(31.0), 0.0, 0.0, 0.5, 400, 30, 0, 10], "cv": flat(ra), "rng": WIDE},
         "BB": {"k3": [math.log(301.0), 0.0, 0.0, 0.5, 270, 30, 0, 10], "cv": flat(rb), "rng": WIDE}}}
     cal = {"built": "2031-01-01", "cty": {str(H): [[0.0, 0.0], [1.0, 1.0]] for H in be.HS},
@@ -280,8 +280,8 @@ def test_the_owners_rule_sums_the_countries_curves_never_averages_their_be_days(
     lo_k = math.exp(0.5 * be.ninv(0.1))                          # the 10 % level's factor at σ = 0.5
     # each country's day is ITS OWN curve's (the one the app line adds up): A crosses 100 % on day 30 (its curve to 90),
     # B on day 300 (to 360) — the app's day 70 lies between them, never before both
-    assert a_row[7] == 30 and a_row[8] <= 30 <= a_row[9] and a_row[10:] == [90, 0]
-    assert b_row[7] == 300 and b_row[8] <= 300 and a_row[7] < out["app"]["be"][0] < b_row[7] and b_row[10:] == [360, 0]
+    assert a_row[7] == 30 and a_row[8] <= 30 <= a_row[9] and a_row[10:12] == [90, 0]
+    assert b_row[7] == 300 and b_row[8] <= 300 and a_row[7] < out["app"]["be"][0] < b_row[7] and b_row[10:12] == [360, 0]
     assert out["app"]["lo"] == [None] * 13 and out["app"]["be"][1:] == [None, None]   # no band yet: no range (never the line)
 
 
@@ -348,7 +348,8 @@ def test_the_shapes_the_page_reads(built):
         assert all(v is None or isinstance(v, int) for v in a["be"])
         assert a["roas"] == sorted(a["roas"])                    # the app curve never goes down with age
         ccs = [x[0] for x in d["cty"]]
-        assert sorted(ccs) == ["AA", "BB", "CC"] and all(len(x) == 12 and isinstance(x[10], int) and x[11] in range(7) for x in d["cty"])
+        assert sorted(ccs) == ["AA", "BB", "CC"] and all(len(x) == 13 and isinstance(x[10], int) and x[11] in range(7) for x in d["cty"])
+        assert all(isinstance(x[12], list) and len(x[12]) == 4 for x in d["cty"])      # bm: the country's benchmark
         assert [x[1] for x in d["cty"]] == sorted((x[1] for x in d["cty"]), reverse=True)
         named = [x for x in d["unc"] if x[0] != "…"]
         rest = [x for x in d["unc"] if x[0] == "…"]
@@ -357,16 +358,18 @@ def test_the_shapes_the_page_reads(built):
         assert sum(x[1] for x in d["cty"]) + sum(x[1] for x in d["unc"]) == pytest.approx(1.0, abs=0.002)
         assert d["cov"] == pytest.approx(sum(x[1] for x in d["cty"]), abs=0.002)
         c = d["card"]
-        assert set(c) == {"roas", "bench", "fin"} and all(len(v) == 6 for v in c.values())   # (no revenue index: owner)
+        assert set(c) == {"roas", "bench", "fin", "cv", "chk"} and all(len(v) == 6 for v in c.values())
+        assert not any(c["chk"]) and all(v is None or 0 < v <= d["cov"] + 0.001 for v in c["cv"])   # (no pack gap here)
         assert all(f in (0, 1) and (f == 0 or v is not None) for f, v in zip(c["fin"], c["roas"]))   # final ⇒ a value
         seen = [i for i, j in enumerate(be.CARD_J) if be.GRID[j] <= d["age"]]
         assert [i for i, v in enumerate(c["roas"]) if v is not None] == seen   # (null where not observed yet)
-        assert all(v is not None for v in c["bench"])
+        assert [i for i, v in enumerate(c["bench"]) if v is not None] == seen
+        assert [i for i, v in enumerate(c["cv"]) if v is not None] == seen
     assert shifted == sum(1 for d in days if d["age"] >= be.CLAG)   # (no data hole: every day with a read old enough)
     new = days[-1]
     prov = [d for d in days if d["age"] < be.PROV]                 # provisional: answered and shown, not final
     assert [d["age"] for d in prov] == [3, 2, 1, 0] and all("app" in d for d in prov)
-    assert new["now"] == ["no", 0, new["card"]["roas"][0], 0] and new["card"]["roas"][1:] == [None] * 5   # (not final)
+    assert new["now"][:2] == ["no", 0] and new["now"][3] == 0 and new["card"]["roas"][1:] == [None] * 5   # (not final)
     b2 = body_of(built["site"], "b")
     assert all("app" not in d and d["cov"] == 0.0 and d["cty"] == [] and d["unc"] == [["EE", 1.0]] for d in b2["days"])
     assert b2["skill"] == {"auc": [None, None, None], "c": [None, None, None], "n": 0}
@@ -375,13 +378,17 @@ def test_the_shapes_the_page_reads(built):
 def test_the_fits_recover_the_synthetic_benchmark(built):
     with gzip.open(os.path.join(built["data"], "be_tab", "fits_%s.json.gz" % KEYS["a"]), "rt") as f:
         fc = json.load(f)
-    assert fc["v"] == 1 and fc["origin"] == TODAY.isoformat() and sorted(fc["fits"]) == ["AA", "BB", "CC"]
+    assert fc["v"] == 1 and fc["fv"] == be.FV == 2 and fc["origin"] == TODAY.isoformat() and sorted(fc["fits"]) == ["AA", "BB", "CC"]
     for cc, (sp, cpi, ecpm, kap) in CTY.items():
         a, b, c, s, tmax, kept, dropped, cens = fc["fits"][cc]["k3"]
         assert b == pytest.approx(1 / G, abs=0.15) and c == pytest.approx(-1 / G, abs=0.15)   # log(BE + 1) slopes
         assert a == pytest.approx(-math.log(kap) / G, abs=0.4) and kept >= be.MIN_KEPT and cens > 0
         assert [be.GRID[j] for j, *_ in fc["fits"][cc]["cv"]] == list(be.GRID)
-    assert [j for j, *_ in fc["app_med"]] == list(range(13)) and "app_idx" not in fc
+    assert "app_med" not in fc and "app_idx" not in fc
+    for cc in CTY:                                           # the benchmark triple from K3's own training set
+        bcpi, becpm, bbe, blim = fc["fits"][cc]["bm"]
+        assert bcpi == pytest.approx(CTY[cc][1], rel=0.3) and becpm == pytest.approx(CTY[cc][2], rel=0.3)
+        assert blim == round(fc["fits"][cc]["k3"][4]) and (bbe is None or bbe > 0)
 
 
 def test_headers_one_splat_rule_covers_the_files(built):
@@ -635,7 +642,7 @@ def test_a_day_outside_the_learned_range_is_not_answered():
     never an extrapolated one: the app's curve is the country inside alone."""
     flat = [[j, [math.log(1.5), -1.0, 0.0], -0.2, 0.2, 40, math.log(1.5)] for j in range(13)]   # cheaper CPI → more ROAS
     rng = [math.log(1.0), math.log(4.0), math.log(1.0), math.log(6.0)]
-    fc = {"origin": "2031-01-01", "app_med": [], "fits": {
+    fc = {"origin": "2031-01-01", "fits": {
         cc: {"k3": [math.log(31.0), 0.0, 0.0, 0.5, 400, 30, 0, 10], "cv": flat, "rng": rng} for cc in ("AA", "BB", "CC")}}
     cal = {"built": "2031-01-01", "cty": {str(H): [[0.0, 0.0], [1.0, 1.0]] for H in be.HS},
            "pit": {"0.1": 0.1, "0.5": 0.5, "0.9": 0.9}, "band": {}}
@@ -661,7 +668,7 @@ def test_a_day_outside_the_learned_range_is_not_answered():
 
 
 def _one(fc_fits, cal, app_row, cs, day="2030-12-30"):
-    fc = {"origin": "2031-01-01", "app_med": [], "fits": fc_fits}
+    fc = {"origin": "2031-01-01", "fits": fc_fits}
     return be.predict("k", fc, cal, ("2030-12-31", [app_row], {day: cs}))["days"][0]
 
 
@@ -696,7 +703,7 @@ def test_a_calibration_without_a_level_answers_no_day_never_past_its_limit():
     cs = {"AA": R(day=day, sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0))}
     app_row = R(day=day, sp=100.0, na=50.0, obs=0, oc=1.0)
     full = _one(fits, CAL0, app_row, cs)["cty"][0]
-    assert full[7:] == [0, 0, 0, 360, 0]                      # (a flat 150 % curve: its spend back on day 0)
+    assert full[7:12] == [0, 0, 0, 360, 0]                      # (a flat 150 % curve: its spend back on day 0)
     for q in ("0.5", "0.1", "0.9"):                         # (Kaplan–Meier never reaching 0.9 under heavy censoring …)
         cal = dict(CAL0, pit=dict(CAL0["pit"], **{q: None}))
         row = _one(fits, cal, app_row, cs)["cty"][0]
@@ -762,7 +769,7 @@ def test_a_level_of_0_or_1_is_no_level_and_never_crashes():
     row = R(day=day, sp=100.0, na=50.0, obs=0, oc=1.0)
     for bad in (1.0, 0.0):
         cal = dict(CAL0, pit={"0.1": 0.1, "0.5": bad, "0.9": 0.9})
-        assert _one(fits, cal, row, cs)["cty"][0][7:] == [0, 0, 0, 360, 0]       # (never a crash; the curve's day)
+        assert _one(fits, cal, row, cs)["cty"][0][7:12] == [0, 0, 0, 360, 0]       # (never a crash; the curve's day)
     # calibrate() never stores such a level: 40 events early, 100 days censored late, 3 extreme events
     C = [(math.log(31.0), 0.3, 20, 20.0, 400, 400)] * 40 + [(math.log(31.0), 0.3, None, None, 40, 400)] * 100 + \
         [(math.log(31.0), 0.3, 900, 900.0, 950, 1000)] * 3
@@ -856,8 +863,8 @@ def test_every_day_carries_its_real_roas_even_with_nothing_covered_and_a_country
     broke = R(day=day, sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0), rbe=(12, "x"))
     later = R(day=day, sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0), sfa=200, sfv=80.0)
     got = _one(fits, CAL0, old, {"AA": later})["cty"][0][7:]
-    assert 201 <= got[1] < got[0] < got[2] and got[3:] == [360, 0]   # its curve given 80 % by day 200: a real band past it
-    assert _one(fits, CAL0, old, {"AA": broke})["cty"][0][7:] == [12, None, None, 360, 1]   # its real day, no range
+    assert 201 <= got[1] < got[0] < got[2] and got[3:5] == [360, 0]   # its curve given 80 % by day 200: a real band past it
+    assert _one(fits, CAL0, old, {"AA": broke})["cty"][0][7:12] == [12, None, None, 360, 1]   # its real day, no range
 
 
 def test_a_model_age_never_falls_below_the_real_one_before_it():
@@ -954,7 +961,7 @@ def _days(n, r0, last=None, age0=40):
 
 
 def _many(rows, cs, cal=None):
-    fc = {"origin": "2031-01-01", "app_med": [], "fits": _up_fits()}
+    fc = {"origin": "2031-01-01", "fits": _up_fits()}
     return be.predict("k", fc, cal or CAL0, ("2030-12-31", rows, cs))["days"]
 
 
@@ -972,7 +979,7 @@ def test_a_country_is_shifted_on_its_own_read_with_the_range_for_its_size():
               cum=[150.0 * v for v in UP[:6]] + [None] * 7, obs=13, oc=81.0)
         out[n] = _one(_up_fits(), cal, row, {"AA": x}, day=day)["cty"][0][7:]
     small, big = out[40], out[500]
-    assert small[0] == big[0] == 30 and small[3:] == big[3:] == [360, 0]          # the same shifted median
+    assert small[0] == big[0] == 30 and small[3:5] == big[3:5] == [360, 0]          # the same shifted median
     assert small[1] < big[1] <= 30 <= big[2] < small[2]                          # the small row's range is wider
     x0 = R(day=day, sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0), n=40,
            cum=[150.0 * v for v in UP[:6]] + [None] * 7, obs=13, oc=81.0, fin=[None] * 13)
@@ -1059,7 +1066,7 @@ def test_a_calibration_without_the_shifts_ranges_is_made_again_the_same_day(tmp_
 def test_a_skill_kept_from_before_the_shift_passes_through_as_it_was():
     """A calibration kept from before the shift (its new one failed) carries one install-time C (a number): the file keeps
     it as it was — the page reads that shape with its own old words — never the old AUC under the new day labels."""
-    fc = {"origin": "2031-01-01", "app_med": [], "fits": {}}
+    fc = {"origin": "2031-01-01", "fits": {}}
     row = R(day="2030-12-30", sp=100.0, na=50.0, obs=0, oc=10.0)
     old = {"auc": [80.0, 60.0, 45.0], "c": 55.0, "n": 600}
     got = be.predict("k", fc, CAL0, ("2030-12-31", [row], {}), old)["skill"]
@@ -1175,7 +1182,7 @@ def test_a_day_with_a_hole_in_its_first_week_says_data_check_and_stays_shifted()
         x.oc = x.dd[x.obs]
         x.sfa, x.sfv = x.obs, x.oc
     cs = {x.day: {"AA": R(day=x.day, sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0))} for x in rows}
-    fc = {"origin": "2031-01-01", "app_med": [], "fits": _up_fits()}
+    fc = {"origin": "2031-01-01", "fits": _up_fits()}
     out = {d["d"]: d for d in be.predict("k", fc, CAL0, ("2030-12-31", rows, cs, _adm()))["days"]}
     assert not any(d.get("chk") for d in _many(rows, cs))                       # (no AdMob read: no mark)
     marked = sorted(d for d, x in out.items() if x.get("chk"))
@@ -1264,3 +1271,309 @@ def test_the_ranking_and_the_country_ranges_also_leave_out_rows_broken_even_by_t
     rb, cb, sk, au, n, ga, gc = be.asof(KEYS["a"], newest, app, cty, {})
     assert len(old) >= 10 and len(sk[6]) < nsk                                    # those days: no ranking row on day 7
     assert len(oc) >= 10 and sum(len(v) for (a, t, z), v in cb.items() if a == 6) < ncb   # … and no range error
+
+
+# ── the country benchmark (owner, 15 Nov 2026: "haan dono karo") ────────────────────────────────────────────────────
+
+def test_the_kaplan_meier_median():
+    """No censoring: the plain median event time; a censored day moves it later (it stays at risk until its time);
+    S never reaching 0.5: null; a day censored AT an event time is still at risk then."""
+    assert be.km_median([(t, True) for t in (1.0, 2.0, 3.0, 4.0, 5.0)]) == 3.0
+    assert be.km_median([(t, True) for t in (1.0, 2.0, 3.0)]) == 2.0
+    cens = [(1.0, True), (2.0, True), (3.0, True), (1.5, False), (10.0, False), (10.0, False)]
+    assert be.km_median(cens) == 3.0 > be.km_median(cens[:3])        # S: 5/6, then ×3/4 = 0.625, then ×2/3 = 0.417
+    assert be.km_median([(1.0, True), (5.0, False), (5.0, False), (5.0, False), (5.0, False)]) is None   # S = 0.8
+    assert be.km_median([(2.0, True), (2.0, False)]) == 2.0          # (the censored day at 2 is at risk: S = 0.5)
+    assert be.km_median([(2.0, False), (3.0, False)]) is None and be.km_median([]) is None
+    assert be.km_median([(1, True), (1, True), (2, True), (3, False)]) == 1      # tied events: S(1) = 1 − 2/4 = 0.5
+    assert be.km_median([(1, True), (1, False), (2, True), (3, True)]) == 2      # a tie of an event and a censored day
+
+
+def _train(rows, O):
+    """K3's own training set at O, rebuilt from the public pieces (bot-kept events + the not-yet days)."""
+    obs = [(r,) + be.at_origin(r, O) for r in rows if r.X < O and be._usable(r) and be.at_origin(r, O) is not None]
+    kept, _ = be.bot([r for r, k, _ in obs if k == "e"])
+    return [(r, True, r.be) for r in kept] + [(r, False, t) for r, k, t in obs if k == "c"]
+
+
+def test_the_benchmark_triple_is_k3s_own_training_set_in_the_fits_and_at_index_12_of_the_cty_rows(built):
+    site, data = built["site"], built["data"]
+    newest, app, cty = be.load(site, data, KEYS["a"], "roi_%s.json.gz" % KEYS["a"])
+    O = TODAY.toordinal()
+    with gzip.open(be._fits_path(data, KEYS["a"]), "rt") as f:
+        fc = json.load(f)
+    for cc in CTY:
+        tr = _train(cty[cc], O)
+        k3 = be.k3_fit(cty[cc], O)
+        want = [round(math.exp(be._median([r.c for r, _, _ in tr])), 4),
+                round(math.exp(be._median([r.e for r, _, _ in tr])), 3),
+                be._r(be.km_median([(t, e) for _, e, t in tr]), 1), round(k3["tmax"])]
+        assert fc["fits"][cc]["bm"] == want and k3["bm"][3] == want[3]
+        assert any(not e for _, e, _ in tr)                           # (the not-yet days are in it, censored)
+    for d in body_of(site, "a")["days"]:
+        for x in d["cty"]:
+            assert x[12] == fc["fits"][x[0]]["bm"]
+    old = {"origin": "2031-01-01", "fits": {"AA": dict(_up_fits()["AA"])}}      # a cache from before: no triple
+    rows = R(day="2030-12-30", sp=100.0, na=50.0, obs=0, oc=1.0)
+    cs = {"AA": R(day="2030-12-30", sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0))}
+    assert be.predict("k", old, CAL0, ("2030-12-31", [rows], {"2030-12-30": cs}))["days"][0]["cty"][0][12] is None
+    for bad in ([1.0, 2.0, None], "x", [1.0, 2.0, "n", 3], [None, 2.0, 3.0, 4]):
+        old["fits"]["AA"]["bm"] = bad
+        assert be.predict("k", old, CAL0, ("2030-12-31", [rows], {"2030-12-30": cs}))["days"][0]["cty"][0][12] is None
+
+
+def test_the_benchmark_triple_leaves_out_the_days_the_bot_drops():
+    """A hand-made country: 40 ordinary real-BE days plus 4 planted outliers (far larger CPI / eCPM_fs and a BE the
+    regression cannot explain) and 5 not-yet days. k3_fit drops the outliers, and bm is the medians and the Kaplan–Meier
+    median of the KEPT events + the censored days — different from those of all the events."""
+    O = date(2031, 1, 1).toordinal()
+    rows = []
+
+    def add(i, c, e, be):
+        X = date.fromordinal(O - 400 + i)
+        hi = be if be is not None else None
+        rows.append(R(day=X.isoformat(), X=X.toordinal(), sp=50.0, na=25.0, c=c, e=e, lo=None if hi is None else hi - 1,
+                      hi=hi, be=None if be is None else float(be), obs=None if be is not None else 40, jd=True))
+    for i in range(40):
+        c, e = 0.5 + 0.02 * (i % 9), -1.0 + 0.03 * (i % 7)
+        add(i, c, e, int(round(math.exp(1.8 + 0.4 * c - 0.3 * e + 0.05 * math.sin(i * 7.0)))))
+    for i in range(4):
+        add(40 + i, 3.0 + 0.1 * i, 1.0 + 0.1 * i, 330 + i)                     # the planted outliers
+    for i in range(5):
+        X = date.fromordinal(O - 80 + i)                                         # not-yet days: no BE, 80 days lived
+        rows.append(R(day=X.isoformat(), X=X.toordinal(), sp=50.0, na=25.0, c=0.6, e=-0.9, lo=None, hi=None, be=None,
+                      obs=76, jd=True))
+    rows.sort(key=lambda r: r.X)
+    k3 = be.k3_fit(rows, O)
+    assert k3 is not None and k3["dropped"] >= 1
+    tr = _train(rows, O)
+    ev = [r for r in rows if r.X < O and be.at_origin(r, O) and be.at_origin(r, O)[0] == "e"]
+    allr = [(r, True, r.be) for r in ev] + [(r, False, t) for r, k, t in
+                                            [(r,) + be.at_origin(r, O) for r in rows if be.at_origin(r, O)] if k == "c"]
+    assert len(tr) < len(allr)
+
+    def triple(t):
+        return [math.exp(be._median([r.c for r, _, _ in t])), math.exp(be._median([r.e for r, _, _ in t])),
+                be.km_median([(x, e) for _, e, x in t])]
+    got, want, wrong = k3["bm"], triple(tr), triple(allr)
+    assert got[0] == pytest.approx(want[0]) and got[1] == pytest.approx(want[1]) and got[2] == want[2]
+    assert got[0] != pytest.approx(wrong[0]) or got[1] != pytest.approx(wrong[1]) or got[2] != wrong[2]
+
+
+def test_a_fits_cache_without_fv_or_an_older_one_is_refitted_the_same_day(tmp_path):
+    site, data, dash = make(tmp_path)
+    assert be.run(dash, data, site, {}, NOW) == ["/be_*"]
+    be.pop_line()
+    path = be._fits_path(data, KEYS["a"])
+    for fv in (None, 1):
+        with gzip.open(path, "rt") as f:
+            fc = json.load(f)
+        assert fc["fv"] == 2
+        fc.pop("fv")
+        for v in fc["fits"].values():
+            v.pop("bm")
+        if fv:
+            fc["fv"] = fv
+        be.save_fits(data, KEYS["a"], fc)
+        assert be.load_fits(data, KEYS["a"]) is not None                  # (older caches stay readable …)
+        d2 = copy.deepcopy(dash)
+        assert be.run(d2, data, site, {}, NOW) == ["/be_*"]
+        assert be.pop_line().endswith("refit yes, calib no")               # … they just refit, with the triple
+        with gzip.open(path, "rt") as f:
+            fc = json.load(f)
+        assert fc["fv"] == 2 and all(len(v["bm"]) == 4 for v in fc["fits"].values())
+    d3 = copy.deepcopy(dash)
+    be.run(d3, data, site, {}, NOW)
+    assert be.pop_line().endswith("refit no, calib no")
+
+
+def _card_world(specs, day="2030-12-14", gaps=(), whole=False, jd=True):
+    """specs {cc: (spend, cum at j 0..5, fin at j 0..5, curve medians log at j 0..5 or None for no entry, in-range?[,
+    small?])} → the card of one install day through predict() (whole: the day's body; small: a row under $5 / 30 new
+    users — it carries only its card cells kc / kf, like load() builds it)."""
+    fits, cs = {}, {}
+    for cc, (sp, cum, fin, med, ok, *sm) in specs.items():
+        cv = [[j, [m, 0.0, 0.0], -0.2, 0.2, 40, m] for j, m in enumerate(med) if m is not None]
+        fits[cc] = {"k3": [math.log(31.0), 0.0, 0.0, 0.5, 400, 30, 0, 10], "cv": cv, "rng": WIDE if ok else [9, 9, 9, 9]}
+        if sm and sm[0]:
+            cs[cc] = R(day=day, sp=sp, na=sp / 2, cpi=2.0, c=math.log(2.0), e=math.log(3.0), kc=list(cum), kf=list(fin), jd=False)
+        else:
+            cs[cc] = R(day=day, sp=sp, na=sp / 2, cpi=2.0, c=math.log(2.0), e=math.log(3.0),
+                       cum=list(cum) + [None] * 7, fin=list(fin) + [None] * 7, obs=5)
+    tot = sum(v[0] for v in specs.values())
+    tot = tot or 10.0
+    row = R(day=day, sp=tot, na=tot / 2, cum=[None] * 13, obs=0, oc=0.0, jd=jd)
+    fc = {"origin": "2031-01-01", "fits": fits}
+    d = be.predict("k", fc, CAL0, ("2030-12-31", [row], {day: cs}, None, frozenset(gaps)))["days"][0]
+    return d if whole else d["card"]
+
+
+def test_the_card_joins_each_countries_own_median_by_the_days_spend_share():
+    """One set S per card = the covered countries with a curve entry at every card day (small rows too): roas = Σ
+    cumulative ÷ Σ spend, bench = spend-weighted exp(its curve median), cv = S's spend ÷ the day's whole country spend;
+    a day where a country of S has no cell is null for BOTH lines (the set never changes along the line); fin needs every
+    country's final cell AND a date at least CLAG days old; an out-of-range country is no covered country."""
+    L = math.log
+    specs = {"AA": (300.0, [30, 60, 90, 120, 150, 180], [30, 60, 90, 120, 150, None], [L(0.2), L(0.4), L(0.6), L(0.8), L(1.0), L(1.2)], True),
+             "BB": (100.0, [40, 50, None, None, 100, 110], [40, 50, None, None, 100, 110], [L(0.5), L(0.7), L(0.9), L(1.1), L(1.4), L(1.6)], True),
+             "CC": (100.0, [10, 20, 30, 40, 50, 60], [10, 20, 30, 40, 50, 60], [L(0.1)] * 6, False),    # (out of range)
+             "DD": (50.0, [5] * 6, [5] * 6, [L(0.1), L(0.1), L(0.1), None, L(0.1), L(0.1)], True)}      # (no curve entry at 3)
+    c = _card_world(specs)
+    assert c["roas"][0] == pytest.approx((30 + 40) / 400, abs=1e-4)             # (CC, DD not in S: 400 of 550)
+    assert c["bench"][0] == pytest.approx((300 * 0.2 + 100 * 0.5) / 400, abs=1e-4)
+    assert c["cv"] == [pytest.approx(400 / 550, abs=1e-4), pytest.approx(400 / 550, abs=1e-4), None, None,
+                       pytest.approx(400 / 550, abs=1e-4), pytest.approx(400 / 550, abs=1e-4)]
+    assert c["roas"][2] is None and c["roas"][3] is None and c["bench"][2] is None and c["bench"][3] is None   # BB: no cell
+    assert c["roas"][4] == pytest.approx(250 / 400, abs=1e-4)
+    assert c["fin"] == [1, 1, 0, 0, 1, 0]                                           # j = 5: AA's cell is not final
+    assert c["roas"][5] == pytest.approx(290 / 400, abs=1e-4) and c["bench"][5] == pytest.approx((300 * 1.2 + 100 * 1.6) / 400, abs=1e-4)
+    d = _card_world({"AA": (100.0, [None] * 6, [None] * 6, [L(0.2)] * 6, True)}, whole=True)    # nothing known at any j
+    assert d["card"] is None and d["cw"] == "r"
+    assert _card_world({"AA": (50.0, [5] * 6, [5, 5, None, 5, 5, 5], [L(0.2)] * 6, True)})["fin"] == [1, 1, 0, 1, 1, 1]
+
+
+def test_the_card_reads_a_covered_small_row_and_says_why_there_is_none():
+    """A covered country whose row is under $5 / 30 new users stays in S (cv = 1 when it is the whole spend); a day with
+    no card says why: j (a small day), k (no country spend split), c (no covered country), r (no ROAS cell yet)."""
+    L = math.log
+    full = (300.0, [30, 60, 90, 120, 150, 180], [30, 60, 90, 120, 150, 180], [L(0.2)] * 6, True)
+    small = (100.0, [40, 50, 60, 70, 80, 90], [40, 50, 60, 70, 80, 90], [L(0.5)] * 6, True, True)
+    c = _card_world({"AA": full, "BB": small})
+    assert c["cv"] == [1.0] * 6 and c["roas"][0] == pytest.approx(70 / 400, abs=1e-4)
+    assert c["bench"][0] == pytest.approx((300 * 0.2 + 100 * 0.5) / 400, abs=1e-4) and c["fin"] == [1] * 6
+    out = {"AA": (100.0, [1] * 6, [1] * 6, [L(0.2)] * 6, False)}                        # nobody covered
+    d = _card_world(out, whole=True)
+    assert d["card"] is None and d["cw"] == "c"
+    assert _card_world({"AA": full}, whole=True, jd=False)["cw"] == "j"
+    assert _card_world({}, whole=True)["cw"] == "k"
+
+
+def test_a_country_cell_three_days_old_is_not_final_for_the_card():
+    """A card day whose date is newer than newest − CLAG is not final even when its cells are marked final (they are
+    often still empty): install day = newest − 4, days 1 and 2 are at newest − 4 and − 3."""
+    L = math.log
+    sp = {"AA": (100.0, [10, 20, 30, 40, 50, 60], [10, 20, 30, 40, 50, 60], [L(0.2)] * 6, True)}
+    assert _card_world(sp, day="2030-12-27")["fin"] == [1, 0, 0, 0, 0, 0]
+    assert _card_world(sp, day="2030-12-28")["fin"] == [0] * 6                       # age 3: nothing final yet
+    assert _card_world(sp, day="2030-12-14")["fin"] == [1] * 6
+
+
+def test_the_cards_data_check_window_is_install_day_to_install_day_plus_the_card_age():
+    """chk[j] = 1 when a pack-gap date lies in [X, X + GRID[j]] (days 1, 2, 3, 4, 7, 14 = ages 0, 1, 2, 3, 6, 13)."""
+    X = date(2030, 12, 14)
+    spec = {"AA": (100.0, [10] * 6, [10] * 6, [0.0] * 6, True)}
+    for k, want in ((0, [1, 1, 1, 1, 1, 1]), (1, [0, 1, 1, 1, 1, 1]), (3, [0, 0, 0, 1, 1, 1]), (6, [0, 0, 0, 0, 1, 1]),
+                    (13, [0, 0, 0, 0, 0, 1]), (14, [0] * 6), (-1, [0] * 6)):
+        assert _card_world(spec, gaps={(X + timedelta(days=k)).toordinal()})["chk"] == want
+    assert _card_world(spec)["chk"] == [0] * 6
+
+
+def _gap_site(tmp, pack_upto, extra=None, newest_off=40, tiny=False):
+    """An app whose All rows cover 20 install days (each paying 10 USD a day on its first 3 days, final); the country
+    pack carries only the install days up to pack_upto (extra: {cc: …} more rows of the install days after it)."""
+    site, data = str(tmp / "site"), str(tmp / "data")
+    os.makedirs(site, exist_ok=True)
+    os.makedirs(data, exist_ok=True)
+    k = KEYS["a"]
+    d0 = date(2030, 1, 1)
+    sc = 0.01 if tiny else 1.0
+    allr, pack = [], {"AA": []}
+    for i in range(20):
+        xs = (d0 + timedelta(days=i)).isoformat()
+        row = roi_row(xs, 50, 20.0, 100.0, [10.0 * sc, 20.0 * sc, 30.0 * sc], [])
+        allr.append(row)
+        if i <= pack_upto:
+            pack["AA"].append(row)
+        elif extra:
+            for cc in extra:
+                pack.setdefault(cc, []).append(row)
+    pf = "roi_%s_c00.json.gz" % k
+    with gzip.open(os.path.join(site, pf), "wt") as f:
+        json.dump({"v": 1, "b": "x", "key": k, "c": pack}, f)
+    with gzip.open(os.path.join(site, "roi_%s.json.gz" % k), "wt") as f:
+        json.dump({"v": 1, "key": k, "newest": (d0 + timedelta(days=newest_off)).isoformat(), "rows": allr,
+                   "cd": {"packs": [[pf, "x"]]}}, f)
+    return site, data, d0.toordinal()
+
+
+def test_a_pack_gap_is_a_date_the_country_packs_lost_never_noise_a_fresh_date_or_a_tiny_total(tmp_path):
+    """load(): the All rows' final daily revenue vs every country row (the "--" / "XX" / "ZZ" ones too). Install days
+    0 … 9 are in the pack, 10 … 19 are not: the dates they alone pay are gaps; a date with ≥ 35 % in the pack is not;
+    the rows of no-country codes make the packs whole again."""
+    site, data, o = _gap_site(tmp_path, 9)
+    fn = "roi_%s.json.gz" % KEYS["a"]
+    newest, app, cty, adm, gaps = be.load(site, data, KEYS["a"], fn, True)
+    assert gaps == {o + D for D in range(11, 22)}              # D = 10: 2 of 3 rows in the pack (0.67); D = 11: 1 of 3 (0.33)
+    assert not gaps & {o + D for D in range(0, 11)}
+    site2, data2, o2 = _gap_site(tmp_path / "w", 9, extra=["--", "XX", "ZZ"])
+    assert be.load(site2, data2, KEYS["a"], fn, True)[4] == set()      # the no-country rows count: the All row has them
+    assert be.load(site, data, KEYS["a"], fn)[0] == newest                # (the plain read keeps its 3 values)
+    s3, d3, _ = _gap_site(tmp_path / "t", 9, tiny=True)
+    assert be.load(s3, d3, KEYS["a"], fn, True)[4] == set()            # a tiny total (< PACK_MIN): no claim
+    s4, d4, o4 = _gap_site(tmp_path / "n", 9, newest_off=15)           # newest = day 15: only D ≤ 15 − CLAG = 11 counts
+    assert be.load(s4, d4, KEYS["a"], fn, True)[4] == {o4 + 11}
+
+
+def test_pack_gaps_stop_at_the_packs_own_final_edge_and_no_packs_no_gap(tmp_path):
+    """Dates the cube has not folded yet (after cd["fthru"]) are not gaps; a file without packs has none."""
+    site, data, o = _gap_site(tmp_path, 9)
+    fn = "roi_%s.json.gz" % KEYS["a"]
+    full = be.load(site, data, KEYS["a"], fn, True)[4]
+    assert full and max(full) > o + 14
+    path = os.path.join(site, fn)
+    with gzip.open(path, "rt") as f:
+        body = json.load(f)
+    body["cd"]["fthru"] = (date.fromordinal(o) + timedelta(days=14)).isoformat()
+    with gzip.open(path, "wt") as f:
+        json.dump(body, f)
+    cut = be.load(site, data, KEYS["a"], fn, True)[4]
+    assert cut == {D for D in full if D <= o + 14} and cut != full
+    body["cd"] = {}
+    with gzip.open(path, "wt") as f:
+        json.dump(body, f)
+    assert be.load(site, data, KEYS["a"], fn, True)[4] == set()
+    assert be.pack_gaps({990: 100.0, 995: 100.0}, {}, 1000, 992) == {990}
+
+
+def test_pack_gaps_ordinary_noise_is_not_a_gap_and_the_limits_are_exact():
+    nw = 1000
+    assert be.pack_gaps({990: 100.0}, {990: 90.0}, nw) == set()         # ±10 % noise
+    assert be.pack_gaps({990: 100.0}, {990: 110.0}, nw) == set()
+    assert be.pack_gaps({990: 100.0}, {990: 34.0}, nw) == {990}         # under 0.35 ×
+    assert be.pack_gaps({990: 100.0}, {990: 35.0}, nw) == set()
+    assert be.pack_gaps({990: 100.0}, {}, nw) == {990}                  # an empty-country date
+    assert be.pack_gaps({nw - be.CLAG: 100.0, nw - be.CLAG + 1: 100.0}, {}, nw) == {nw - be.CLAG}   # newer: not final
+    assert be.pack_gaps({990: be.PACK_MIN - 0.01}, {}, nw) == set() and be.pack_gaps({990: be.PACK_MIN}, {}, nw) == {990}
+
+
+def test_run_carries_the_pack_gaps_to_the_card(tmp_path):
+    """End to end: the gap dates reach predict through the pin, so a card point whose window holds one says chk."""
+    site, data, dash = make(tmp_path)
+    fn = "roi_%s.json.gz" % KEYS["a"]
+    pk = os.path.join(site, "roi_%s_c00.json.gz" % KEYS["a"])
+    with gzip.open(pk, "rt") as f:
+        body = json.load(f)
+    gap = TODAY - timedelta(days=60)
+    for cc, rows in body["c"].items():                       # the packs lose every cell of one activity date
+        for r in rows:
+            X = date.fromisoformat(r[0])
+            a = (gap - X).days
+            if 0 <= a < len(r[4]) and a < r[5]:
+                step = r[4][a] - (r[4][a - 1] if a else 0.0)
+                r[4][a:] = [v - step for v in r[4][a:]]
+    with gzip.open(pk, "wt") as f:
+        json.dump(body, f)
+    assert be.load(site, data, KEYS["a"], fn, True)[4] == {gap.toordinal()}
+    assert be.run(dash, data, site, {}, NOW) == ["/be_*"]
+    days = {d["d"]: d for d in body_of(site, "a")["days"]}
+    for k in (0, 1, 5, 13, 14, -1):
+        x = (gap - timedelta(days=k)).isoformat()
+        if x in days:
+            ch = days[x]["card"]["chk"]
+            assert ch == [1 if 0 <= k <= be.GRID[j] else 0 for j in be.CARD_J], (k, ch)
+
+
+def test_the_apps_median_benchmark_is_gone():
+    import inspect
+    assert "app_med" not in inspect.getsource(be).replace("app_med is gone", "") .replace('"app_med" not in', "")
+    assert "app_med" not in be.fit([], {}, TODAY.toordinal())

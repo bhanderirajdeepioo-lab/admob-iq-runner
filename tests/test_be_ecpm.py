@@ -115,15 +115,16 @@ def rows_of(site, data):
 
 
 # ── the benchmark ───────────────────────────────────────────────────────────────────────────────────────────────────
-def test_the_planted_per_country_index_curve_is_the_benchmark(tmp_path):
-    site, data, body, line, _ = run(tmp_path)
+def test_the_planted_per_country_index_curve_is_the_benchmark(tmp_path, monkeypatch):
+    monkeypatch.setattr(bec, "MIN_IMP", 1000)             # a floor between CC's planted impressions and AA's (whatever the
+    site, data, body, line, _ = run(tmp_path)             # shipped value): CC's thin days stay out of its benchmark
     B = bench_of(data)
     for cc in ("AA", "BB"):
         assert B[cc][0][0] == 100.0 and B[cc][0][2] >= be.MIN_KEPT
         for j, a in enumerate(bec.CARD[1:], 1):
             assert abs(B[cc][j][0] - 100 * ratio(cc, a)) <= 0.1, (cc, j)
             assert B[cc][j][2] >= be.MIN_KEPT
-    fs = _fs(data, KEYS["a"])                             # CC: only its PAST days with ≥ 1,000 first-session impressions
+    fs = _fs(data, KEYS["a"])                             # CC: only its PAST days with ≥ MIN_IMP first-session impressions
     O = TODAY.toordinal()
     ok = [X for (cc, X), (rev, im) in fs.items() if cc == "CC" and im >= bec.MIN_IMP and rev > 0
           and date.fromisoformat(X).toordinal() + max(be.LAG, be.SETTLE) <= O]

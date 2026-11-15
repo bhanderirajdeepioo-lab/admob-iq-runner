@@ -61,7 +61,10 @@ V = 1
 BV = 1                               # the benchmark's rule: bump with any change to bench() or _cell()'s training path
 CARD = (0, 1, 2, 3, 6, 13)           # card days 1, 2, 3, 4, 7, 14 = these ages (day 1: the first session)
 KS = tuple(gce.AGES.index(a) for a in CARD[1:])     # the store's age slots of days 2 … 14
-MIN_IMP = 1000                       # impressions a cell needs (on day k and on day 1)
+MIN_IMP = 100                        # impressions a cell needs (on day k and on day 1): measured on the stores (16 Nov
+#                                      2026) — below it one country's index strays from its own benchmark far more than
+#                                      the real day-to-day spread; at it, about as much (the owner: "ye kami galat he" — a
+#                                      floor of 1,000 left most countries out though their data was whole)
 FLOOR = 0.01                         # an index never below 1 % of day 1 (a log of 0)
 STALE_DAYS = 3                       # days past the fetch's own slack (its edge + a held day's wait): stale
 OK_ST = ("ok", "oth", "thr")

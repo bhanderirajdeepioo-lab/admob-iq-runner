@@ -88,3 +88,60 @@ def test_history_resumes_after_a_stop_and_marks_sampled_days():
 def test_log_line_is_counts_only():
     line = gv.log_line({"counts": {"selected": 3, "with_ga4": 2, "fetched": 1, "fresh": 1, "calls": 4, "tokens": 9}})
     assert line == "ga4 nvr: apps 3, with GA4 2, fetched 1, fresh 1, failed 0, deferred 0, waiting 0, calls 4, tokens 9"
+
+
+class RawGA(FakeGA):
+    """GA4 samples a range that is still changing (it reaches the newest RECENT_DAYS days of `today`), never a final one
+    (a busy app's raw events vs its daily tables)."""
+    def __init__(self, today, **kw):
+        super().__init__(**kw)
+        self.today = today
+
+    def report_all(self, body, **kw):
+        rows = super().report_all(body, **kw)
+        b = date.fromisoformat(body["dateRanges"][0]["endDate"])
+        self.last_metas = ([{"samplingMetadatas": [{"samplesReadCount": "1"}]}]
+                           if b > self.today - timedelta(days=gv.RECENT_DAYS) else [{}])
+        return rows
+
+
+def _ranges(ga):
+    return [(x["dateRanges"][0]["startDate"], x["dateRanges"][0]["endDate"]) for x in ga.asked[::3]]
+
+
+def test_a_final_day_still_marked_sampled_is_read_once_more_alone_newest_first():
+    """16 Nov 2026 (the Breakeven card's day 1 on the busiest app): its newest days kept the sampled mark of the read made
+    while GA4 was filling them — once final, each is read again alone and whole; never twice."""
+    hs, store = TODAY - timedelta(days=20), {"v": gv.STORE_V}
+    gv.step_app(RawGA(TODAY), store, TODAY, hs, NOW)
+    recent = [(TODAY - timedelta(days=i)).isoformat() for i in range(gv.RECENT_DAYS)]
+    assert sorted(store["mark"]) == sorted(recent) and set(store["mark"].values()) == {"s"} and store["rr"] == {}
+    later, t2 = TODAY + timedelta(days=3), NOW + timedelta(days=3)
+    ga = RawGA(later)
+    assert gv.step_app(ga, store, later, hs, t2) == "fetched"
+    left = [(TODAY - timedelta(days=i)).isoformat() for i in (2, 3, 4)]     # left the window: final now, newest first
+    assert _ranges(ga)[1:] == [(d, d) for d in left] and ga.calls == 3 + 3 * len(left)
+    assert all(d not in store["mark"] for d in left) and sorted(store["rr"]) == sorted(left)
+    assert all(store["mark"][(later - timedelta(days=i)).isoformat()] == "s" for i in range(gv.RECENT_DAYS))
+    ga2 = RawGA(later)                                                      # the next hour: the window only, nothing again
+    gv.step_app(ga2, store, later, hs, t2 + timedelta(hours=1))
+    assert ga2.calls == 3 and _ranges(ga2) == [((later - timedelta(days=gv.RECENT_DAYS - 1)).isoformat(), later.isoformat())]
+
+
+def test_a_final_day_that_stays_sampled_keeps_its_mark_and_is_not_asked_again_and_a_stop_resumes():
+    hs, store = TODAY - timedelta(days=20), {"v": gv.STORE_V}
+    gv.step_app(RawGA(TODAY), store, TODAY, hs, NOW)                         # (the history whole, the window sampled)
+    later, t2 = TODAY + timedelta(days=3), NOW + timedelta(days=3)
+    ga = FakeGA(sampled=True, stop_after=3 + 3)                             # (from here on every read comes back sampled)                             # the window + one day alone, then a stop
+    try:
+        gv.step_app(ga, store, later, hs, t2)
+        raise AssertionError("no stop")
+    except gf.Stop:
+        pass
+    newest = (TODAY - timedelta(days=2)).isoformat()
+    assert list(store["rr"]) == [newest] and store["mark"][newest] == "s"   # read alone, still sampled: the mark stays
+    ga2 = FakeGA(sampled=True)
+    gv.step_app(ga2, store, later, hs, t2 + timedelta(minutes=10))          # (the window is fresh: only the rest)
+    assert _ranges(ga2) == [(d, d) for d in ((TODAY - timedelta(days=3)).isoformat(), (TODAY - timedelta(days=4)).isoformat())]
+    ga3 = FakeGA(sampled=True)
+    assert gv.step_app(ga3, store, later, hs, t2 + timedelta(minutes=20)) == "fresh" and ga3.calls == 0

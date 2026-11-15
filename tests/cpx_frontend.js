@@ -746,12 +746,12 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
         titles: [...t.matchAll(/title="([^"]*)"/g)].map(m => dec(m[1])) }; };
     const svgOf = h => { const m = h.match(/<svg class="cpx-svg cpx-bes"[\s\S]*?<\/svg>/); if (!m) return null; const s = m[0], at = (t, k) => +((t.match(new RegExp(' ' + k + '="([^"]*)"')) || [])[1]);
       const lab = c => [...s.matchAll(new RegExp('<text [^>]*class="' + c + '"[^>]*>([^<]*)<', 'g'))].map(z => ({ v: z[1], x: at(z[0], 'x'), y: at(z[0], 'y') }));
-      const dot = c => [...s.matchAll(new RegExp('<circle [^>]*class="' + c + '"[^>]*/>', 'g'))].map(z => ({ x: at(z[0], 'cx'), y: at(z[0], 'cy') }));
+      const dot = c => [...s.matchAll(new RegExp('<circle [^>]*class="' + c + '"[^>]*?(?:/>|>)', 'g'))].map(z => ({ x: at(z[0], 'cx'), y: at(z[0], 'cy') }));
       return { view: (s.match(/viewBox="([^"]*)"/) || [])[1], pt: lab('cpx-pt'), nt: lab('cpx-nt'), ax: lab('cpx-ax').map(z => z.v), dr: dot('cpx-dot cpx-l2'), db: dot('cpx-bep'),
         be1: (s.match(/<line [^>]*class="cpx-be1"\/>/) || [''])[0].length > 0, be1t: lab('cpx-be1t').map(z => z.v), paths: [...s.matchAll(/<path d="([^"]*)" class="([^"]*)"/g)].map(z => [z[2], z[1].split(/[ML]/).filter(Boolean).length]),
-        title: lab('cpx-tt').map(z => z.v), ch: s.includes('data-cpx-ch') }; };
+        title: lab('cpx-tt').map(z => z.v), ch: s.includes('data-cpx-ch'), filled: (s.match(/class="cpx-bep" data-f="1"/g) || []).length, anchors: [...s.matchAll(/<text x="([\d.]+)"[^>]*class="cpx-pt" text-anchor="(\w+)"/g)].map(z => [+z[1], z[2]]) }; };
     const cardOf = h => { const d = bedOf(h) || ''; return { svg: svgOf(d), idx: tblOf(d, '<table class="cpx-t cpx-bei">'), vs: txt((d.match(/<h4 class="cpx-h4">ROAS so far[^<]*<\/h4>(?:<p class="cpx-vm">([\s\S]*?)<\/p>)?/) || [])[1] || ''),
-      none: d.includes('Is din ka ROAS card nahi bana'), fn: [...d.matchAll(/<p class="cpx-fn">([\s\S]*?)<\/p>/g)].map(m => txt(m[1])) }; };
+      note: txt((d.match(/ROAS so far[^<]*<\/h4><p class="cpx-note">([\s\S]*?)<\/p>/) || [])[1] || ''), none: d.includes('ROAS so far') && !d.includes('<svg class="cpx-svg cpx-bes"') && /ROAS so far[^<]*<\/h4><p class="cpx-note">/.test(d), fn: [...d.matchAll(/<p class="cpx-fn">([\s\S]*?)<\/p>/g)].map(m => txt(m[1])) }; };
     // an older build: no DATA.be — the tab is there, says so, and nothing is fetched
     LOADS = []; const h0 = await beGo({ OPEN: ID.a });
     BO.old = { text: txt(h0), loads: beL(), tabs: tabsOf(SCREEN.innerHTML) };
@@ -839,6 +839,22 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
       const r = rowsOf(hr)[0], q = rowsOf(hq)[0];
       BO.chk = { cell: r.cells[1], titles: r.titles, plain: q.cells[1], det: txt((hd.match(/<p class="cpx-fn"><b class="cpx-chk">([\s\S]*?)<\/p>/) || [])[1] || ''),
         det_plain: hn.includes('cpx-chk'), cls: (hr.match(/<small class="([^"]*)"[^>]*>data check/) || [])[1] || '' }; }
+    // 15 Nov: the countries table's B lines (a null / short / junk "bm" = none; per cell) and the new card fields (all SYNTHETIC)
+    { const row = bm => { const h = _.beDet({ d: '2026-02-10', age: 50, cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, 30, null, null, 400, 0].concat(bm === undefined ? [] : [bm])], unc: [], now: ['no', 20, 0.5] }, 1, false); BER.push(h); return tblOf(h, '<h4 class="cpx-h4">Countries with a benchmark').rows[0]; };
+      BO.bm_bad = [undefined, null, [0.35], 'x', {}, [null, null, null, null]].map(row);
+      BO.bm_part = row([0.35, null, null, 99]);
+      const cd = { roas: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7], bench: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6] }, vm = h => txt((h.match(/<p class="cpx-vm">([\s\S]*?)<\/p>/) || [])[1] || '');
+      const o = _.beCard(Object.assign({ chk: [1, 1, 1, 1, 1, 1], cv: [1, 1, 1, 1, 1, 1] }, cd)), p = _.beCard(Object.assign({ fin: [1, 1, 0, 0, 0, 0], cv: [1, 1, 1, 1, 1, 1], chk: [0, 0, 0, 0, 0, 0] }, cd));
+      BER.push(o, p);
+      const rk = (k, m, lim, lo, hi, med) => { const h = _.beDet({ d: '2026-02-10', age: 50, cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, med, lo, hi, lim, k, m]], unc: [], now: ['no', 20, 0.5] }, 1, false); BER.push(h); return tblOf(h, '<h4 class="cpx-h4">Countries with a benchmark').rows[0][4]; };
+      BO.bm_rk = [rk(1, [0.3, 3, 60, 360], 360, null, null, 33), rk(3, [0.3, 3, 60, 360], 360, null, null, 33), rk(5, [0.3, 3, null, 120], 120, null, null, 120), rk(0, [0.3, 3, 60, 360], 90, 70, null, -90), rk(0, [0.3, 3, 60, 360], 360, null, null, null)];
+      { const h = _.beCard({ roas: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7], bench: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6] }, { x: [100, 40, 36, 33, 30, 28], b: [100, 42, 38, 35, 32, 30], e: [6, 2, 2, 2, 2, 2], be: [6, 2, 2, 2, 2, 2], cv: [1, 1, 1, 1, 1, 1], w: '......', wb: '......', p: '000001', q: '000000' });
+        BO.ec_hollow = { roas_filled: (h.match(/class="cpx-bep" data-f="1"/g) || []).length, ec_plain: (h.match(/class="cpx-bep"\/>/g) || []).length, ec_data_f: (h.match(/cpx-bep"[^>]*data-f/g) || []).length }; }
+      BO.cardnone = ['j', 'k', 'c', 'r', undefined].map(w => txt(_.beCard({ roas: [null, null, null, null, null, null], bench: [null, null, null, null, null, null], fin: [0, 0, 0, 0, 0, 0], cv: [null, null, null, null, null, null], chk: [0, 0, 0, 0, 0, 0] }, null, w)));
+      BO.cardnone_null = txt(_.beCard(null, null, 'j'));
+      BO.cardnone_svg = [_.beCard(null, null, 'j'), _.beCard({ roas: [null, null, null, null, null, null], bench: [null, null, null, null, null, null] }, null, 'r')].map(h => h.includes('<svg'));
+      BO.cardends = { first: svgOf(_.beCard({ roas: [0.451, 0.5, 0.6, 0.7, 0.8, 1.084], bench: [0.4, 0.4, 0.4, 0.4, 0.4, 0.4], fin: [1, 1, 1, 1, 1, 1], cv: [1, 1, 1, 1, 1, 1], chk: [1, 0, 0, 0, 0, 1] })), plain: svgOf(_.beCard({ roas: [0.451, 0.5, 0.6, 0.7, 0.8, 1.084], bench: [0.4, 0.4, 0.4, 0.4, 0.4, 0.4], fin: [1, 1, 1, 1, 1, 1], cv: [1, 1, 1, 1, 1, 1], chk: [0, 0, 0, 0, 0, 0] })) };
+      BO.cardnew = { all_chk: (o.match(/<p class="cpx-vm">/g) || []).length, old: _.beCard(cd), old_plain: _.beCard(Object.assign({ cv: null, chk: null }, cd)), skip_nf: vm(p) }; }
     BO.zw = { app: txt(_.beRow({ d: '2026-01-10', age: 80, sp: 100, inst: 10, real: [], unc: [], cty: [], app: { be: [61, 61, 61], lim: 360, roas: [], lo: [0.1], hi: [0.1] }, now: ['no', 60, 0.99, 1] }, 'Alpha', [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270, 360]).match(/<td>([\s\S]*?)<\/td>/g)[1].replace(/<[^>]+>/g, '')),
       cty: txt((_.beDet({ d: '2026-01-10', age: 80, cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, 61, 61, 61, 360, 0]], unc: [], now: ['no', 60, 0.99, 1] }, 1, false).match(/<td>(<b>day[\s\S]*?)<\/td>/) || [])[1] || '') };
     // a day opened: its countries, the "data kam" line (names on tap), its ROAS card (values printed on the points)
@@ -850,6 +866,7 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     CURV = 'USD'; BO.d25 = await dayAt('2026-03-25'); BO.d25u = await dayAt('2026-03-25', { BUNC: true }); CURV = 'INR';
     BO.d25i = await dayAt('2026-03-25');
     for (const d of ['2026-03-15', '2026-03-21', '2026-03-23', '2026-03-26', '2026-03-28', '2026-03-29']) BO['d' + d.slice(8)] = await dayAt(d);
+    BO.d26h = BO.d26.html;   // (the opened day's raw html: the card's <title>s and the B lines)
     for (const k in BO) if (/^d\d\d/.test(k)) delete BO[k].html;
     // taps through the screen's own handler: one day open at a time, the same day again closes it, a non-date does nothing; the names
     await beGo({ OPEN: ID.a }); const st = () => ({ open: _.get().BOPEN, unc: _.get().BUNC, n: (SCREEN.innerHTML.match(/class="cpx-bedr"/g) || []).length,
@@ -878,7 +895,7 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
         cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, 30, 20, 60]], card: { roas: [0.2, null, null, null, null, null], bench: [null, null, null, null, null, null] }, now: ['no', 4, 0.25] }] };
     LOADS = []; SCREEN._on.click[0]({ target: { closest: s => s === '[data-cpx-retry]' ? { dataset: { cpxRetry: fC } } : null } }); await settle(); CPX.paint();
     _.set({ BOPEN: '2026-03-25' }); CPX.paint(); const hC2 = tbOf(SCREEN.innerHTML); BER.push(hC2);
-    Object.assign(BO.gamma, { after: beL(), text2: txt(hC2), rows: rowsOf(hC2), card: cardOf(hC2), kam: (bedOf(hC2) || '').includes('data kam') });
+    Object.assign(BO.gamma, { after: beL(), text2: txt(hC2), rows: rowsOf(hC2), card: cardOf(hC2), kam: (bedOf(hC2) || '').includes('spend: data kam') });
     LOADS = []; BO.delta = { text: txt(await beGo({ OPEN: ID.d })), loads: beL() };
     LOADS = []; BO.eps = { text: txt(await beGo({ OPEN: ID.e })), loads: beL(), a: _.beA(ID.e) };
     BO.beta = txt(await beGo({ OPEN: ID.b }));

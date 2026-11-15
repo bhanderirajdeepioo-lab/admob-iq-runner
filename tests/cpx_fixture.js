@@ -289,7 +289,7 @@ function be(fx) {
   const pw = (a, v) => { const X = [0, 30, 90, 180], Y = [0.1, v[0], v[1], v[2]]; let i = 0; while (i < 2 && a > X[i + 1]) i++; return Y[i] + (Y[i + 1] - Y[i]) * (a - X[i]) / (X[i + 1] - X[i]); };
   const curve = (lim, v, f) => GRID.filter(a => a <= lim).map(a => r4(pw(a, v) * f));
   const app = (b, lim, v) => ({ be: b, lim, roas: curve(lim, v, 1), lo: curve(lim, v, 0.7), hi: curve(lim, v, 1.4) });
-  const IN = ['IN', 0.6, 0.31, 4.0, 0.12, 0.55, 0.81, 75, 40, 160, 360], US = ['US', 0.25, 0.62, 9.6, 0.05, 0.3, 0.62, 140, 70, null, 210];   // US: the high end past its watched 210 days
+  const IN = ['IN', 0.6, 0.31, 4.0, 0.12, 0.55, 0.81, 75, 40, 160, 360, 0, [0.28, 3.5, 60, 360]], US = ['US', 0.25, 0.62, 9.6, 0.05, 0.3, 0.62, 140, 70, null, 210, 0, [0.5, 8.04, null, 210]];   // US: the high end past its watched 210 days
   const day = x => { const ag = ageOf(x), o = { d: x, age: ag, sp: r2(50000 * fxd(x)), inst: 1600, cov: 0.85, app: app([95, 50, 170], 270, [0.4, 0.96, 1.8]),
       unc: [['BR', 0.06], ['SA', 0.03], ['AE', 0.02], ['…', 0.04]], cty: [IN.slice(), US.slice()], card: card(ag, roas), now: ['no', ag, roas(ag)] };
     if (x === '2026-03-15') { const R = { 0: 0.35, 1: 0.52, 2: 0.63, 3: 0.72, 6: 0.9, 13: 1.08 };
@@ -300,11 +300,12 @@ function be(fx) {
     if (x === '2026-03-25') o.ec = { x: [100, 40, 36, 33, null, null], b: [100, 42, 38, 35, null, null], e: [6.2, 2.48, 2.23, 2.05, null, null],
       be: [6.0, 2.52, 2.28, 2.1, null, null], cv: [0.85, 0.85, 0.85, 0.85, 0, 0], w: '....yy', wb: '......', p: '000100', q: '000000' };   // (be_ecpm's shape)
     if (x === '2026-03-26') { Object.assign(o, { cov: 0.6, cty: [IN.slice()], unc: [['US', 0.25], ['BR', 0.1], ['…', 0.05]], app: app([160, 90, null], 270, [0.25, 0.6, 1.1]) });
+      o.card = Object.assign(card(ag, roas), { cv: [1, 1, 0.85, 0.85, 1, 1], chk: [0, 0, 0, 1, 0, 0] });   // the new card: 85 % of the spend at days 3 / 4, a pack-gap date in the 4-day window
       o.app.lo = o.app.lo.map((v, i) => (GRID[i] > 180 ? null : v)); o.app.hi = o.app.hi.map((v, i) => (GRID[i] > 180 ? null : v)); }   // its band reaches 180 days
     if (x === '2026-03-16') Object.assign(o.app, { be: [95, null, null], lo: o.app.lo.map(() => null), hi: o.app.hi.map(() => null) });   // no band at all
     if (x === '2026-03-17') o.app.roas[GRID.indexOf(30)] = roas(ag);   // the build's floor: ROAS 30 = what the day has made by day 13 (≥)
     if (x === '2026-03-27') o.app = app([null, 45, null], 60, [0.45, 0.8, 1.2]);
-    if (x === '2026-03-28') { delete o.app; Object.assign(o, { cov: 0, cty: [], unc: [['IN', 0.6], ['US', 0.25], ['BR', 0.1], ['…', 0.05]] }); }
+    if (x === '2026-03-28') { delete o.app; Object.assign(o, { cov: 0, cty: [], unc: [['IN', 0.6], ['US', 0.25], ['BR', 0.1], ['…', 0.05]], card: null, cw: 'c' }); }   // (the build: no covered country = no card, and why)
     return o; };
   const file = (k, o) => { const f = 'be_' + KEYS[k] + '.json.gz'; FILES[f] = Object.assign({ v: 1, key: KEYS[k], origin: O, grid: GRID, calib: CAL }, o); return f; };
   file('a', { skill: { auc: [58.3, 66, 71.2], c: 64.4, n: 120 }, days: days('2026-03-15', NEW).filter(x => x !== '2026-03-20').map(day) });

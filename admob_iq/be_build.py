@@ -27,7 +27,14 @@ breaks even (the page shows the days of its period).
   not answered: no past day there — never extrapolated). K3: log(BE + 1) = a + b·log CPI + c·log eCPM_fs + σ·ε, right-censored normal
   errors (Schmee–Hahn EM). Its ROAS curve: per GRID age, Huber → bot → Huber of log ROAS(age) on the same inputs over
   the days that reached that age (the kept residuals' 10 / 90 % = its range), up to the first age with < 20 kept days
-  (the curve's limit). The app's own median past curve (the median of log ROAS per age) is the card's benchmark.
+  (the curve's limit). Each curve entry also stores the country's median of log ROAS(age) over its usable past days
+  (rmed): the card's benchmark is built from these, per country (see the card below). "bm" (fits[cc]["bm"] = [bCPI,
+  beCPM_fs, bBE | null, bLim]) = the countries table's "B" (the card does not use it), from K3's OWN training set at O (the bot-kept real-BE days
+  as events at their BE day + the not-yet days censored at their age): bCPI = exp(median log CPI), beCPM_fs = exp(median
+  log eCPM_fs), bBE = the Kaplan–Meier median (S(t) = Π (1 − d_i / n_i) over the event times, n_i = days at risk at t_i;
+  the first event time with S ≤ 0.5; null = beyond what the data watched, the page: "B > bLim days"), bLim = round(tmax).
+  The fits body carries "fv" (FV = 2): a cache without it (or older) is refitted at once, so the triple is there on the
+  first build after the change, not a day later.
   calibration (once a UTC day, data/be_tab/calib.json with its date): the same fits at every month start over the
   history (rolling, no look-ahead), every judged install day of that month answered, the truth = what is known now →
   isotonic maps (PAVA) of K3's P(BE ≤ H) to the real share for H = 30 / 90 / 180 (a day old enough to know: age ≥
@@ -47,7 +54,7 @@ breaks even (the page shows the days of its period).
   K3 P's and days (null past the longest age its data watched, that limit beside it); the uncovered countries as their
   spend share (no benchmark, or a CPI / eCPM_fs outside it: "x % spend: data kam"; the ones under 0.5 % as one "…"
   rest); the card: ROAS so far at days 1, 2, 3, 4,
-  7, 14 against the app's median past curve. A day under 4 days old (age < 4)
+  7, 14 against the countries' own median past ROAS joined by the day's spend (below). A day under 4 days old (age < 4)
   is provisional: GA4's country and first-session reads are not final yet, and neither are Google Ads' installs (the
   CPI: installs read at age 0–1 were a median 0.91 of their final count, ≈ 1.00 from age 2; the back-test answers
   with final inputs) — the page marks it. The grid ages a day has lived carry its REAL cumulative ROAS (never the
@@ -55,6 +62,22 @@ breaks even (the page shows the days of its period).
   cumulative ROAS never falls; from its real BE day on it is ≥ 100 %) and caps any unlived age before it; a day that
   already broke even answers its real day (no range); the 80 % range only as far as the band reaches (beyond it: no
   end, never the median line).
+  the card (owner, 15 Nov 2026: "haan dono karo"): one country set S per card = the day's COVERED countries (the "cty"
+  ones, small rows too) with a curve entry at every card day (GRID index 0–5; a cumulative ROAS must not fall because the
+  set changed); roas[j] = Σ cumulative revenue ÷ Σ spend over S, null where a country of S has no cell at j yet; bench[j]
+  = Σ spend × exp(the country's stored curve median at j) ÷ Σ spend (each country's own benchmark, joined by the day's
+  spend share — both lines from the same countries); fin[j] = 1 when every country of S has a FINAL cell at j and that
+  date is at least CLAG days old; cv = S's spend ÷ the day's whole country spend (the rest is "x % spend: data kam");
+  chk[j] = 1 when a PACK-GAP date lies in [install day, + GRID[j]] (below). No card day with a value: "card" is null and
+  "cw" says why ("j" under $5 / 30 new users, "k" no country spend split, "c" no covered country, "r" their ROAS has not
+  arrived yet).
+  PACK GAPS (load, pack_gaps): the country packs come from the GA4 cube, which folds an activity date once, at D+3; for
+  a date it can be nearly empty while the app's All rows are whole, and a cumulative ROAS built from the countries is then
+  low. S_all[D] = the All rows' FINAL daily revenue at activity date D, S_cty[D] = the same over EVERY country row in
+  every pack ("--" / "XX" / "ZZ" too: the All row includes them), streamed while load reads (nothing kept per row). D is a
+  gap when D ≤ newest − CLAG, S_all[D] ≥ PACK_MIN (1 USD: a smaller total says nothing) and S_cty[D] < PACK_GAP (0.35) ×
+  S_all[D], and D ≤ the packs' own final edge (cd["fthru"]: a later date is not folded yet); no packs: no gap. The set
+  rides in the pin (pin[4]) to predict.
   the "ROAS ab tak" shift (owner, 15 Nov 2026: "haan, pehle backtest karke dikhao", then "haan live karo"; the
   back-test ranked the days and dated their breakeven far better than the unshifted curve, the country rows too):
   once a day has a FINAL grid age inside its curve (its latest one: a; a daily one at least CLAG days old — the
@@ -88,13 +111,16 @@ breaks even (the page shows the days of its period).
                           made elsewhere), "anc" (the grid age it is shifted at; absent: not shifted)} (absent: nothing
                           covered), "chk" 1 (a GA4 hole date in its first week: "data check" — information only, still shifted), "unc": [[cc, share], …,
                           ["…", rest]], "cty":
-                          [[cc, share, CPI, eCPM_fs, P30, P90, P180, median, low, high, lim, rk], …] (rk 1 / 2 / 3:
+                          [[cc, share, CPI, eCPM_fs, P30, P90, P180, median, low, high, lim, rk, bm], …] (bm = [bCPI (USD, 4 dp), beCPM_fs
+                          (USD, 3 dp), bBE (days, 1 dp, or null: beyond bLim), bLim] — the country's benchmark, or null
+                          for an old fits cache; rk 1 / 2 / 3:
                           the country broke even — median = its real day: exact / "≤" / not final yet; 0: off its
                           own curve (shifted to its own final read when it has one) given it has not broken even by its
                           own so-far age; 4: ≤ a 30-day column not final yet;
                           5 / 6: it lived past K3's limit without breaking even — median = its so-far age, final /
                           not final yet), "jd" 0 (only on a day under $5 / 30 new users: no model, no countries — its
-                          real numbers only), "card": {"roas", "bench", "fin" (1 final / 0 not final yet)}, "now": ["be", BE day, kind ("x" exact / "nf" not final
+                          real numbers only), "card": {"roas", "bench", "fin" (1 final / 0 not final yet), "cv" (S_j's share of the day's country spend), "chk"
+                          (1: a pack-gap date inside the window; the point is low by what the data lost)}, "now": ["be", BE day, kind ("x" exact / "nf" not final
                           / "b" ≤ a column / "s" ≤ its so far), so-far age, ROAS so far] (the ROI row's own) | ["no",
                           so-far age, ROAS so far, final? (1: older than LAG days)]}]} (every install day with
                           spend, oldest first)
@@ -156,6 +182,11 @@ CALV = 3                             # calib.json content: 3 = with the shift's 
 CLAG = LAG + 1                       # a daily cell 3 days old is often still empty (a country's split lags: most
                                      # country cells dated 3 days ago carried no revenue yet, and a few small apps' own
                                      # rows — measured 15 Nov 2026): the shift reads a daily cell at least 4 days old
+PACK_MIN = 1.0                       # a pack-gap date needs the app's final revenue of that date ≥ 1 USD (a smaller total
+                                     # is noise: a ratio of two cents says nothing about a missing pack)
+PACK_GAP = 0.35                      # … and the country packs' sum of it under 0.35 × the All rows' (GA4's cube folds a date
+                                     # once, at D+3: it can be nearly empty while the app's All rows are whole)
+FV = 2                               # the fits cache content: 2 = with each country's benchmark triple "bm" (older: refit)
 SKIP_CC = frozenset(("--", "XX", "ZZ"))
 LINE = None
 
@@ -181,7 +212,7 @@ class _R:
     (a final 30-day column / a checkpoint), "bn" "≤ that day" on a 30-day column not final yet, "s" "≤ its so-far age"
     (the so-far read paid back, no cell pins the day)."""
     __slots__ = ("day", "X", "n", "na", "sp", "cpi", "c", "e", "lo", "hi", "be", "obs", "oc", "cum", "jd", "fin", "sfa",
-                 "sfv", "rbe", "dd")
+                 "sfv", "rbe", "dd", "kc", "kf")
 
 
 def _pts(r):
@@ -228,8 +259,13 @@ def _row(r, ecpm, full):
         x.fin = _fin(r)
         d, df = r[4] or [], r[5] or 0                # its final daily cells 0 … 30 (the calendar-hole check)
         x.dd = [v for v in d[:min(df, 31)]]
+        x.kc = x.kf = None                           # (the card reads cum / fin)
     else:
         x.cum = x.fin = x.dd = None
+        at = dict(pts)                               # a small row (under $5 / 30 new users) is still a covered country's
+        fa = _fin(r)                                 # row: its card days' cells (CARD_J) feed the card, nothing else
+        x.kc = [None if at.get(GRID[j]) is None else round(at[GRID[j]], 4) for j in CARD_J]
+        x.kf = [fa[j] for j in CARD_J]
     x.sfa, x.sfv = x.obs, x.oc
     sd = r[9] if len(r) > 9 else None
     if isinstance(sd, str) and len(sd) == 10 and isinstance(r[8], (int, float)):
@@ -302,10 +338,39 @@ def _read(path):
         return json.load(f)
 
 
+def _fday(S, r):
+    """Adds one ROI row's FINAL daily revenue (its first r[5] cumulative cells: daily = d[a] − d[a−1], d[0] for a = 0)
+    to S at its activity date (install day + a). Streaming: nothing about the row is kept."""
+    d = r[4] if len(r) > 5 else None
+    if not d or not isinstance(r[0], str):
+        return
+    n = min(int(r[5] or 0), len(d))
+    X = date.fromisoformat(r[0]).toordinal()
+    prev = 0.0
+    for a in range(n):
+        v = d[a]
+        if not isinstance(v, (int, float)):
+            break
+        S[X + a] = S.get(X + a, 0.0) + v - (prev if a else 0.0)
+        prev = v
+
+
+def pack_gaps(S_all, S_cty, newest, fthru=None):
+    """The activity dates (ordinals) on which the country packs lost revenue the All rows have: D ≤ newest − CLAG (the
+    date's cells are final), the All rows' final revenue of it ≥ PACK_MIN, the packs' (every country row, "--" / "XX" /
+    "ZZ" too — the All row includes them) under PACK_GAP × it. newest: ordinal. fthru (ordinal): the packs' own final edge
+    (the cube folded through it): a later date is not folded yet, not a gap."""
+    lim = newest - CLAG if fthru is None else min(newest - CLAG, fthru)
+    return {D for D, v in S_all.items() if D <= lim and v >= PACK_MIN and S_cty.get(D, 0.0) < PACK_GAP * v}
+
+
 def load(out_dir, data_dir, key, fn, want_adm=False):
     """One app → (newest, the All rows, {cc: rows}), spend > 0 only, by day — every day (the tab answers every judged
-    install day)."""
+    install day). want_adm: (newest, app, cty, adm, gaps) — AdMob's daily revenue and the pack-gap dates (pack_gaps)."""
     body = _read(os.path.join(out_dir, fn))
+    S_all, S_cty = {}, {}
+    for r in body.get("rows") or []:
+        _fday(S_all, r)
     st = gv.load_store(os.path.join(data_dir, gv.DIR, key + ".json.gz"))
     days = (st or {}).get("days") or {}
     nv_app = {}
@@ -335,9 +400,12 @@ def load(out_dir, data_dir, key, fn, want_adm=False):
         pk = _read(os.path.join(out_dir, pf))
         for cc, rows in pk["c"].items():
             if cc in SKIP_CC:
+                for r in rows:
+                    _fday(S_cty, r)          # (no country, but the All row includes them)
                 continue
             ncc = nv_cc.get(cc) or {}
             for r in rows:
+                _fday(S_cty, r)
                 if len(r) < 14 or r[3] is None or r[3] <= 0:
                     continue
                 v = ncc.get(r[0])
@@ -356,7 +424,14 @@ def load(out_dir, data_dir, key, fn, want_adm=False):
                 adm[date.fromisoformat(e[0]).toordinal()] = float(e[1])
         except (TypeError, ValueError, IndexError):
             continue
-    return newest, app, cty, adm
+    cd = body.get("cd") or {}
+    if not newest or not cd.get("packs"):
+        return newest, app, cty, adm, set()      # (no country packs: nothing to compare — no gap)
+    try:
+        ft = date.fromisoformat(cd["fthru"]).toordinal()
+    except (KeyError, TypeError, ValueError):
+        ft = None
+    return newest, app, cty, adm, pack_gaps(S_all, S_cty, date.fromisoformat(newest).toordinal(), ft)
 
 
 # ── the maths (pure Python: the runner has no numpy) ───────────────────────────────────────────────────────────────
@@ -650,10 +725,28 @@ def bot(events, k=ZBOT):
     return keep, drop
 
 
+def km_median(obs):
+    """The Kaplan–Meier median of [(time, event?)]: S(t) = Π (1 − d_i / n_i) over the event times t_i, n_i = the days at
+    risk at t_i (every time ≥ t_i; a day censored at t_i is still at risk). The first event time with S ≤ 0.5; None when
+    S never gets there (the median lies beyond what the data watched)."""
+    ev = sorted({t for t, e in obs if e})
+    if not ev:
+        return None
+    ts = sorted(t for t, _ in obs)
+    s = 1.0
+    for t in ev:
+        n = len(ts) - bisect.bisect_left(ts, t)
+        s *= 1.0 - sum(1 for tt, e in obs if e and tt == t) / n
+        if s <= 0.5 + 1e-12:
+            return t
+    return None
+
+
 def k3_fit(rows, O):
     """K3 at origin O on a country's usable days: the bot on the real-BE days, ≥ MIN_KEPT kept, the not-yet days as
-    "BE > age so far" → {"beta", "s", "tmax" (the longest age the training set watched), "kept", "dropped", "cens"} or
-    None (uncovered)."""
+    "BE > age so far" → {"beta", "s", "tmax" (the longest age the training set watched), "kept", "dropped", "cens",
+    "bm" (the country's benchmark from this same training set: [median CPI, median eCPM_fs, the Kaplan–Meier median BE
+    day or None, round(tmax)])} or None (uncovered)."""
     obs = []
     for r in rows:
         if r.X >= O:
@@ -674,8 +767,12 @@ def k3_fit(rows, O):
     res = cens_reg([[1.0, r.c, r.e] for r, _, _ in train], [math.log(t + 1.0) for _, _, t in train], cz, iters=25)
     if res is None or res[1] <= 0:
         return None
-    return {"beta": res[0], "s": res[1], "tmax": max(t for _, _, t in train), "kept": len(kept),
-            "dropped": len(dropped), "cens": sum(cz)}
+    tmax = max(t for _, _, t in train)
+    km = km_median([(t, k == "e") for _, k, t in train])
+    bm = [math.exp(_median([r.c for r, _, _ in train])), math.exp(_median([r.e for r, _, _ in train])), km,
+          round(tmax)]
+    return {"beta": res[0], "s": res[1], "tmax": tmax, "kept": len(kept), "dropped": len(dropped), "cens": sum(cz),
+            "bm": bm}
 
 
 def curve_fit(rows, O):
@@ -808,7 +905,9 @@ def _month(o):
 # ── fit (daily, per app) ────────────────────────────────────────────────────────────────────────────────────────────
 
 def fit(app, cty, O):
-    """The daily fit at origin O → the fits cache body (rounded as stored: predict reads only this)."""
+    """The daily fit at origin O → the fits cache body (rounded as stored: predict reads only this). Per country "bm" =
+    [CPI, eCPM_fs, BE day | None, limit]: its benchmark from K3's own training set (the countries table's "B"; the card's
+    benchmark is each country's curve median, "cv"[5])."""
     fits = {}
     for cc, rows in cty.items():
         if sum(1 for r in rows if r.X < O and r.hi is not None and _usable(r)) < MIN_KEPT:
@@ -824,15 +923,8 @@ def fit(app, cty, O):
                                                                  k3["dropped"], k3["cens"]],
                     "cv": [[j, [round(v, 6) for v in b], round(q10, 5), round(q90, 5), n, round(m, 5)]
                            for j, b, q10, q90, n, m in cf],
-                    "rng": g}
-    med = []                              # the app's median past curve (the card's benchmark)
-    for j, a in enumerate(GRID):
-        v = [math.log(max(r.cum[j] / r.sp, ROAS_FLOOR)) for r in app
-             if r.jd and r.cum and r.cum[j] is not None and r.X + max(a + LAG, SETTLE) <= O]
-        if len(v) < MIN_KEPT:
-            break
-        med.append([j, round(rmed(v), 5), len(v)])
-    return {"v": V, "origin": _iso(O), "fits": fits, "app_med": med}
+                    "rng": g, "bm": [round(k3["bm"][0], 4), round(k3["bm"][1], 3), _r(k3["bm"][2], 1), k3["bm"][3]]}
+    return {"v": V, "fv": FV, "origin": _iso(O), "fits": fits}
 
 
 # ── calibration (daily, all apps): the rolling back-test, its maps, the skill ───────────────────────────────────────
@@ -1210,9 +1302,9 @@ def _cty_of(pin):
     return out
 
 
-def _pin(newest, app, cty, adm=None):
+def _pin(newest, app, cty, adm=None, gaps=None):
     """What predict needs of one app: every install day with spend (the judged ones get the model; the others only their
-    real numbers) and its countries' rows."""
+    real numbers), its countries' rows, AdMob's daily revenue and the pack-gap dates (load's, ordinals)."""
     rows = list(app)
     want = {r.day for r in rows}
     byday = {}
@@ -1220,7 +1312,7 @@ def _pin(newest, app, cty, adm=None):
         for r in rs:
             if r.day in want:
                 byday.setdefault(r.day, {})[cc] = r
-    return newest, rows, byday, adm
+    return newest, rows, byday, adm, frozenset(gaps or ())
 
 
 def _holes(rows, nw, adm=None):
@@ -1315,6 +1407,58 @@ def _cty_shift(ages, mid, x, cb, upto=None, gq=None):
     return _cty_days(ages, lm, lo, hi, x)
 
 
+def _bm(v):
+    """A country's stored benchmark triple + limit → [CPI, eCPM_fs, BE day | None, limit]; None when missing / malformed
+    (an old cache)."""
+    ok = isinstance(v, list) and len(v) == 4 and all(isinstance(x, (int, float)) and not isinstance(x, bool)
+                                                     for x in (v[0], v[1], v[3])) and \
+        (v[2] is None or (isinstance(v[2], (int, float)) and not isinstance(v[2], bool)))
+    return list(v) if ok else None
+
+
+def _cells(x, j):
+    """A row's cumulative revenue and its FINAL cumulative revenue at card day j (an index of CARD_J, which is also the
+    GRID index) — the judged rows' cum / fin, a small row's own card cells (kc / kf)."""
+    if x.cum is not None:
+        return x.cum[j], (x.fin[j] if x.fin else None)
+    return (x.kc[j], x.kf[j]) if x.kc else (None, None)
+
+
+def _card(r, cov, tot, gaps, nw):
+    """The 14-day card of one install day at CARD_J: the owner's rule — each country's own median past ROAS, joined by
+    the day's spend share, both lines from the SAME countries. S = the day's covered countries (small rows too) with a
+    curve entry at every card day (one set for the whole card: a cumulative ROAS must not fall because the set changed).
+    roas[j] = Σ cum ÷ Σ spend over S (null where a country of S has no cell at j yet); bench[j] = Σ spend × exp(its stored
+    curve median at j) ÷ Σ spend; fin[j] = 1 when every country of S has a FINAL cell at j AND that date is at least CLAG
+    days old (a country's cell 3 days old is often still empty); cv = S's spend ÷ the day's whole country spend; chk[j] =
+    1 when a pack-gap date lies in [X, X + GRID[j]]. → (card | None, why): None when no card day has a value; why: "c" no
+    covered country with a full curve, "r" their ROAS has not arrived."""
+    S = []
+    for cc, x, f, *_ in cov:
+        ms = {e[0]: e[5] for e in f["cv"]}
+        if all(j in ms for j in CARD_J):
+            S.append((x, ms))
+    sp = sum(x.sp for x, _ in S)
+    if not S or sp <= 0:
+        return None, "c"
+    roas, bench, fin, chk = [], [], [], []
+    for j in CARD_J:
+        cl = [_cells(x, j) for x, _ in S]
+        if all(c is not None for c, _ in cl):
+            roas.append(_rr(sum(c for c, _ in cl) / sp))
+            bench.append(_rr(sum(x.sp * math.exp(ms[j]) for x, ms in S) / sp))
+            fin.append(1 if r.X + GRID[j] <= nw - CLAG and all(f is not None for _, f in cl) else 0)
+        else:
+            roas.append(None)
+            bench.append(None)
+            fin.append(0)
+        chk.append(1 if any(r.X <= D <= r.X + GRID[j] for D in gaps) else 0)
+    if all(v is None for v in roas):
+        return None, "r"
+    cvs = round(sp / tot, 4)
+    return {"roas": roas, "bench": bench, "fin": fin, "cv": [None if v is None else cvs for v in roas], "chk": chk}, None
+
+
 def predict(key, fc, cal, pin, sk=None):
     """One app's judged install days from its fits + the calibration → its be_<key>.json.gz body (see the module doc)."""
     newest, rows, byday = pin[:3]
@@ -1324,8 +1468,7 @@ def predict(key, fc, cal, pin, sk=None):
     bandb = cal.get("bandb") or {}
     cbandb = cal.get("cbandb") or {}
     cmh = {H: _cal_xy((cal.get("cty") or {}).get(str(H))) for H in HS}         # (each map's arrays once, not per call)
-    medm = {j: m for j, m, _ in fc.get("app_med") or []}
-    bench = [None if j not in medm else _rr(math.exp(medm[j])) for j in CARD_J]
+    gaps = pin[4] if len(pin) > 4 else ()   # (pack-gap dates: the card's "data check")
     holes = _holes(rows, nw, adm)         # the calendar dates GA4 lost on every cohort while AdMob did not
     gr, cgr = _gq(cal.get("grow"), key, "app"), _gq(cal.get("grow"), key, "cty")
     ok = cal.get("cv") == CALV            # the shift only with a calibration that has its ranges and bound (a failed first
@@ -1373,7 +1516,7 @@ def predict(key, fc, cal, pin, sk=None):
                 days_ = (dd if dd is not None else _cty_days(ages, mid, clo, chi, x)) + [clim, 0]   # one curve, one
                 # answer) — its daily anchor at least CLAG days old
             ctys.append([cc, round(x.sp / tot, 4), round(x.cpi, 4), round(math.exp(x.e), 3), *[_r(v, 3) for v in pk],
-                         *days_])
+                         *days_, _bm(f.get("bm"))])
         out = {"d": r.day, "age": nw - r.X, "sp": round(r.sp, 2), "inst": r.na, "cov": round(csp / tot, 4),
                "unc": unc, "cty": ctys}
         rl = [None if not r.fin or v is None else _rr(v / r.sp) for v in (r.fin or [])]
@@ -1445,8 +1588,9 @@ def predict(key, fc, cal, pin, sk=None):
                 out["app"]["anc"] = anc[0]            # shifted at this grid age (its real ROAS there)
         if chk:
             out["chk"] = 1                            # a GA4 hole in its first week: "data check" on the page (still shifted)
-        out["card"] = {"roas": [None if (not r.cum or r.cum[j] is None) else _rr(r.cum[j] / r.sp) for j in CARD_J],
-                       "bench": bench, "fin": [1 if r.fin and r.fin[j] is not None else 0 for j in CARD_J]}   # (final points)
+        out["card"], cw = _card(r, cov, tot, gaps, nw)
+        if cw:
+            out["cw"] = "j" if not r.jd else "k" if not ctys and not unc else cw   # why there is none (the page says it)
         sfr = None if r.sfv is None else _rr(r.sfv / r.sp)
         sff = 1 if r.sfa is not None and r.sfa <= nw - r.X - LAG else 0       # its so-far read final? ("asli")
         out["now"] = (["be", r.rbe[0], r.rbe[1], r.sfa, sfr, sff] if r.rbe is not None else
@@ -1598,8 +1742,8 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
         for aid, key, fn in apps:
             try:
                 fc = load_fits(data_dir, key)
-                refit = fc is None or fc["origin"] != today
-                newest, app, cty, adm = load(out_dir, data_dir, key, fn, True)
+                refit = fc is None or fc["origin"] != today or fc.get("fv") != FV     # (fv: the benchmark triple)
+                newest, app, cty, adm, gaps = load(out_dir, data_dir, key, fn, True)
                 if not newest:
                     continue
                 if refit:
@@ -1629,7 +1773,7 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                     SKL[key] = skill2(sk_, au_, n0)
                     GK[key] = growth(ga, gc)              # (its own growth: its bound where it has enough days)
                     del F, rb, cb, sk_, au_, ga, gc
-                pin = _pin(newest, app, cty, adm)
+                pin = _pin(newest, app, cty, adm, gaps)
                 del app, cty
                 if not pin[1]:
                     continue
