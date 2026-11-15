@@ -332,13 +332,18 @@ def test_the_shapes_the_page_reads(built):
     days = b["days"]
     assert len(days) > 14 and [d["d"] for d in days] == sorted(d["d"] for d in days)  # every judged day, oldest first
     assert [d["age"] for d in days[-14:]] == list(range(13, -1, -1))                    # … the newest at age 0
-    sk = b["skill"]
-    assert set(sk) == {"auc", "c", "n"} and len(sk["auc"]) == 3 and sk["n"] > 100
-    assert any(v is not None for v in sk["auc"]) and 0 <= sk["c"] <= 100
+    sk = b["skill"]                        # the shift's back-test: C on day 1 / 7 / 14, the AUC at 30 / 90 / 180 on day 7
+    assert set(sk) == {"auc", "c", "n"} and len(sk["auc"]) == 3 and len(sk["c"]) == 3 and sk["n"] > 100
+    assert any(v is not None for v in sk["auc"]) and all(v is not None and 50 < v <= 100 for v in sk["c"])
+    shifted = 0
     for d in days:
-        assert set(d) == {"d", "age", "sp", "inst", "cov", "real", "app", "unc", "cty", "card", "now"}
+        assert set(d) == {"d", "age", "sp", "inst", "cov", "real", "app", "unc", "cty", "card", "now"}   # (no data hole)
         a = d["app"]
-        assert set(a) == {"be", "lim", "roas", "lo", "hi"} and a["lim"] in be.GRID
+        assert set(a) - {"anc"} == {"be", "lim", "roas", "lo", "hi"} and a["lim"] in be.GRID
+        if "anc" in a:                     # shifted at its latest FINAL grid age within its curve (here every lived
+            shifted += 1                   # cell is final: the synthetic rows' df = all of them), a daily one ≥ CLAG
+            assert a["anc"] == max(g for g, v in zip(be.GRID, d["real"]) if v is not None and g <= a["lim"]
+                                   and (g > 30 or g <= d["age"] - be.CLAG))       # days old (the newest one often empty)
         assert len(a["roas"]) == len(a["lo"]) == len(a["hi"]) == be.GRID.index(a["lim"]) + 1
         assert all(v is None or isinstance(v, int) for v in a["be"])
         assert a["roas"] == sorted(a["roas"])                    # the app curve never goes down with age
@@ -357,13 +362,14 @@ def test_the_shapes_the_page_reads(built):
         seen = [i for i, j in enumerate(be.CARD_J) if be.GRID[j] <= d["age"]]
         assert [i for i, v in enumerate(c["roas"]) if v is not None] == seen   # (null where not observed yet)
         assert all(v is not None for v in c["bench"])
+    assert shifted == sum(1 for d in days if d["age"] >= be.CLAG)   # (no data hole: every day with a read old enough)
     new = days[-1]
     prov = [d for d in days if d["age"] < be.PROV]                 # provisional: answered and shown, not final
     assert [d["age"] for d in prov] == [3, 2, 1, 0] and all("app" in d for d in prov)
     assert new["now"] == ["no", 0, new["card"]["roas"][0], 0] and new["card"]["roas"][1:] == [None] * 5   # (not final)
     b2 = body_of(built["site"], "b")
     assert all("app" not in d and d["cov"] == 0.0 and d["cty"] == [] and d["unc"] == [["EE", 1.0]] for d in b2["days"])
-    assert b2["skill"] == {"auc": [None, None, None], "c": None, "n": 0}
+    assert b2["skill"] == {"auc": [None, None, None], "c": [None, None, None], "n": 0}
 
 
 def test_the_fits_recover_the_synthetic_benchmark(built):
@@ -418,7 +424,7 @@ def test_a_second_build_the_same_day_neither_refits_nor_recalibrates_a_new_day_d
     assert be.run(dash, data, site, {}, NOW) == ["/be_*"] and be.pop_line().endswith("refit yes, calib yes")
     first, p1 = _snap(site, data), copy.deepcopy(dash["be"])
     calls = {}
-    for nm in ("fit", "backtest", "calibrate", "skill"):
+    for nm in ("fit", "backtest", "asof", "calibrate", "skill2"):
         _spy(monkeypatch, nm, calls)
     d2 = copy.deepcopy(dash)
     assert be.run(d2, data, site, {}, NOW + timedelta(hours=5)) == ["/be_*"]
@@ -427,7 +433,7 @@ def test_a_second_build_the_same_day_neither_refits_nor_recalibrates_a_new_day_d
     d3 = copy.deepcopy(dash)
     be.run(d3, data, site, {}, NOW + timedelta(days=1))
     assert be.pop_line().endswith("refit yes, calib yes")
-    assert calls == {"fit": 3, "backtest": 3, "calibrate": 1, "skill": 1}        # (app c too: fitted, real numbers only)
+    assert calls == {"fit": 3, "backtest": 3, "asof": 3, "calibrate": 1, "skill2": 3}   # (app c too: real numbers only)
     with open(os.path.join(data, "be_tab", "calib.json"), encoding="utf-8") as f:
         cal = json.load(f)
     nxt = (TODAY + timedelta(days=1)).isoformat()
@@ -467,8 +473,10 @@ def test_a_failing_calibration_keeps_the_last_good_one_and_tries_again_the_next_
     with open(os.path.join(data, "be_tab", "calib.json"), encoding="utf-8") as f:
         kept = json.load(f)
     nxt = (TODAY + timedelta(days=1)).isoformat()
-    assert {k: v for k, v in kept.items() if k != "tried"} == {k: v for k, v in good.items() if k != "tried"}
-    assert kept["tried"] == nxt and d2["be"]["calib"] == TODAY.isoformat() and d2["be"]["origin"] == nxt
+    same = lambda c: {k: v for k, v in c.items() if k not in ("tried", "skill")}    # noqa: E731
+    assert same(kept) == same(good)                                      # the last good maps and ranges stay; the skill
+    assert set(kept["skill"]) == set(good["skill"]) and all(isinstance(v["c"], list) for v in kept["skill"].values())
+    assert kept["tried"] == nxt and d2["be"]["calib"] == TODAY.isoformat() and d2["be"]["origin"] == nxt   # (this build's)
     assert body_of(site, "a")["calib"] == TODAY.isoformat()
     be.run(copy.deepcopy(dash), data, site, {}, NOW + timedelta(days=1, hours=3))          # same day: not again
     assert calls["n"] == 1 and "skipped" not in capsys.readouterr().err and be.pop_line().endswith("calib no")
@@ -498,10 +506,10 @@ def test_one_apps_failure_costs_that_app_only_and_reaches_the_health_banner(tmp_
     site, data, dash = make(tmp_path)
     load = be.load
 
-    def bad(out_dir, data_dir, key, fn):
+    def bad(out_dir, data_dir, key, fn, *a):
         if key == KEYS["b"]:
             return 1 / 0
-        return load(out_dir, data_dir, key, fn)
+        return load(out_dir, data_dir, key, fn, *a)
     monkeypatch.setattr(be, "load", bad)
     assert be.run(dash, data, site, {}, NOW) == ["/be_*"]
     line = be.pop_line()
@@ -586,24 +594,40 @@ def test_auc_is_mann_whitney_with_half_ties():
     assert be._auc(pts) == _brute_auc(pts)
 
 
-def _rec(key, i, be_day, r30):
-    """One back-test answer: the app curve's ROAS at 30 / 90 / 180 and the real BE day (None: not yet, watched 400 d)."""
-    return {"key": key, "age": 400, "a": {"ages": [30, 90, 180], "roas": [r30, r30 * 1.5, r30 * 2.0]},
-            "hi": be_day, "be": be_day, "obs": None if be_day is not None else 400, "be_a": 400 - 100 * r30}
+def _sk_row(a, ra, vals, be_day, obs=400):
+    """One back-test day for the skill: its shifted curve after as-of age a (GRID ages), its real BE day (None: watched
+    obs days without)."""
+    pts = [(t, v) for t, v in zip([t for t in be.GRID if t > a], vals)]
+    return (be._cut(a, ra, pts), pts[-1][0], be_day, None if be_day is not None else obs)
 
 
-def test_skill_scores_auc_c_and_needs_ten_days_each_side():
-    # 10 days that broke even within 30 days (high ROAS(30)) and 30 that never did: AUC30 = 100, C from 10 real BE days
-    A = [_rec("k", i, 20 + i, 0.9 + 0.001 * i) for i in range(10)] + [_rec("k", 10 + i, None, 0.2 + 0.01 * i)
-                                                                      for i in range(30)]
-    sk = be.skill(A)["k"]
-    assert sk["n"] == 40 and sk["auc"][0] == 100.0 and sk["c"] is not None
-    assert sk["auc"][1] == 100.0 and sk["auc"][2] == 100.0          # (the same 10 within 90 / 180 days)
-    sk9 = be.skill(A[1:])["k"]                                       # 9 on the BE side: no AUC, and C has 9 real BE days
-    assert sk9 == {"auc": [None, None, None], "c": None, "n": 39}
-    flip = [dict(x, a={"ages": [30, 90, 180], "roas": [1.2 - r, 1.2 - r, 1.2 - r]}, be_a=1000 - x["be_a"])
-            for x, r in ((x, x["a"]["roas"][0]) for x in A)]
-    assert be.skill(flip)["k"]["auc"][0] == 0.0                      # a model that ranks backwards shows under 50
+def test_skill_is_the_shifts_ranking_on_day_1_7_14_and_the_auc_on_day_7():
+    # 10 days that broke even (the earlier the BE, the higher the curve) and 30 that never did (lower curves): C = 100
+    good = [_sk_row(0, 0.5, [0.5 + 0.1 * (k + 1) * (1.3 - 0.01 * i) for k in range(12)], 10 + 5 * i) for i in range(10)]
+    never = [_sk_row(0, 0.2, [0.2 + 0.02 * (k + 1) * (1 - 0.01 * i) for k in range(12)], None) for i in range(30)]
+    AU = {H: [(math.log(1.2 - 0.01 * i), True) for i in range(10)] + [(math.log(0.5 - 0.01 * i), False)
+                                                                     for i in range(30)] for H in be.HS}
+    sk = be.skill2({0: good + never, 6: good + never, 13: good[1:] + never}, AU, 40)
+    assert sk == {"c": [100.0, 100.0, None], "auc": [100.0, 100.0, 100.0], "n": 40}   # 9 real-BE days on day 14: None
+    flip = {H: [(-x, y) for x, y in v] for H, v in AU.items()}
+    assert be.skill2({}, flip, 0)["auc"][0] == 0.0                   # a forecast that ranks backwards shows under 50
+    assert be.skill2({}, {H: v[1:] for H, v in AU.items()}, 0)["auc"] == [None] * 3   # 9 on the BE side: no AUC
+
+
+def test_the_ranking_cuts_every_pair_at_the_shorter_curve():
+    """The old score compared "beyond 120" with "beyond 270" (last age + 1000 × what is missing): two IDENTICAL forecasts
+    whose curves stop at different ages counted as a wrong pair (one app read under 50 % that way). Cut at the shorter curve they tie."""
+    same = [0.30, 0.40, 0.45, 0.50, 0.55, 0.60, 0.70, 0.80, 0.85, 0.90, 0.92, 0.95]       # never 100 % (ages 1 … 360)
+    early = _sk_row(0, 0.2, same, 100)                              # (the curve to 360; really broke even on day 100)
+    late = _sk_row(0, 0.2, same[:9], None, obs=500)                 # (the same curve, stops at 120; no BE by day 500)
+    old = [e[1] + 1000 * (1 - same[len(e[0]) - 1]) for e in (early, late)]
+    assert old[0] > old[1]                  # the old score: "beyond 360 at 95 %" later than "beyond 120 at 85 %" — wrong
+    assert be._cpair([early, late] * 10) == 50.0                    # identical forecasts: ties, never "wrong"
+    late = _sk_row(0, 0.2, same, None, obs=500)
+    hi = _sk_row(0, 0.2, [v + 0.2 for v in same], 100)             # a curve above the other at the cut: earlier → right
+    assert be._cpair([hi, late] * 10) == 100.0
+    cross = _sk_row(0, 0.5, [0.6, 0.8, 1.1] + [1.2] * 9, 3)          # crosses inside the cut: beats a non-crossing one
+    assert be._cpair([cross, late] * 10) == 100.0
 
 
 def test_a_day_outside_the_learned_range_is_not_answered():
@@ -642,7 +666,7 @@ def _one(fc_fits, cal, app_row, cs, day="2030-12-30"):
 
 
 CAL0 = {"built": "2031-01-01", "cty": {str(H): [[0.0, 0.0], [1.0, 1.0]] for H in be.HS},
-        "pit": {"0.1": 0.1, "0.5": 0.5, "0.9": 0.9}, "band": {}}
+        "pit": {"0.1": 0.1, "0.5": 0.5, "0.9": 0.9}, "band": {}, "cv": be.CALV}       # (a calibration with the shift's parts)
 
 
 def test_what_is_already_observed_floors_the_curve():
@@ -706,9 +730,11 @@ def test_an_empty_back_test_is_no_calibration_the_last_good_one_stays(tmp_path, 
     assert capsys.readouterr().err.count("be skipped: ValueError") == 1 and be.pop_line().endswith("calib no")
     with open(os.path.join(data, "be_tab", "calib.json"), encoding="utf-8") as f:
         kept = json.load(f)
-    assert {k: v for k, v in kept.items() if k != "tried"} == {k: v for k, v in good.items() if k != "tried"}
-    b = body_of(site, "a")                                               # the day's answers: the last good calibration's
-    assert b["calib"] == TODAY.isoformat() and b["skill"] == good["skill"][KEYS["a"]] and d2["be"]["calib"] == TODAY.isoformat()
+    same = lambda c: {k: v for k, v in c.items() if k not in ("tried", "skill")}    # noqa: E731
+    assert same(kept) == same(good)                                      # the last good maps and ranges stay …
+    b = body_of(site, "a")                                               # … the skill: this build's own (asof ran)
+    assert b["calib"] == TODAY.isoformat() and b["skill"] == kept["skill"][KEYS["a"]] and d2["be"]["calib"] == TODAY.isoformat()
+    assert isinstance(b["skill"]["c"], list)
 
 
 def test_a_day_not_broken_even_never_answers_a_day_before_its_age():
@@ -756,13 +782,19 @@ def test_an_old_day_shows_its_real_roas_where_it_has_lived_never_the_model():
     never = R(day=day, sp=100.0, na=50.0, cum=[100.0 * v for v in real], obs=360, oc=90.0)
     dn = _one(fits, CAL0, never, cs)
     a = dn["app"]
-    assert dn["real"] == real and a["roas"] == real and a["lo"] == [None] * 13    # real everywhere (no band in CAL0)
+    assert dn["real"] == real and a["roas"] == real and a["anc"] == 360           # real everywhere …
+    assert a["lo"] == a["hi"] == real                                             # … no spread where it has lived
     assert a["be"] == [None, None, None]                                           # never reached 100 % in its 360 days
-    young = R(day=day, sp=100.0, na=50.0, cum=[100.0 * v for v in real[:6]] + [None] * 7, obs=13, oc=25.0)
-    dy = _one(fits, CAL0, young, cs)
-    y = dy["app"]
-    assert dy["real"] == real[:6] and y["roas"][:6] == real[:6] and y["roas"][6:] == [1.2] * 7   # lived: real; after: model
-    assert 13 < y["be"][0] <= 30
+    d17 = "2030-12-14"                     # (17 days old: its day-14 cell is 4 days old — the shift reads it)
+    young = R(day=d17, sp=100.0, na=50.0, cum=[100.0 * v for v in real[:6]] + [None] * 7, obs=13, oc=25.0)
+    dy = _one(fits, CAL0, young, {"AA": R(day=d17, sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0))},
+              day=d17)
+    y = dy["app"]                          # lived: real; after: the model's GROWTH from its final read (flat here: none)
+    assert dy["real"] == real[:6] and y["roas"][:6] == real[:6] and y["roas"][6:] == [0.25] * 7 and y["anc"] == 13
+    assert y["be"] == [None, None, None]   # (a flat model never lifts a day at 25 % to 100 % — not its 120 % level)
+    fresh = R(day=day, sp=100.0, na=50.0, cum=[5.0] + [None] * 12, obs=0, oc=5.0, fin=[None] * 13)   # nothing final yet
+    f = _one(fits, CAL0, fresh, cs)["app"]
+    assert "anc" not in f and f["roas"][1:] == [1.2] * 12 and 0 < f["be"][0] <= 1   # unshifted: the model as it is
     bec = [0.05, 0.08, 0.1, 0.12, 0.16, 0.25, 0.4, 0.7, 0.9, 1.005, 1.3, 1.4, 1.5]
     broke = R(day=day, sp=100.0, na=50.0, cum=[100.0 * v for v in bec], obs=360, oc=150.0, hi=120, be=118.0)
     b = _one(fits, CAL0, broke, cs)["app"]
@@ -838,8 +870,13 @@ def test_a_model_age_never_falls_below_the_real_one_before_it():
     cs = {"AA": R(day=day, sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0))}
     real = [0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 1.1, 1.4, 1.7, 1.9, 2.1, 2.4045]
     row = R(day=day, sp=100.0, na=50.0, cum=[100.0 * v for v in real] + [None], obs=277, oc=239.0, rbe=(2, "x"))
-    a = _one(fits, CAL0, row, cs)["app"]
-    assert a["roas"][11] == 2.4045 and a["roas"][12] == 2.4045                     # (the model said 2.3; its so far 2.39)
+    a = _one(fits, CAL0, row, cs)["app"]   # (the model said 2.3 at 360; shifted from its real 270: × 2.3 ÷ 2.2)
+    assert a["roas"][11] == 2.4045 and a["roas"][12] == round(2.4045 * 2.3 / 2.2, 4) and a["anc"] == 270
+    flat = [[j, [math.log(v), 0.0, 0.0], -0.2, 0.2, 40, math.log(v)] for j, v in
+            enumerate([0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 1.1, 1.4, 1.7, 1.9, 2.1, 2.3, 2.2])]      # a model dipping at 360
+    fits2 = {"AA": dict(fits["AA"], cv=flat)}
+    a2 = _one(fits2, CAL0, row, cs)["app"]
+    assert a2["roas"][12] >= a2["roas"][11] == 2.4045                             # never below the real one before it
 
 
 def test_a_so_far_read_past_spend_is_broken_even_by_that_day_never_abhi_nahi():
@@ -866,3 +903,364 @@ def test_the_so_far_read_is_capped_at_365_and_never_below_the_last_point_and_nev
     assert (y.sfa, y.sfv) == (59, 31.0)                    # a later read lower than the last point keeps the point's value
     assert be._rr(0.99996) == 0.9999 and be._rr(1.00004) == 1.0 and be._rr(0.5) == 0.5
 
+
+
+# ── the "ROAS ab tak" shift (owner, 15 Nov 2026: "haan, pehle backtest karke dikhao" → "haan live karo") ───────────
+
+UP = [0.3, 0.35, 0.4, 0.42, 0.46, 0.54, 0.67, 0.84, 0.95, 1.4, 1.5, 1.6, 1.7]   # a growing model at the 13 grid ages
+
+
+def _up_fits():
+    cv = [[j, [math.log(v), 0.0, 0.0], -0.2, 0.2, 40, math.log(v)] for j, v in enumerate(UP)]
+    return {"AA": {"k3": [math.log(31.0), 0.0, 0.0, 0.5, 400, 30, 0, 10], "cv": cv, "rng": WIDE}}
+
+
+def test_the_shift_moves_the_curve_to_what_the_day_really_made():
+    """A day at 1.5 × its model by day 14 (its latest final grid age, 13): after it, the model's GROWTH times what it made
+    (UP(t) ÷ UP(13) × 81 %) — 100 % by day 30 (the unshifted curve: day 94); one at 0.5 × lags the same way: past its
+    curve, never "day 94". The range: the shift's own errors at that age (bandb)."""
+    day = "2030-12-14"                     # (17 days old: its day-14 cell is 4 days old — the shift reads it)
+    cs = {"AA": R(day=day, sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0))}
+    i13, i30 = be.GRID.index(13), be.GRID.index(30)
+    ahead = R(day=day, sp=100.0, na=50.0, cum=[150.0 * v for v in UP[:6]] + [None] * 7, obs=13, oc=81.0)
+    bb = {"13": {str(t): [0.0, math.log(0.8), math.log(1.25), 99] for t in be.GRID if t > 13}}
+    a = _one(_up_fits(), dict(CAL0, bandb=bb), ahead, cs, day=day)["app"]
+    assert a["anc"] == 13 and a["roas"][i13] == 0.81 and a["roas"][i30] == round(0.81 * 0.67 / 0.54, 4)
+    assert a["be"][0] == 30 and a["be"][1] < 30 < a["be"][2]                      # the range around it
+    assert a["lo"][i30] == 0.81 and a["hi"][i30] == round(0.81 * 0.67 / 0.54 * 1.25, 4)   # (the low end: never below
+    assert a["lo"][be.GRID.index(60)] == round(0.81 * 0.84 / 0.54 * 0.8, 4)                # what it made: 80.4 → 81 %)
+    plain = _one(_up_fits(), dict(CAL0, bandb=bb), R(day=day, sp=100.0, na=50.0, cum=[150.0 * v for v in UP[:6]] +
+                                                     [None] * 7, obs=13, oc=81.0, fin=[None] * 13), cs, day=day)["app"]
+    assert "anc" not in plain and plain["be"][0] == 94                           # (unshifted: max(model, so far))
+    behind = R(day=day, sp=100.0, na=50.0, cum=[50.0 * v for v in UP[:6]] + [None] * 7, obs=13, oc=27.0)
+    b = _one(_up_fits(), CAL0, behind, cs, day=day)["app"]
+    fresh = R(day="2030-12-15", sp=100.0, na=50.0, cum=[150.0 * v for v in UP[:6]] + [None] * 7, obs=13, oc=81.0)
+    f = _one(_up_fits(), dict(CAL0, bandb=bb), fresh, {"AA": cs["AA"]}, day="2030-12-15")["app"]
+    assert f["anc"] == 6                   # 16 days old: its day-14 cell is only 3 days old (often still empty) → day 7
+    assert b["roas"][-1] == round(0.27 * 1.7 / 0.54, 4) < 1 and b["be"][0] is None  # 85 % by day 360: beyond data
+    assert "lo" in b and all(v is None for v in b["lo"][i13 + 1:])                 # (no band at its age: no range)
+
+
+def _days(n, r0, last=None, age0=40):
+    """n consecutive install days (oldest first), each final through day 1 only (anchor 0), its day-0 ROAS r0 (the last
+    one's: last)."""
+    out, cs = [], {}
+    for i in range(n):
+        d = (date(2030, 12, 31) - timedelta(days=age0 + n - 1 - i)).isoformat()
+        v = last if (last is not None and i == n - 1) else r0
+        out.append(R(day=d, sp=100.0, na=50.0, cum=[100.0 * v] + [None] * 12, obs=0, oc=100.0 * v))
+        cs[d] = {"AA": R(day=d, sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0))}
+    return out, cs
+
+
+def _many(rows, cs, cal=None):
+    fc = {"origin": "2031-01-01", "app_med": [], "fits": _up_fits()}
+    return be.predict("k", fc, cal or CAL0, ("2030-12-31", rows, cs))["days"]
+
+
+def test_a_country_is_shifted_on_its_own_read_with_the_range_for_its_size():
+    """A country at 1.5 × its curve by day 14: its day off its own SHIFTED curve; its range from the shift's errors for its
+    size bucket (40 new users: "0"), a bigger row with no bucket of its own takes every size pooled ("all")."""
+    day = "2030-12-14"                                     # 17 days before the newest: its day-13 cell is 4 days old
+    row = R(day=day, sp=100.0, na=50.0, cum=[150.0 * v for v in UP[:6]] + [None] * 7, obs=13, oc=81.0)
+    cb = {"13": {str(t): {"0": [0.0, math.log(0.5), math.log(2.0), 99], "all": [0.0, math.log(0.9), math.log(1.1), 99]}
+                 for t in be.GRID if t > 13}}
+    cal = dict(CAL0, cbandb=cb)
+    out = {}
+    for n in (40, 500):
+        x = R(day=day, sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0), n=n,
+              cum=[150.0 * v for v in UP[:6]] + [None] * 7, obs=13, oc=81.0)
+        out[n] = _one(_up_fits(), cal, row, {"AA": x}, day=day)["cty"][0][7:]
+    small, big = out[40], out[500]
+    assert small[0] == big[0] == 30 and small[3:] == big[3:] == [360, 0]          # the same shifted median
+    assert small[1] < big[1] <= 30 <= big[2] < small[2]                          # the small row's range is wider
+    x0 = R(day=day, sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0), n=40,
+           cum=[150.0 * v for v in UP[:6]] + [None] * 7, obs=13, oc=81.0, fin=[None] * 13)
+    assert _one(_up_fits(), cal, row, {"AA": x0}, day=day)["cty"][0][7] == 94    # nothing final: its curve unshifted
+    # a country's daily cell 3 days old is often still empty (its split lags): the shift waits a day more (CLAG) —
+    # 16 days old, its day-13 cell is 3 days old: shifted at day 7 (age 6) instead, never on that cell
+    d2 = "2030-12-15"
+    x3 = R(day=d2, sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0), n=40,
+           cum=[150.0 * v for v in UP[:5]] + [100.0 * UP[5]] + [None] * 7, obs=13, oc=54.0)   # (day 14: the empty cell)
+    row2 = R(day=d2, sp=100.0, na=50.0, cum=[150.0 * v for v in UP[:6]] + [None] * 7, obs=13, oc=81.0)
+    cb6 = {"6": cb["13"]}
+    got = _one(_up_fits(), dict(CAL0, cbandb=cb6), row2, {"AA": x3}, day=d2)["cty"][0][7]
+    assert got is not None and got < 94                       # its day-7 read (1.5 ×) shifts it, the empty cell does not
+
+
+def test_the_shifts_fits_never_read_past_their_moment(tmp_path):
+    """Every cell observed after a cut-off date multiplied by 1.37 (the app's rows and its country rows): every fit the
+    shift's back-test answers with at a month start up to the cut-off (asof: the month start of install day + a + LAG) is
+    exactly the same — the fits, the ranges and the anchors read nothing later — while the later ones do change."""
+    site, data, dash = make(tmp_path)
+    key, fn = KEYS["a"], "roi_%s.json.gz" % KEYS["a"]
+    cut = date.fromordinal(TODAY.toordinal() - 120)
+
+    def fits():
+        newest, app, cty = be.load(site, data, key, fn)
+        out = {}
+        for O in sorted({be._month(o) for o in range(DAY0.toordinal() + 60, TODAY.toordinal())}):
+            out[O] = json.dumps({cc: [v[0], v[1], v[2]] for cc, v in be._fits_at(cty, O).items()}, sort_keys=True,
+                                default=list)
+        return out
+    before = fits()
+
+    def bump(rows):
+        for r in rows:
+            X = date.fromisoformat(r[0])
+            r[4] = [v * 1.37 if X + timedelta(days=a) > cut else v for a, v in enumerate(r[4])]
+            if len(r) > 14 and r[14]:
+                r[14] = [v * 1.37 if X + timedelta(days=30 * (i + 2)) > cut else v for i, v in enumerate(r[14])]
+            r[8] = r[4][-1] if r[4] else r[8]
+    for f in (fn, "roi_%s_c00.json.gz" % key):
+        p = os.path.join(site, f)
+        with gzip.open(p, "rt", encoding="utf-8") as h:
+            body = json.load(h)
+        for rows in ([body["rows"]] if "rows" in body else body["c"].values()):
+            bump(rows)
+        with gzip.open(p, "wt", encoding="utf-8") as h:
+            json.dump(body, h)
+    after = fits()
+    upto = [O for O in before if O <= cut.toordinal()]
+    later = [O for O in before if O > cut.toordinal() + 31]
+    assert len(upto) >= 12 and len(later) >= 2
+    assert all(before[O] == after[O] for O in upto)                              # nothing after the moment reached them
+    assert any(before[O] != after[O] for O in later)                             # (the bump is real where it may act)
+
+
+def test_the_shifts_ranges_need_enough_days_and_pool_the_sizes():
+    from array import array
+    RB = {(6, 30): array("d", [0.01 * i for i in range(60)]), (6, 90): array("d", [0.0] * 49)}
+    CB = {(13, 90, 0): array("d", [0.02 * i for i in range(30)]), (13, 90, 3): array("d", [0.01 * i for i in range(60)])}
+    bb, cb = be.bands(RB, CB)
+    assert set(bb) == {"6"} and set(bb["6"]) == {"30"}                            # 49 errors at 90: no range
+    m, q10, q90, n = bb["6"]["30"]
+    assert n == 60 and q10 < m < q90 and m == pytest.approx(0.295) and q10 == pytest.approx(0.059)
+    assert set(cb["13"]["90"]) == {"3", "all"} and cb["13"]["90"]["all"][3] == 90   # bucket 0 (30): only in "all"
+
+
+def test_a_calibration_without_the_shifts_ranges_is_made_again_the_same_day(tmp_path):
+    site, data, dash = make(tmp_path)
+    be.run(dash, data, site, {}, NOW)
+    be.pop_line()
+    p = os.path.join(data, "be_tab", "calib.json")
+    with open(p, encoding="utf-8") as f:
+        cal = json.load(f)
+    old = {k: v for k, v in cal.items() if k not in ("cv", "bandb", "cbandb")}      # (an older build's file)
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(old, f)
+    d2 = copy.deepcopy(dash)
+    be.run(d2, data, site, {}, NOW + timedelta(hours=2))
+    assert be.pop_line().endswith("refit no, calib yes")
+    with open(p, encoding="utf-8") as f:
+        assert json.load(f)["cv"] == be.CALV
+
+
+def test_a_skill_kept_from_before_the_shift_passes_through_as_it_was():
+    """A calibration kept from before the shift (its new one failed) carries one install-time C (a number): the file keeps
+    it as it was — the page reads that shape with its own old words — never the old AUC under the new day labels."""
+    fc = {"origin": "2031-01-01", "app_med": [], "fits": {}}
+    row = R(day="2030-12-30", sp=100.0, na=50.0, obs=0, oc=10.0)
+    old = {"auc": [80.0, 60.0, 45.0], "c": 55.0, "n": 600}
+    got = be.predict("k", fc, CAL0, ("2030-12-31", [row], {}), old)["skill"]
+    assert got == {"auc": [80.0, 60.0, 45.0], "c": 55.0, "n": 600}
+    new = be.predict("k", fc, CAL0, ("2030-12-31", [row], {}), {"auc": [None] * 3, "c": [90.0, None, 95.0], "n": 9})
+    assert new["skill"] == {"auc": [None] * 3, "c": [90.0, None, 95.0], "n": 9}
+    assert be.predict("k", fc, CAL0, ("2030-12-31", [row], {}))["skill"]["c"] == [None] * 3
+
+
+def test_a_failing_first_calibration_after_the_shift_keeps_the_unshifted_curve_and_its_old_skill(tmp_path, monkeypatch,
+                                                                                                   capsys):
+    """The first build after the shift ships finds a calibration from before it (no shift ranges, no growth bound, one
+    install-time C per app) and its new calibration fails: no day is shifted without the shift's parts — the unshifted
+    curve with its band, and the old skill as it was (the page reads that shape with its old words) — and the next build
+    tries again (no "cv" stamped)."""
+    site, data, dash = make(tmp_path)
+    be.run(dash, data, site, {}, NOW)
+    be.pop_line()
+    p = os.path.join(data, "be_tab", "calib.json")
+    with open(p, encoding="utf-8") as f:
+        cal = json.load(f)
+    old = {k: v for k, v in cal.items() if k not in ("cv", "bandb", "cbandb", "grow")}   # (a pre-shift file)
+    old["skill"] = {k: {"auc": [80.0, 60.0, 45.0], "c": 55.0, "n": 600} for k in cal["skill"]}
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(old, f)
+    calls = {"n": 0}
+
+    def boom(*a, **k):
+        calls["n"] += 1
+        return 1 / 0
+    monkeypatch.setattr(be, "calibrate", boom)
+    capsys.readouterr()
+    d2 = copy.deepcopy(dash)
+    assert be.run(d2, data, site, {}, NOW + timedelta(hours=3)) == ["/be_*"]
+    assert be.pop_line().endswith("calib no") and "be skipped: ZeroDivisionError" in capsys.readouterr().err
+    b = body_of(site, "a")
+    assert b["skill"] == {"auc": [80.0, 60.0, 45.0], "c": 55.0, "n": 600}
+    assert not any("anc" in (d.get("app") or {}) for d in b["days"])            # nothing shifted without its parts
+    with open(p, encoding="utf-8") as f:
+        assert "cv" not in json.load(f)
+    be.run(copy.deepcopy(dash), data, site, {}, NOW + timedelta(hours=5))
+    assert calls["n"] == 2                                                       # (tried again on the next build)
+    be.pop_line()
+
+
+def _cohorts(n, hole=None, weak=None, last=date(2030, 12, 31)):
+    """n consecutive install days (oldest first) ending CLAG days before `last`, each earning 30 on its install day and
+    1 a day after (daily cells final through day 30 or its age − LAG); on the calendar date `hole` every cohort earns 0
+    that day; the install day `weak` earns a tenth of everyone else (a weak day, not a hole)."""
+    rows = []
+    for i in range(n):
+        X = last - timedelta(days=be.CLAG + n - 1 - i)
+        k = 0.1 if weak is not None and X == weak else 1.0
+        dd, c = [], 0.0
+        for a in range(min(31, (last - X).days - be.LAG + 1)):
+            if not (hole is not None and X + timedelta(days=a) == hole):
+                c += (30.0 if a == 0 else 1.0) * k
+            dd.append(c)
+        rows.append(R(day=X.isoformat(), sp=100.0, na=50.0, dd=dd))
+    return rows
+
+
+def _adm(low=None):
+    """AdMob's own revenue of every day (100 USD), the date `low` at 5 (a real outage)."""
+    d0 = date(2030, 9, 1).toordinal()
+    return {o: (5.0 if low is not None and o == low.toordinal() else 100.0) for o in range(d0, d0 + 130)}
+
+
+def test_a_hole_is_a_calendar_date_ga4_lost_on_every_cohort_never_a_weak_day_or_a_real_outage():
+    """_holes: the older cohorts (7–30 days old: their revenue does not move with the day's spend) together earning near
+    nothing on one date while AdMob's own revenue was normal is a GA4 hole; one install day earning little is a weak
+    day; a date AdMob lost too is a real outage (its numbers are true); no AdMob read: no hole claimed."""
+    nw = date(2030, 12, 31).toordinal()
+    hole = date(2030, 12, 1)
+    assert be._holes(_cohorts(60, hole=hole), nw, _adm()) == {hole.toordinal()}
+    assert be._holes(_cohorts(60, hole=hole), nw, _adm(low=hole)) == set()        # AdMob lost it too: a real outage
+    assert be._holes(_cohorts(60, hole=hole), nw) == set()                        # (no AdMob read: no claim)
+    assert be._holes(_cohorts(60, weak=date(2030, 12, 1)), nw, _adm()) == set()  # one weak install day: no hole
+    assert be._holes(_cohorts(60), nw, _adm()) == set()
+    few = _cohorts(14, hole=date(2030, 12, 25))                                  # 5 older cohorts on that date
+    half = {k: v / 2 for k, v in _adm().items()}
+    assert be._holes(few, nw, half) == set()                                     # (< HOLE_MIN: no claim …)
+    hm = be.HOLE_MIN
+    try:
+        be.HOLE_MIN = 1
+        assert be._holes(few, nw, half) == {date(2030, 12, 25).toordinal()}     # (… that is the only reason)
+    finally:
+        be.HOLE_MIN = hm
+    long = _cohorts(60)
+    for x in long:                         # a 6-day hole: every date of it, never its own baseline
+        X = date.fromisoformat(x.day)
+        c, dd = 0.0, []
+        for a in range(len(x.dd)):
+            if not date(2030, 12, 1) <= X + timedelta(days=a) <= date(2030, 12, 6):
+                c += 30.0 if a == 0 else 1.0
+            dd.append(c)
+        x.dd = dd
+    assert be._holes(long, nw, _adm()) == {date(2030, 12, d).toordinal() for d in range(1, 7)}
+    big = {k: v * 20 for k, v in _adm().items()}                                 # paid cohorts ~1 % of AdMob's revenue
+    assert be._holes(_cohorts(60, hole=hole), nw, big) == set()                  # (too small a signal to call a hole)
+
+
+def test_a_day_with_a_hole_in_its_first_week_says_data_check_and_stays_shifted():
+    """The days whose first 7 days hold a hole date carry "chk" (the page: "data check" — their real ROAS is low by
+    what the data lost); their forecast stays the shift (measured against the recorded data, falling back to the
+    unshifted curve cost accuracy). Days before and after that window: no mark."""
+    hole = date(2030, 11, 20)
+    rows = _cohorts(60, hole=hole)
+    for x in rows:                         # (their model view: final grid cells from the daily ones)
+        x.cum = [x.dd[a] if a < len(x.dd) else None for a in be.GRID]
+        x.fin = list(x.cum)
+        x.obs = max(a for a in be.GRID if a < len(x.dd))
+        x.oc = x.dd[x.obs]
+        x.sfa, x.sfv = x.obs, x.oc
+    cs = {x.day: {"AA": R(day=x.day, sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0))} for x in rows}
+    fc = {"origin": "2031-01-01", "app_med": [], "fits": _up_fits()}
+    out = {d["d"]: d for d in be.predict("k", fc, CAL0, ("2030-12-31", rows, cs, _adm()))["days"]}
+    assert not any(d.get("chk") for d in _many(rows, cs))                       # (no AdMob read: no mark)
+    marked = sorted(d for d, x in out.items() if x.get("chk"))
+    want = sorted((hole - timedelta(days=k)).isoformat() for k in range(be.HOLE_W)
+                  if "anc" in out[(hole - timedelta(days=k)).isoformat()]["app"])
+    assert marked == want and len(marked) >= 5                                    # its first 7 days held the hole
+    assert all("anc" in out[d]["app"] for d in marked)                           # … still shifted
+
+
+def test_the_shifts_growth_never_leaves_what_real_days_grew():
+    """A model read far outside its inputs can claim growth no real install day had (×1.5 from day 90 to 120 where real
+    days grew ≤ ×1.2): the shift's growth stays inside the 1st / 99th percentile of the apps' real growth at that step
+    (calib "grow")."""
+    ages = [0, 1, 2, 3, 6, 13, 30, 60, 90, 120]
+    vals = [0.1, 0.12, 0.13, 0.14, 0.16, 0.2, 0.3, 0.4, 0.5, 0.75]              # ×1.5 from 90 to 120
+    gq = {"90": {"120": [0.0, math.log(1.2), 500]}}
+    got = be._bound(ages, be._shifted(ages, vals, 90, 0.7), 90, 0.7, gq)
+    assert got[-1] == pytest.approx(0.7 * 1.2) and got[ages.index(90)] == pytest.approx(0.7)
+    low = be._bound(ages, be._shifted(ages, [v if t != 120 else 0.5 for t, v in zip(ages, vals)], 90, 0.7), 90,
+                    0.7, {"90": {"120": [math.log(1.02), math.log(1.2), 500]}})
+    assert low[-1] == pytest.approx(0.7 * 1.02)                                   # (a flat model: at least the 1st %)
+    assert be._bound(ages, None, 90, 0.7, gq) is None
+
+
+def test_the_day_7_auc_and_the_country_ranges_leave_out_what_had_already_broken_even(tmp_path, monkeypatch):
+    """On day 7 a day that had already broken even shows its real day, never a forecast: it is not an AUC point (a free
+    right answer) — nor, at its age, a country range error or a ranking row (_open)."""
+    assert be._open(R(hi=None), 6) and be._open(R(hi=7), 6) and not be._open(R(hi=6), 6) and not be._open(R(hi=2), 6)
+    site, data, dash = make(tmp_path)
+    newest, app, cty = be.load(site, data, KEYS["a"], "roi_%s.json.gz" % KEYS["a"])
+    use = [r for r in app if be._usable(r) and r.X + 200 < date.fromisoformat(newest).toordinal()]
+    for r in use[::20]:                    # (a few old days made early breakers: back on day 3)
+        r.hi, r.be = 3, 3.0
+    seen = []
+    orig = be._mature
+    monkeypatch.setattr(be, "_mature", lambda age, hi, obs, H: seen.append(hi) or orig(age, hi, obs, H))
+    be.asof(KEYS["a"], newest, app, cty, {})
+    assert len(use[::20]) >= 10 and seen and all(h is None or h > be.AUC_A for h in seen)   # (left out of the AUC)
+
+
+def test_the_growth_bound_is_the_apps_own_widened_by_every_apps_and_predict_uses_it():
+    """An app whose days really grow faster keeps its own room (its q99 above the pooled one), a model read far outside
+    every app's experience is still held: _gq takes the wider of the two; predict bounds the app line and each
+    country with it."""
+    grow = {"app": {"13": {"30": [0.0, math.log(1.2), 900]}}, "cty": {"13": {"30": [0.0, math.log(1.1), 900]}},
+            "apps": {"k": {"app": {"13": {"30": [math.log(1.05), math.log(1.6), 80]}}}}}
+    assert be._gq(grow, "k", "app") == {"13": {"30": [0.0, math.log(1.6), 900]}}
+    assert be._gq(grow, "other", "app") == {"13": {"30": [0.0, math.log(1.2), 900]}}
+    assert be._gq(None, "k", "cty") == {}
+    day = "2030-12-14"
+    cs = {"AA": R(day=day, sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0), n=40,
+                  cum=[150.0 * v for v in UP[:6]] + [None] * 7, obs=13, oc=81.0)}
+    row = R(day=day, sp=100.0, na=50.0, cum=[150.0 * v for v in UP[:6]] + [None] * 7, obs=13, oc=81.0)
+    free = _one(_up_fits(), CAL0, row, cs, day=day)
+    held = _one(_up_fits(), dict(CAL0, grow={"app": {"13": {"30": [0.0, math.log(1.1), 900]}},
+                                             "cty": {"13": {"30": [0.0, math.log(1.1), 900]}}}), row, cs, day=day)
+    i30 = be.GRID.index(30)
+    assert free["app"]["roas"][i30] == round(0.81 * 0.67 / 0.54, 4)               # × 1.24 unbounded
+    assert held["app"]["roas"][i30] == round(0.81 * 1.1, 4)                       # × 1.1 at most
+    assert held["cty"][0][7] > free["cty"][0][7]                                   # (the country bounded too: later)
+
+
+def test_growth_keeps_the_1st_and_99th_percentile_of_enough_days():
+    from array import array
+    GA = {(6, 30): array("d", [math.log(1.0 + 0.01 * i) for i in range(100)]), (6, 90): array("d", [0.1] * 49)}
+    g = be.growth(GA, {})
+    assert set(g) == {"app", "cty"} and g["cty"] == {} and set(g["app"]["6"]) == {"30"}       # (49 days: no bound)
+    lo, hi, n = g["app"]["6"]["30"]
+    assert n == 100 and lo == pytest.approx(math.log(1.0099), abs=1e-4) and hi == pytest.approx(math.log(1.9801), abs=1e-4)
+
+
+def test_the_ranking_and_the_country_ranges_also_leave_out_rows_broken_even_by_then(tmp_path):
+    """The same _open filter as the day-7 AUC: an install day already broken even by a is no ranking row at a, and a
+    country row broken even by a gives no range error at a (the page shows their real days)."""
+    site, data, dash = make(tmp_path)
+    newest, app, cty = be.load(site, data, KEYS["a"], "roi_%s.json.gz" % KEYS["a"])
+    rb, cb, sk, au, n, ga, gc = be.asof(KEYS["a"], newest, app, cty, {})
+    nsk, ncb = len(sk[6]), sum(len(v) for (a, t, z), v in cb.items() if a == 6)
+    nw = date.fromisoformat(newest).toordinal()
+    old = [r for r in app if be._usable(r) and r.X + 200 < nw and r.hi is None or (r.hi is not None and r.hi > 6)][::25]
+    for r in old:
+        r.hi, r.be = 3, 3.0
+    oc = [x for rows in cty.values() for x in rows if x.jd and x.X + 200 < nw and (x.hi is None or x.hi > 6)][::25]
+    for x in oc:
+        x.hi, x.be = 3, 3.0
+    rb, cb, sk, au, n, ga, gc = be.asof(KEYS["a"], newest, app, cty, {})
+    assert len(old) >= 10 and len(sk[6]) < nsk                                    # those days: no ranking row on day 7
+    assert len(oc) >= 10 and sum(len(v) for (a, t, z), v in cb.items() if a == 6) < ncb   # … and no range error

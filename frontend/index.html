@@ -3065,6 +3065,7 @@ h2.cpx-h{font-size:20px;margin:0 0 3px;font-weight:800}.cpx-d{margin:0;color:var
 .cpx-svg .cpx-be1{stroke:var(--good);stroke-width:1.2;stroke-dasharray:2 3}.cpx-svg .cpx-be1t{fill:var(--good);font-size:11px;font-weight:700}
 .cpx-svg circle.cpx-bep{fill:var(--panel2);stroke:var(--ink2);stroke-width:1.4}
 .cpx-svg circle.cpx-dot.cpx-benf{fill:var(--panel2);stroke-width:1.8}   /* a card point not final yet: hollow */
+.cpx-fn b.cpx-chk,.cpx-t td small.cpx-chk{color:var(--watch);font-weight:600}   /* ⚖️ a GA4 hole in a day's first week: "data check" */
 .cpx-beu{overflow-wrap:anywhere}
 .cpx-ft{color:var(--faint);font-size:12px;margin:12px 0 0;max-width:1100px}.cpx-ft b{color:var(--ink2)}
 .cpx-lnk{background:none;border:none;padding:0;font:inherit;color:var(--cyan);font-weight:700;cursor:pointer;text-decoration:underline}
@@ -9624,14 +9625,20 @@ function beNow(n){ const no=beDash('is din ka abhi tak ka data nahi aaya'); if(!
   if(n[0]==='be'&&num(n[1])!=null){ const k=beKind(n); return `<b class="cpx-good"${BEKT[k]?` title="${E(BEKT[k])}"`:''}>✅ Broke even: ${beLe(k)?'≤ ':''}day ${Math.round(n[1])}</b>${beNf(k)?' <small>not final</small>':''}`; }
   if(n[0]!=='no') return no; const a=num(n[1]), v=num(n[2]);
   return `Not yet · ROAS ${v!=null?`<b>${beRf(v)}</b>`:beDash('abhi tak ka ROAS nahi aaya')}${a!=null?`<small>by day ${Math.round(a)}${n[3]===0?' (not final)':''}</small>`:''}`; }
-// "how sure": the back-test's skill for this app (AUC at 30 / 90 / 180 days, C) — a fraction or points
+// "how sure" ("kitna pakka"): the "ROAS ab tak" shift's back-test for this app — the breakeven ranking (C) on day 1 / 7 /
+// 14 (each day answered with only what it knew then; every true pair cut at the shorter of its two curves) and, on day
+// 7, "broke even within 30 / 90 / 180 days?" (AUC; shown only where scorable) — an older file's one C (number) as it was
 function beSure(F,P){ const s=F.skill&&typeof F.skill==='object'&&!Array.isArray(F.skill)?F.skill:null, au=s&&Array.isArray(s.auc)?s.auc.map(num):[], n=s?num(s.n):null;
-  const pt=v=>v==null?null:Math.round(v<=1?v*100:v), B=[0,1,2].map(i=>pt(au[i])), C=pt(s?num(s.c):null);
+  const pt=v=>v==null?null:Math.round(v<=1?v*100:v), B=[0,1,2].map(i=>pt(au[i]));
+  const CC=s&&Array.isArray(s.c)?[0,1,2].map(i=>pt(num(s.c[i]))):null, C1=s&&!Array.isArray(s.c)?pt(num(s.c)):null;
   const o=okD(F.origin)?F.origin:okD(P.origin)?P.origin:null, c=okD(F.calib)?F.calib:okD(P.calib)?P.calib:null;
   const at=[o?'andaza '+fd(o)+' ke data se':'',c?'calibration '+fd(c):''].filter(Boolean).join(', ');
-  if(!B.some(v=>v!=null)&&C==null) return `<p class="cpx-vd"><b>Is app ka andaza kitna pakka:</b> abhi kehne ke liye din kam${n>0?` (sirf ${fN(n)} din parkhe)`:''}.</p>${at?`<p class="cpx-fn">${E(at)}.</p>`:''}`;
+  if(!B.some(v=>v!=null)&&!(CC&&CC.some(v=>v!=null))&&C1==null) return `<p class="cpx-vd"><b>Is app ka andaza kitna pakka:</b> abhi kehne ke liye din kam${n>0?` (sirf ${fN(n)} din parkhe)`:''}.</p>${at?`<p class="cpx-fn">${E(at)}.</p>`:''}`;
   const v=(x,w)=>x!=null?`<b>${x}%</b>`:beDash(w);
-  return `<p class="cpx-vd"><b>Is app ka andaza kitna pakka:</b> ${[30,90,180].map((H,i)=>`${H} din ${v(B[i],H+' din pe parkhne layak purane din kam')}`).join(' · ')} sahi · kaun din pehle BE karega: ${v(C,'ranking parkhne layak purane din kam')} sahi</p>`
+  if(CC) return `<p class="cpx-vd"><b>Is app ka andaza kitna pakka:</b> kaun din pehle BE karega (1 / 7 / 14 days ke data pe): ${CC.map((x,i)=>x!=null?`<b>${x}%</b>`:beDash([1,7,14][i]+(i?' days':' day')+' ke data pe parkhne layak purane din kam (10 se kam BE wale din)')).join(' / ')} sahi`
+      +(B.some(x=>x!=null)?` · BE 30 / 90 / 180 din tak (7 days ke data pe): ${B.map((x,i)=>x!=null?x+'%':beDash([30,90,180][i]+' din pe parkhne layak purane din kam')).join(' / ')} sahi`:'')+'</p>'
+    +`<p class="cpx-fn">Purane ${n>0?fN(n)+' ':''}install din pe parkha (back-test): har din ko sirf utne din ka data dekar (1 / 7 / 14 days; 1 day = sirf install ka din), phir asli nateeje se milaya — BE wale aur na-BE wale din me se pehle wala kitni baar pehchana · 50% = tukka, 100% = hamesha sahi${at?' · '+E(at):''}.</p>`;
+  return `<p class="cpx-vd"><b>Is app ka andaza kitna pakka:</b> ${[30,90,180].map((H,i)=>`${H} din ${v(B[i],H+' din pe parkhne layak purane din kam')}`).join(' · ')} sahi · kaun din pehle BE karega: ${v(C1,'ranking parkhne layak purane din kam')} sahi</p>`
     +`<p class="cpx-fn">Purane ${n>0?fN(n)+' ':''}install din pe parkha (back-test): BE wale aur na-BE wale din me se sahi din kitni baar pehchana · 50% = tukka, 100% = hamesha sahi${at?' · '+E(at):''}.</p>`; }
 // the 14-day card: ROAS so far at days 1 2 3 4 7 14 (solid) vs the benchmark (the app's median past curve, dashed), the 100 %
 // line, every point's value printed (the higher of the two above its point, the lower one below it: never on top of each other)
@@ -9653,8 +9660,13 @@ function beCard(cd){ const ar=k=>cd&&typeof cd==='object'&&Array.isArray(cd[k])&
   const vs=j!=null?`<p class="cpx-vm">${BEK[j]===1?'1 day':BEK[j]+' days'}: ROAS <b>${beRf(r[j])}</b> vs benchmark ${beRf(b[j])} → <span class="cpx-dl ${dCls('ROAS_G',r[j]/b[j]-1)}">${fP(r[j]/b[j]-1)}</span></p>`:'';
   return hd+vs+`<div class="cpx-becd"><div class="cpx-chw">${beSvg(r,b,FN)}</div></div>`
     +`<p class="cpx-fn">━ is din · ┄ benchmark = is app ke purane install din ka median ROAS (usi din tak) · 100% = spend wapas (breakeven) · N days = install ke din se N din ki kul kamai ÷ spend (1 day = sirf install ka din; table ka "day N" = install ke N din baad) · khokhla point = abhi final nahi (verdict sirf final point pe).${b.every(v=>v==null)?' Benchmark ke liye purane din kam.':''}</p>`; }
+// a day with a hole date in its first week (the build's _holes: GA4 lost that date's revenue on every older cohort while
+// AdMob's own revenue was normal — a gap in the data, never a real outage): its real ROAS, and the curve shifted to it,
+// are low by what GA4 lost
+const BECHK='is install din ke pehle hafte me ek tareekh pe GA4 me app ki kamai lagbhag gayab thi jabki AdMob me normal thi (data me gap) — is din ke asli aur andaze wale number asal se kam dikh sakte hain';
 // the open day: its covered countries, one "data kam" line for the rest (the names on tap), its ROAS card
 function beDet(x,k,pv){ const o=[], C=(Array.isArray(x.cty)?x.cty:[]).filter(c=>Array.isArray(c)&&typeof c[0]==='string'&&c[0]).sort((p,q)=>(num(q[1])||0)-(num(p[1])||0));
+  if(x.chk===1) o.push(`<p class="cpx-fn"><b class="cpx-chk">data check</b> — ${E(BECHK)}.</p>`);
   if(pv) o.push('<p class="cpx-fn">⏳ <b>Abhi final nahi</b> — ye install din 4 din se kam purana hai: GA4 ki country aur first-session report abhi badal sakti hai, aur Google Ads ke installs bhi 1–2 din me poore judte hain (CPI abhi thoda zyada dikh sakta hai) — andaza bhi badlega.</p>');
   if(C.length) o.push(`<h4 class="cpx-h4">Countries with a benchmark (${C.length})</h4><div class="cpx-x"><table class="cpx-t"><thead><tr><th>Country</th><th class="cpx-ben">Spend share</th><th class="cpx-ben" title="Google Ads spend ÷ installs">CPI</th><th title="is country ka breakeven: BE ho chuka to asli din, warna benchmark se (80% range)">Breakeven</th></tr></thead><tbody>`
     +C.map(c=>{ const sh=num(c[1]), cp=num(c[2]);
@@ -9687,9 +9699,10 @@ function beRow(x,nm,G){ const on=BOPEN===x.d, A=x.app&&typeof x.app==='object'&&
   const beCell=N[0]==='be'&&num(N[1])!=null?beDayTxt(N[1],beKind(N),true)
     :no&&sa!=null&&(so==null||so<1)&&(A?lim!=null&&sa>=lim&&!(Array.isArray(A.be)&&num(A.be[0])!=null):sa>=G[G.length-1])?beNot(sa,N[3]===1)   // lived past its curve / every curve
     :A?beAppBe(A,G):beDash(why(0));
+  const chk=x.chk===1?` <small class="cpx-chk" title="${E(BECHK)}">data check</small>`:'';
   return `<tr class="cpx-ber${on?' cpx-beon':''}" data-cpx-bed="${E(x.d)}"><td><button type="button" class="cpx-bedb" data-cpx-bed="${E(x.d)}" aria-expanded="${on}">${E(fd(x.d))}</button>`
       +`${pv?' <span class="cpx-wat" title="abhi final nahi — 4 din se kam purana (GA4 country / first-session data aur Google Ads installs abhi badal sakte hain)">⏳</span>':''}</td>`
-    +`<td>${beCell}</td><td>${beNow(x.now)}</td>`            // the answer first: in view on a phone too
+    +`<td>${beCell}${chk}</td><td>${beNow(x.now)}</td>`            // the answer first: in view on a phone too
     +[30,90,180].map(H=>`<td class="cpx-ben">${cell(H)}</td>`).join('')
     +`<td class="cpx-ben">${sp==null?beDash('spend nahi aaya'):beSp(sp,k)}</td><td class="cpx-ben">${num(x.inst)!=null?fN(x.inst):beDash('Google Ads installs nahi aaye')}</td></tr>`
     +(on?`<tr class="cpx-bedr"><td class="cpx-bedc" colspan="8">${beDet(x,k,pv)}</td></tr>`:''); }
@@ -9701,13 +9714,13 @@ function beHtml(r){ const P=beP(); if(!P) return '<p class="cpx-note cpx-wait">�
   const seen=new Set(), D=F.days.filter(x=>x&&typeof x==='object'&&okD(x.d)&&!seen.has(x.d)&&!!seen.add(x.d)).sort((p,q)=>p.d<q.d?1:-1);   // every day, newest first
   if(!D.length) return beSure(F,P)+'<p class="cpx-note">Is app ka koi judge layak install din nahi (spend $5+ aur 30+ naye users) — Breakeven ka andaza nahi.</p>';
   const show=D.slice(0,DN);   // (30 at a time, as Day-wise: "Show 30 more")
-  const hd='<tr><th>Date</th><th title="spend wapas kis din — real: BE ho chuka (final data) · not final: BE ho gaya, number abhi badal sakta hai · ≤ day N: us din ya pehle · not by day N: utne din tak wapas nahi aaya · warna curve se ROAS 100% ka din (80% range) ya beyond data">Breakeven</th><th title="aaj tak ka hisaab (pichhle 2–3 din ka abhi badal sakta hai)">So far</th>'
+  const hd='<tr><th>Date</th><th title="spend wapas kis din — real: BE ho chuka (final data) · not final: BE ho gaya, number abhi badal sakta hai · ≤ day N: us din ya pehle · not by day N: utne din tak wapas nahi aaya · warna curve se ROAS 100% ka din (80% range) ya beyond data · data check: us din ke pehle hafte me GA4 data me gap — number asal se kam dikh sakte hain">Breakeven</th><th title="aaj tak ka hisaab (pichhle 2–3 din ka abhi badal sakta hai)">So far</th>'
     +[30,90,180].map(H=>`<th class="cpx-ben" title="${H} din tak kamai ÷ spend (100% = breakeven) — din guzar chuke to asli, warna andaza">ROAS ${H} days</th>`).join('')
     +'<th class="cpx-ben">Spend</th><th class="cpx-ben" title="Google Ads installs">Installs</th></tr>';
   return beSure(F,P)+`<div class="cpx-x cpx-bex" id="cpx-bex"><table class="cpx-t cpx-bet"><thead>${hd}</thead><tbody>${show.map(x=>beRow(x,r.name,G)).join('')}</tbody></table></div>`
     +(D.length>DN?`<button type="button" class="cpx-more" data-cpx-more="1">Show 30 more</button>`:'')
     +'<p class="cpx-fn">Upar ka date picker is tab pe lagu nahi — yahan saare spend wale install din.</p>'
-    +'<p class="cpx-fn"><b>ROAS 30 / 90 / 180 din</b> = utne din tak kamai ÷ spend — jo din guzar chuke (final) unka asli, aage ka andaza (✓ = 100% ya zyada = breakeven; ≥ = itna to ho chuka) · Breakeven: real = BE ho chuka (final), not final = BE ho gaya par number badal sakta hai, not by day N = utne din tak wapas nahi aaya, warna isi curve se · <b>App ka answer</b> = benchmark wali countries ke ROAS curves unke spend share se jod ke (countries ke BE din ka average nahi) · saare Google Ads spend wale install din, naya upar (30-30 karke; bina spend wale din yahan nahi) · spend $5 se kam / 30 se kam naye users wale din: sirf asli numbers, andaza nahi · ⏳ = abhi final nahi (4 din se kam purana) · day N = install ke N din baad (day 0 = install ka din). Din pe tap = countries + ROAS card.</p>'; }
+    +'<p class="cpx-fn"><b>ROAS 30 / 90 / 180 din</b> = utne din tak kamai ÷ spend — jo din guzar chuke (final) unka asli, aage ka andaza (✓ = 100% ya zyada = breakeven; ≥ = itna to ho chuka) · Breakeven: real = BE ho chuka (final), not final = BE ho gaya par number badal sakta hai, not by day N = utne din tak wapas nahi aaya, warna isi curve se · <b>App ka answer</b> = benchmark wali countries ke ROAS curves unke spend share se jod ke (countries ke BE din ka average nahi), phir din ke asli ROAS pe shift — uske pichhle pakke grid din pe (day 0 / 1 / 2 / 3 / 6 / 13 / 30 / 60 / 90 …), ab tak ka asli ROAS neeche ki had: jo din model se aage chal raha hai uska aage ka curve bhi upar, peeche wala neeche (har country ka bhi apne asli ROAS pe) · data check = us din ke pehle hafte me GA4 data me gap (AdMob me kamai normal thi) — uske number asal se kam dikh sakte hain · saare Google Ads spend wale install din, naya upar (30-30 karke; bina spend wale din yahan nahi) · spend $5 se kam / 30 se kam naye users wale din: sirf asli numbers, andaza nahi · ⏳ = abhi final nahi (4 din se kam purana) · day N = install ke N din baad (day 0 = install ka din). Din pe tap = countries + ROAS card.</p>'; }
 // ---- 🎯 Campaigns: status, bidding (the tROAS target on the period's last day, "not known" before the archive), spend, installs,
 // CPI and D0 ROAS vs normal, its own alarm line ----
 function campHtml(r,F){ const [lo,hi]=span(r); if(lo>hi) return '<p class="cpx-note">Is period ke din abhi final nahi — campaigns t tak.</p>';

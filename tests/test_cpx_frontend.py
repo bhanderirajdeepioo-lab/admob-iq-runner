@@ -1316,3 +1316,32 @@ def test_breakeven_card_marks_points_not_final_and_so_far_reads_not_final(out):
     assert s["cells"][1:3] == ["≤ day 45 not final", "✅ Broke even: ≤ day 45 not final"]
     assert not any(x.startswith("asli") for x in s["titles"][:2])
 
+
+
+def test_breakeven_kitna_pakka_on_day_1_7_14_and_the_data_check_mark(out):
+    """The "ROAS ab tak" shift (owner, 15 Nov 2026, "haan live karo"): "kitna pakka" is the shift's own back-test — the
+    breakeven ranking with 1 / 7 / 14 days of data (each pair cut at the shorter curve; "N days" as the card: 1 day = the
+    install day only), the 30 / 90 / 180-day AUC on 7 days only where scorable — and a day with a GA4 hole in its first
+    week says "data check" (amber; why on hover and in the opened day: a phone shows no hover); an older file's single number
+    still reads with its own old words."""
+    s = out["be"]["sure2"]
+    assert s["all"].startswith("Is app ka andaza kitna pakka: kaun din pehle BE karega (1 / 7 / 14 days ke data pe): "
+                               "90% / 91% / 92% sahi · BE 30 / 90 / 180 din tak (7 days ke data pe): 96% / — / — sahi "
+                               "Purane 300 install din pe parkha (back-test): har din ko sirf utne din ka data dekar "
+                               "(1 / 7 / 14 days; 1 day = sirf install ka din), phir asli nateeje se milaya")
+    assert s["all"].endswith("50% = tukka, 100% = hamesha sahi · andaza 30 Mar ke data se, calibration 28 Mar.")
+    assert s["noauc"].startswith("Is app ka andaza kitna pakka: kaun din pehle BE karega (1 / 7 / 14 days ke data pe): "
+                                 "90% / — / 92% sahi Purane")                    # (no AUC at all: no AUC part)
+    assert s["none"] == "Is app ka andaza kitna pakka: abhi kehne ke liye din kam (sirf 5 din parkhe)."
+    assert s["old"].startswith("Is app ka andaza kitna pakka: 30 din 80% · 90 din 60% · 180 din 45% sahi · kaun din "
+                               "pehle BE karega: 55% sahi")                       # (a calibration kept from before)
+    assert any("10 se kam BE wale din" in t for t in s["dash"])                  # every "—" says why
+    c = out["be"]["chk"]
+    assert c["cell"] == "day 61 data check" and c["plain"] == "day 61" and c["cls"] == "cpx-chk"
+    assert c["titles"][0].startswith("is install din ke pehle hafte me ek tareekh pe GA4 me app ki kamai lagbhag gayab")
+    assert c["det"].startswith("data check — is install din ke pehle hafte me") and not c["det_plain"]
+    assert "AdMob me normal thi" in c["titles"][0]                               # (a GA4 gap, never a real outage)
+    p = _page()
+    css = p[p.index("<style>"):p.index("</style>")]
+    assert ".cpx-fn b.cpx-chk,.cpx-t td small.cpx-chk{color:var(--watch)" in css   # (amber in the row and the opened day:
+    # .cpx-t td small is muted, .cpx-fn b is ink)

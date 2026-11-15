@@ -803,6 +803,18 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
         prov: one({ app: A, prov: [null, null, null, null, null, null, 0.41], now: ['no', 75, 0.6, 1] }),
         least_x: one({ jd: 0, now: ['be', 40, 'x', 45, 1.3, 1] }), least_nf: one({ jd: 0, now: ['be', 40, 'nf', 45, 1.3, 0] }),
         old_nocurve: one({ age: 410, now: ['no', 400, 0.7, 1] }) }; }
+    // the "ROAS ab tak" shift (15 Nov): "kitna pakka" with 1 / 7 / 14 days of data (an AUC only where scorable), and a day with a GA4 hole in its first week (made-up skill numbers)
+    { const s2 = [_.beSure({ skill: { auc: [96, null, null], c: [90, 91, 92], n: 300 }, origin: '2026-03-30', calib: '2026-03-28' }, {}),
+        _.beSure({ skill: { auc: [null, null, null], c: [90, null, 92], n: 300 } }, {}), _.beSure({ skill: { auc: [null, null, null], c: [null, null, null], n: 5 } }, {}),
+        _.beSure({ skill: { auc: [80, 60, 45], c: 55, n: 600 } }, {})];
+      BER.push(...s2);
+      BO.sure2 = { all: txt(s2[0]), noauc: txt(s2[1]), none: txt(s2[2]), old: txt(s2[3]), dash: (s2[1].match(/title="([^"]*)"/g) || []).map(dec) }; }
+    { const G = [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270, 360], X = { d: '2026-01-10', age: 20, sp: 100, inst: 10, real: [], unc: [], cty: [], app: { be: [61, 40, null], lim: 360, roas: [], lo: [], hi: [] }, now: ['no', 17, 0.2, 1] };
+      const hr = _.beRow(Object.assign({ chk: 1 }, X), 'Alpha', G), hq = _.beRow(X, 'Alpha', G), hd = _.beDet(Object.assign({ chk: 1 }, X), 1, false), hn = _.beDet(X, 1, false);
+      BER.push(hr, hd);
+      const r = rowsOf(hr)[0], q = rowsOf(hq)[0];
+      BO.chk = { cell: r.cells[1], titles: r.titles, plain: q.cells[1], det: txt((hd.match(/<p class="cpx-fn"><b class="cpx-chk">([\s\S]*?)<\/p>/) || [])[1] || ''),
+        det_plain: hn.includes('cpx-chk'), cls: (hr.match(/<small class="([^"]*)"[^>]*>data check/) || [])[1] || '' }; }
     BO.zw = { app: txt(_.beRow({ d: '2026-01-10', age: 80, sp: 100, inst: 10, real: [], unc: [], cty: [], app: { be: [61, 61, 61], lim: 360, roas: [], lo: [0.1], hi: [0.1] }, now: ['no', 60, 0.99, 1] }, 'Alpha', [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270, 360]).match(/<td>([\s\S]*?)<\/td>/g)[1].replace(/<[^>]+>/g, '')),
       cty: txt((_.beDet({ d: '2026-01-10', age: 80, cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, 61, 61, 61, 360, 0]], unc: [], now: ['no', 60, 0.99, 1] }, 1, false).match(/<td>(<b>day[\s\S]*?)<\/td>/) || [])[1] || '') };
     // a day opened: its countries, the "data kam" line (names on tap), its ROAS card (values printed on the points)

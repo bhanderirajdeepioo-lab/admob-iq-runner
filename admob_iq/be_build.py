@@ -32,8 +32,12 @@ breaks even (the page shows the days of its period).
   history (rolling, no look-ahead), every judged install day of that month answered, the truth = what is known now →
   isotonic maps (PAVA) of K3's P(BE ≤ H) to the real share for H = 30 / 90 / 180 (a day old enough to know: age ≥
   H + 3), the Kaplan–Meier of K3's PIT values (the levels of a country's median day
-  and 80 % range), the quantiles of the real ÷ predicted app ROAS per age (the app's 80 % band) and per app its skill
-  (below). A calibration that fails keeps the last good file (tried again the next UTC day; none yet: every build).
+  and 80 % range), the quantiles of the real ÷ predicted app ROAS per age (the unshifted curve's 80 % band); and the
+  shift's own back-test (asof, below): every usable install day answered at each as-of age a in ASOF it has lived,
+  with the fits of the month start of install day + a + LAG (never later than what was known then) → the quantiles of
+  log real ÷ shifted ROAS per (a, age) (the app's range, "bandb") and per (a, age, size bucket) (a country's,
+  "cbandb", every size pooled as "all"), and per app its skill (below). A calibration that fails keeps the last good
+  file (tried again the next UTC day; none yet: every build); one without the shift's ranges (cv < CALV) is made again.
   predict (every build, from the caches only): per install day each covered country whose CPI and eCPM_fs are inside
   its learned range: its curve at them (made non-decreasing in age), weighted by its share of the day's covered spend and summed = the app's ROAS
   curve (a country whose curve stops earlier keeps its last value: a lower bound) — the owner's rule, never an average
@@ -51,24 +55,43 @@ breaks even (the page shows the days of its period).
   cumulative ROAS never falls; from its real BE day on it is ≥ 100 %) and caps any unlived age before it; a day that
   already broke even answers its real day (no range); the 80 % range only as far as the band reaches (beyond it: no
   end, never the median line).
-  skill (the page's "how sure"), on the app's back-test days (what the tab would have said then, scored on what is
-  known now): AUC at 30 / 90 / 180 of the app curve's ROAS(H) against "broke even within H?" (of a day that did and
-  one that did not, how often the one that did scored higher; ties ½; ≥ 10 days on each side, else null) — not the
-  P ≥ 0.5 yes/no accuracy, which is 50 at 30 days for every app (BE within 30 days is rare, a calibrated P seldom
-  reaches 0.5) — and C (the concordance of the app curve's BE day with the real one over every comparable pair; ≥ 10
-  days with a real BE, else null); n = the app's answered back-test days.
+  the "ROAS ab tak" shift (owner, 15 Nov 2026: "haan, pehle backtest karke dikhao", then "haan live karo"; the
+  back-test ranked the days and dated their breakeven far better than the unshifted curve, the country rows too):
+  once a day has a FINAL grid age inside its curve (its latest one: a; a daily one at least CLAG days old — the
+  newest "final" daily cell is often still empty), the curve after a is the model's GROWTH from
+  a times what the day really made at a (ra × M(t) ÷ M(a): a day running ahead of its model
+  moves up, one lagging moves down — never the model's own level), bounded as above; the range = the shift's own
+  errors at a (bandb); its growth from a never outside what real install days grew there (the 1st / 99th percentile
+  over every app: calib "grow" — a model read far outside its inputs could claim growth no real day had). Each covered
+  country the same on its own curve and its own final read, its range for its size (cbandb), its growth bound from the
+  country rows. Not shifted: a day with nothing final yet. A DATA HOLE — a calendar date on which the app's older
+  cohorts (7–30 days old) together earned under GAP × the median of the GAP_N dates before while AdMob's own revenue
+  was normal (_holes: GA4 lost it on every cohort at once — never one weak install day, never a real outage) — in a
+  day's first HOLE_W days marks it "chk": 1 (the page's "data check": its real ROAS and so its shifted curve are low by what
+  the data lost); the forecast stays the shift (measured against the recorded data, falling back cost accuracy).
+  skill (the page's "kitna pakka"), from the shift's back-test (what the tab would have said then, scored on what is
+  known now): C on day 1 / 7 / 14 (SK_A) — the breakeven ranking over every true pair, each pair cut at the SHORTER
+  of its two curves (_cpair: a curve that stops earlier is never compared past its end — the old score compared
+  "beyond 120" with "beyond 270": a curve that stopped early could read as "earlier" than an identical one);
+  ≥ 10 days with a real BE, else null — and on day 7 (AUC_A) the AUC at 30 / 90 / 180 of the shifted ROAS(H) against "broke even within
+  H?" (of a day that did and one that did not, how often the one that did scored higher; ties ½; ≥ 10 days on each
+  side, else null); n = the days answered on day 1.
 
-  site/be_<key>.json.gz  {"v", "key", "origin", "grid", "calib" (its day), "skill": {"auc", "c", "n"}, "days": [{"d",
+  site/be_<key>.json.gz  {"v", "key", "origin", "grid", "calib" (its day), "skill": {"auc" [30, 90, 180 on day 7],
+                          "c" [day 1, 7, 14], "n"}, "days": [{"d",
                           "age", "sp" (USD), "inst" (Google Ads installs), "cov" (covered share of the day's country
                           spend), "real" (the day's REAL ROAS at the grid ages from final cells, whatever its
                           coverage; null where not lived / not final; trailing nulls trimmed — the page shows these as
                           "asli", never the model), "app": {"be": [median, low, high] (days; null = no crossing
                           within "lim"; a day that broke even: [its real day, null, null]), "lim", "roas" / "lo" /
                           "hi" (the curve and its band at the grid ages ≤ lim: real where final, bounded by what it
-                          made elsewhere)} (absent: nothing covered), "unc": [[cc, share], …, ["…", rest]], "cty":
+                          made elsewhere), "anc" (the grid age it is shifted at; absent: not shifted)} (absent: nothing
+                          covered), "chk" 1 (a GA4 hole date in its first week: "data check" — information only, still shifted), "unc": [[cc, share], …,
+                          ["…", rest]], "cty":
                           [[cc, share, CPI, eCPM_fs, P30, P90, P180, median, low, high, lim, rk], …] (rk 1 / 2 / 3:
-                          the country broke even — median = its real day: exact / "≤" / not final yet; 0: K3's days
-                          given it has not broken even by its own so-far age; 4: ≤ a 30-day column not final yet;
+                          the country broke even — median = its real day: exact / "≤" / not final yet; 0: off its
+                          own curve (shifted to its own final read when it has one) given it has not broken even by its
+                          own so-far age; 4: ≤ a 30-day column not final yet;
                           5 / 6: it lived past K3's limit without breaking even — median = its so-far age, final /
                           not final yet), "jd" 0 (only on a day under $5 / 30 new users: no model, no countries — its
                           real numbers only), "card": {"roas", "bench", "fin" (1 final / 0 not final yet)}, "now": ["be", BE day, kind ("x" exact / "nf" not final
@@ -90,6 +113,7 @@ import os
 import re
 import sys
 import zlib
+from array import array
 from collections import Counter
 from datetime import date, datetime, timezone
 from itertools import repeat
@@ -120,6 +144,18 @@ REST = 0.005                         # uncovered countries under 0.5 % of the da
 REST_CC = "…"
 MIN_BAND = 50                        # an age of the app band: ≥ 50 back-test days
 MIN_SK = 10                          # skill: an AUC at H needs ≥ 10 back-test days each side, C ≥ 10 real-BE days
+ASOF = (0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270)   # the "ROAS ab tak" back-test: what a day knows on day a + 1
+SK_A = (0, 6, 13)                    # the page's "kitna pakka": the breakeven ranking on day 1 / 7 / 14 …
+AUC_A = 6                            # … and "broke even within 30 / 90 / 180 days?" on day 7
+SIZE = (50, 100, 300)                # a country row's size (new users) for its range: < 50 · 50–99 · 100–299 · ≥ 300
+GAP, GAP_N = 0.35, 7                 # a hole date: the older cohorts' revenue under 0.35 × the 7 dates before (median)
+HOLE_MIN, HOLE_W = 10, 7             # … with ≥ 10 cohorts adding up; "data check" on a day with one in its first 7 days
+ADM_OK, ADM_N = 0.5, 14              # … while AdMob's own revenue that date was ≥ 0.5 × its 14 days before (else: real)
+HOLE_SHARE = 0.05                    # … and those cohorts usually carry ≥ 5 % of it (a smaller signal is noise, not a hole)
+CALV = 3                             # calib.json content: 3 = with the shift's ranges + growth bound (older: made again)
+CLAG = LAG + 1                       # a daily cell 3 days old is often still empty (a country's split lags: most
+                                     # country cells dated 3 days ago carried no revenue yet, and a few small apps' own
+                                     # rows — measured 15 Nov 2026): the shift reads a daily cell at least 4 days old
 SKIP_CC = frozenset(("--", "XX", "ZZ"))
 LINE = None
 
@@ -145,7 +181,7 @@ class _R:
     (a final 30-day column / a checkpoint), "bn" "≤ that day" on a 30-day column not final yet, "s" "≤ its so-far age"
     (the so-far read paid back, no cell pins the day)."""
     __slots__ = ("day", "X", "n", "na", "sp", "cpi", "c", "e", "lo", "hi", "be", "obs", "oc", "cum", "jd", "fin", "sfa",
-                 "sfv", "rbe")
+                 "sfv", "rbe", "dd")
 
 
 def _pts(r):
@@ -190,8 +226,10 @@ def _row(r, ecpm, full):
         at = dict(pts)
         x.cum = [None if at.get(a) is None else round(at[a], 4) for a in GRID]
         x.fin = _fin(r)
+        d, df = r[4] or [], r[5] or 0                # its final daily cells 0 … 30 (the calendar-hole check)
+        x.dd = [v for v in d[:min(df, 31)]]
     else:
-        x.cum = x.fin = None
+        x.cum = x.fin = x.dd = None
     x.sfa, x.sfv = x.obs, x.oc
     sd = r[9] if len(r) > 9 else None
     if isinstance(sd, str) and len(sd) == 10 and isinstance(r[8], (int, float)):
@@ -264,7 +302,7 @@ def _read(path):
         return json.load(f)
 
 
-def load(out_dir, data_dir, key, fn):
+def load(out_dir, data_dir, key, fn, want_adm=False):
     """One app → (newest, the All rows, {cc: rows}), spend > 0 only, by day — every day (the tab answers every judged
     install day)."""
     body = _read(os.path.join(out_dir, fn))
@@ -309,7 +347,16 @@ def load(out_dir, data_dir, key, fn):
     for v in cty.values():
         v.sort(key=lambda r: r.X)
     newest = body.get("newest") or (app[-1].day if app else None)
-    return newest, app, cty
+    if not want_adm:
+        return newest, app, cty
+    adm = {}                              # AdMob's own revenue of every day (the ROI file's "life": [day, AdMob USD, …]):
+    for e in body.get("life") or []:      # a GA4 hole is a date GA4 lost while AdMob did not
+        try:
+            if isinstance(e[1], (int, float)):
+                adm[date.fromisoformat(e[0]).toordinal()] = float(e[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+    return newest, app, cty, adm
 
 
 # ── the maths (pure Python: the runner has no numpy) ───────────────────────────────────────────────────────────────
@@ -790,7 +837,28 @@ def fit(app, cty, O):
 
 # ── calibration (daily, all apps): the rolling back-test, its maps, the skill ───────────────────────────────────────
 
-def backtest(key, newest, app, cty):
+def _fits_at(cty, O, F=None):
+    """The countries covered at origin O → {cc: (K3, curve fit, range)} (be_build's own rules: only what O knew),
+    remembered in F by O (the back-tests share one fit per month start)."""
+    if F is not None and O in F:
+        return F[O]
+    cov = {}
+    for cc, rows in cty.items():
+        if sum(1 for r in rows if r.X < O and r.hi is not None and _usable(r)) < MIN_KEPT:
+            continue
+        k3 = k3_fit(rows, O)
+        if not k3:
+            continue
+        cf = curve_fit(rows, O)
+        g = _rng(rows, O)
+        if cf and g is not None:
+            cov[cc] = (k3, cf, g)
+    if F is not None:
+        F[O] = cov
+    return cov
+
+
+def backtest(key, newest, app, cty, F=None):
     """One app's rolling back-test: at every month start O with usable install days, the fits on the days before O;
     each of the month's usable days answered → (app records, country records), rounded as the maps read them."""
     byday = {}
@@ -804,17 +872,7 @@ def backtest(key, newest, app, cty):
     nw = date.fromisoformat(newest).toordinal()
     A, C = [], []
     for O in sorted(months):
-        cov = {}
-        for cc, rows in cty.items():
-            if sum(1 for r in rows if r.X < O and r.hi is not None and _usable(r)) < MIN_KEPT:
-                continue
-            k3 = k3_fit(rows, O)
-            if not k3:
-                continue
-            cf = curve_fit(rows, O)
-            g = _rng(rows, O)
-            if cf and g is not None:
-                cov[cc] = (k3, cf, g)
+        cov = _fits_at(cty, O, F)
         for r in months[O]:
             parts = []
             for cc, x in byday.get(r.day, {}).items():
@@ -849,6 +907,223 @@ def backtest(key, newest, app, cty):
     return A, C
 
 
+# ── the "ROAS ab tak" shift (owner, 15 Nov 2026: the back-test first — "haan, pehle backtest karke dikhao" — then "haan
+# live karo"): a day's model curve moved to pass through what it REALLY made at its latest final grid age ──────────────
+
+def _size(n):
+    """A country row's size bucket for its range (new users): 0 < 50 · 1 50–99 · 2 100–299 · 3 ≥ 300."""
+    return sum(1 for b in SIZE if (n or 0) >= b)
+
+
+def _anchor(fin, sp, last, upto=None):
+    """A day's (or a country row's) latest FINAL grid age within its curve (≤ last; a daily one also ≤ upto) and its real
+    ROAS there → (age, ROAS), or None: nothing final yet — the shift waits for one, as the back-test did."""
+    if not fin or not sp or sp <= 0:
+        return None
+    for j in range(min(len(fin), len(GRID)) - 1, -1, -1):
+        if GRID[j] <= last and (upto is None or GRID[j] > 30 or GRID[j] <= upto) and fin[j] is not None and fin[j] > 0:
+            return GRID[j], fin[j] / sp
+    return None
+
+
+def _shifted(ages, vals, a, ra):
+    """The shift of a curve (ROAS at its ages): ra × v(t) ÷ v(a) at every age — a day running ahead of its model moves
+    its whole curve up, one lagging moves it down (only the model's GROWTH is used, never its level); None when the curve
+    does not reach a."""
+    if a not in ages or ra is None or ra <= 0:
+        return None
+    va = vals[ages.index(a)]
+    if not va or va <= 0:
+        return None
+    return [ra * v / va for v in vals]
+
+
+def _after(ages, vals, a, ra):
+    """[(t, ROAS)] of a shifted curve at the ages after a, never below ra, never falling."""
+    out, run = [], ra
+    for t, v in zip(ages, vals):
+        if t > a:
+            run = max(run, v)
+            out.append((t, run))
+    return out
+
+
+def _cut(a, ra, pts):
+    """A shifted curve's answer within each limit it reaches: {limit: (its breakeven day by then or None, its ROAS)}."""
+    out, pa, pv, hit = {}, a, ra, None
+    for t, v in pts:
+        if hit is None and v >= 1.0:
+            hit = max(float(t) if v <= pv else pa + (t - pa) * (1.0 - pv) / (v - pv), a + 1.0)
+        out[t] = (hit, v)
+        pa, pv = t, v
+    return out
+
+
+def _open(r, a):
+    """Not broken even by age a (its breakeven still a forecast there)."""
+    return r.hi is None or r.hi > a
+
+
+def asof(key, newest, app, cty, F=None, gq=None):
+    """The shift's back-test on one app: each usable install day answered at every as-of age a in ASOF it has lived
+    (install day + a + LAG ≤ newest) with the fits of the month start of that moment (never later than what was known
+    then) — the covered countries' curves summed by spend (combine), shifted to the day's REAL ROAS at a; each judged
+    country row the same on its own curve and its own ROAS at a. Scored on what is known now → (app errors {(a, t): log
+    real ÷ shifted}, country errors {(a, t, size): …}, the skill rows {a: [(cut, last age, BE or None, censored at)]} on
+    days 1 / 7 / 14 (the days not broken even by a), the AUC rows {H: [(log shifted ROAS(H), broke even within H?)]} on
+    day AUC_A + 1, n = the days answered on day 1)."""
+    byday = {}
+    for cc, rows in cty.items():
+        for r in rows:
+            byday.setdefault(r.day, {})[cc] = r
+    nw = date.fromisoformat(newest).toordinal()
+    RB, CB, SK, AU, n = {}, {}, {a: [] for a in SK_A}, {H: [] for H in HS}, 0
+    GA, GC = {}, {}                       # the real growth log R(t) ÷ R(a) (app rows / judged country rows)
+    gapp, gcty = _gq(gq, key, "app"), _gq(gq, key, "cty")   # (the last calibration's bound, as predict uses it)
+    for r in app:
+        if not _usable(r) or not r.cum:
+            continue
+        cs = byday.get(r.day, {})
+        for a in ASOF:
+            if r.X + a + LAG > nw:
+                break
+            j = GRID.index(a)
+            if r.cum[j] is None or r.cum[j] <= 0:
+                continue
+            ra = r.cum[j] / r.sp
+            cov = _fits_at(cty, _month(r.X + a + LAG), F)
+            parts, rows_c = [], []
+            for cc, x in cs.items():
+                if cc not in cov or x.c is None or x.e is None or not _seen(cov[cc][2], x):
+                    continue
+                pa, mid, _, _ = curve_predict(cov[cc][1], x.c, x.e)
+                parts.append((x.sp, pa, mid))
+                rows_c.append((x, pa, mid))
+            if not parts:
+                continue
+            ages, roas = combine(parts)
+            sh = _bound(ages, _shifted(ages, roas, a, ra), a, ra, gapp)   # (as predict shows it:
+            if sh is None:                       # the last calibration's growth bound)
+                continue
+            pts = _after(ages, sh, a, ra)
+            if not pts:
+                continue
+            n += a == 0
+            for t, v in pts:
+                jt = GRID.index(t)
+                if r.X + t + LAG <= nw and r.cum[jt] is not None:
+                    RB.setdefault((a, t), array("d")).append(math.log(max(r.cum[jt] / r.sp, ROAS_FLOOR) / v))
+                    GA.setdefault((a, t), array("d")).append(math.log(max(r.cum[jt] / r.sp, ROAS_FLOOR) / ra))
+            if a in SK and _open(r, a):
+                SK[a].append((_cut(a, ra, pts), pts[-1][0], r.be if r.hi is not None else None,
+                              r.obs if r.hi is None else None))
+            if a == AUC_A and _open(r, a):        # (a day already broken even shows its real day: no forecast)
+                at = dict(pts)
+                for H in HS:
+                    k = _mature(nw - r.X, r.hi, r.obs, H) if H in at else None
+                    if k:
+                        AU[H].append((math.log(max(at[H], 1e-6)), k == "le"))
+            for x, pa, mid in rows_c:
+                if not x.jd or not x.cum or x.cum[j] is None or x.cum[j] <= 0:
+                    continue
+                for t in GRID:                   # (its real growth, broken even or not)
+                    jt = GRID.index(t)
+                    if t > a and x.X + t + LAG <= nw and x.cum[jt] is not None:
+                        GC.setdefault((a, t), array("d")).append(math.log(max(x.cum[jt] / x.sp, ROAS_FLOOR) / (x.cum[j] / x.sp)))
+                if not _open(x, a):              # (broken even by a: the page shows its real day, never a range)
+                    continue
+                rc = x.cum[j] / x.sp
+                shc = _bound(pa, _shifted(pa, [math.exp(v) for v in mid], a, rc), a, rc, gcty)
+                if shc is None:
+                    continue
+                sz = _size(x.n)
+                for t, v in _after(pa, shc, a, rc):
+                    jt = GRID.index(t)
+                    if x.X + t + LAG <= nw and x.cum[jt] is not None:
+                        CB.setdefault((a, t, sz), array("d")).append(math.log(max(x.cum[jt] / x.sp, ROAS_FLOOR) / v))
+    return RB, CB, SK, AU, n, GA, GC
+
+
+def _bands(E):
+    """{key: log errors} → {key: [median, q10, q90, n]} where ≥ MIN_BAND errors (the shift's own 80 % range)."""
+    out = {}
+    for k, v in E.items():
+        if len(v) >= MIN_BAND:
+            s = sorted(v)
+            out[k] = [round(_median(s), 4), round(_q(s, 0.1), 4), round(_q(s, 0.9), 4), len(s)]
+    return out
+
+
+def bands(RB, CB):
+    """The shift's ranges for calib.json: "bandb" {a: {t: row}} for the app line; "cbandb" {a: {t: {size | "all":
+    row}}} for a country row (its own size bucket, else every size pooled)."""
+    bb, cb, pool = {}, {}, {}
+    for (a, t), row in _bands(RB).items():
+        bb.setdefault(str(a), {})[str(t)] = row
+    for (a, t, sz), v in CB.items():
+        pool.setdefault((a, t), array("d")).extend(v)
+    for (a, t, sz), row in _bands(CB).items():
+        cb.setdefault(str(a), {}).setdefault(str(t), {})[str(sz)] = row
+    for (a, t), row in _bands(pool).items():
+        cb.setdefault(str(a), {}).setdefault(str(t), {})["all"] = row
+    return bb, cb
+
+
+def growth(GA, GC):
+    """The real growth bound for calib.json "grow": {"app" | "cty": {a: {t: [q01, q99, n]}}} of log R(t) ÷ R(a) over
+    every app's install days (≥ MIN_BAND)."""
+    out = {}
+    for nm, E in (("app", GA), ("cty", GC)):
+        g = out.setdefault(nm, {})
+        for (a, t), v in E.items():
+            if len(v) >= MIN_BAND:
+                q = sorted(v)
+                g.setdefault(str(a), {})[str(t)] = [round(_q(q, 0.01), 4), round(_q(q, 0.99), 4), len(q)]
+    return out
+
+
+def _cpair(rows):
+    """The breakeven ranking's C (%) over one app's day rows [(cut, last age, BE or None, censored at)]: every true pair
+    (a day that broke even vs a later one, or vs one watched longer without) is cut at the SHORTER of its two curves — a
+    curve that stops earlier is never compared past its end (the old score compared "beyond 120" with "beyond 270": its
+    under-50 % reading for one app was that) — within it a crossing beats none, two crossings compare days, two non-crossings compare
+    ROAS at the cut (higher = earlier); ties ½. None with < MIN_SK real-BE days."""
+    conc = comp = 0.0
+    for ti, li, Ti, _ in rows:
+        if Ti is None:
+            continue
+        for tj, lj, Tj, Cj in rows:
+            if Tj is not None:
+                if Tj <= Ti:
+                    continue
+            elif Cj is None or Cj <= Ti:
+                continue
+            L = min(li, lj)
+            if L not in ti or L not in tj:
+                continue
+            (ci, vi), (cj, vj) = ti[L], tj[L]
+            comp += 1
+            if ci is not None and cj is not None:
+                conc += 1.0 if ci < cj else (0.5 if ci == cj else 0.0)
+            elif ci is not None:
+                conc += 1.0
+            elif cj is None:
+                conc += 1.0 if vi > vj else (0.5 if vi == vj else 0.0)
+    nbe = sum(1 for _, _, T, _ in rows if T is not None)
+    return round(100.0 * conc / comp, 1) if comp and nbe >= MIN_SK else None
+
+
+def skill2(SK, AU, n):
+    """The page's "kitna pakka" for one app, from the shift's back-test: {"c": [C on day 1, 7, 14], "auc": [AUC at 30 /
+    90 / 180 days, on day 7], "n": the days answered on day 1}; null where not scorable (MIN_SK)."""
+    auc = []
+    for H in HS:
+        pts = AU.get(H) or []
+        n1 = sum(1 for _, y in pts if y)
+        auc.append(_auc(pts) if n1 >= MIN_SK and len(pts) - n1 >= MIN_SK else None)
+    return {"c": [_cpair(SK.get(a) or []) for a in SK_A], "auc": auc, "n": n}
+
+
 def _mature(age, hi, obs, H):
     """"le" / "gt": whether the day broke even within H days, once it is old enough to know (age ≥ H + 3); else None."""
     if age < H + 3:
@@ -863,10 +1138,14 @@ def _score(x, H):
     return math.log(max(a["roas"][a["ages"].index(H)], 1e-6)) if a and H in a["ages"] else None
 
 
-def calibrate(A, C, O):
+def calibrate(A, C, O, RB=None, CB=None, GA=None, GC=None):
     """The back-test's answers → calib.json's maps: "cty" {H: [[K3's raw P, P], …]}, "pit" {level: K3's raw level where the Kaplan–Meier of its PIT values reaches 0.1 / 0.5 / 0.9}, "band" {age:
-    [median, q10, q90, n] of log(real ÷ predicted app ROAS) on the days whose app curve is complete at that age}."""
-    out = {"v": V, "built": _iso(O), "tried": _iso(O), "cty": {}, "band": {}}
+    [median, q10, q90, n] of log(real ÷ predicted app ROAS) on the days whose app curve is complete at that age} (the
+    unshifted curve: a day not shifted yet — nothing final); the shift's own ranges "bandb" /
+    "cbandb" (bands(): from asof()'s errors); "cv" = CALV (a calibration without them is made again)."""
+    out = {"v": V, "cv": CALV, "built": _iso(O), "tried": _iso(O), "cty": {}, "band": {}}
+    out["bandb"], out["cbandb"] = bands(RB or {}, CB or {})
+    out["grow"] = growth(GA or {}, GC or {})
     for H in HS:
         xs, ys = [], []
         for mu, s, hi, be, obs, age in C:
@@ -904,12 +1183,6 @@ def calibrate(A, C, O):
     return out
 
 
-def _risk(x):
-    """A later-breakeven-is-higher score of the app curve (C): its BE day, else past its limit by what is missing."""
-    a = x["a"]
-    return x["be_a"] if x.get("be_a") is not None else a["ages"][-1] + 1000.0 * (1.0 - min(a["roas"][-1], 1.0))
-
-
 def _auc(pts):
     """Mann–Whitney AUC (%) of (score, broke even within H?) pairs: of a day that did and one that did not, the share
     where the one that did scored higher (ties ½) — rank-based, so the raw score needs no calibration."""
@@ -926,45 +1199,9 @@ def _auc(pts):
     return round(100.0 * (rs - n1 * (n1 + 1) / 2.0) / (n1 * n0), 1)
 
 
-def skill(A):
-    """Per app → {"auc": [AUC30, AUC90, AUC180], "c": C, "n": answered days} (see the module doc), null where not
-    scorable."""
-    by = {}
-    for x in A:
-        if x.get("a"):
-            by.setdefault(x["key"], []).append(x)
-    out = {}
-    for key, v in by.items():
-        auc = []
-        for H in HS:
-            pts = []
-            for x in v:
-                s, k = _score(x, H), _mature(x["age"], x["hi"], x["obs"], H)
-                if s is not None and k is not None:
-                    pts.append((s, k == "le"))
-            n1 = sum(1 for _, y in pts if y)
-            auc.append(_auc(pts) if n1 >= MIN_SK and len(pts) - n1 >= MIN_SK else None)
-        pts = [(_risk(x), x["be"] if x["hi"] is not None else None, x["obs"] if x["hi"] is None else None) for x in v]
-        conc = comp = 0.0
-        for pi, Ti, _ in pts:
-            if Ti is None:
-                continue
-            for pj, Tj, Cj in pts:
-                if Tj is not None:
-                    if Tj <= Ti:
-                        continue
-                elif Cj is None or Cj <= Ti:
-                    continue
-                comp += 1
-                conc += 1.0 if pi < pj else (0.5 if pi == pj else 0.0)
-        nbe = sum(1 for _, Ti, _ in pts if Ti is not None)
-        out[key] = {"auc": auc, "c": round(100.0 * conc / comp, 1) if comp and nbe >= MIN_SK else None, "n": len(v)}
-    return out
-
-
 # ── predict (every build) ───────────────────────────────────────────────────────────────────────────────────────────
 
-def _pin(newest, app, cty):
+def _pin(newest, app, cty, adm=None):
     """What predict needs of one app: every install day with spend (the judged ones get the model; the others only their
     real numbers) and its countries' rows."""
     rows = list(app)
@@ -974,31 +1211,145 @@ def _pin(newest, app, cty):
         for r in rs:
             if r.day in want:
                 byday.setdefault(r.day, {})[cc] = r
-    return newest, rows, byday
+    return newest, rows, byday, adm
+
+
+def _holes(rows, nw, adm=None):
+    """The calendar dates GA4 lost: the app's OLDER cohorts (7–30 days old: their revenue does not move with the day's
+    spend) together earned under GAP × the median of the GAP_N dates before (within 3 × GAP_N days; ≥ 3 of them) — on
+    every cohort at once, never one weak install day — while AdMob's own revenue that date (adm: {day: USD}, the ROI
+    file's "life") was normal: ≥ ADM_OK × its median of the ADM_N days before. A date AdMob lost too
+    is a real outage, not a hole (its numbers are true). Only dates whose cells are all final (≤ newest − CLAG) with ≥
+    HOLE_MIN cohorts adding up, whose older cohorts usually earn ≥ HOLE_SHARE of AdMob's revenue (an app living on
+    organic users: too small a signal to tell); no AdMob read: no hole claimed."""
+    if not adm:
+        return set()
+    S, C = {}, {}
+    for r in rows:
+        dd = r.dd or []
+        for a in range(7, len(dd)):
+            if dd[a] is None or dd[a - 1] is None:
+                break
+            S[r.X + a] = S.get(r.X + a, 0.0) + dd[a] - dd[a - 1]
+            C[r.X + a] = C.get(r.X + a, 0) + 1
+    days = sorted(D for D in S if D <= nw - CLAG and C[D] >= HOLE_MIN)
+    out, ok = set(), []                   # (ok: the dates so far that were not holes — a long hole never sets its own
+    for D in days:                        # baseline)
+        prev = [S[x] for x in ok[-GAP_N:] if x >= D - 3 * GAP_N]
+        if len(prev) >= 3:
+            m = _median(prev)
+            if m > 0 and S[D] < GAP * m:
+                a = [adm[x] for x in range(D - ADM_N, D) if adm.get(x) is not None]
+                ma = _median(a) if len(a) >= 3 else None
+                if ma and adm.get(D) is not None and adm[D] >= ADM_OK * ma and m >= HOLE_SHARE * ma:
+                    out.add(D)
+                    continue
+        ok.append(D)
+    return out
+
+
+def _gq(grow, key, kind):
+    """The growth bound an app's shift uses ({a: {t: [q01, q99, n]}} of log real growth): its own install days' where it
+    has ≥ MIN_BAND of them at (a, t), widened by every app's (never tighter than either: an app that really grows faster
+    keeps its own room, a model read far outside every app's experience is still held); kind "app" | "cty"."""
+    g = grow or {}
+    pool, own = g.get(kind) or {}, ((g.get("apps") or {}).get(key) or {}).get(kind) or {}
+    out = {}
+    for a in set(pool) | set(own):
+        for t in set(pool.get(a) or {}) | set(own.get(a) or {}):
+            q = [r for r in ((pool.get(a) or {}).get(t), (own.get(a) or {}).get(t)) if r]
+            out.setdefault(a, {})[t] = [min(r[0] for r in q), max(r[1] for r in q), max(r[2] for r in q)]
+    return out
+
+
+def _bound(ages, vals, a, ra, gq):
+    """The shift's growth from its anchor a kept inside what the apps' real install days ever grew there (gq: {a: {t:
+    [q01, q99, n]}} of log real growth, calib "grow"): a model read far outside its inputs (a day whose first-session
+    eCPM lies below every training day) can claim growth no real day had — never past the 1st / 99th percentile."""
+    if vals is None:
+        return None
+    rows = gq.get(str(a)) or {}
+    out = []
+    for t, v in zip(ages, vals):
+        q = rows.get(str(t)) if t > a else None
+        if q:
+            v = ra * min(max(v / ra, math.exp(q[0])), math.exp(q[1]))
+        out.append(v)
+    return out
+
+
+def _cty_shift(ages, mid, x, cb, upto=None, gq=None):
+    """A country's [median, low, high] day off its own curve SHIFTED to its real ROAS at its latest final grid age (as
+    the app line), its 80 % range from the shift's back-test errors for its size (cbandb: its size bucket, else every
+    size pooled; past the band's reach: no end) — then _cty_days' own bounds (its so-far read pinned, capped before,
+    floored after; never a day at or before it). None (its unshifted curve answers) with nothing final inside its curve."""
+    anc = _anchor(x.fin, x.sp, ages[-1], upto)
+    if anc is None:
+        return None
+    af, rc = anc
+    sh = _bound(ages, _shifted(ages, [math.exp(v) for v in mid], af, rc), af, rc, gq or {})
+    if sh is None:
+        return None
+    lm = [math.log(max(v, 1e-12)) for v in sh]
+    at, sz = cb.get(str(af)) or {}, str(_size(x.n))
+    lo, hi, reach = [], [], True
+    for t, v in zip(ages, lm):
+        if t <= af:
+            lo.append(v)
+            hi.append(v)
+            continue
+        b = at.get(str(t)) or {}
+        row = (b.get(sz) or b.get("all")) if reach else None
+        reach = row is not None
+        lo.append(v + row[1] if row else -math.inf)       # (past the band's reach: flat — no end, never the median)
+        hi.append(v + row[2] if row else -math.inf)
+    return _cty_days(ages, lm, lo, hi, x)
 
 
 def predict(key, fc, cal, pin, sk=None):
     """One app's judged install days from its fits + the calibration → its be_<key>.json.gz body (see the module doc)."""
-    newest, rows, byday = pin
+    newest, rows, byday = pin[:3]
+    adm = pin[3] if len(pin) > 3 else None   # (AdMob's own daily revenue: tells a GA4 hole from a real outage)
     nw = date.fromisoformat(newest).toordinal()
     band = cal.get("band") or {}
+    bandb = cal.get("bandb") or {}
+    cbandb = cal.get("cbandb") or {}
     cmh = {H: _cal_xy((cal.get("cty") or {}).get(str(H))) for H in HS}         # (each map's arrays once, not per call)
     medm = {j: m for j, m, _ in fc.get("app_med") or []}
     bench = [None if j not in medm else _rr(math.exp(medm[j])) for j in CARD_J]
+    holes = _holes(rows, nw, adm)         # the calendar dates GA4 lost on every cohort while AdMob did not
+    gr, cgr = _gq(cal.get("grow"), key, "app"), _gq(cal.get("grow"), key, "cty")
+    ok = cal.get("cv") == CALV            # the shift only with a calibration that has its ranges and bound (a failed first
+    #                                       one after the shift shipped: the unshifted curve and its band, as before)
+
+    def each():                           # every day's covered countries and its model curve, the shift's anchor (its
+        for r in rows:                    # latest final grid age) — one day at a time
+            cs = byday.get(r.day, {}) if r.jd else {}  # (a day under $5 / 30 new users: no model — only its real numbers)
+            tot = sum(x.sp for x in cs.values()) or 1.0
+            cov, unc, rest = [], [], 0.0
+            for cc, x in sorted(cs.items(), key=lambda kv: -kv[1].sp):
+                f = fc["fits"].get(cc)
+                if not f or x.c is None or x.e is None or not _seen(f["rng"], x):
+                    if x.sp / tot >= REST:
+                        unc.append([cc, round(x.sp / tot, 4)])
+                    else:
+                        rest += x.sp / tot
+                    continue
+                cov.append((cc, x, f) + tuple(curve_predict(f["cv"], x.c, x.e)))
+            if rest > 0:
+                unc.append([REST_CC, round(rest, 4)])
+            csp = sum(c[1].sp for c in cov)
+            M = combine([(c[1].sp, c[3], c[4]) for c in cov]) if cov and csp > 0 else None
+            anc = _anchor(r.fin, r.sp, M[0][-1], nw - r.X - CLAG) if M else None    # (a daily anchor ≥ CLAG days old)
+            # "data check": a GA4 hole date in its first HOLE_W days — its real ROAS, and so its shifted curve, are low by
+            # what GA4 lost (the forecast stays the shift: falling back cost accuracy against the recorded data)
+            chk = anc is not None and any(r.X + k in holes for k in range(HOLE_W))
+            yield r, tot, cov, unc, csp, M, anc, chk
     days = []
-    for r in rows:
-        cs = byday.get(r.day, {}) if r.jd else {}  # (a day under $5 / 30 new users: no model — only its real numbers)
-        tot = sum(x.sp for x in cs.values()) or 1.0
-        parts, unc, rest, ctys = [], [], 0.0, []
-        for cc, x in sorted(cs.items(), key=lambda kv: -kv[1].sp):
-            f = fc["fits"].get(cc)
-            if not f or x.c is None or x.e is None or not _seen(f["rng"], x):
-                if x.sp / tot >= REST:
-                    unc.append([cc, round(x.sp / tot, 4)])
-                else:
-                    rest += x.sp / tot
-                continue
-            ages, mid, clo, chi = curve_predict(f["cv"], x.c, x.e)
+    for r, tot, cov, unc, csp, M, anc, chk in each():
+        shift = ok and anc is not None            # the "ROAS ab tak" shift (nothing final yet: unshifted)
+        ctys = []
+        for cc, x, f, ages, mid, clo, chi in cov:
             b0, b1, b2, s_, tmax = f["k3"][:5]
             mu = b0 + b1 * x.c + b2 * x.e
             pk = [iso_pred(cmh[H], p_le(mu, s_, H)) if cmh[H] else None for H in HS]   # (K3's chances: kept, not shown)
@@ -1008,14 +1359,12 @@ def predict(key, fc, cal, pin, sk=None):
                 days_ = [x.rbe[0], None, None, clim, {"x": 1, "b": 2, "s": 2, "nf": 3, "bn": 4}[k]]
             elif x.sfa is not None and x.sfa >= clim:    # it lived past its curve without breaking even: that real fact
                 days_ = [x.sfa, None, None, clim, 5 if x.sfa <= nw - x.X - LAG else 6]
-            else:                                # its OWN curve — the one the app line adds up (one curve, one answer:
-                days_ = _cty_days(ages, mid, clo, chi, x) + [clim, 0]   # the app never before all its countries)
-            parts.append((x.sp, ages, mid))
+            else:                                # its OWN curve, shifted to its own ROAS so far (the app line adds up the
+                dd = _cty_shift(ages, mid, x, cbandb, nw - x.X - CLAG, cgr) if shift else None   # same countries:
+                days_ = (dd if dd is not None else _cty_days(ages, mid, clo, chi, x)) + [clim, 0]   # one curve, one
+                # answer) — its daily anchor at least CLAG days old
             ctys.append([cc, round(x.sp / tot, 4), round(x.cpi, 4), round(math.exp(x.e), 3), *[_r(v, 3) for v in pk],
                          *days_])
-        if rest > 0:
-            unc.append([REST_CC, round(rest, 4)])
-        csp = sum(p[0] for p in parts)
         out = {"d": r.day, "age": nw - r.X, "sp": round(r.sp, 2), "inst": r.na, "cov": round(csp / tot, 4),
                "unc": unc, "cty": ctys}
         rl = [None if not r.fin or v is None else _rr(v / r.sp) for v in (r.fin or [])]
@@ -1028,8 +1377,8 @@ def predict(key, fc, cal, pin, sk=None):
             pv.pop()
         if pv:
             out["prov"] = pv                      # lived, not final yet: the page's "ab tak (abhi final nahi)"
-        if parts and csp > 0:
-            ages, roas = combine(parts)
+        if M:
+            ages, roas = M
             sa = r.sfa                            # its latest so-far read: age, ROAS
             so = r.sfv / r.sp if r.sfv is not None and sa is not None and r.sp > 0 else None
             yet = r.rbe is None                   # not broken even by its so-far age (the ROI row's own answer, or its so far)
@@ -1050,10 +1399,22 @@ def predict(key, fc, cal, pin, sk=None):
                 if not yet and a >= r.rbe[0]:
                     v = max(v, 1.0)               # from its real BE day on: 100 % or more
                 return v
-            k = next((i for i, a in enumerate(ages) if str(a) not in band), len(ages))   # the band's reach (a prefix)
-            lo = [fl(a, v * math.exp(band[str(a)][1]), i) if i < k else None for i, (a, v) in enumerate(zip(ages, roas))]
-            hi = [fl(a, v * math.exp(band[str(a)][2]), i) if i < k else None for i, (a, v) in enumerate(zip(ages, roas))]
-            roas = [fl(a, v, i) for i, (a, v) in enumerate(zip(ages, roas))]   # real where lived, bounded after
+            base = _bound(ages, _shifted(ages, roas, anc[0], anc[1]), anc[0], anc[1], gr) if shift else None
+            did = base is not None
+            if did:                  # the shift: the model's growth from its latest final grid age, its
+                af = anc[0]                       # level = what it really made there; the range = the shift's own errors
+                bb = bandb.get(str(af)) or {}     # at that age (bandb; past its reach: no end)
+                k = next((i for i, a in enumerate(ages) if a > af and str(a) not in bb), len(ages))
+                lo0 = [v if a <= af else v * math.exp(bb[str(a)][1]) for a, v in zip(ages[:k], base[:k])]
+                hi0 = [v if a <= af else v * math.exp(bb[str(a)][2]) for a, v in zip(ages[:k], base[:k])]
+            else:                                 # unshifted: the covered countries' curves as they are, the install-time band
+                base = roas
+                k = next((i for i, a in enumerate(ages) if str(a) not in band), len(ages))   # the band's reach (a prefix)
+                lo0 = [v * math.exp(band[str(a)][1]) for a, v in zip(ages[:k], roas[:k])]
+                hi0 = [v * math.exp(band[str(a)][2]) for a, v in zip(ages[:k], roas[:k])]
+            lo = [fl(a, v, i) for i, (a, v) in enumerate(zip(ages, lo0))] + [None] * (len(ages) - k)
+            hi = [fl(a, v, i) for i, (a, v) in enumerate(zip(ages, hi0))] + [None] * (len(ages) - k)
+            roas = [fl(a, v, i) for i, (a, v) in enumerate(zip(ages, base))]   # real where lived, bounded after
             for arr in (roas, lo, hi):                # a model age never below the age before it (a real one stays as
                 for i in range(1, len(arr)):          # GA4 / the cube gave it, a tiny dip included)
                     if real[i] is None and arr[i] is not None and arr[i - 1] is not None and arr[i] < arr[i - 1]:
@@ -1071,6 +1432,10 @@ def predict(key, fc, cal, pin, sk=None):
                 be, be_lo, be_hi = r.rbe[0], None, None
             out["app"] = {"be": [_day(v) for v in (be, be_lo, be_hi)], "lim": ages[-1],
                           "roas": [_rr(v) for v in roas], "lo": [_rr(v) for v in lo], "hi": [_rr(v) for v in hi]}
+            if did:
+                out["app"]["anc"] = anc[0]            # shifted at this grid age (its real ROAS there)
+        if chk:
+            out["chk"] = 1                            # a GA4 hole in its first week: "data check" on the page (still shifted)
         out["card"] = {"roas": [None if (not r.cum or r.cum[j] is None) else _rr(r.cum[j] / r.sp) for j in CARD_J],
                        "bench": bench, "fin": [1 if r.fin and r.fin[j] is not None else 0 for j in CARD_J]}   # (final points)
         sfr = None if r.sfv is None else _rr(r.sfv / r.sp)
@@ -1080,9 +1445,12 @@ def predict(key, fc, cal, pin, sk=None):
         if not r.jd:
             out["jd"] = 0                          # (under $5 / 30 new users: no model, its real numbers only)
         days.append(out)
-    sk = sk or {"auc": [None] * len(HS), "c": None, "n": 0}
-    return {"v": V, "key": key, "origin": fc["origin"], "grid": list(GRID), "calib": cal.get("built"),
-            "skill": {"auc": list(sk.get("auc") or [None] * len(HS)), "c": sk.get("c"), "n": sk.get("n") or 0},
+    sk = sk or {"auc": [None] * len(HS), "c": [None] * len(SK_A), "n": 0}
+    c = sk.get("c")                        # (a calibration kept from before the shift: its one install-time C as it was —
+    return {"v": V, "key": key, "origin": fc["origin"], "grid": list(GRID), "calib": cal.get("built"),   # the page
+            "skill": {"auc": list(sk.get("auc") or [None] * len(HS)),            # reads it with its own old words)
+                      "c": list(c) if isinstance(c, list) else c if isinstance(c, (int, float)) else None,
+                      "n": sk.get("n") or 0},
             "days": days}
 
 
@@ -1193,8 +1561,9 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             LINE = "be: apps 0"
             return []
         old = load_calib(data_dir)
-        need = old is None or (old.get("tried") or old["built"]) != today      # the first build of the UTC day
-        A, C, held, bodies = [], [], [], {}
+        need = old is None or old.get("cv") != CALV or (old.get("tried") or old["built"]) != today   # the first build
+        A, C, held, bodies = [], [], [], {}                     # of the UTC day (or an older calibration's content)
+        RB, CB, SKL, GA, GC, GK = {}, {}, {}, {}, {}, {}
         n = {"refit": 0, "fail": 0}
         cal = old
 
@@ -1207,7 +1576,7 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             try:
                 fc = load_fits(data_dir, key)
                 refit = fc is None or fc["origin"] != today
-                newest, app, cty = load(out_dir, data_dir, key, fn)
+                newest, app, cty, adm = load(out_dir, data_dir, key, fn, True)
                 if not newest:
                     continue
                 if refit:
@@ -1215,10 +1584,18 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                     save_fits(data_dir, key, fc)
                     n["refit"] += 1
                 if need:
-                    a_, c_ = backtest(key, newest, app, cty)
+                    F = {}                                 # (one fit per month start, shared by the two back-tests)
+                    a_, c_ = backtest(key, newest, app, cty, F)
                     A += a_
                     C += c_
-                pin = _pin(newest, app, cty)
+                    rb, cb, sk_, au_, n0, ga, gc = asof(key, newest, app, cty, F, (old or {}).get("grow"))
+                    for E, e in ((RB, rb), (CB, cb), (GA, ga), (GC, gc)):
+                        for kk, v in e.items():
+                            E.setdefault(kk, array("d")).extend(v)
+                    SKL[key] = skill2(sk_, au_, n0)
+                    GK[key] = growth(ga, gc)              # (its own growth: its bound where it has enough days)
+                    del F, rb, cb, sk_, au_, ga, gc
+                pin = _pin(newest, app, cty, adm)
                 del app, cty
                 if not pin[1]:
                     continue
@@ -1234,17 +1611,20 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             try:
                 if not C or not any(x.get("a") for x in A):
                     raise ValueError("empty back-test")      # (every app failed or unusable: not a calibration)
-                cal = calibrate(A, C, O)
-                cal["skill"] = skill(A)
+                cal = calibrate(A, C, O, RB, CB, GA, GC)
+                cal["skill"] = SKL
+                cal["grow"]["apps"] = {k: v for k, v in GK.items() if v.get("app") or v.get("cty")}
                 save_calib(data_dir, cal)
                 ran = True
             except Exception as e:                       # the last good calibration stays (tried again tomorrow)
                 _fail(e)
                 if old is None:
                     raise NoCalib()
-                cal = dict(old, tried=today)
+                cal = dict(old, tried=today)             # (no cv stamped: a calibration without the shift's parts
+                if SKL and old.get("cv") == CALV:        # stays unshifted and is tried again; over one that has them,
+                    cal["skill"] = SKL                   # this build's own skill — asof() / skill2() ran before)
                 save_calib(data_dir, cal)
-            del A, C
+            del A, C, RB, CB, GA, GC, GK
             for aid, key, fc, pin in held:
                 try:
                     _predict(aid, key, fc, pin)
