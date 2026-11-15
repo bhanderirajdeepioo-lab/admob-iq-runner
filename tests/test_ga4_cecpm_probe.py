@@ -489,3 +489,20 @@ def test_a_stop_mid_day_still_compares_the_reads_made(monkeypatch, tmp_path):
     assert list(d2["reads"]) == ["E6"] and d2["cmp"]["cube"]["day"] and d2["cmp"]["cube"]["rev"] == 1.0
     assert a["verdict"]["verdict"] == "unknown" and a["stopped"] == "calls"
 
+
+def test_the_workflow_file_parses_and_keeps_the_inputs_off_the_log():
+    import yaml
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, ".github", "workflows", "ga4-cecpm-probe.yml"), encoding="utf-8") as fh:
+        raw = fh.read()
+    wf = yaml.safe_load(raw)                                              # (a ": " in a step's name broke it once)
+    on = wf.get("on", wf.get(True))
+    assert set(on) == {"workflow_dispatch"} and set(on["workflow_dispatch"]["inputs"]) == {"apps", "max_calls"}
+    assert wf["permissions"] == {"contents": "read"} and "github.event.inputs" not in raw and "inputs." not in raw
+    steps = wf["jobs"]["probe"]["steps"]
+    assert steps[0]["with"]["persist-credentials"] is False
+    (clone,) = [st for st in steps if "clone" in (st.get("run") or "")]
+    assert "> /dev/null 2>&1" in clone["run"] and "::add-mask::" in clone["run"] and "timeout 480 git " in clone["run"]
+    (runs,) = [st for st in steps if "ga4_cecpm_probe" in (st.get("run") or "")]
+    assert "2>/tmp/" in runs["run"] and runs["env"]["CECPM_DATA_DIR"] == "_private"
+

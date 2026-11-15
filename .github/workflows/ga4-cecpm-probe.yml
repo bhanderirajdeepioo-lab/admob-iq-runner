@@ -40,7 +40,7 @@ jobs:
           python-version: "3.11"
       - name: Install
         run: pip install -q -r requirements.txt
-      - name: Read the PRIVATE data (a read-only clone: the app routes and the cube's month files)
+      - name: Read the PRIVATE data (a read-only clone, for the app routes and the stores the reads are tied to)
         env:
           DATA_REPO: ${{ secrets.DATA_REPO }}
           DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
