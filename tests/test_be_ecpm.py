@@ -158,7 +158,11 @@ def test_a_new_rule_makes_the_benchmark_again_the_same_day(tmp_path, monkeypatch
 
 
 # ── each day ────────────────────────────────────────────────────────────────────────────────────────────────────────
-def test_this_day_and_the_benchmark_use_the_same_countries_and_weights(tmp_path):
+def test_this_day_and_the_benchmark_use_one_set_of_countries_and_its_weights(tmp_path):
+    """16 Nov 2026 ("ha": one set for the whole card, like the ROAS card): the set = the countries with a day-1 base, a
+    valid cell on every lived card day and a benchmark on every one; over it, by spend share, this day's eCPM $ and the
+    benchmark's $ per card day; the index = that $ ÷ its day 1's × 100 on both sides (the table divides out to the
+    chart); cv the set's share, the same on every point."""
     site, data, body, line, _ = run(tmp_path)
     B = bench_of(data)
     fs = _fs(data, KEYS["a"])
@@ -166,20 +170,20 @@ def test_this_day_and_the_benchmark_use_the_same_countries_and_weights(tmp_path)
     seen = 0
     for d in body["days"]:
         ec = d.get("ec")
-        if not ec or ec["x"][5] is None or d["age"] < 14:
+        if not ec or ec["x"][5] is None or d["age"] < 14 + 5:
             continue
         cs = {cc: x for cc, x in R[d["d"]].items() if cc not in be.SKIP_CC}
         tot = sum(x.sp for x in R[d["d"]].values())
-        for j in (1, 3, 5):
-            cov = [cc for cc in cs if cc in B and j in B[cc] and fs.get((cc, d["d"]), (0, 0))[1] >= bec.MIN_IMP
-                   and fs[(cc, d["d"])][0] > 0]
-            S = sum(cs[cc].sp for cc in cov)
-            a = bec.CARD[j]
-            e1 = {cc: fs[(cc, d["d"])][0] / fs[(cc, d["d"])][1] * 1000 for cc in cov}
-            assert abs(ec["x"][j] - sum(cs[cc].sp * 100 * ratio(cc, a) for cc in cov) / S) <= 0.15
-            assert abs(ec["b"][j] - sum(cs[cc].sp * B[cc][j][0] for cc in cov) / S) <= 0.15
-            assert abs(ec["e"][j] - sum(cs[cc].sp * e1[cc] * ratio(cc, a) for cc in cov) / S) <= 1e-3
-            assert abs(ec["be"][j] - sum(cs[cc].sp * B[cc][j][1] for cc in cov) / S) <= 1e-3
+        cov = [cc for cc in cs if cc in B and all(j in B[cc] for j in range(6)) and fs.get((cc, d["d"]), (0, 0))[1] >= bec.MIN_IMP
+               and fs[(cc, d["d"])][0] > 0]
+        S = sum(cs[cc].sp for cc in cov)
+        e1 = {cc: fs[(cc, d["d"])][0] / fs[(cc, d["d"])][1] * 1000 for cc in cov}
+        E = [sum(cs[cc].sp * e1[cc] * (ratio(cc, bec.CARD[j]) if j else 1.0) for cc in cov) / S for j in range(6)]
+        BE = [sum(cs[cc].sp * B[cc][j][1] for cc in cov) / S for j in range(6)]
+        for j in range(6):
+            assert abs(ec["e"][j] - E[j]) <= 1e-3 and abs(ec["be"][j] - BE[j]) <= 1e-3
+            assert abs(ec["x"][j] - 100 * E[j] / E[0]) <= 0.06 and abs(ec["b"][j] - 100 * BE[j] / BE[0]) <= 0.06
+            assert abs(ec["x"][j] - 100 * ec["e"][j] / ec["e"][0]) <= 0.06                    # the table divides out to it
             assert abs(ec["cv"][j] - S / tot) <= 1e-4 and ec["w"][j] == "."
         assert ec["x"][0] == ec["b"][0] == 100.0
         seen += 1
@@ -193,8 +197,11 @@ def test_every_missing_value_says_why(tmp_path):
     by = {d["d"]: d for d in body["days"]}
     X = (date.fromisoformat(D) - timedelta(days=6)).isoformat()             # its day 7 is the day never read
     assert by[X]["ec"]["w"][4] == "w" and by[X]["ec"]["x"][4] is None and by[X]["ec"]["e"][4] is None
-    Xs = (date.fromisoformat(sd) - timedelta(days=13)).isoformat()          # its day 14 was sampled
-    assert by[Xs]["ec"]["w"][5] == "s"
+    for k, j in ((13, 5), (1, 1), (2, 2), (3, 3), (6, 4)):           # its day 14 / 2 / 3 / 4 / 7 was sampled: that ONE
+        ec = by[(date.fromisoformat(sd) - timedelta(days=k)).isoformat()]["ec"]    # point says so, never the whole card
+        assert ec["w"] == "." * j + "s" + "." * (5 - j), (k, ec["w"])       # — the other five drawn over the one set
+        assert ec["x"][j] is None and all(ec["x"][i] is not None for i in range(6) if i != j)
+        assert len({ec["cv"][i] for i in range(6) if i != j}) == 1 and ec["cv"][j] == 0.0       # (one cv)
     newest = body["days"][-1]
     assert newest["ec"]["w"][5] == "y"                                       # not lived yet
     m = {"fs": {("AA", "2030-01-01"): (0.0, 5000.0), ("BB", "2030-01-01"): (1.0, 10.0)}, "fa": {}, "fsd": set(),
@@ -297,7 +304,7 @@ def test_a_card_on_days_ga4_sampled_the_country_split_is_every_country_together(
             a = bec.CARD[j]
             ek = sum(rv * 1000 / im * ratio(cc, a) * 2 * im for cc, rv, im in cs) / sum(2 * im for _, _, im in cs)
             assert abs(ec["e"][j] - ek) <= 1e-3 and abs(ec["x"][j] - 100 * ek / e1) <= 0.15
-            assert abs(ec["b"][j] - P[j][0]) <= 0.15 and abs(ec["be"][j] - P[j][1]) <= 1e-3 and ec["w"][j] == "."
+            assert abs(ec["b"][j] - 100 * P[j][1] / P[0][1]) <= 0.06 and abs(ec["be"][j] - P[j][1]) <= 1e-3 and ec["w"][j] == "."   # (its eCPMs' ratio, like the table)
         assert ec["x"][0] == 100.0 and abs(ec["e"][0] - e1) <= 1e-3
         seen += 1
     assert seen > 10
@@ -343,3 +350,133 @@ def test_the_app_lines_reason_is_the_one_carrying_the_spend_and_day_1_is_marked_
     ec2 = body2["days"][0]["ec"]
     assert ec2["w"][1] == "c" and ec2["wb"][1] == "h" and ec2["p"][0] == "0"   # made while the history was filling
 
+
+# ── review round 3 (16 Nov 2026, the one set): a day GA4 answered unusable for every country ───────────────────────
+def test_a_day_unusable_for_every_country_is_one_null_point_never_the_whole_card():
+    """A folded activity day GA4 answered unusable for EVERY country (sampled / cut, kept so after its retries;
+    collapsed, kept so after LOW_WAIT) says nothing of any one country: it never empties the card's one set — that one
+    point null with its why, the other five over the same set and weights (SYNTHETIC numbers)."""
+    X = "2030-01-01"
+    cs = {"AA": _Row(60.0), "BB": _Row(30.0), "CC": _Row(10.0)}
+    fs = {(cc, X): (5.0, 5000.0) for cc in cs}                            # day 1: $1.00 on 5,000 impressions
+    cells = {(cc, X): [1000000, 2000] * 5 for cc in cs}                   # days 2 … 14: $0.50 on 2,000 impressions
+    fc = {"ec": {cc: [[j, 0.0, 30, 0.0] for j in range(6)] for cc in cs}, "ec_v": bec.stamp()}
+    for st, why in (("smp", "s"), ("cut", "s"), (gce.LOW, "l")):
+        days = {(date(2030, 1, 1) + timedelta(days=a)).isoformat(): (st if a == 6 else "ok", False)
+                for a in bec.CARD[1:]}
+        body = {"days": [{"d": X, "age": 20}]}
+        bec.attach(body, ("2030-01-21", [], {X: cs}), fc, _m(days, fs, cells))
+        ec = body["days"][0]["ec"]                                         # its day 7 (age 6) folded that way
+        assert ec["w"] == "....%s." % why and ec["wb"] == "......", (st, ec["w"])
+        assert ec["x"] == [100.0, 50.0, 50.0, 50.0, None, 50.0] and ec["e"] == [1.0, 0.5, 0.5, 0.5, None, 0.5], st
+        assert ec["b"][4] is None and ec["cv"] == [1.0, 1.0, 1.0, 1.0, 0.0, 1.0], st
+
+
+
+def test_a_day_no_country_has_a_valid_cell_is_one_null_point_never_the_whole_card():
+    """16 Nov 2026 (review): every country under MIN_IMP on one lived final card day must not empty the set — that day is
+    one null point with its own letter, the other points keep the one set (synthetic)."""
+    X = "2030-03-01"
+    days = {(date.fromisoformat(X) + timedelta(days=a)).isoformat(): ("ok", False) for a in bec.CARD}
+    cells = {("AA", X): [2_000_000, 400, 1_500_000, 300, 1_400_000, 300, 1_000_000, 200, 10_000, 5],
+             ("BB", X): [1_000_000, 500, 800_000, 400, 700_000, 400, 600_000, 300, 5_000, 4]}
+    m = {"fs": {("AA", X): (4.0, 1000.0), ("BB", X): (1.0, 800.0)}, "fa": {}, "fsd": {X}, "fsm": set(), "cells": cells,
+         "pool": {}, "days": days, "upto": max(days), "done": True}
+    B = {cc: [[j, math.log(0.5), 30, math.log(1.0)] for j in range(6)] for cc in ("AA", "BB")}
+    fc = {"ec": B, "ec_v": bec.stamp()}
+
+    class R:
+        def __init__(self, sp):
+            self.sp = sp
+    pin = ((date.fromisoformat(X) + timedelta(days=40)).isoformat(), [], {X: {"AA": R(60.0), "BB": R(40.0)}})
+    body = {"days": [{"d": X}]}
+    bec.attach(body, pin, fc, m)
+    ec = body["days"][0]["ec"]
+    assert ec["w"] == ".....n" and ec["x"][5] is None and all(v is not None for v in ec["x"][:5])
+    assert len({c for c in ec["cv"][:5]}) == 1 and ec["cv"][0] == 1.0
+
+
+def test_a_country_counts_until_the_day_its_data_drops_and_that_day_is_named():
+    """16 Nov 2026 ("sab din rakho · bs ak info add kar do jab se giravat ati he to konsi country count nahi hua vo bata do
+    vo day"): AA counts on days 1–2 and drops from day 3 (under MIN_IMP) — named in "dr" with that day, its share and
+    why; the index is CHAINED day to day on the countries counted both days (a country leaving never moves it)
+    (synthetic)."""
+    X = "2030-03-01"
+    days = {(date.fromisoformat(X) + timedelta(days=a)).isoformat(): ("ok", False) for a in bec.CARD}
+    #            day 2 (age 1)        day 3 (age 2)    day 4 (age 3)    day 7 (age 6)    day 14 (age 13)
+    cells = {("AA", X): [3_000_000, 300, 50_000, 20, 40_000, 20, 30_000, 10, 10_000, 5],
+             ("BB", X): [1_000_000, 500, 900_000, 450, 800_000, 400, 600_000, 300, 400_000, 200]}
+    m = {"fs": {("AA", X): (20.0, 1000.0), ("BB", X): (2.0, 800.0)}, "fa": {}, "fsd": {X}, "fsm": set(), "cells": cells,
+         "pool": {}, "days": days, "upto": max(days), "done": True}
+    B = {cc: [[j, math.log(0.5), 30, math.log(10.0 if cc == "AA" else 1.0)] for j in range(6)] for cc in ("AA", "BB")}
+    fc = {"ec": B, "ec_v": bec.stamp()}
+
+    class R:
+        def __init__(self, sp):
+            self.sp = sp
+    pin = ((date.fromisoformat(X) + timedelta(days=40)).isoformat(), [], {X: {"AA": R(75.0), "BB": R(25.0)}})
+    body = {"days": [{"d": X}]}
+    bec.attach(body, pin, fc, m)
+    ec = body["days"][0]["ec"]
+    e1 = {"AA": 20.0, "BB": 2.5}                                             # day-1 eCPMs ($): 20 / 1000 · 2 / 800 × 1000
+    ek = {"AA": [10.0, None], "BB": [2.0, 2.0]}                               # days 2 and 3 ($)
+    E2 = (75 * ek["AA"][0] + 25 * ek["BB"][0]) / 100
+    E1 = (75 * e1["AA"] + 25 * e1["BB"]) / 100
+    assert abs(ec["e"][1] - E2) < 1e-3 and abs(ec["x"][1] - 100 * E2 / E1) <= 0.06       # day 2: both countries
+    assert abs(ec["e"][2] - 2.0) < 1e-3 and abs(ec["x"][2] - ec["x"][1] * 2.0 / 2.0) <= 0.06   # day 3: BB alone — CHAINED:
+    #   day 2's index × BB's own move from day 2 (AA leaving moves nothing: BB is flat, so the line is flat)
+    assert ec["cv"][1] == 1.0 and ec["cv"][2] == 0.25 and ec["w"] == "......"
+    assert ec["dr"] == [[2, [["AA", 0.75, "n"]]]]                                    # from day 3 on: AA, 75 %, too few impressions
+    assert abs(ec["b"][2] - 100.0) <= 0.06 and abs(ec["be"][0] - (75 * 10 + 25 * 1) / 100) < 1e-3   # B: the same countries
+
+
+def _card(cells, fs, B, sp, X="2030-03-01", hot=(), newest_age=40):
+    days = {(date.fromisoformat(X) + timedelta(days=a)).isoformat(): ("ok", a in hot) for a in bec.CARD}
+    m = {"fs": fs, "fa": {}, "fsd": {X}, "fsm": set(), "cells": cells, "pool": {}, "days": days, "upto": max(days),
+         "done": True}
+
+    class R:
+        def __init__(self, v):
+            self.sp = v
+    pin = ((date.fromisoformat(X) + timedelta(days=newest_age)).isoformat(), [], {X: {cc: R(v) for cc, v in sp.items()}})
+    body = {"days": [{"d": X}]}
+    bec.attach(body, pin, {"ec": B, "ec_v": bec.stamp()}, m)
+    return body["days"][0]["ec"]
+
+
+def test_a_day_no_counted_country_can_stay_drops_nobody_and_a_benchmarkless_country_leaves_on_the_next_drawable_day():
+    """Review, 16 Nov 2026: AA's day-3 row folded into "(other)" and BB without a benchmark past day 2 must not empty
+    the card — day 3 null ("o"), BB leaves on day 4 ("c"), AA keeps days 4 / 7 / 14 (synthetic)."""
+    X = "2030-03-01"
+    cells = {("AA", X): [1_000_000, 500, 0, 0, 900_000, 500, 800_000, 500, 700_000, 500],
+             ("BB", X): [500_000, 500, 400_000, 500, 300_000, 500, 200_000, 500, 100_000, 500]}
+    fs = {("AA", X): (2.0, 1000.0), ("BB", X): (1.0, 1000.0)}
+    B = {"AA": [[j, 0.0, 30, math.log(1.0)] for j in range(6)], "BB": [[j, 0.0, 30, math.log(1.0)] for j in range(2)]}
+    m_days = {(date.fromisoformat(X) + timedelta(days=a)).isoformat(): ("oth" if a == 2 else "ok", False) for a in bec.CARD}
+    m = {"fs": fs, "fa": {}, "fsd": {X}, "fsm": set(), "cells": cells, "pool": {}, "days": m_days, "upto": max(m_days),
+         "done": True}
+
+    class R:
+        def __init__(self, v):
+            self.sp = v
+    pin = ((date.fromisoformat(X) + timedelta(days=40)).isoformat(), [], {X: {"AA": R(70.0), "BB": R(30.0)}})
+    body = {"days": [{"d": X}]}
+    bec.attach(body, pin, {"ec": B, "ec_v": bec.stamp()}, m)
+    ec = body["days"][0]["ec"]
+    assert ec["x"][2] is None and ec["w"][2] == "o" and all(ec["x"][j] is not None for j in (0, 1, 3, 4, 5))
+    assert ec["dr"] == [[3, [["BB", 0.3, "c"]]]] and ec["cv"][3] == 0.7 and ec["cv"][1] == 1.0
+    # AA alone from day 4: chained from day 2 (the last drawn day) on AA's own move ($2.00 → $1.80)
+    assert abs(ec["x"][3] - ec["x"][1] * 1.8 / 2.0) <= 0.06
+
+
+def test_a_hot_copy_still_filling_drops_nobody_and_its_point_is_the_countries_that_have_a_cell():
+    """Review, 16 Nov 2026: a hot day where only AA has reached MIN_IMP must not list BB under "Ginti se bahar" — no
+    "dr"; the not-final point is AA's own move, chained (synthetic)."""
+    X = "2030-03-01"
+    cells = {("AA", X): [1_000_000, 500, 900_000, 500, 0, 0, 0, 0, 0, 0],
+             ("BB", X): [500_000, 500, 40_000, 20, 0, 0, 0, 0, 0, 0]}                # day 3: BB still filling (20)
+    fs = {("AA", X): (2.0, 1000.0), ("BB", X): (1.0, 1000.0)}
+    B = {cc: [[j, 0.0, 30, math.log(1.0)] for j in range(6)] for cc in ("AA", "BB")}
+    ec = _card(cells, fs, B, {"AA": 60.0, "BB": 40.0}, hot=(2,), newest_age=3)
+    assert "dr" not in ec and ec["p"][2] == "1"
+    assert ec["cv"][2] == 0.6 and abs(ec["x"][2] - ec["x"][1] * 1.8 / 2.0) <= 0.06       # AA's own move from day 2

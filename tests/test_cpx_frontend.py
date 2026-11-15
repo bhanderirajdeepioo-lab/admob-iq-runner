@@ -1068,12 +1068,12 @@ def test_breakeven_day_opened_countries_data_kam_and_the_card(out):
     assert d["row"]["on"] and d["row"]["exp"] == "true" and d["n"] == 1 and not d["pv"]
     assert d["cty_h4"] == "Countries with a benchmark (2)"
     assert d["cty"]["head"] == ["Country", "Spend share", "CPI", "eCPM", "Breakeven"]   # (eCPM back, with its benchmark: 15 Nov "haan dono karo")
-    assert d["cty"]["rows"] == [["[IN] Name IN", "60%", "$0.31 · B $0.28", "$4.00 · B $3.50", "day 75 · B day 60 80%: day 40–160"],
-                                ["[US] Name US", "25%", "$0.62 · B $0.50", "$9.60 · B $8.04", "day 140 · B > 210 days 80%: day 70–210+"]]   # (the owner's mock: "₹120 · B ₹100" on one line)
+    assert d["cty"]["rows"] == [["[IN] Name IN", "60%", "$0.31 · B $0.28 +11%", "$4.00 · B $3.50 +14%", "day 75 · B day 60 +25% 80%: day 40–160"],
+                                ["[US] Name US", "25%", "$0.62 · B $0.50 +24%", "$9.60 · B $8.04 +19%", "day 140 · B > 210 days 80%: day 70–210+"]]   # (16 Nov "tino me % add kar do": the day ÷ B − 1; no % against "B > L days")   # (the owner's mock: "₹120 · B ₹100" on one line)
     assert "10 me se 8 baar breakeven is range me (210+ = country ke dekhe hue 210 din ke aage)" in d["cty"]["titles"]   # beyond its watched limit
     k = 50000 / (50000 * fxd(date(2026, 3, 25)))                                        # the ₹ view: CPI $ × that day's ₹/$
-    assert [r[2] for r in b["d25i"]["cty"]["rows"]] == ["₹%.1f · B ₹%.1f" % (0.31 * k, 0.28 * k), "₹%.1f · B ₹%.1f" % (0.62 * k, 0.5 * k)] == ["₹26.3 · B ₹23.7", "₹52.5 · B ₹42.4"]
-    assert [r[3] for r in b["d25i"]["cty"]["rows"]] == ["₹%.1f · B ₹%.1f" % (4.0 * k, 3.5 * k), "₹%.1f · B ₹%.1f" % (9.6 * k, 8.04 * k)]   # eCPM in the view's currency, like CPI (the owner's mock: "₹70 · B ₹50")
+    assert [r[2] for r in b["d25i"]["cty"]["rows"]] == ["₹%.1f · B ₹%.1f +11%%" % (0.31 * k, 0.28 * k), "₹%.1f · B ₹%.1f +24%%" % (0.62 * k, 0.5 * k)] == ["₹26.3 · B ₹23.7 +11%", "₹52.5 · B ₹42.4 +24%"]
+    assert [r[3] for r in b["d25i"]["cty"]["rows"]] == ["₹%.1f · B ₹%.1f +14%%" % (4.0 * k, 3.5 * k), "₹%.1f · B ₹%.1f +19%%" % (9.6 * k, 8.04 * k)]   # eCPM in the view's currency, like CPI (the owner's mock: "₹70 · B ₹50")
     assert d["kam"] == "15% spend: data kam (3 countries + baaki chhote) — Show names" and d["names"] == ""
     assert d["kam_t"].startswith("data kam = us country ke 20 se kam asli-BE wale purane din, ya is din ka CPI / eCPM unke purane din ki range ke bahar (ya aaya hi nahi)")
     u = b["d25u"]                                                                       # the names on tap: top few + the folded rest
@@ -1107,7 +1107,7 @@ def test_breakeven_day_opened_countries_data_kam_and_the_card(out):
         assert w in r["titles"], w
     # 26 Mar (provisional): one country covered, 40 % of the spend "data kam"
     g = b["d26"]
-    assert g["pv"] and g["cty_h4"] == "Countries with a benchmark (1)" and g["cty"]["rows"][0][2] == "₹%.1f · B ₹%.1f" % (0.31 * 50000 / (50000 * fxd(date(2026, 3, 26))), 0.28 * 50000 / (50000 * fxd(date(2026, 3, 26))))
+    assert g["pv"] and g["cty_h4"] == "Countries with a benchmark (1)" and g["cty"]["rows"][0][2] == "₹%.1f · B ₹%.1f +11%%" % (0.31 * 50000 / (50000 * fxd(date(2026, 3, 26))), 0.28 * 50000 / (50000 * fxd(date(2026, 3, 26))))
     assert g["kam"] == "40% spend: data kam (2 countries + baaki chhote) — Show names"
     # 28 Mar: nothing covered — said, all of its spend "data kam", its card still there (provisional)
     h = b["d28"]
@@ -1227,7 +1227,7 @@ def test_breakeven_rupee_rate_and_the_fold_marker(out):
     assert k["day"] == pytest.approx(50000 / (50000 * fxd(date(2026, 3, 25))))           # the day's ₹ as billed ÷ its $ at its own rate
     assert k["none"] == pytest.approx(1 / 0.012)                                        # DATA has no spend that day: the one rate
     assert k["base"] == 80 and k["base_none"] is None                                   # a ₹ base: the page's usd_inr; none: no rate
-    assert k["row"] == "$%d" % round(50000 * fxd(date(2026, 3, 25))) and k["cpi"] == ["$0.31 · B $0.28", "$0.62 · B $0.50"]   # no rate: the file's $, never a wrong ₹
+    assert k["row"] == "$%d" % round(50000 * fxd(date(2026, 3, 25))) and k["cpi"] == ["$0.31 · B $0.28 +11%", "$0.62 · B $0.50 +24%"]   # no rate: the file's $, never a wrong ₹
     f = out["be"]["fold"]                                                               # "..." folds like "…"
     assert f == {"kam": "15% spend: data kam (1 country + baaki chhote) — Hide names", "names": "[BR] Name BR 10% · baaki chhote countries 5%"}
 
@@ -1367,6 +1367,14 @@ def test_breakeven_card_ecpm_index_day_1_is_the_first_session(out):
     assert ec["none"]["vms"] == 0 and ec["none"]["miss"] == "jin countries ka index bana unka benchmark nahi bana."
     assert ec["none"]["titles"] == []      # no index on any day: the why only — no empty chart, no table of "—" (16 Nov)
     assert ec["fn"] and ec["same"]
+    for w in ("har din wahi countries jo us din tak gini gayi (jis din kisi country ke users ke 100 se kam ads ya us din ka benchmark nahi, us din se aage wo nahi gini)",
+              "table ka eCPM $ aur benchmark $ us din ki gini countries ke",
+              "benchmark = har country ke apne purane install din ka median eCPM (30 din se purane), uski line bhi isi tarah judti hai"):
+        assert w in ec["fn"], w                                            # 16 Nov: a country counts until the day its data drops
+    assert "poore card me countries ka ek hi set" not in ec["fn"]           # (the one-set rule the owner turned down)
+    assert "Ginti se bahar" not in ec["fn"]                                # (no drop on this card: no line to point at)
+    # the chained index (16 Nov): a country leaving never moves the verdict's index — "x % spend: data kam" is this day's only
+    assert ec["unc_t"] == "is din sirf un countries ka eCPM jo 4 days tak gini gayi (har din data aur benchmark) — baaki spend ka eCPM data kam"
     assert out["be"]["ecOpen"] == {"panel": True, "table": True}           # (the open day passes its "ec" to the card)
     pl = ec["pooled"]                                                      # every country together: said, no "data kam"
     assert pl["note"].startswith("— is app ka country-wise eCPM GA4 sirf sample karke deta hai") and not pl["plain"]
@@ -1398,33 +1406,40 @@ def test_breakeven_countries_table_benchmark_lines(out):
     assert "B = benchmark: us country ke purane install dino ka median (beech wala number)" in h and "eCPM = pehle session ka" in h
     for bad in out["be"]["bm_bad"]:                                                     # null / short / junk "bm": the day's own value only
         assert bad == ["[IN] Name IN", "100%", "₹0.40", "₹3.00", "day 30"], bad
-    assert out["be"]["bm_part"] == ["[IN] Name IN", "100%", "₹0.40 · B ₹0.35", "₹3.00", "day 30 · B > 99 days"]   # per cell: what is a number is shown
+    assert out["be"]["bm_part"] == ["[IN] Name IN", "100%", "₹0.40 · B ₹0.35 +14%", "₹3.00", "day 30 · B > 99 days"]   # per cell: what is a number is shown
 
 
 def test_breakeven_roas_card_same_countries_marks_and_filled_benchmark_dots(out):
-    """The ROAS card (new rule): the verdict skips a data-check point and says "(x% spend: data kam)"; the point's label
-    reads "≈ 16.0%" with the why as a <title>; a dot with less than 99.5 % of the spend carries its "data kam" <title>; the
-    benchmark dots are filled; the footnote has the new rule; an old card (no cv / chk) renders as before."""
+    """The ROAS card (new rule): the verdict skips a data-check point and says "(x% spend: data kam)"; a data-check point
+    (a known-low number: GA4 answered a date of its window nearly empty by country) is NOT drawn — a note names its days
+    and why (owner, 16 Nov 2026: "ye kya he?" on a line near 0 %); a dot with less than 99.5 % of the spend carries its
+    "data kam" <title>; the benchmark dots are filled; the footnote has the new rule; an old card (no cv / chk) as before."""
     import re
     d = out["be"]["d26"]["card"]
     assert d["vs"] == "3 days: ROAS 14.0% vs benchmark 13.0% → +8% (15% spend: data kam)"      # 4 days is a data check: skipped
     h = out["be"]["d26h"]
     s = re.search(r"<svg class=\"cpx-svg cpx-bes\".*?</svg>", h, re.S).group(0)
-    assert re.search(r'class="cpx-pt" text-anchor="middle">≈ 16\.0%<title>data check — beech ke kisi din GA4 ka country data adhoora aaya, asli number isse zyada; faisle me nahi</title></text>', s)
-    assert s.count("≈ ") == 1                                                          # only the chk point
+    assert "16.0%" not in s and "≈ " not in s                                          # the data-check point: not drawn
+    NOTE = ": GA4 ka country data beech ke kisi din adhoora aaya (data check) — countries se jodi kamai abhi galat hoti, isliye ye point nahi dikhaye; GA4 ke dobara padhne ke baad aayenge."
+    assert '<p class="cpx-note">4 days' + NOTE + "</p>" in h                           # only the point it hides (7 / 14 days: data checks too — the build's chk is cumulative — but no point yet)
+    k = out["be"]["cardchk"]                                                            # every lived point a data check: no ROAS chart, only the note naming all six
+    for c in (k["none"], k["ec"]):
+        assert 'aria-label="ROAS so far vs benchmark"' not in c
+        assert re.findall(r'<p class="cpx-note">([^<]*)</p>', c) == ["1 day / 2 days / 3 days / 4 days / 7 days / 14 days" + NOTE]
+    assert "<svg" not in k["none"] and "cpx-becd" not in k["none"]                     # (no empty box either)
+    assert k["ec"].count("<svg") == 1 and re.search(r'<div class="cpx-becd"><div class="cpx-chw"><svg class="cpx-svg cpx-bes" [^>]*aria-label="eCPM index vs benchmark">', k["ec"])   # the eCPM chart stays
     assert "<title>15% spend: data kam</title>" in s
-    assert re.search(r"<title>data check — beech ke kisi din[^<]*\n15% spend: data kam</title>", s)
     assert len(re.findall(r'<circle [^>]*class="cpx-bep" data-f="1"/>', s)) == 6        # the benchmark: filled, all six
     assert ".cpx-svg circle.cpx-bep[data-f]{fill:var(--ink2)}" in _page()
     fn = " ".join(d["fn"])
     for w in ("benchmark = har country ka apna median ROAS (uske purane install din, usi din tak; bot ajeeb din hata deta hai), is din ke spend share se joda",
-              "dono line ek hi countries se (poore card me ek set; kisi country ka cell abhi nahi aaya to us din ka point nahi), baaki spend \"data kam\"", "≈ = data check", "khokhla = abhi final nahi", "verdict sirf final, saaf point pe",
+              "dono line ek hi countries se (poore card me ek set; kisi country ka cell abhi nahi aaya to us din ka point nahi), baaki spend \"data kam\"", "data check wale point nahi dikhaye", "khokhla = abhi final nahi", "verdict sirf final, saaf point pe",
               "1 day = sirf install ka din"):
         assert w in fn, w
     o = out["be"]["cardnew"]
     assert o["all_chk"] == 0 and o["old"] == o["old_plain"]                              # every point data-check: no verdict; no cv / chk = the old card
     assert o["skip_nf"].startswith("2 days: ROAS 30.0%") and "spend: data kam" not in o["skip_nf"]   # a not-final point is skipped too; cv 1 = no "data kam"
-    assert out["be"]["bm_rk"] == ["day 33 · B day 60 real", "day 33 · B day 60 not final", "not by day 120 · B > 120 days real",
+    assert out["be"]["bm_rk"] == ["day 33 · B day 60 −45% real", "day 33 · B day 60 −45% not final", "not by day 120 · B > 120 days real",
                                   "beyond data (> 90 days) · B day 60", "beyond data (> 360 days) · B day 60"]   # the B line follows the main value in every shape
     assert out["be"]["ec_hollow"] == {"roas_filled": 6, "ec_plain": 6, "ec_data_f": 6}   # (the ROAS benchmark dots filled; the eCPM chart's stay hollow)
     n = out["be"]["cardnone"]                                                            # a card with nothing to draw says why (never empty axes)
@@ -1434,7 +1449,114 @@ def test_breakeven_roas_card_same_countries_marks_and_filled_benchmark_dots(out)
     assert n[3].endswith("Benchmark wali countries ka ROAS abhi GA4 se nahi aaya — aane par card banega.")
     assert n[4].endswith("Is din ka ROAS card nahi bana.") and out["be"]["cardnone_null"].endswith(n[0][-60:])
     assert out["be"]["cardnone_svg"] == [False, False]
-    e = out["be"]["cardends"]                                                            # "≈ 108.4%" at an end point is anchored to the edge, not cut off
-    assert e["first"]["anchors"][0] == [3.0, "start"] and e["first"]["anchors"][-1] == [317.0, "end"]
-    assert all(a == "middle" for _, a in e["first"]["anchors"][1:-1]) and all(a == "middle" for _, a in e["plain"]["anchors"])
+    e = out["be"]["cardends"]                                                            # data-check end points: not drawn at all (no "≈" label to cut off)
+    assert len(e["first"]["anchors"]) == len(e["plain"]["anchors"]) - 2 and all(a == "middle" for _, a in e["first"]["anchors"])
+    assert all(a == "middle" for _, a in e["plain"]["anchors"])
     assert e["first"]["filled"] == 6 and len(e["first"]["db"]) == 6                    # the benchmark dots: filled
+
+
+def test_breakeven_ecpm_card_names_the_countries_that_stopped_counting_and_the_cells_show_the_benchmark_percent(out):
+    """16 Nov 2026: "sab din rakho · bs ak info add kar do jab se giravat ati he to konsi country count nahi hua vo bata do
+    vo day" — one line under the eCPM card: from which day which country stopped counting (its share; why on hover; the six
+    biggest a day by name, the rest summed; a day not final yet says so); and "cpi ecpm and brekeven tino me % add kar do":
+    the day ÷ its benchmark − 1, coloured like the screen's moves (CPI / BE up = bad, eCPM down = bad; small = flat)."""
+    d = out["be"]["ecdr"]
+    assert d["lines"] == ["Ginti se bahar (us din se aage):",                                     # one line a day (the "·" is each name's reason)
+                          "3 days se: [US] Name US 14% · ads kam, [JP] Name JP 12% · (other) me",
+                          "7 days se: " + ", ".join("[A%d] Name A%d 1%% · ads kam" % (i, i) for i in range(1, 7)) + " +2 aur (5%) (abhi final nahi)"]   # (8 countries: 6 named + the rest; day 7 not final)
+    assert d["spans"][:2] == [["[US] Name US 14% · ads kam", "impressions kam (100 se kam) — itne kam pe eCPM bharosemand nahi"],
+                              ["[JP] Name JP 12% · (other) me", 'GA4 ne us din kuch rows "(other)" me jod di — is country ka hissa nahi mila']]
+    assert d["titles"][0] == ("jis din kisi country ke users ka data kam aaya (100 se kam ads, ya GA4 ne nahi diya) ya us din ka benchmark nahi bana, "
+                              "us din se aage line sirf baaki countries ko ginti hai — har din ka badlav unhi countries pe naapa jaata hai jo dono din "
+                              "gini gayi, isliye kisi country ke hatne se line nahi uchhalti")   # (the chained index: a country leaving never makes it jump)
+    assert d["none"] == [""] * 7                                       # none / empty / day 9 / a day with no country / no good country / junk / day 2.5: nothing
+    assert out["be"]["vsb"] == [["+46%", "cpx-bad"], ["−28%", "cpx-bad"], ["+34%", "cpx-bad"], ["−5%", "cpx-flat"], ["", ""], ["", ""]]
+
+
+def test_breakeven_drop_line_says_why_beside_every_name_and_reads_only_whole_days(out):
+    """The drop line (16 Nov review): a SHORT reason beside each name — a phone shows no hover ("US 14% · ads kam") — for every
+    letter be_ecpm writes, "data nahi" for any other; the long words on hover, "c" in a country's own words (BEW's "c" is
+    the app line's); a day must be a whole 1–5, a day left with no well-formed country is dropped, a missing share is "—"
+    with its why (the rest's sum too: never a partial sum)."""
+    a = out["be"]["ecdr"]["all"]
+    assert [s[0].split(" · ")[1] for s in a] == ["ads kam", "(other) me", "chhupi rows", "benchmark nahi", "ads nahi", "sampled",
+                                                 "adhoora", "abhi aa raha", "data nahi", "data nahi", "data nahi", "data nahi"]   # n o t c x s l w · y "" "nn" null
+    assert a[0][0] == "[L1] Name L1 10% · ads kam"
+    assert a[3][1] == "is country ka is din ka benchmark nahi bana — purane din kam"
+    assert "jin countries ka index bana" not in json.dumps([s[1] for s in a], ensure_ascii=False)      # (never the app line's "c")
+    assert a[2][1].startswith("GA4 ne us din kam users wali rows chhupa di") and a[4][1] == "us din in users se koi ad impression nahi"
+    assert [s[1] for s in a[9:]] == ["is din is country ka data nahi aaya"] * 3                      # (no letter / not one letter: generic, never "undefined")
+    j = out["be"]["ecdr"]["junk"]
+    assert j["lines"] == ["Ginti se bahar (us din se aage):",                                     # 1.5 / "3" / 0 / 6 / true: no day; day 2: no good country — dropped; by day
+                          "4 days se: [JP] Name JP — · ads kam, [KR] Name KR — · ads nahi, [TW] Name TW — · (other) me",
+                          "14 days se: " + ", ".join("[B%d] Name B%d 1%% · ads kam" % (i, i) for i in range(1, 7)) + " +2 aur (—)"]
+    assert j["dash"] == ["spend share nahi aaya"] * 4                                             # null / −1 / "x" shares + the rest with a null: "—" + why
+
+
+def test_breakeven_ecpm_table_marks_every_column_from_a_drop_day(out):
+    """The eCPM $ table (16 Nov review): from a drop day on, "↓" after the column's day, its title naming who left by then
+    ("3 days se nahi gine: US, JP — is column ke $ baaki countries ke"); the footnote says why its $ can step while the index
+    does not; no drop: no "↓", no sentence; a pooled card (every country together) drops nobody."""
+    e = out["be"]["ecd"]
+    L = " — is column ke $ baaki countries ke"
+    t3 = "3 days se nahi gine: [US] Name US, [JP] Name JP"
+    assert e["th"] == [["eCPM $", ""], ["1 day", ""], ["2 days", ""], ["3 days ↓", t3 + L], ["4 days ↓", t3 + L],
+                       ["7 days ↓", t3 + " · 7 days se nahi gine: [KR] Name KR" + L], ["14 days ↓", t3 + " · 7 days se nahi gine: [KR] Name KR" + L]]
+    assert all(lab and "↓" not in lab and not t for lab, t in e["th0"])                            # no drop: no mark
+    S = ('↓ = us column se kuch countries nahi gini: "1 day" column me saari gini countries hain, ↓ wala column kam countries ka '
+         "hai — isliye uska $ achanak badal sakta hai jabki index nahi badalta")
+    assert S in e["fn"] and "↓" not in e["fn0"]
+    assert e["line"] and not e["line0"]                                                            # the drop line under the table, one line a day
+    assert '"Ginti se bahar" me likha hai' in e["fn"]
+    p = e["pooled"]
+    assert not p["line"] and p["arrows"] == 0 and all("↓" not in lab for lab, _ in p["th"])
+
+
+def test_breakeven_ecpm_footnote_is_the_chain_rule(out):
+    """The eCPM footnote (16 Nov review): the CHAINED index in Hinglish — 1 day = 100, each next day = the previous day's index ×
+    the move on the countries counted both days, so a country leaving never makes the line jump; never again "the table's $
+    divide out to the index" (the $ rows are each day's own countries); the "≈" legend only where a ≈ is printed; the pooled
+    card keeps its own footnote (its index IS its $ ÷ day 1's) with the "≈" legend under the same rule."""
+    e = out["be"]["ecd"]
+    for w in ("index: 1 day = 100, har agla din = pichhle din ka index × un countries ke eCPM ka badlav jo dono din gini gayi "
+              "(is din ÷ pichhla din, spend share se; beech me point nahi to uske pehle wala din) — isliye kisi country ke hatne se line nahi uchhalti",
+              "benchmark = har country ke apne purane install din ka median eCPM (30 din se purane), uski line bhi isi tarah judti hai",
+              "table ka eCPM $ aur benchmark $ us din ki gini countries ke"):
+        assert w in e["fn"] and w in e["fn0"], w
+    for f in (e["fn"], e["fn0"], e["q0"], e["qn"]):
+        assert "unhi countries ka 1 day eCPM" not in f and "table se seedha" not in f and "(= 100)" not in f   # (no ratio-of-the-$ claim)
+    Q = " · ≈ = GA4 ne us din kuch rows jod di / chhupa di."
+    assert e["fn0"].endswith(Q)                                                                    # a ≈ printed (3 days) → its legend
+    assert not e["q0"].endswith(Q) and "≈" not in e["q0"]                                          # no q flag: no legend
+    assert "≈" not in e["qn"] and not e["qn_mark"]                                                 # a q flag on a day with no $: no ≈, no legend
+    p = e["pooled"]
+    P0 = ("eCPM = kamai ÷ ad impressions × 1000 (GA4, isi install din ke saare users ki, saari countries mila ke) · 1 day = pehla session (= 100) "
+          "· 2 / 3 / 4 / 7 / 14 days = wahi users us din (returning sessions) · index = us din ka eCPM $ ÷ 1 day ka eCPM $ × 100 (table se seedha milta hai) "
+          "· benchmark = isi app ke purane install dino ka median eCPM (saari countries mila ke, 30 din se purane), isi tarah · khokhla point / not final = GA4 abhi bhar raha hai")
+    assert p["fn0"] == P0 + "." and p["fn"] == P0 + Q                                              # the pooled card's own words, + "≈" where one is printed
+
+
+def test_breakeven_percent_vs_b_colour_provisional_be_kinds_and_phone(out):
+    """The % against B (16 Nov review): coloured by the % it PRINTS (fP's rounding: "+25%" on CPI is coloured though the raw
+    move is +24.96 %), always plain on a provisional day (and says why); the BE % only on an exact or a model day (rk 1 / 3 / 0),
+    never a "≤ day N" bound (2 / 4), "not by day N" (5 / 6) or "beyond data"; the % INSIDE its B span (one span) — and on a
+    phone (the screen's own @container 520 px step, as its other phone rule) that span drops to its own line."""
+    assert out["be"]["vsb2"] == [["+25%", "cpx-bad", "is din ka benchmark (B) se farak"], ["−15%", "cpx-bad", "is din ka benchmark (B) se farak"],
+                                 ["+24%", "cpx-flat", "is din ka benchmark (B) se farak"], ["−25%", "cpx-good", "is din ka benchmark (B) se farak"]] + [
+        [v, "cpx-flat", "is din ka benchmark (B) se farak — din abhi final nahi, isliye rang nahi"] for v in ("+46%", "−28%", "+34%")]
+    p = out["be"]["pvdet"]
+    assert p["row"] == p["row_np"] == ["[IN] Name IN", "100%", "₹0.40 · B ₹0.20 +100%", "₹3.00 · B ₹4.00 −25%", "day 30 · B day 20 +50%"]
+    assert [x[:2] for x in p["np"]] == [["cpx-bad", True]] * 3                                      # final: coloured, each inside its B span
+    assert [x[:2] for x in p["pv"]] == [["cpx-flat", True]] * 3 and all(x[2].endswith("— din abhi final nahi, isliye rang nahi") for x in p["pv"])
+    assert p["one"] == 3                                                                            # one span: " · B ₹0.20 +100%"
+    dl = out["be"]["dl"]                                                                            # the real renders: 25 Mar (final) / 26 Mar (provisional)
+    assert [x[0] for x in dl["d25"]] == ["cpx-flat", "cpx-flat", "cpx-bad", "cpx-flat", "cpx-good"] and all(x[1] for x in dl["d25"])
+    assert [x[0] for x in dl["d26"]] == ["cpx-flat"] * 3 and all(x[1] for x in dl["d26"])           # (its BE +25% would be red: plain)
+    assert out["be"]["bm_rk2"] == ["≤ day 33 · B day 60 real", "≤ day 33 · B day 60 not final", "not by day 120 · B day 60 real",
+                                   "not by day 120 · B day 60 not final", "not by day 120 · B > 120 days not final",
+                                   "day 33 · B day 60 −45% 80%: day 20–50"]                          # a bound / not by: no %; a model day: its %
+    page = _page()
+    css = page[page.index("/* ---- 📉 CPI vs eCPM (CPX)"):page.index("/* ---------- 👥 Audience")]
+    assert "@container cpx (max-width:520px){.cpx-mrow{" in css                                     # the screen's phone step is a container query
+    assert "@container cpx (max-width:520px){.cpx-bed .cpx-t td .cpx-bi{display:block}}" in css
+    assert "@media (max-width:520px)" not in css

@@ -744,6 +744,9 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     const tblOf = (h, head) => { const i = h.indexOf(head); if (i < 0) return null; const t = h.slice(i, h.indexOf('</table>', i));
       return { head: [...t.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map(m => m[1]), rows: [...t.matchAll(/<tr><td>([\s\S]*?)<\/tr>/g)].map(m => cellsOf('<td>' + m[1])),
         titles: [...t.matchAll(/title="([^"]*)"/g)].map(m => dec(m[1])) }; };
+    // the open day's countries table: every "% vs B" (its colour, inside its B span?, its why)
+    const ctyT = h => { const i = h.indexOf('<h4 class="cpx-h4">Countries with a benchmark'); return i < 0 ? '' : h.slice(i, h.indexOf('</table>', i) + 8); };
+    const dlOf = h => miniDom(ctyT(h)).querySelectorAll('.cpx-dl').map(e => [e.cls()[1], !!e.closest('.cpx-bi'), dec(e.getAttribute('title'))]);
     const svgOf = h => { const m = h.match(/<svg class="cpx-svg cpx-bes"[\s\S]*?<\/svg>/); if (!m) return null; const s = m[0], at = (t, k) => +((t.match(new RegExp(' ' + k + '="([^"]*)"')) || [])[1]);
       const lab = c => [...s.matchAll(new RegExp('<text [^>]*class="' + c + '"[^>]*>([^<]*)<', 'g'))].map(z => ({ v: z[1], x: at(z[0], 'x'), y: at(z[0], 'y') }));
       const dot = c => [...s.matchAll(new RegExp('<circle [^>]*class="' + c + '"[^>]*?(?:/>|>)', 'g'))].map(z => ({ x: at(z[0], 'cx'), y: at(z[0], 'cy') }));
@@ -809,7 +812,8 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
         title: svgs.length > 1 ? txt((svgs[1].match(/class="cpx-tt">([^<]*)</) || [])[1] || '') : '',
         cells: [...(ce.match(/<table class="cpx-t cpx-bect">[\s\S]*?<\/table>/) || [''])[0].matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map(m => cellsOf(m[1])),
         titles: [...((ce.match(/<table class="cpx-t cpx-bect">[\s\S]*?<\/table>/) || [''])[0]).matchAll(/class="cpx-nv" title="([^"]*)"/g)].map(t => dec(t[1])),
-        fn: (ce.match(/<p class="cpx-fn">eCPM = [\s\S]*?<\/p>/) || [''])[0].length > 0,
+        fn: txt((ce.match(/<p class="cpx-fn">(eCPM = [\s\S]*?)<\/p>/) || [])[1] || ''),
+        unc_t: dec((ce.match(/eCPM index <b>[^<]*<\/b> vs benchmark [0-9]+ → <span[^>]*>[^<]*<\/span> <small title="([^"]*)">/) || [])[1] || ''),
         vcls: (ce.match(/eCPM index <b>[^<]*<\/b> vs benchmark [0-9]+ → <span class="cpx-dl ([^"]*)"/) || [])[1] || '',
         nf: (ce.match(/<small title="([^"]*)">not final<\/small>/) || [])[1] || '',
         none: { titles: [...((cn.match(/<table class="cpx-t cpx-bect">[\s\S]*?<\/table>/) || [''])[0]).matchAll(/class="cpx-nv" title="([^"]*)"/g)].map(t => dec(t[1])),
@@ -817,6 +821,20 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
         pooled: { note: txt((cp.match(/<p class="cpx-fn"><b>Saari countries mila ke<\/b>([\s\S]*?)<\/p>/) || [])[1] || ''),
           vm: txt((cp.match(/<p class="cpx-vm">(\d+ days: eCPM index[\s\S]*?)<\/p>/) || [])[1] || ''), plain: ce.includes('Saari countries mila ke') },
         same: c0 === cbad && c0 === cnull && !c0.includes('eCPM index') && !c0.includes('cpx-bect') };
+      // 16 Nov, the CHAINED index: a card with drops — "↓" after every column's day from a drop day on (who left by then on
+      // hover), the footnote's chain words + the "↓" sentence; the "≈" legend only where a ≈ is printed (the pooled card's own
+      // footnote too); a pooled card drops nobody (SYNTHETIC)
+      const drX = [[2, [['US', 0.14, 'n'], ['JP', 0.12, 'o']]], [4, [['KR', 0.05, 'c']]]], PN = { pl: 1, cv: [null, null, null, null, null, null] };
+      const ced = _.beCard(cdx, Object.assign({}, ec, { dr: drX })), cq0 = _.beCard(cdx, Object.assign({}, ec, { q: '000000' })),
+        cqn = _.beCard(cdx, Object.assign({}, ec, { q: '000001' })), cpd = _.beCard(cdx, Object.assign({}, ec, PN, { dr: drX })),
+        cp0 = _.beCard(cdx, Object.assign({}, ec, PN, { q: '000000' }));
+      BER.push(ced, cq0, cqn, cpd, cp0);
+      const fnOf = h => txt((h.match(/<p class="cpx-fn">(eCPM = [\s\S]*?)<\/p>/) || [])[1] || '');
+      const thOf = h => [...((h.match(/<table class="cpx-t cpx-bect"><thead><tr>([\s\S]*?)<\/tr><\/thead>/) || [])[1] || '').matchAll(/<th[^>]*>([\s\S]*?)<\/th>/g)]
+        .map(m => [txt(m[1]), dec((m[1].match(/<span title="([^"]*)">↓<\/span>/) || [])[1] || '')]);
+      BO.ecd = { th: thOf(ced), th0: thOf(ce), fn: fnOf(ced), fn0: fnOf(ce), q0: fnOf(cq0), qn: fnOf(cqn), qn_mark: cqn.includes('≈'),
+        line: /<p class="cpx-fn" title="[^"]*">Ginti se bahar \(us din se aage\):<br>/.test(ced), line0: /<p class="cpx-fn" title="[^"]*">Ginti se bahar/.test(ce),
+        pooled: { th: thOf(cpd), fn: fnOf(cp), fn0: fnOf(cp0), line: /<p class="cpx-fn" title="[^"]*">Ginti se bahar/.test(cpd), arrows: (cpd.match(/↓/g) || []).length } };
       const G = [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180, 270, 360];
       const r = rowsOf(_.beRow({ d: '2026-01-10', age: 47, sp: 100, inst: 10, real: [], unc: [], cty: [], jd: 0, now: ['be', 45, 's', 45, 1.02, 0] }, 'Alpha', G))[0];
       BO.sn = { cells: r.cells, titles: r.titles }; }
@@ -845,13 +863,43 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
       BO.bm_part = row([0.35, null, null, 99]);
       const cd = { roas: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7], bench: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6] }, vm = h => txt((h.match(/<p class="cpx-vm">([\s\S]*?)<\/p>/) || [])[1] || '');
       const o = _.beCard(Object.assign({ chk: [1, 1, 1, 1, 1, 1], cv: [1, 1, 1, 1, 1, 1] }, cd)), p = _.beCard(Object.assign({ fin: [1, 1, 0, 0, 0, 0], cv: [1, 1, 1, 1, 1, 1], chk: [0, 0, 0, 0, 0, 0] }, cd));
-      BER.push(o, p);
+      // every lived point a data check, with an "ec" too (16 Nov): no ROAS chart, only the note — the eCPM chart still in its box
+      const oe = _.beCard(Object.assign({ chk: [1, 1, 1, 1, 1, 1], cv: [1, 1, 1, 1, 1, 1] }, cd), { x: [100, 40, 36, 33, 30, 28], b: [100, 42, 38, 35, 32, 30], e: [6, 2, 2, 2, 2, 2], be: [6, 2, 2, 2, 2, 2], cv: [1, 1, 1, 1, 1, 1], w: '......', wb: '......', p: '000000', q: '000000' });
+      BER.push(o, p, oe); BO.cardchk = { none: o, ec: oe };
       const rk = (k, m, lim, lo, hi, med) => { const h = _.beDet({ d: '2026-02-10', age: 50, cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, med, lo, hi, lim, k, m]], unc: [], now: ['no', 20, 0.5] }, 1, false); BER.push(h); return tblOf(h, '<h4 class="cpx-h4">Countries with a benchmark').rows[0][4]; };
       BO.bm_rk = [rk(1, [0.3, 3, 60, 360], 360, null, null, 33), rk(3, [0.3, 3, 60, 360], 360, null, null, 33), rk(5, [0.3, 3, null, 120], 120, null, null, 120), rk(0, [0.3, 3, 60, 360], 90, 70, null, -90), rk(0, [0.3, 3, 60, 360], 360, null, null, null)];
       { const h = _.beCard({ roas: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7], bench: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6] }, { x: [100, 40, 36, 33, 30, 28], b: [100, 42, 38, 35, 32, 30], e: [6, 2, 2, 2, 2, 2], be: [6, 2, 2, 2, 2, 2], cv: [1, 1, 1, 1, 1, 1], w: '......', wb: '......', p: '000001', q: '000000' });
         BO.ec_hollow = { roas_filled: (h.match(/class="cpx-bep" data-f="1"/g) || []).length, ec_plain: (h.match(/class="cpx-bep"\/>/g) || []).length, ec_data_f: (h.match(/cpx-bep"[^>]*data-f/g) || []).length }; }
       BO.cardnone = ['j', 'k', 'c', 'r', undefined].map(w => txt(_.beCard({ roas: [null, null, null, null, null, null], bench: [null, null, null, null, null, null], fin: [0, 0, 0, 0, 0, 0], cv: [null, null, null, null, null, null], chk: [0, 0, 0, 0, 0, 0] }, null, w)));
       BO.cardnone_null = txt(_.beCard(null, null, 'j'));
+      // 16 Nov: the countries that stopped counting from which day ("dr") and the day vs its benchmark in % (all SYNTHETIC)
+      const dr = [[2, [['US', 0.14, 'n'], ['JP', 0.12, 'o']]], [4, [['A1', 0.01, 'n'], ['A2', 0.01, 'n'], ['A3', 0.01, 'n'], ['A4', 0.01, 'n'], ['A5', 0.01, 'n'], ['A6', 0.01, 'n'], ['A7', 0.02, 'n'], ['A8', 0.03, 'n']]]];
+      const hd = _.beEcDr(dr, '000110');
+      // what the eye reads (tags dropped, no space added at a tag): one line a day; each name + share + its short reason, its why on hover
+      const vis = h => dec(String(h).replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+      const drLines = h => { const m = String(h).match(/^<p class="cpx-fn" title="[^"]*">([\s\S]*)<\/p>$/); return m ? m[1].split('<br>').map(vis) : null; };
+      const drSp = h => [...String(h).matchAll(/<span title="([^"]*)">((?:[^<]|<span class="cpx-nv" title="[^"]*">—<\/span>)*)<\/span>/g)].map(m => [vis(m[2]), dec(m[1])]);
+      const all = _.beEcDr([[1, [['L1', 0.1, 'n'], ['L2', 0.1, 'o'], ['L3', 0.1, 't'], ['L4', 0.1, 'c'], ['L5', 0.1, 'x'], ['L6', 0.1, 's']]],
+        [3, [['L7', 0.1, 'l'], ['L8', 0.1, 'w'], ['L9', 0.1, 'y'], ['M1', 0.1, ''], ['M2', 0.1, 'nn'], ['M3', 0.1, null]]]], '000000');
+      const junk = _.beEcDr([[1.5, [['US', 0.1, 'n']]], ['3', [['US', 0.1, 'n']]], [0, [['US', 0.1, 'n']]], [6, [['US', 0.1, 'n']]], [true, [['US', 0.1, 'n']]],
+        [2, [[5, 0.1, 'n'], 'x', null, ['', 0.1, 'n']]], [5, [['B1', 0.01, 'n'], ['B2', 0.01, 'n'], ['B3', 0.01, 'n'], ['B4', 0.01, 'n'], ['B5', 0.01, 'n'], ['B6', 0.01, 'n'], ['B7', null, 'n'], ['B8', 0.03, 'n']]],
+        [3, [['JP', null, 'n'], ['KR', -1, 'x'], ['TW', 'x', 'o']]]], '000000');
+      BER.push(hd, all, junk);
+      BO.ecdr = { text: txt(hd), lines: drLines(hd), spans: drSp(hd), titles: (hd.match(/title="([^"]*)"/g) || []).map(t => dec(t.slice(7, -1))),
+        all: drSp(all), junk: { lines: drLines(junk), dash: [...junk.matchAll(/<span class="cpx-nv" title="([^"]*)">—<\/span>/g)].map(m => dec(m[1])) },
+        none: [_.beEcDr(undefined, '000000'), _.beEcDr([], '000000'), _.beEcDr([[9, [['US', 0.1, 'n']]]], '000000'), _.beEcDr([[2, []]], '000000'),
+          _.beEcDr([[2, [['', 0.1, 'n'], [null, 0.1], 'US']]], '000000'), _.beEcDr('x', '000000'), _.beEcDr([[2.5, [['US', 0.1, 'n']]]], '000000')] };
+      BO.vsb = [_.beVsB(2.57, 1.76, 'CPI'), _.beVsB(120.96, 168.44, 'ECPM'), _.beVsB(160, 119, 'BE'), _.beVsB(1.0, 1.05, 'CPI'), _.beVsB(null, 1, 'CPI'), _.beVsB(1, 0, 'CPI')].map(h => [txt(h), (h.match(/class="cpx-dl ([^"]*)"/) || [])[1] || '']);
+      // the colour is the printed %'s (under the floor unrounded, at it once rounded: coloured) · a day not final: plain, and why
+      BO.vsb2 = [_.beVsB(1.2496, 1, 'CPI'), _.beVsB(0.8549, 1, 'ECPM'), _.beVsB(1.2449, 1, 'CPI'), _.beVsB(89.5, 120, 'BE'), _.beVsB(2.57, 1.76, 'CPI', true), _.beVsB(120.96, 168.44, 'ECPM', true), _.beVsB(160, 119, 'BE', true)]
+        .map(h => [txt(h), (h.match(/class="cpx-dl ([^"]*)"/) || [])[1] || '', dec((h.match(/title="([^"]*)"/) || [])[1] || '')]);
+      // the countries table: the % inside its B span (one span), plain on a provisional day; the BE % on an exact / model day only
+      const pvRow = pv => _.beDet({ d: '2026-02-10', age: pv ? 2 : 50, cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, 30, null, null, 400, 0, [0.2, 4, 20, 400]]], unc: [], now: ['no', 2, 0.5] }, 1, pv);
+      const hpv = pvRow(true), hnp = pvRow(false); BER.push(hpv, hnp);
+      BO.pvdet = { pv: dlOf(hpv), np: dlOf(hnp), row: tblOf(hpv, '<h4 class="cpx-h4">Countries with a benchmark').rows[0], row_np: tblOf(hnp, '<h4 class="cpx-h4">Countries with a benchmark').rows[0],
+        one: (ctyT(hnp).match(/<span class="cpx-bi" title="[^"]*"> · [^<]* <span class="cpx-dl [^"]*" title="[^"]*">[^<]*<\/span><\/span>/g) || []).length };
+      BO.bm_rk2 = [rk(2, [0.3, 3, 60, 360], 360, null, null, 33), rk(4, [0.3, 3, 60, 360], 360, null, null, 33), rk(5, [0.3, 3, 60, 360], 360, null, null, 120),
+        rk(6, [0.3, 3, 60, 360], 360, null, null, 120), rk(6, [0.3, 3, null, 120], 120, null, null, 120), rk(0, [0.3, 3, 60, 360], 360, 20, 50, 33)];
       BO.cardnone_svg = [_.beCard(null, null, 'j'), _.beCard({ roas: [null, null, null, null, null, null], bench: [null, null, null, null, null, null] }, null, 'r')].map(h => h.includes('<svg'));
       BO.cardends = { first: svgOf(_.beCard({ roas: [0.451, 0.5, 0.6, 0.7, 0.8, 1.084], bench: [0.4, 0.4, 0.4, 0.4, 0.4, 0.4], fin: [1, 1, 1, 1, 1, 1], cv: [1, 1, 1, 1, 1, 1], chk: [1, 0, 0, 0, 0, 1] })), plain: svgOf(_.beCard({ roas: [0.451, 0.5, 0.6, 0.7, 0.8, 1.084], bench: [0.4, 0.4, 0.4, 0.4, 0.4, 0.4], fin: [1, 1, 1, 1, 1, 1], cv: [1, 1, 1, 1, 1, 1], chk: [0, 0, 0, 0, 0, 0] })) };
       BO.cardnew = { all_chk: (o.match(/<p class="cpx-vm">/g) || []).length, old: _.beCard(cd), old_plain: _.beCard(Object.assign({ cv: null, chk: null }, cd)), skip_nf: vm(p) }; }
@@ -867,6 +915,7 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     BO.d25i = await dayAt('2026-03-25');
     for (const d of ['2026-03-15', '2026-03-21', '2026-03-23', '2026-03-26', '2026-03-28', '2026-03-29']) BO['d' + d.slice(8)] = await dayAt(d);
     BO.d26h = BO.d26.html;   // (the opened day's raw html: the card's <title>s and the B lines)
+    BO.dl = { d25: dlOf(BO.d25.html), d26: dlOf(BO.d26.html) };   // (25 Mar final: coloured; 26 Mar provisional: plain)
     for (const k in BO) if (/^d\d\d/.test(k)) delete BO[k].html;
     // taps through the screen's own handler: one day open at a time, the same day again closes it, a non-date does nothing; the names
     await beGo({ OPEN: ID.a }); const st = () => ({ open: _.get().BOPEN, unc: _.get().BUNC, n: (SCREEN.innerHTML.match(/class="cpx-bedr"/g) || []).length,

@@ -16,14 +16,23 @@ session's eCPM, "haan pehla session wala lo"). A part of be_build, switched by G
 
   bench (with be_build's daily fit, cached in its fits as "ec" with its rule's stamp "ec_v" — a stamp of another rule
   is made again the same build): per app × country and card day the bot's median (be_build.rmed: |robust z| > 3
-  dropped) over the country's PAST judged install days with final valid cells — of log index (the benchmark index) and
-  of log eCPM (the benchmark eCPM; day 1: the first session's) — up to the first card day with < MIN_KEPT days. No
+  dropped) over the country's PAST judged install days with final valid cells — of log index (kept in the fits and the stamp; the card no longer reads it) and
+  of log eCPM (the benchmark eCPM, which the card's benchmark line chains; day 1: the first session's) — up to the first card day with < MIN_KEPT days. No
   look-ahead and never the days it judges: install day + max(age + LAG, SETTLE) ≤ the fit's origin (the ROAS
   benchmark's rule beside it). Every past day the stores hold, nothing trimmed.
-  attach (every build): per judged install day its countries' index against their benchmarks, combined by the owner's
-  rule: the day's spend share over the countries that have BOTH at that card day — this day's index, its eCPM $ and
-  the benchmark's index and eCPM $ all over the SAME countries and weights (one country mix on both sides, never an
-  average of days); cv = that share of the day's country spend (the page: "x % spend: data kam" for the rest).
+  attach (every build): per judged install day the countries COUNT from day 1 (a day-1 base and a day-1 benchmark) for
+  as long as their users' cells hold (owner, 16 Nov 2026: "sab din rakho · bs ak info add kar do jab se giravat ati he
+  to konsi country count nahi hua vo bata do vo day"): from the first FINAL card day a country has no valid cell (under
+  MIN_IMP, folded into "(other)", …) or no benchmark it is out from there on, and "dr" names it with that day, its
+  spend share and why. A hot copy still filling drops nobody (its point: the counted countries that have a cell), nor
+  does a day where no counted country has a cell (never read, GA4-unusable for every country, all under MIN_IMP) or
+  none could stay — that point is null with its letter. Per card day, over its counted countries with a cell by the
+  day's spend share: this day's eCPM $ and the benchmark's (each country's median eCPM). The INDEX is CHAINED: day 1 =
+  100, each next drawn day = the last drawn day's index × the move between those two days on the countries counted
+  both days (the owner's example: ₹100 → ₹20 = 20 against ₹90 → ₹25 = 28), the benchmark index the same on their
+  benchmark eCPMs — a country leaving never moves either line; the $ rows are each day's own countries (after a drop
+  the $ can step while the index does not). cv = that day's countries' share of its country spend (the page: "x %
+  spend: data kam" for the rest).
   On an app whose country split GA4 samples (its busy days: fetch.ga4_cecpm keeps that day's no-country read, "pool"),
   a card with such a day is every country together: GA4's exact eCPM of all the install day's users, day 1 = the whole
   app's first session, against the app's own pooled benchmark (bench "*", from its judged install days) — "pl": 1 (the
@@ -42,8 +51,9 @@ session's eCPM, "haan pehla session wala lo"). A part of be_build, switched by G
 
   site/be_<key>.json.gz gains (only with the switches on): days[i] "ec": {"x" [6 × this day's index], "b" [6 × the
   benchmark index], "e" [6 × this day's eCPM USD], "be" [6 × the benchmark eCPM USD], "cv" [6 × the covered share of
-  the day's country spend], "w" / "wb" (why x / b is null), "p" / "q" (not final / folded or thresholded)} (judged
-  days only; "pl": 1 = every country together) — nothing the page does not show.
+  the day's country spend], "w" / "wb" (why x / b is null), "p" / "q" (not final / folded or thresholded), "dr"
+  [[card day, [[cc, spend share, why], …]], …] (the countries that stopped counting from that day; absent: none)}
+  (judged days only; "pl": 1 = every country together) — nothing the page does not show.
 A store whose newest final day is more than FINAL_LAG + LOW_WAIT + STALE_DAYS days old is stale ("f"; be_build prints
 one "be ecpm skipped: StaleWarning" line a build). Never raises into be_build: load / bench / attach each fail alone
 ("be ecpm skipped: <Type>", the health banner) and cost the card's eCPM part only.
@@ -248,29 +258,77 @@ def attach(body, pin, fc, m, O=None):
                 w.append(why)
             ix = [None if e[0] is None or e[j] is None else 100 * max(e[j], FLOOR * e[0]) / e[0] for j in range(6)]
             rows[cc] = (x.sp, e, ix, w)
-        ex, eb, ee, ebe, cv, wx, wb = [], [], [], [], [], [], []
-        for j in range(6):                  # the owner's rule: spend share over the countries with both, same weights
-            has = [(cc, sp, ix[j], e[j]) for cc, (sp, e, ix, w) in rows.items() if ix[j] is not None]
-            s = [(sp, v, ej, B[cc][j]) for cc, sp, v, ej in has if j in B.get(cc, {})]
-            S = sum(t[0] for t in s)
-            if s and S > 0:
-                ex.append(_r(sum(sp * v for sp, v, _, _ in s) / S, 1))
-                eb.append(_r(sum(sp * 100 * math.exp(b[0]) for sp, _, _, b in s) / S, 1))
-                ee.append(_r(sum(sp * ej for sp, _, ej, _ in s) / S, 4))
-                ebe.append(_r(sum(sp * math.exp(b[2]) for sp, _, _, b in s) / S, 4))
-                cv.append(round(S / tot, 4))
-                wx.append(".")
-                wb.append(".")
-                continue
-            for arr in (ex, eb, ee, ebe):
-                arr.append(None)
-            cv.append(0.0)
-            lt = [(sp, "c" if ix[j] is not None else w[j], e[0] is not None) for (sp, e, ix, w) in rows.values()]
-            why = (_most([(sp, c) for sp, c, b1 in lt if b1] or [(sp, c) for sp, c, _ in lt]) if rows
-                   else "y" if Xo + CARD[j] > nw else "k")     # the reason carrying the most spend ("c": an index,
-            wx.append(why)                                   # no benchmark — among the countries with a day 1)
-            wb.append(hb if why == "c" else ".")
         st_of = [m["days"].get((date.fromisoformat(X) + timedelta(days=CARD[j])).isoformat()) for j in range(6)]
+        lived = [j for j in range(6) if Xo + CARD[j] <= nw]
+
+        def final(j):                       # a folded day (never a hot copy still filling)
+            return j == 0 or bool(st_of[j] and not st_of[j][1])
+        # the owner, 16 Nov 2026: "sab din rakho · bs ak info add kar do jab se giravat ati he to konsi country count
+        # nahi hua vo bata do vo day" — a country counts from day 1 (a day-1 base and a day-1 benchmark) for as long as
+        # its users' cells hold: from the first FINAL card day it has no valid cell (or no benchmark) it is out from there
+        # on, and "dr" names it with that day, its spend share and why. A hot copy still filling drops nobody; nor does a
+        # day where no counted country has a cell (never read, GA4-unusable for every country, all under MIN_IMP) or
+        # where no counted country could stay — that point is null.
+        cur = [cc for cc, (sp, e, ix, w) in rows.items() if e[0] is not None and 0 in B.get(cc, {})]
+        sets, dr = [], []
+        for j in range(6):
+            if j and j in lived and final(j) and any(rows[cc][1][j] is not None for cc in cur):
+                keep = [cc for cc in cur if rows[cc][1][j] is not None and j in B.get(cc, {})]
+                if keep:
+                    gone = sorted((cc for cc in cur if cc not in keep), key=lambda c: (-rows[c][0], c))
+                    if gone:
+                        dr.append([j, [[cc, round(rows[cc][0] / tot, 4),
+                                        rows[cc][3][j] if rows[cc][1][j] is None else "c"] for cc in gone]])
+                    cur = keep
+            sets.append(list(cur))
+
+        def _why_out(j):                    # nobody counted: the most-spend reason among the countries with a day-1
+            if not rows:                    # eCPM (all of them when none has one) — a missing cell first, then "c"
+                return "k"
+            lt = [(sp, (w[0] if e[0] is None else w[j] if e[j] is None else "c"), e[0] is not None)
+                  for cc, (sp, e, ix, w) in rows.items()]
+            return _most([(sp, c) for sp, c, b1 in lt if b1] or [(sp, c) for sp, c, _ in lt])
+        er, br, cv, wx, wb, ex, eb = [], [], [], [], [], [], []
+        xp = bp = jp = None                 # the last drawn day: its index, its benchmark index, its card day
+        for j in range(6):
+            S = sets[j]
+            M = [cc for cc in S if rows[cc][1][j] is not None and j in B.get(cc, {})] if j in lived else []
+            Mp = M if j == 0 or jp is None else [cc for cc in M if rows[cc][1][jp] is not None and jp in B.get(cc, {})]
+            Msp = sum(rows[cc][0] for cc in M)
+            if M and Msp > 0 and (j == 0 or (jp is not None and Mp)):
+                E = sum(rows[cc][0] * rows[cc][1][j] for cc in M) / Msp
+                Bj = sum(rows[cc][0] * math.exp(B[cc][j][2]) for cc in M) / Msp
+                if j == 0:
+                    x = b = 100.0
+                else:
+                    # CHAINED: the move since the last drawn day, on the countries counted both days, onto its index
+                    # (the owner's example: ₹100 → ₹20 = 20 against ₹90 → ₹25 = 28) — a country leaving moves nothing
+                    num = sum(rows[cc][0] * rows[cc][1][j] for cc in Mp)
+                    den = sum(rows[cc][0] * rows[cc][1][jp] for cc in Mp)
+                    bnum = sum(rows[cc][0] * math.exp(B[cc][j][2]) for cc in Mp)
+                    bden = sum(rows[cc][0] * math.exp(B[cc][jp][2]) for cc in Mp)
+                    x = max(xp * num / den, 100 * FLOOR) if den > 0 else None
+                    b = bp * bnum / bden if bden > 0 else None
+                if x is not None and b is not None:
+                    er.append(E)
+                    br.append(Bj)
+                    ex.append(_r(x, 1))
+                    eb.append(_r(b, 1))
+                    cv.append(round(Msp / tot, 4))
+                    wx.append(".")
+                    wb.append(".")
+                    xp, bp, jp = x, b, j
+                    continue
+            er.append(None)
+            br.append(None)
+            ex.append(None)
+            eb.append(None)
+            cv.append(0.0)
+            why = "y" if j not in lived else _why_out(j)      # (the documented rule: the most spend's missing piece)
+            wx.append(why)
+            wb.append(hb if why == "c" else ".")
+        ee = [_r(v, 4) for v in er]
+        ebe = [_r(v, 4) for v in br]
         pl = any(j and st_of[j] and st_of[j][0] == gce.POOL for j in range(6))
         if pl:                              # GA4 sampled the country split on a day of this card: the whole card is
             P = B.get(gce.POOL_CC, {})      # every country together (exact), against the app's own pooled benchmark
@@ -282,8 +340,9 @@ def attach(body, pin, fc, m, O=None):
                 if ex[j] is None:
                     eb[j] = ebe[j] = None
                     wx[j], wb[j] = (why if v is None else "z"), "."
-                elif j in P:
-                    eb[j], ebe[j], wx[j], wb[j] = _r(100 * math.exp(P[j][0]), 1), _r(math.exp(P[j][2]), 4), ".", "."
+                elif j in P and 0 in P:             # (the benchmark index = its eCPMs' ratio, like the table)
+                    eb[j], ebe[j], wx[j], wb[j] = (_r(100 * math.exp(P[j][2] - P[0][2]), 1), _r(math.exp(P[j][2]), 4),
+                                                   ".", ".")
                 else:
                     eb[j] = ebe[j] = None
                     wx[j], wb[j] = ".", hb
@@ -293,6 +352,8 @@ def attach(body, pin, fc, m, O=None):
         q = "".join("1" if j and st_of[j] and st_of[j][0] in ("oth", "thr") else "0" for j in range(6))
         out["ec"] = {"x": ex, "b": eb, "e": ee, "be": ebe, "cv": cv, "w": "".join(wx), "wb": "".join(wb), "p": p,
                      "q": q}
+        if dr and not pl:
+            out["ec"]["dr"] = dr            # (the page: which country stopped counting from which day, and why)
         if pl:
             out["ec"]["pl"] = 1             # (the page: "saari countries mila ke" and why)
     return m["stale"]
