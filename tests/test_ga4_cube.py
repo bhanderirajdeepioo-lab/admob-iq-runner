@@ -1494,7 +1494,8 @@ def test_build_hook_switch(tmp_path, monkeypatch, capsys):
         "ga4 cube: apps 2, with GA4 0, fetched 1, fresh 0, failed 0, deferred 0, waiting 0, days folded 0, split 0, "
         "deeper 0, capped 0, hidden 0, futile 0, loss 0, flagged 0, months read again 0, repair days 0, "
         "months repaired 0, q days 0, q flagged 0, q calls 0, q left 0, q unscanned 0, q errors 0, q settling 0, "
-        "q reread 0, q recovered 0, q fl waiting 0, q early 0, calls 0, tokens 0"]
+        "q reread 0, q recovered 0, q fl waiting 0, q early 0, held 0, folded low 0, refold days 0, "
+        "months refolded 0, refold waiting 0, refold given up 0, calls 0, tokens 0"]
     monkeypatch.setattr(cu, "refresh_all", lambda *a, **k: 1 / 0)
     dash = tub.dashboard()
     ub.run_uninstall(dash, data, out, tub.ga4_settings(ga4_cube=True), now=tub.NOW)
@@ -1796,7 +1797,8 @@ def test_q_in_the_run_two_rounds_counts_and_files(monkeypatch, tmp_path):
     assert all(h["d"][k]["qs"] == "ok" for k in h["d"]) and h["qh"]["p"][0] > "2026-08-07"
     line = cu.log_line(out)
     assert (", q days %d, q flagged 0, q calls %d, q left %d, q unscanned 0, q errors 0, q settling 4, q reread 0, "
-            "q recovered 0, q fl waiting 0, q early 0, calls " % (c["q_days"], c["q_calls"], c["q_left"])) in line
+            "q recovered 0, q fl waiting 0, q early 0, held 0, folded low 0, refold days 0, months refolded 0, "
+            "refold waiting 0, refold given up 0, calls " % (c["q_days"], c["q_calls"], c["q_left"])) in line
     assert "example" not in line and "x~" not in line
 
 
@@ -2315,7 +2317,9 @@ def test_q_settle_counts_in_the_run(monkeypatch, tmp_path):
     assert h["qh"]["r"] == [["2026-08-06", "2026-10-14T06:00:00Z", 0]] and h["qh"]["p"] == ["2026-10-09", "2026-10-10"]
     line = cu.log_line(out)
     assert ", q flagged 8, " in line and (", q errors 0, q settling 4, q reread 2, q recovered 1, q fl waiting 2, "
-                                          "q early 1, calls ") in line and "x~" not in line and "example" not in line
+                                          "q early 1, held 0, folded low 0, refold days 0, months refolded 0, "
+                                          "refold waiting 0, refold given up 0, calls ") in line and "x~" not in line \
+        and "example" not in line
 
 
 # ── u: GA4's own users of the same reads (their own files; the two users fills) ─────────────────────────────────────

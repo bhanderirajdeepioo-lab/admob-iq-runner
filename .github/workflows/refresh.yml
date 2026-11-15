@@ -217,6 +217,12 @@ jobs:
           GA4_CUBE_Q_SETTLE:    ${{ vars.GA4_CUBE_Q_SETTLE }}
           GA4_CUBE_Q_RETRY:     ${{ vars.GA4_CUBE_Q_RETRY }}
           GA4_CUBE_Q_USE:       ${{ vars.GA4_CUBE_Q_USE || 'true' }}
+          # Its fold guard (a final read GA4 answers collapsed is held, read again every run, up to a day; then folded
+          # marked "lo"): GA4_CUBE_GUARD=false folds every final read as it comes, as before. Its refold (a month holding
+          # a day folded collapsed is read again whole into a copy, then replaces it): GA4_CUBE_RF_CALLS = the calls a
+          # build may start its days with (empty: 30; 0 = off)
+          GA4_CUBE_GUARD:       ${{ vars.GA4_CUBE_GUARD || 'true' }}
+          GA4_CUBE_RF_CALLS:    ${{ vars.GA4_CUBE_RF_CALLS }}
           # Its users (GA4's own activeUsers of the same reads, files of their own next to the cube): GA4_CUBE_U=false
           # stops keeping them (no file written, no users fill), GA4_CUBE_U_USE=false = the page ignores them. The
           # history fills, each its own calls / seconds a build inside the budget above: All users (one whole

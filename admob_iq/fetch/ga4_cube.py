@@ -142,6 +142,61 @@ has left (at most REPAIR_CALLS calls started a run, MAX_CALLS and the budget as 
   "cut" (the cut memory of its reads), "s" (the app's seconds a GA4 call, last measured), "log": [[month, "(other)"
   micros before, after, the month's revenue, when]] (the last LOG_KEEP)}.
 
+The fold guard (GA4_CUBE_GUARD, GUARD; 16 Nov 2026 — measured on the real properties: since 14 Nov GA4 answers the
+newest final day almost empty for hours, on one property for more than a day, around D + 2 … D + 3; the walk, folding
+at D + 3, kept 11 and 12 Nov so on every app — the country rows lost those days for good, while ga4_cohort, which
+reads its last 35 days again, healed): a final read is folded only when GA4 is not answering it collapsed —
+  * against the day's OWN reads: "pk" in the head = the most total an unflagged read of the day showed while it was not
+    folded (the hot reads every 6 hours; GA4's total of a day only grows while it fills): a final read under COLLAPSE
+    (0.5) × that peak (≥ PK_MIN, 0.1 USD) is collapsed — a real drop in traffic, low in every read of the day, never
+    is (a flagged answer is never judged so);
+  * a day with no such peak (never read before: after an outage, a first walk; or a small one): its total under LOW
+    (0.2) × the median total of its folded days D − 7 … D − 1 (≥ LOW_DAYS 4 of them, the median ≥ PK_MIN) — measured
+    on every app's whole cube history: no day folded at D + 3 … D + 4 before 11 Nov is under it (the nearest normal one
+    well above), while every collapsed app day of 11 and 12 Nov is.
+  A collapsed day is HELD while under FINAL_LAG + HOLD_DAYS (4) days old: not folded, the cursor waits at it (ONE
+  cursor: the days after it wait too — the page's columns stop before it, as for a walk on its way, never a collapsed
+  read standing in), read again every run (head "hold": [day, held since, reads]); 4 days old and still collapsed it
+  is folded as it is, marked "lo" (its peak, or 1): a hole GA4 keeps never blocks the walk. A day RF_RIPE (5) days old
+  or more (a backfill, a catch-up after a long pause) is never judged (GA4 settled — q's own rule). A day low against
+  its neighbours but not against its own reads (a real drop) is folded marked "rd". Off: every final read folded as it
+  comes (the walk before 16 Nov 2026).
+
+The refold (refold(); GA4_CUBE_RF_CALLS, RF_CALLS 30 a run; 0 = off) — a month holding a day the walk folded collapsed
+is read again and REPLACED whole, the repair's way (a month's cells sum many days: no day of it can be taken out
+alone): after the walk, the hot days and their q, with what the run has left (MAX_CALLS and the budget as always, a
+day started only with room for it: _room), one month at a time:
+  * the queue (head "rf" "q", made once a property day from the months of the edge and the one before — RF_MONTHS: a
+    day folded early is in them —, no GA4 call): every month with a day read early (before RF_RIPE days old) and folded
+    collapsed — marked "lo", or (folded before the guard, so with no mark) under LOW × its folded neighbours' median
+    and not "rd" —, started only once one of them is RF_RIPE days old;
+  * every day of the month is read again into its copy <YYYY-MM>.rf.json.gz (kept across runs, its own file: never the
+    repair's), the collapsed days first: one still collapsed (against its "lo" peak, else its neighbours; a flagged
+    answer against its neighbours) while under RF_MAX (10) days old is never merged — the month waits ("wait"), that
+    day read again next run; at RF_MAX it is merged as it is (GA4 kept it so); a newer "lo" day of the month (not
+    RF_RIPE days old yet) is merged as it is, still "lo" (a later refold reads it again). Any other day GA4 now answers
+    under COLLAPSE × what the walk folded of it waits too, at any age (GA4 may be emptying a young day right now: a
+    refold never puts a collapsed read where the walk had a whole one; the log counts apps waiting, "refold
+    waiting") — at most RF_WAIT_DAYS (5) from its first such read: then that month's refold is given up (its copy
+    dropped, the month as it was, "refold given up" in the log, head "rf" "log" naming the day) and not started again
+    for RF_SKIP_DAYS (7: "skip");
+  * once the copy holds every day the month holds (a day the walk folds into it meanwhile is read into the copy too),
+    the copy becomes the month file ("rf": {"at", "done", "t0" / "t1": the collapsed days' totals before / after}),
+    the head is written and only then the copy removed (the repair's order). Only then (kept with the copy until
+    that: "rfu", "rfq") a collapsed day's users are replaced by the new read's ("rf"; the other days' only where none
+    were kept) and its whole read (q), when made while GA4 still held the day collapsed (q's total under COLLAPSE ×
+    the new read's), goes with its week (q_drop) and those days' users, read again once settled; a day of nothing that
+    has revenue now gets its q read. The month file itself is never touched meanwhile: the build reads it as it was.
+    The repair never runs beside a refold, nor a refold beside a repair building its copy while the repair is on
+    (off, a repair copy left in the head never blocks it; a refold of that same month drops it — the repair would
+    put its older reads back); the repair keeps the fold guard's rule too (a read under COLLAPSE × what the walk
+    folded ends that month's repair, its copy dropped — never merged —, that day read first when the month is tried
+    again: "blk") and never takes, nor goes on with, a month holding a "lo" day (the refold's).
+  head "rf" = {"scan" (the property day the queue was made), "q": [[YYYY-MM, [its collapsed days]]], "k" (the month
+  being read again), "at", "cand", "c" / "n" / "m" / "s" (its calls / days / the most calls a day / seconds a call),
+  "cut", "wait" ([day, since when]), "skip" ({YYYY-MM: until}: given up lately), "log": [[month, its collapsed days,
+  when (, the day it was given up on)]] (the last LOG_KEEP)}.
+
 q — the WHOLE read of ages 31 … 420 (owner, 21 Oct 2026: real data only, nothing GA4 dropped left out). GA4 folds the
 country "(other)" BEFORE any filter, so no split above gets it back (measured: the repair read nothing back). But one
 activity day with dimension firstSessionDate ONLY, no filter, every page (q_read: the install-day fetch's own per-day
@@ -314,6 +369,27 @@ REPAIR_CALLS = int(os.environ.get("GA4_CUBE_REPAIR_CALLS") or 0)    # calls a ru
                                     # country "(other)" is folded BEFORE filters (a split names no row its root had
                                     # not), so a repair read gets nothing back — measured on its first real run
 RESCAN_DAYS = 7                     # the repair's (and q's) queue made again (while empty) after this many days
+# The fold guard and the refold (16 Nov 2026 — measured: since 14 Nov GA4 answers the newest final day almost empty
+# for hours, on one property more than a day, around D + 2 … D + 3; the walk folded 11 and 12 Nov so on every app):
+GUARD = (os.environ.get("GA4_CUBE_GUARD") or "true").strip().lower() != "false"    # false: every final read folded
+#                                     as it comes (the walk as before 16 Nov 2026; the refold below has its own switch)
+COLLAPSE = 0.5                      # a final read under this × the most an earlier read of the SAME day showed …
+LOW = 0.2                           # … or, with no such read, under this × the median total of its folded days
+LOW_DAYS = 4                        #   D − 7 … D − 1 (at least this many of them) …
+PK_MIN = 100_000                    # … (that peak / median ≥ 0.1 USD in micros) is collapsed
+HOLD_DAYS = 1                       # a collapsed final day is held (read again every run) while under FINAL_LAG +
+#                                     this many days old; then folded as it is, marked "lo" (it never blocks the walk)
+RF_CALLS = int(os.environ.get("GA4_CUBE_RF_CALLS") or 30)   # calls a run may start refold days with (0 = no refold)
+RF_MAX = 10                         # a refold's read again still collapsed waits (never merged) until the day is
+#                                     this old (RF_RIPE, below FINAL_LAG: when the refold starts)
+RF_WAIT_DAYS = 5                    # a day the walk had whole that GA4 answers collapsed in a refold: waited on this
+#                                     long at most (never merged so); then that month's refold is given up — its copy
+#                                     dropped, the month as it was — and not started again for RF_SKIP_DAYS
+RF_SKIP_DAYS = 7
+RF_MONTHS = 2                       # the refold's queue: the months of the edge and the one before (a day folded
+#                                     early is in them)
+RF = ".rf.json.gz"                  # a month's copy while the refold builds it
+RF_FIELDS = ("k", "at", "c", "n", "m", "cut", "cand", "wait")
 QJ = 13                             # q: buckets 1 … 13 = ages 31 … 420 from the whole no-country day read
 QL = LAGS - 1 + STEP * QJ           # 420: the oldest age q keeps (the read is whole to 427; bucket 14 = 421 … 450)
 QDIMS = ("firstSessionDate",)
@@ -379,6 +455,8 @@ LOG_KEEP = 24                       # repaired months kept in the head's "rep" "
 REP = ".rep.json.gz"                # a month's copy while the repair builds it
 HEAVY_KEEP = 90                     # activity days a range goes day by day after a block of its length needed it
 FINAL_LAG = 3                       # an activity day is final once ≤ the property's today − 3 (as ga4_cohort)
+RF_RIPE = FINAL_LAG + HOLD_DAYS + 1  # 5: a collapsed folded day's month is read again once the day is this old (the
+#                                     guard judges only days younger: an older one, GA4 settled — q's own Q_SETTLE)
 REFRESH_HOURS = 6.0                 # the hot days (today − 2 … today) read again
 MAX_CALLS = 60                      # per app per run (the walk goes on next run)
 BUDGET_SEC = 150
@@ -390,7 +468,9 @@ OTHER = "(other)"
 NO_CC = "--"                        # countryId "(not set)" / empty
 HOT = "hot.json.gz"
 LEDGER = ("st", "rows", "loss", "t", "fl", "via", "at", "sv", "ol", "n", "cap")
-LEDGER_OPT = ("fu", "hd", "dp")       # kept on a day only when the read set them (why a split stopped, hidden micros, depth)
+LEDGER_OPT = ("fu", "hd", "dp", "lo", "rd")   # kept on a day only when set (why a split stopped, hidden micros,
+#                                     depth; the fold guard's: "lo" folded collapsed at its cap — the day's peak micros,
+#                                     or 1 —, "rd" 1: a real drop, low against its neighbours but not its own reads)
 F_OTHER, F_SMP, F_CUT, F_THR = 1, 2, 4, 8       # GA4's flags on an answer
 RETRY = F_OTHER | F_SMP | F_CUT                 # … that a smaller read can avoid
 
@@ -1181,11 +1261,14 @@ class Cube:
             h = {"v": V, "stream_id": self.stream_id, "d": {}}
         self.head = h
         self.m, self.touched = {}, set()
+        self.peek = {}                  # {YYYY-MM: ledger} of month files read for a look only (Cube.ledgers)
         self.bad = set()                # months whose file is on disk but not a month of this stream (read again)
         self.folded = self.split = self.loss = self.flagged = self.reread = 0
         self.deeper = self.capped = self.rep_days = self.repaired = self.hidden = self.futile = 0
         self.pruned = self.dirty = False    # dirty: the head changed with no read (the repair's / q's queue)
         self.rp = None                  # the repair's copy of a month: {"k", "mo", "dirty", "done"}
+        self.rf = None                  # the refold's copy of a month: the same shape (its own file, RF)
+        self.held = self.low = self.rf_days = self.refolded = self.rf_gave = 0     # the fold guard's / the refold's
         self.qm, self.qtouched = {}, set()  # q month files loaded / changed in the run
         self.q_days = self.q_fl = self.q_calls = self.q_err = 0
         self.q_rr = self.q_rok = 0      # stored "fl" days read again in the run / of them "ok" now
@@ -1203,6 +1286,7 @@ class Cube:
         not this format or another stream's: an empty month too, but in `bad` — step_app then reads the WHOLE month
         again before anything is folded into it, so the file is never written over with fewer days than it held."""
         if k not in self.m:
+            self.peek.pop(k, None)                  # a look at its file before: the month itself from now on
             s = None
             if self.data_dir:
                 p = month_path(self.data_dir, self.app_id, k)
@@ -1220,6 +1304,22 @@ class Cube:
         k = D.isoformat()
         return k in self.month(k[:7])["days"]
 
+    def ledgers(self, k):
+        """Month k's ledger {D: …} — of the month in memory, else read from its file for a look only (never loaded
+        into the run, never flagged "bad": the fold guard's neighbours, the refold's queue)."""
+        mo = self.m.get(k)
+        if mo is not None:
+            return mo["days"]
+        if k not in self.peek:
+            s = gu.load_store(month_path(self.data_dir, self.app_id, k)) if self.data_dir else None
+            self.peek[k] = s["days"] if _month_ok(s, self.stream_id) else {}
+        return self.peek[k]
+
+    def ledger(self, D):
+        """Day D's (YYYY-MM-DD) ledger — None: not folded."""
+        led = self.ledgers(D[:7]).get(D)
+        return led if isinstance(led, dict) else None
+
     def fold(self, D, rec):
         """A FINAL day's record into its month — once (a day already in the ledger: nothing)."""
         k = D.isoformat()
@@ -1230,6 +1330,11 @@ class Cube:
         _merge(mo, k, rec)
         self.touched.add(k[:7])
         self.head.setdefault("d", {}).pop(k, None)
+        (self.head.get("pk") or {}).pop(k, None)    # its peak (the fold guard's) goes with its hot copy
+        if (self.head.get("hold") or [None])[0] == k:
+            self.head.pop("hold")
+        if rec.get("lo"):                           # folded collapsed: the refold's queue is made again
+            self.head.setdefault("rf", {}).pop("scan", None)
         if Q_CALLS > 0 and q_need(rec):             # its q read: in this run (q_fwd) or first in the history fill
             self.head.setdefault("qh", {}).setdefault("p", []).append(k)
         self.folded += 1
@@ -1255,12 +1360,13 @@ class Cube:
 
     def u_put(self, D, u, rec, by):
         """A FINAL read's users of day D (its record's "u", rec: its ledger) → its month's users file "c": by "fold"
-        (the walk), "fill" (the country users fill: only a day without them), "rep" (the repair: only a day without
-        them — the walk's read stays)."""
+        (the walk), "fill" (the country users fill: only a day without them), "rep" (the repair, and the refold's
+        other days: only a day without them — the walk's read stays), "rf" (the refold's read of a day the walk
+        folded collapsed: replaces them)."""
         if not U_ON or not isinstance(u, dict):
             return False
         mo = self.umonth(D[:7])
-        if by != "fold" and D in mo["c"]:
+        if by not in ("fold", "rf") and D in mo["c"]:
             return False
         mo["c"][D] = dict(u, at=rec.get("at"), by=by, fl=_ufl(rec))
         self.utouched.add(D[:7])
@@ -1380,9 +1486,10 @@ class Cube:
         qh["r"] = r
         self.dirty = True
 
-    def q_drop(self, k, ws):
+    def q_drop(self, k, ws, early=True):
         """Month k's q of the weeks ws (Mondays) taken out: every cell of those weeks and their "ok" days (a week's
-        cells hold no day apart: q_early); their "fl" days stay (they hold no cell) → the days taken out."""
+        cells hold no day apart: q_early); their "fl" days stay (they hold no cell) → the days taken out. early
+        False: the refold's (a whole read made while GA4 held its day collapsed), not counted in q_out."""
         mo = self.qmonth(k)
         for X in list(mo["q"]):
             js = mo["q"][X]
@@ -1398,7 +1505,7 @@ class Cube:
         for D in out:
             del mo["days"][D]
         self.qtouched.add(k)
-        self.q_out += len(out)
+        self.q_out += len(out) if early else 0
         self.dirty = True
         return out
 
@@ -1464,6 +1571,39 @@ class Cube:
             except OSError:
                 pass
 
+    def rf_path(self, k):
+        return os.path.join(app_dir(self.data_dir, self.app_id), k + RF)
+
+    def rf_copy(self, k):
+        """Month k's refold copy (loaded once): the file of an earlier run when it is this stream's and was started
+        when the head's refold of k was (`at`: a copy no head names is never used), else empty."""
+        rf = self.head.get("rf") or {}
+        if self.rf is None or self.rf["k"] != k:
+            s = gu.load_store(self.rf_path(k)) if self.data_dir else None
+            if not (_month_ok(s, self.stream_id) and (s.get("rf") or {}).get("at") == rf.get("at")):
+                s = dict(_empty_month(self.stream_id), rf={"at": rf.get("at")})
+            self.rf = {"k": k, "mo": s, "dirty": False, "done": False}
+        return self.rf["mo"]
+
+    def drop_rf(self, k):
+        """The refold's copy of month k: gone (an older one never made the month file; a finished one became it)."""
+        if self.rf is not None and self.rf["k"] == k:
+            self.rf = None
+        if self.data_dir:
+            try:
+                os.remove(self.rf_path(k))
+            except OSError:
+                pass
+
+    def u_q_drop(self, days):
+        """The users of whole reads of these days ("q") taken out with their q (q_drop: read again, kept again)."""
+        if not U_ON:
+            return
+        for D in days:
+            mo = self.umonth(D[:7])
+            if mo["q"].pop(D, None) is not None:
+                self.utouched.add(D[:7])
+
     def each_month(self):
         """Every month of the app, oldest first, one at a time (on disk: the touched ones written first)."""
         if not self.data_dir:
@@ -1492,6 +1632,7 @@ class Cube:
                 continue
             write_json_gz_stable(month_path(self.data_dir, self.app_id, k), self.m[k])
             self.touched.discard(k)
+            self.peek.pop(k, None)
         for k in sorted(self.qtouched):             # q files (a read of their own: never ahead of anything)
             write_json_gz_stable(q_path(self.data_dir, self.app_id, k), self.qm[k])
         self.qtouched.clear()
@@ -1505,17 +1646,22 @@ class Cube:
                 self.m.pop(k, None)
             for k in [k for k in self.um if k < before and k not in self.utouched]:
                 self.um.pop(k, None)
-        elif self.rp is not None and not self.rp["done"] and self.rp["dirty"]:
-            write_json_gz_stable(self.rep_path(self.rp["k"]), self.rp["mo"])
-            self.rp["dirty"] = False
+        else:
+            for c, path in ((self.rp, self.rep_path), (self.rf, self.rf_path)):    # the copies being built
+                if c is not None and not c["done"] and c["dirty"]:
+                    write_json_gz_stable(path(c["k"]), c["mo"])
+                    c["dirty"] = False
 
     def save_head(self):
-        """The head (after the months: it never runs ahead of them); then a repair's copy that became its month goes
-        (a run killed before that leaves a copy no head names: the next repair of that month starts without it)."""
+        """The head (after the months: it never runs ahead of them); then a repair's / refold's copy that became its
+        month goes (a run killed before that leaves a copy no head names: the next one of that month starts without
+        it)."""
         if self.data_dir:
             write_json_gz_stable(hot_path(self.data_dir, self.app_id), self.head)
         if self.rp is not None and self.rp["done"]:
             self.drop_rep(self.rp["k"])
+        if self.rf is not None and self.rf["done"]:
+            self.drop_rf(self.rf["k"])
         self.save_u()                               # the users' head after it (its own file)
 
 
@@ -1527,6 +1673,9 @@ def step_app(ga, cube, today, hs, now):
     h, now_iso, did = cube.head, gu._now_iso(now), False
     edge = today - timedelta(days=FINAL_LAG)
     d = h.setdefault("d", {})
+    if GUARD:
+        for k, rec in d.items():                            # the hot reads' peaks (the fold guard's), before any copy
+            _peak(h, k, rec)                                # goes
     for k in [k for k in d if k <= edge.isoformat()]:      # final now: a copy read while it was filling never counts
         d.pop(k)                                            # (a hole until the walk folds it — even when the walk stops
         cube.pruned = True                                  # before it)
@@ -1562,15 +1711,28 @@ def step_app(ga, cube, today, hs, now):
                 b = x - timedelta(days=1)
                 break
             x += timedelta(days=1)
+        held = False
         for D, rec in read_range(ga, nxt, b, h, now_iso):
+            did = True
+            if GUARD and _guard(cube, D, rec, today, now_iso):
+                held = True                                 # collapsed: not folded, read again next run (the walk
+                break                                       # waits here: ONE cursor)
             cube.fold(D, rec)
             h["next"] = (D + timedelta(days=1)).isoformat()
             h["walk_at"] = now_iso                          # the walk's last step (the page's "on its way" note)
-            did = True
+        if held:
+            break
         nxt = b + timedelta(days=1)
-    h["done"] = True                                        # the walk reached the final edge
+    else:
+        h["done"] = True                                    # the walk reached the final edge
     for k in [k for k in d if not (hs.isoformat() <= k <= today.isoformat())]:
         d.pop(k)
+    pk = h.get("pk")
+    if pk is not None:                                      # peaks of days folded (before the cursor) or out of the
+        for k in [k for k in pk if k < h["next"] or not (hs.isoformat() <= k <= today.isoformat())]:     # history:
+            pk.pop(k)                                       # gone
+        if not pk or not GUARD:
+            h.pop("pk")
     a = max(hs, edge + timedelta(days=1))
     due = gu._hours_since(h.get("hot_at"), now) >= REFRESH_HOURS or h.get("hot_today") != today.isoformat()
     hot_now = []                                            # the hot days this run read (their q: q_fwd)
@@ -1583,15 +1745,266 @@ def step_app(ga, cube, today, hs, now):
             for D, rec in read_range(ga, x, y, h, now_iso, cap=HOT_CAP, key="hcut", hot=True):
                 d[D.isoformat()] = cube.u_hot_c(D.isoformat(), rec)     # replaced (never folded: read while not
                 #                                                         final); its users to the users' head
+                if GUARD:
+                    _peak(h, D.isoformat(), rec)            # the most this day showed (the fold guard's)
                 hot_now.append(D.isoformat())
                 did = True
         h["hot_at"], h["hot_today"] = now_iso, today.isoformat()
         h.pop("hot_cyc", None)
     if Q_CALLS > 0:
         did = q_fwd(ga, cube, now, hot_now, today) or did  # q of the hot days this run read, settled folded days
-    if REPAIR_CALLS > 0:
-        did = repair(ga, cube, now) or did                  # with what the run has left
+    if RF_CALLS > 0:
+        did = refold(ga, cube, now, today) or did           # months holding a day folded collapsed: read again
+    if REPAIR_CALLS > 0 and not (RF_CALLS > 0 and (h.get("rf") or {}).get("k")):
+        did = repair(ga, cube, now) or did                  # with what the run has left (never beside a refold)
     return "fetched" if did else "fresh"
+
+
+# ── the fold guard and the refold (module doc) ──────────────────────────────────────────────────────────────────────
+def _peak(h, k, rec):
+    """Day k's peak (head "pk"): the most total an UNFLAGGED read of it showed while it was not folded yet (GA4's total
+    of a day only grows while it fills) — a flagged read (sampled, thresholded, cut, "(other)" hidden) is never one."""
+    if isinstance(rec, dict) and not rec.get("fl"):
+        t = int(rec.get("t") or 0)
+        pk = h.setdefault("pk", {})
+        if t > int(pk.get(k) or 0):
+            pk[k] = t
+
+
+def _med_before(cube, D):
+    """The median total (micros) of the folded days D − 7 … D − 1 — None with fewer than LOW_DAYS of them."""
+    ts = sorted(int(led.get("t") or 0) for led in (cube.ledger((D - timedelta(days=i)).isoformat())
+                                                   for i in range(1, 8)) if led is not None)
+    n = len(ts)
+    if n < LOW_DAYS:
+        return None
+    return ts[n // 2] if n % 2 else (ts[n // 2 - 1] + ts[n // 2]) / 2
+
+
+def _nb_low(cube, D, t):
+    """A total of day D under LOW × the median of its folded days D − 7 … D − 1 (≥ LOW_DAYS, the median ≥ PK_MIN)."""
+    m = _med_before(cube, D)
+    return m is not None and m >= PK_MIN and t < LOW * m
+
+
+def _low(cube, D, rec, p):
+    """Did GA4 answer day D with far less than it holds? Judged on the day's OWN reads when it has a peak p ≥ PK_MIN
+    and the answer is unflagged (its total under COLLAPSE × p — GA4's total of a day only grows while it fills, so a
+    real drop in traffic, low in every read of the day, is never this); else (a day never read before — after an
+    outage, a first walk —, a small one, or a flagged answer: sampled, thresholded, cut): its total under LOW × its
+    folded neighbours' median."""
+    t = int(rec.get("t") or 0)
+    if p >= PK_MIN and not rec.get("fl"):
+        return t < COLLAPSE * p
+    return _nb_low(cube, D, t)
+
+
+def _guard(cube, D, rec, today, now_iso):
+    """The fold guard on the walk's FINAL read of day D → True: held (not folded; the walk waits at it and reads it
+    again next run). A day collapsed (_low, against its peak "pk") while under FINAL_LAG + HOLD_DAYS days old is held;
+    older, it is folded as it is, marked "lo" (its peak, or 1): a hole GA4 keeps never blocks the walk, the refold
+    reads it again later. A day RF_RIPE days old or more (a backfill, a catch-up after a long pause: GA4 settled) is
+    never judged. A day folded low against its neighbours but not against its own reads (a real drop: every read of
+    it was low) is marked "rd" (the refold leaves it)."""
+    age = (today - D).days
+    if age >= RF_RIPE:
+        return False
+    k, h = D.isoformat(), cube.head
+    p = int((h.get("pk") or {}).get(k) or 0)
+    low = _low(cube, D, rec, p)
+    if not low:
+        if p >= PK_MIN and not rec.get("fl") and _nb_low(cube, D, int(rec.get("t") or 0)):
+            rec["rd"] = 1
+        return False
+    if age < FINAL_LAG + HOLD_DAYS:
+        hd = h.get("hold")
+        n = int(hd[2]) + 1 if isinstance(hd, list) and len(hd) == 3 and hd[0] == k else 1
+        h["hold"] = [k, hd[1] if n > 1 else now_iso, n]     # [the day, held since, reads held]
+        cube.held += 1
+        cube.dirty = True
+        return True
+    rec["lo"] = p if p >= 1 else 1
+    cube.low += 1
+    return False
+
+
+def _early(led, D, tz=None):
+    """A folded day read before it was RF_RIPE days old (GA4 may still have been filling it) — by the property's day
+    of its read ("at" is UTC; tz: the property's time zone)."""
+    try:
+        return (_pday(str(led["at"]), tz) - D).days < RF_RIPE
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def _cand(cube, D, led):
+    """A folded day the refold reads again: read early and folded collapsed — marked "lo" by the guard, or (folded
+    before it, with no mark: "rd" says the guard saw a real drop) low against its folded neighbours."""
+    if not isinstance(led, dict) or not _early(led, D, cube.tz()):
+        return False
+    return bool(led.get("lo")) or not led.get("rd") and _nb_low(cube, D, int(led.get("t") or 0))
+
+
+def _rf_scan(cube, today):
+    """The refold's queue (no GA4 call): the months of the edge and the one before (RF_MONTHS) → [[YYYY-MM, [its
+    candidate days]]], oldest first (a month unreadable now: the walk reads it again whole)."""
+    M, ks = (today - timedelta(days=FINAL_LAG)).replace(day=1), []
+    for _ in range(RF_MONTHS):
+        ks.append(M.isoformat()[:7])
+        M = (M - timedelta(days=1)).replace(day=1)
+    rf = cube.head.setdefault("rf", {})
+    skip = {m: u for m, u in (rf.get("skip") or {}).items() if str(u) > today.isoformat()}   # given up lately
+    if skip:
+        rf["skip"] = skip
+    else:
+        rf.pop("skip", None)
+    out = []
+    for k in sorted(ks):
+        if k in cube.bad or k in skip:
+            continue
+        days = sorted(D for D, led in cube.ledgers(k).items() if _cand(cube, _d(D), led))
+        if days:
+            out.append([k, days])
+    return out
+
+
+def _rf_q(cube, D, rec, old):
+    """Day D (YYYY-MM-DD) read again by the refold (rec; old: its ledger as the walk folded it): its whole read (q)
+    made while GA4 still held the day collapsed (its total under COLLAPSE × this read's) goes — its week out of the q
+    file (q_drop) with those days' users, read again once settled; a day the walk folded as nothing that has revenue
+    now gets its q read (q_need)."""
+    if Q_CALLS <= 0:
+        return
+    qd = cube.qmonth(D[:7])["days"].get(D)
+    if isinstance(qd, dict):
+        if qd.get("qs") == "ok" and int(qd.get("qt") or 0) < COLLAPSE * int(rec.get("t") or 0):
+            back = cube.q_drop(D[:7], {_mon(_d(D)).isoformat()}, early=False)
+            cube.u_q_drop(back)
+            _q_pend(cube, back)
+    elif q_need(rec) and not q_need(old):
+        _q_pend(cube, [D])
+
+
+def refold(ga, cube, now, today):
+    """The refold (module doc): a month holding a day the walk folded collapsed is read again, day by day, into its
+    copy and REPLACES the month once the copy holds every day the month holds (the month file untouched meanwhile: the
+    build reads it as it was) → True when a day was read. Its collapsed days first: one still collapsed while under
+    RF_MAX days old is never merged — the month waits, that day read again next run; a newer "lo" day of the month
+    (not RF_RIPE days old yet) is merged as it is, still "lo" (a later refold reads it again). Any other day GA4 now
+    answers under COLLAPSE × what the walk folded of it waits the same way (GA4 may be emptying a young day right
+    now). The days' users and the collapsed days' whole reads (q) are kept with the copy and applied only when it
+    becomes the month. Never started while a repair builds its copy. Raises Stop (the days read kept in the copy; the
+    app's own call cap only ends the refold for this run)."""
+    h, now_iso = cube.head, gu._now_iso(now)
+    rf = h.get("rf")
+    if not isinstance(rf, dict):
+        rf = h["rf"] = {}
+        cube.dirty = True
+    if not rf.get("k"):
+        if REPAIR_CALLS > 0 and (h.get("rep") or {}).get("k"):     # a repair building its copy: never beside it
+            return False                                    # (its copy, of reads made before, would replace the month)
+        if rf.get("scan") != today.isoformat():
+            rf["q"], rf["scan"] = _rf_scan(cube, today), today.isoformat()
+            cube.dirty = True
+        while rf.get("q") and not rf.get("k"):
+            k, days = rf["q"].pop(0)
+            cube.dirty = True
+            if k not in cube.bad and any((today - _d(D)).days >= RF_RIPE for D in days):
+                cube.drop_rf(k)                             # a copy no head names (a run killed after its month was
+                rf.update(k=k, at=now_iso, c=0, n=0, cand=list(days))   # written): never used
+            # (no candidate ripe yet: the next day's queue has it again)
+    k = rf.get("k")
+    if not k:
+        return False
+    cube.let_go(keep=k)
+    live = cube.month(k)
+    if k in cube.bad or not live["days"]:                   # unreadable now (the walk reads it again whole), or gone
+        cube.drop_rf(k)
+        for f in RF_FIELDS:
+            rf.pop(f, None)
+        cube.dirty = True
+        return False
+    acc = cube.rf_copy(k)
+    cand = set(rf.get("cand") or []) | {D for D, led in live["days"].items() if isinstance(led, dict) and led.get("lo")}
+    todo = sorted((D for D in live["days"] if D not in acc["days"]), key=lambda D: (D not in cand, D))
+    did, c0, gave = False, ga.calls, None
+    try:
+        for D in todo:
+            if ga.calls - c0 >= RF_CALLS or not _room(ga, rf):
+                break
+            last = ga.calls
+            rec = _read_day(ga, _d(D), now_iso, rf, DAY_CAP)
+            _took(ga, rf, ga.calls - last)
+            did = True
+            old = live["days"][D] if isinstance(live["days"][D], dict) else {}
+            age = (today - _d(D)).days
+            if D in cand:                                   # a collapsed day: against its "lo" peak, else neighbours
+                lo = int(old.get("lo") or 0)
+                low = _low(cube, _d(D), rec, lo if lo >= PK_MIN else 0)
+            else:                                           # any other: against what the walk folded of it (GA4
+                ot = int(old.get("t") or 0)                 # may be emptying a young day right now)
+                low = ot >= PK_MIN and int(rec.get("t") or 0) < COLLAPSE * ot
+            if low:
+                if D in cand and age < RF_RIPE:
+                    rec["lo"] = int(old.get("lo") or 0) or 1    # a newer "lo" day: as it is, still "lo"
+                elif D not in cand or age < RF_MAX:         # GA4 holds it collapsed now: the month waits, never
+                    w = rf.get("wait")                      # merged so (read again next run) — a day the walk had
+                    since = w[1] if isinstance(w, list) and len(w) == 2 and w[0] == D else now_iso   # whole, at any
+                    rf["wait"] = [D, since]                 # age (counted: "refold waiting") — at most RF_WAIT_DAYS
+                    cube.dirty = True
+                    if D not in cand and gu._hours_since(since, now) >= RF_WAIT_DAYS * 24:
+                        gave = D
+                    break
+            if (rf.get("wait") or [None])[0] == D:
+                rf.pop("wait")
+            if D not in cand and old.get("rd"):
+                rec["rd"] = 1
+            u = rec.pop("u", None)
+            if u is not None:                               # its users: with the copy until the swap (the walk's
+                acc.setdefault("rfu", {})[D] = ["rf" if D in cand else "rep", u,        # stay meanwhile)
+                                                {f: rec.get(f) for f in ("at", "fl", "hd")}]
+            if D in cand and Q_CALLS > 0:                   # its whole read (q): the same, at the swap
+                acc.setdefault("rfq", {})[D] = [{f: rec.get(f) for f in ("t", "loss", "fl")},
+                                                {f: old.get(f) for f in ("t", "loss", "fl")}]
+            _merge(acc, D, rec)
+            cube.rf["dirty"] = True
+            cube.rf_days += 1
+            cube.count(rec)
+    except Stop as e:
+        if str(e) != "calls":                               # the budget, the property's quota: the app stops here
+            raise
+    if gave:                                                # GA4 kept a day the walk had whole collapsed too long:
+        cube.drop_rf(k)                                     # given up — the month as it was (never a collapsed read
+        rf["log"] = (list(rf.get("log") or []) + [[k, sorted(cand), now_iso, gave]])[-LOG_KEEP:]    # put in), read
+        rf.setdefault("skip", {})[k] = (today + timedelta(days=RF_SKIP_DAYS)).isoformat()      # again later
+        for f in RF_FIELDS:
+            rf.pop(f, None)
+        cube.rf_gave += 1
+        cube.dirty = True
+        return did
+    if live["days"] and all(D in acc["days"] for D in live["days"]):    # every day read again: the copy is the month
+        for D, (by, u, r) in sorted((acc.pop("rfu", None) or {}).items()):
+            cube.u_put(D, u, r, by)                         # the collapsed days' users: this read's ("rf"); the
+        for D, (new, old) in sorted((acc.pop("rfq", None) or {}).items()):     # others' only where none were kept
+            _rf_q(cube, D, new, old)
+        old_t = {D: int(live["days"][D].get("t") or 0) for D in sorted(cand) if isinstance(live["days"].get(D), dict)}
+        acc["rf"] = {"at": rf.get("at"), "done": now_iso, "t0": old_t,
+                     "t1": {D: int(acc["days"][D].get("t") or 0) for D in old_t}}
+        cube.m[k] = acc
+        cube.touched.add(k)
+        cube.rf["done"] = True
+        cube.refolded += 1
+        rp = h.get("rep")
+        if isinstance(rp, dict) and rp.get("k") == k:      # a repair copy of this month (its reads made before): it
+            cube.drop_rep(k)                                # would put them back — gone, the repair takes the month
+            for f in REP_FIELDS:                            # up again from its queue if ever turned on
+                rp.pop(f, None)
+        cube.dirty = True                                   # the head written (k cleared) even in a run with no call
+        rf["log"] = (list(rf.get("log") or []) + [[k, sorted(old_t), now_iso]])[-LOG_KEEP:]
+        for f in RF_FIELDS:
+            rf.pop(f, None)
+        rf.pop("scan", None)                                # the queue made again next run (a "lo" day left in it)
+    return did
 
 
 def _scan(cube):
@@ -1675,7 +2088,8 @@ def repair(ga, cube, now):
             k = str(rp["q"].pop(0)[0])
             cube.dirty = True
             ol, lo, t, nf = _month_oloss(cube.month(k))
-            if (ol > 0 or nf > 0) and k not in cube.bad:
+            if (ol > 0 or nf > 0) and k not in cube.bad and not any(isinstance(v, dict) and v.get("lo")
+                                                                     for v in cube.month(k)["days"].values()):
                 cube.drop_rep(k)                            # a copy no head names (a run killed after its month was
                 rp.update(k=k, old={"ol": ol, "loss": lo, "t": t}, at=now_iso, c=0, n=0)   # written): never used
             elif cube.data_dir and k not in cube.touched:   # nothing to repair in it (any more): let go
@@ -1685,6 +2099,12 @@ def repair(ga, cube, now):
         return False
     cube.let_go(keep=k)
     live = cube.month(k)
+    if any(isinstance(v, dict) and v.get("lo") for v in live["days"].values()):    # a day folded collapsed in it
+        cube.drop_rep(k)                                    # (the walk folds into the month meanwhile): the refold's,
+        for f in REP_FIELDS:                                # never the repair's (it would drop the mark)
+            rp.pop(f, None)
+        cube.dirty = True
+        return False
     acc = None if k in cube.bad else cube.rep(k)
     if acc is None or not live["days"] or not acc["days"] and not any(_month_oloss(live)[i] for i in (0, 3)):
         cube.drop_rep(k)                                    # its file unreadable now (never a copy made the month with
@@ -1694,11 +2114,21 @@ def repair(ga, cube, now):
         return False                                        # run
     did, c0 = False, ga.calls
     try:
-        for D in sorted(D for D in live["days"] if D not in acc["days"]):   # day by day: a block of a month with
-            if ga.calls - c0 >= REPAIR_CALLS or not _room(ga, rp):         # "(other)" only comes back with it again
-                break
+        blk = (rp.get("blk") or {}).get(k)                  # the day a collapsed read ended its last try: first
+        for D in sorted((D for D in live["days"] if D not in acc["days"]), key=lambda D: (D != blk, D)):  # (a try
+            if ga.calls - c0 >= REPAIR_CALLS or not _room(ga, rp):         # again costs one day's read); then day
+                break                                                      # by day (a block of a month with
+            #                                                                "(other)" only comes back with it)
             last = ga.calls
             rec = _read_day(ga, _d(D), now_iso, rp, DAY_CAP)
+            ot = int(live["days"][D].get("t") or 0) if isinstance(live["days"][D], dict) else 0
+            if ot >= PK_MIN and int(rec.get("t") or 0) < COLLAPSE * ot:     # GA4 holds it collapsed now (the fold
+                cube.drop_rep(k)                            # guard's rule): never merged so — this month's repair
+                for f in REP_FIELDS:                        # ends here, its copy dropped (its queue made again in
+                    rp.pop(f, None)                         # RESCAN_DAYS; that day read first then: "blk")
+                rp["blk"] = dict(rp.get("blk") or {}, **{k: D})
+                cube.dirty = True
+                return True
             cube.u_put(D, rec.pop("u", None), rec, "rep")  # its users: only a day without them (never the month's)
             _merge(acc, D, rec)
             cube.rp["dirty"] = did = True
@@ -1709,6 +2139,9 @@ def repair(ga, cube, now):
         if str(e) != "calls":                               # the budget, the property's quota: the app stops here
             raise
     if live["days"] and all(D in acc["days"] for D in live["days"]):    # every day read again: the copy is the month
+        (rp.get("blk") or {}).pop(k, None)
+        if not rp.get("blk"):
+            rp.pop("blk", None)
         t = _month_oloss(acc)[2]
         nol = sum(int(v.get("ol") or 0) for v in acc["days"].values() if isinstance(v, dict))
         old = rp.get("old") or {}
@@ -2364,7 +2797,7 @@ def save_state(data_dir, state):
 COUNTS = ("selected", "with_ga4", "fetched", "fresh", "failed", "deferred", "waiting", "days", "split", "deeper",
           "capped", "hidden", "futile", "loss", "flagged", "reread", "repair_days", "repaired", "q_days", "q_flagged",
           "q_calls", "q_left", "q_unscanned", "q_errors", "q_settling", "q_reread", "q_recovered", "q_fl_wait",
-          "q_early", "calls", "tokens")
+          "q_early", "held", "low", "rf_days", "refolded", "rf_wait", "rf_gave", "calls", "tokens")
 U_COUNTS = ("u_kept", "u_days", "u_calls", "u_left", "uc_days", "uc_calls", "uc_left", "u_unscanned", "u_other",
             "u_errors")
 # U_COUNTS (the log line's last part, only with U_ON): "u_kept" days whose users the walk's own reads kept (no call
@@ -2534,6 +2967,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, wo
                     cube.m.clear()                      # written: the fill reads what it needs again
                     cube.qm.clear()
                     cube.um.clear()
+                    cube.peek.clear()
                     with lock:
                         fill.append((aid, st, cube, ga))
                 with lock:
@@ -2555,6 +2989,12 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, wo
                     counts["futile"] += cube.futile
                     counts["repair_days"] += cube.rep_days
                     counts["repaired"] += cube.repaired
+                    counts["held"] += cube.held
+                    counts["low"] += cube.low
+                    counts["rf_days"] += cube.rf_days
+                    counts["refolded"] += cube.refolded
+                    counts["rf_wait"] += bool((cube.head.get("rf") or {}).get("wait"))
+                    counts["rf_gave"] += cube.rf_gave
                     counts["loss"] += cube.loss
                     counts["flagged"] += cube.flagged
                     counts["reread"] += cube.reread
@@ -2642,7 +3082,8 @@ def log_line(status):
     return ("ga4 cube: apps %d, with GA4 %d, fetched %d, fresh %d, failed %d, deferred %d, waiting %d, days folded %d, "
             "split %d, deeper %d, capped %d, hidden %d, futile %d, loss %d, flagged %d, months read again %d, "
             "repair days %d, months repaired %d, q days %d, q flagged %d, q calls %d, q left %d, q unscanned %d, "
-            "q errors %d, q settling %d, q reread %d, q recovered %d, q fl waiting %d, q early %d, calls %d, "
+            "q errors %d, q settling %d, q reread %d, q recovered %d, q fl waiting %d, q early %d, held %d, "
+            "folded low %d, refold days %d, months refolded %d, refold waiting %d, refold given up %d, calls %d, "
             "tokens %d%s%s"
             % tuple([gaud._int(c.get(k)) for k in COUNTS]
                     + [(", u kept %d, u days %d, u calls %d, u left %d, uc days %d, uc calls %d, uc left %d, "
