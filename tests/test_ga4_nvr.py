@@ -309,3 +309,46 @@ def test_the_first_backfill_chunk_takes_a_day_that_left_the_window_unflagged_and
     ga3 = FakeGA()
     gv.step_app(ga3, store, later, hs, NOW + timedelta(days=1, minutes=10))
     assert ga3.calls == 0                                                                      # never asked again
+
+
+def test_a_lone_read_part_is_replaced_only_by_a_better_chunk_part_and_a_day_with_no_rows_takes_the_chunk(monkeypatch):
+    """A day read alone ("rr") keeps each part unless the first chunk's is better (whole > thresholded > sampled): a
+    sampled chunk never replaces a sampled lone part; a day with no rows kept takes the chunk's read whole; a day read
+    alone before the store kept "mp" is left as it was."""
+    hs, lone = TODAY - timedelta(days=20), (TODAY - timedelta(days=6)).isoformat()
+
+    def case(own, chunk_u, rows=True):
+        store = {"v": gv.STORE_V}
+        monkeypatch.setattr(gv, "_mark", lambda ga: getattr(ga, "flag", None))
+        try:
+            gv.step_app(FakeGA(stop_after=3), store, TODAY, hs, NOW)              # the window, then a stop
+            raise AssertionError("no stop")
+        except gf.Stop:
+            pass
+        if rows:
+            store["days"][lone] = {"u": [["n", "App open", "unit_open", 9.0, 50]], "c": [], "s": []}
+        if own is not None:
+            store["mp"][lone] = own
+            gv._remark(store["mark"], lone, own)
+        store["rr"] = {lone: 1}
+
+        class G(FakeGA):
+            def report_all(self, body, **kw):
+                got = super().report_all(body, **kw)
+                a, b = (date.fromisoformat(body["dateRanges"][0][k]) for k in ("startDate", "endDate"))
+                unit = "adUnitName" in [x["name"] for x in body["dimensions"]]
+                self.flag = chunk_u if unit and (b - a).days > gv.RECENT_DAYS else None
+                return got
+        gv.step_app(G(), store, TODAY + timedelta(days=1), hs, NOW + timedelta(days=1))
+        return store
+    st = case({"u": "s"}, "s")                                                   # sampled vs sampled: the lone stays
+    assert st["days"][lone]["u"][0][3] == 9.0 and st["mp"][lone] == {"u": "s"} and st["mark"][lone] == "s"
+    st = case({"u": "s"}, "t")                                                   # thresholded beats sampled
+    assert st["days"][lone]["u"][0][3] == 1 and st["mp"][lone] == {"u": "t"} and st["mark"][lone] == "t"
+    st = case({"u": "t"}, None)                                                  # whole beats thresholded
+    assert st["days"][lone]["u"][0][3] == 1 and st["mp"][lone] == {} and lone not in st["mark"]
+    st = case(None, None)                                                        # (before "mp": left as it was)
+    assert st["days"][lone]["u"][0][3] == 9.0 and lone not in st["mp"] and lone not in st["mark"]
+    st = case({"u": "t"}, None, rows=False)                                      # no rows kept: the chunk's, whole
+    assert st["days"][lone]["u"][0][3] == 1 and st["days"][lone]["c"] and st["mp"][lone] == {}
+    assert st["rr"] == {lone: 1}

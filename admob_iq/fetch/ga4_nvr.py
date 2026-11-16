@@ -85,6 +85,9 @@ def _mark(ga):
     return None
 
 
+RANK = {None: 2, "t": 1, "s": 0}   # a read's flag, better first: whole > thresholded > sampled
+
+
 def _remark(mark, d, flags):
     """A day's all-in-one "mark" from its reads' own flags ({part: "s" | "t"}): "s" when any was sampled, else "t"."""
     fl = set(flags.values())
@@ -174,20 +177,21 @@ def step_app(ga, store, today, hs, now):
         a = max(first, top - timedelta(days=CHUNK_DAYS - 1))
         got, mk, pm = read(ga, a, top)
         for d, rec in got.items():
-            if d in rr:                                 # read alone already (final; "rr" never asks it again): each
-                own = mp.get(d)                         # of its reads stays, unless that one was a sample and the
-                if isinstance(own, dict):               # chunk's is not
-                    own = dict(own)
+            cur = days.get(d)
+            if d in rr and isinstance(cur, dict) and all(p in cur for p in ("u", "c", "s")):
+                own = mp.get(d)                         # read alone already (final; "rr" never asks it again): each
+                if isinstance(own, dict):               # of its reads stays, unless the chunk's is better (whole >
+                    own = dict(own)                     # thresholded > sampled)
                     for p in ("u", "c", "s"):
-                        if own.get(p) == "s" and pm[d].get(p) != "s":
-                            days.setdefault(d, {"u": [], "c": [], "s": []})[p] = rec[p]
+                        if RANK[pm[d].get(p)] > RANK[own.get(p)]:
+                            cur[p] = rec[p]
                             if pm[d].get(p):
                                 own[p] = pm[d][p]
                             else:
                                 own.pop(p, None)
                     mp[d] = own
                     _remark(mark, d, own)
-                continue
+                continue                                # (no rows kept for it: the chunk's read, whole, below)
             days[d] = rec
             mp[d] = pm[d]
             _remark(mark, d, pm[d])
