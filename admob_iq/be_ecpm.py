@@ -116,8 +116,7 @@ def load(data_dir, key, cty):
     del got["cells"]
     fs, fa, fsd = {}, {}, set()
     st = gv.load_store(os.path.join(data_dir, gv.DIR, key + ".json.gz"))
-    mk = (st or {}).get("mark") or {}
-    fsm = {d for d, v in mk.items() if v == "s" and d in want}
+    fsm = _sampled_base(st, want)
     for day, rv in ((st or {}).get("days") or {}).items():
         if day not in want:
             continue
@@ -134,6 +133,14 @@ def load(data_dir, key, cty):
     del st
     return {"fs": fs, "fa": fa, "fsd": fsd, "fsm": fsm, "cells": cells, "pool": pool, "days": got["days"],
             "upto": got["upto"], "done": got["done"], "hs": got.get("hs")}
+
+
+def _sampled_base(st, want):
+    """The first-session store's days whose day-1 base came from a GA4 sample: the COUNTRY read's own flag ("mp") where
+    the store knows it — another read of the day being sampled never counts (owner, 16 Nov 2026: "sample data de esa ho
+    hi nhi sakta … proper check kro"); the all-in-one "mark" only for a day read before the store kept its reads' own."""
+    mk, mp = (st or {}).get("mark") or {}, (st or {}).get("mp") or {}
+    return {d for d in want if (mp[d].get("c") == "s" if isinstance(mp.get(d), dict) else mk.get(d) == "s")}
 
 
 def stale(m, O):

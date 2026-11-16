@@ -18,14 +18,17 @@ Store, kept for good: data/ga4_nvr/<key>.json.gz (private repo)
     {"v", "app_id", "package", "property_id", "stream_id", "time_zone", "recent_at",
      "days": {YYYY-MM-DD: {"u": [[nvr, format, ad unit, revenue, impressions], …], "c": [[nvr, cc, revenue, impressions], …],
                            "s": [[nvr, sessions, users], …]}}     (nvr: "n" new · "r" returning · "x" not set; [] = nothing)
-     "mark": {YYYY-MM-DD: "s" (read from a GA4 sample) | "t" (subject to thresholding)},
+     "mark": {YYYY-MM-DD: "s" (a read of the day came from a GA4 sample) | "t" (subject to thresholding)},
      "rr": {YYYY-MM-DD: 1} (a final day read once more alone for its sampled mark),
+     "mp": {YYYY-MM-DD: {"u" | "c" | "s": "s" | "t"}} (EACH read's own flag; {} = all three whole; "mark" = "s" when any
+           read was sampled, else "t" when any was thresholded — the Breakeven card's day 1 reads only "c"'s own),
      "backfill": {"oldest": the oldest day read, "done": reached the app's history start}}
 Per app and run (at most MAX_CALLS calls; the property's quota floors as the Audience fetch's; the run's budget):
   * every REFRESH_HOURS the last RECENT_DAYS days (today included: GA4 still adds to them) — replaced whole;
   * a day that left that window still marked "s" (GA4 sampled the still-changing range — a busy app's raw events) is read
     once more ALONE when final, newest first (whole from GA4's daily tables), "rr": {day: 1} keeping it from being asked
-    twice (one that stays sampled keeps its mark);
+    twice (one that stays sampled keeps its mark); a day marked before the store kept each read's own flag ("mp") is
+    read alone once more too, to learn them;
   * the backfill: CHUNK_DAYS at a time, newest first, from the day before the recent window back to the app's history
     start (the Uninstall store's). Days older than RECENT_DAYS are final in GA4.
 Switched by GA4_NVR. Never raises; never prints (log_line: counts only).
@@ -82,11 +85,23 @@ def _mark(ga):
     return None
 
 
+def _remark(mark, d, flags):
+    """A day's all-in-one "mark" from its reads' own flags ({part: "s" | "t"}): "s" when any was sampled, else "t"."""
+    fl = set(flags.values())
+    m = "s" if "s" in fl else ("t" if "t" in fl else None)
+    if m:
+        mark[d] = m
+    else:
+        mark.pop(d, None)
+
+
 def read(ga, a, b):
     """[a, b] → ({YYYY-MM-DD: {"u": [...], "c": [...], "s": [...]}} for every day of the range, {day: "s" | "t"} when a page
-    of any read was sampled / thresholded)."""
+    of any read was sampled / thresholded, {day: {part: "s" | "t"}} — EACH read's own flag ({} = all three whole): one
+    sampled read never stands for the others (owner, 16 Nov 2026: "sample data de esa ho hi nhi sakta … proper check kro"
+    — the busiest app's country read came whole while its ad-unit read of the same day was sampled))."""
     days = {(a + timedelta(days=i)).isoformat(): {"u": [], "c": [], "s": []} for i in range((b - a).days + 1)}
-    mark = None
+    part_mk = {}
     for part, dims, mets, ev in (("u", (NVR, "adFormat", "adUnitName"), EV, EVENT), ("c", (NVR, "countryId"), EV, EVENT),
                                  ("s", (NVR,), ("sessions", "activeUsers"), None)):
         rows = ga.report_all(body(a, b, dims, mets), event=ev, page_rows=PAGE_ROWS)
@@ -105,11 +120,15 @@ def read(ga, a, b):
             else:
                 rec = [k, int(float(r.get("sessions") or 0)), int(float(r.get("activeUsers") or 0))]
             days[d.isoformat()][part].append(rec)
-        mark = mark or _mark(ga)
+        m = _mark(ga)
+        if m:
+            part_mk[part] = m
+    fl = set(part_mk.values())
+    mark = "s" if "s" in fl else ("t" if "t" in fl else None)     # (a sample outranks a threshold: never hidden by it)
     for v in days.values():
         for part in v:
             v[part].sort()
-    return days, ({d: mark for d in days} if mark else {})
+    return days, ({d: mark for d in days} if mark else {}), {d: dict(part_mk) for d in days}
 
 
 def step_app(ga, store, today, hs, now):
@@ -119,26 +138,31 @@ def step_app(ga, store, today, hs, now):
     mark = store.setdefault("mark", {})
     recent = today - timedelta(days=RECENT_DAYS - 1)
     first = min(hs, recent) if hs else recent
+    mp = store.setdefault("mp", {})                     # each read's own flag of a day ({} = whole)
     if gu._hours_since(store.get("recent_at"), now) >= REFRESH_HOURS:
-        got, mk = read(ga, max(first, recent), today)
+        got, mk, pm = read(ga, max(first, recent), today)
         for d, rec in got.items():
             days[d] = rec                               # the newest read of a still-changing day wins
             mark.pop(d, None)
+            mp[d] = pm[d]
         mark.update(mk)
         store["recent_at"] = now_iso
         did = True
     # a FINAL day still marked sampled — read while GA4 was still filling it: a busy app's newest days come back sampled
     # (GA4 answers a still-changing range from its raw events), a final day whole — is read once more, ALONE, newest
     # first (the Breakeven card's day 1 = this store's first session: owner, 16 Nov 2026, "isme bhi milna hi chahiye").
-    # "rr" keeps the days read so, so one that stays sampled is never asked again.
+    # "rr" keeps the days read so, so one that stays sampled is never asked again — whichever of its reads was (the
+    # ad-unit and sessions rows feed the eCPM tab and the CPI screen; the country rows the Breakeven card). A day whose
+    # reads' own flags are not known yet ("mp": marked by the older all-in-one rule) is read alone once more too.
     rr = store.setdefault("rr", {})
     edge = recent - timedelta(days=1)
-    for d in sorted((d for d, v in mark.items() if v == "s" and d not in rr and first <= gu._d(d) <= edge),
-                    reverse=True):
-        got, mk = read(ga, gu._d(d), gu._d(d))
+    for d in sorted((d for d, v in mark.items() if v == "s" and first <= gu._d(d) <= edge
+                     and (d not in rr or d not in mp)), reverse=True):
+        got, mk, pm = read(ga, gu._d(d), gu._d(d))
         days[d] = got[d]
         mark.pop(d, None)
         mark.update(mk)
+        mp[d] = pm[d]
         rr[d] = 1
         did = True
     bf = store.setdefault("backfill", {})
@@ -148,11 +172,25 @@ def step_app(ga, store, today, hs, now):
             bf["done"] = True
             break
         a = max(first, top - timedelta(days=CHUNK_DAYS - 1))
-        got, mk = read(ga, a, top)
+        got, mk, pm = read(ga, a, top)
         for d, rec in got.items():
+            if d in rr:                                 # read alone already (final; "rr" never asks it again): each
+                own = mp.get(d)                         # of its reads stays, unless that one was a sample and the
+                if isinstance(own, dict):               # chunk's is not
+                    own = dict(own)
+                    for p in ("u", "c", "s"):
+                        if own.get(p) == "s" and pm[d].get(p) != "s":
+                            days.setdefault(d, {"u": [], "c": [], "s": []})[p] = rec[p]
+                            if pm[d].get(p):
+                                own[p] = pm[d][p]
+                            else:
+                                own.pop(p, None)
+                    mp[d] = own
+                    _remark(mark, d, own)
+                continue
             days[d] = rec
-            mark.pop(d, None)
-        mark.update(mk)
+            mp[d] = pm[d]
+            _remark(mark, d, pm[d])
         bf["oldest"] = a.isoformat()
         did = True
     return "fetched" if did else "fresh"

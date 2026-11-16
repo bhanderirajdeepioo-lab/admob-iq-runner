@@ -480,3 +480,12 @@ def test_a_hot_copy_still_filling_drops_nobody_and_its_point_is_the_countries_th
     ec = _card(cells, fs, B, {"AA": 60.0, "BB": 40.0}, hot=(2,), newest_age=3)
     assert "dr" not in ec and ec["p"][2] == "1"
     assert ec["cv"][2] == 0.6 and abs(ec["x"][2] - ec["x"][1] * 1.8 / 2.0) <= 0.06       # AA's own move from day 2
+
+
+def test_day_1_is_sampled_only_when_the_country_read_itself_was():
+    """16 Nov 2026 (the busiest app: every first-session × country read whole, another read of the day flagged): only the
+    country read's own flag makes day 1's base a sample; a day read before the store kept its reads' own uses "mark"."""
+    st = {"mark": {"d1": "s", "d2": "s", "d3": "s", "d4": "t", "d5": "t"},
+          "mp": {"d1": {"u": "s"}, "d2": {"c": "s", "u": "s"}, "d4": {"c": "t"}, "d5": {"u": "t", "c": "s"}}}
+    assert bec._sampled_base(st, {"d1", "d2", "d3", "d4", "d5"}) == {"d2", "d3", "d5"}   # (d5: its own flag, not "mark")
+    assert bec._sampled_base(st, {"d1"}) == set() and bec._sampled_base(None, {"d1"}) == set()

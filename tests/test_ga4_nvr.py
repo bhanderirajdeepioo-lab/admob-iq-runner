@@ -145,3 +145,167 @@ def test_a_final_day_that_stays_sampled_keeps_its_mark_and_is_not_asked_again_an
     assert _ranges(ga2) == [(d, d) for d in ((TODAY - timedelta(days=3)).isoformat(), (TODAY - timedelta(days=4)).isoformat())]
     ga3 = FakeGA(sampled=True)
     assert gv.step_app(ga3, store, later, hs, t2 + timedelta(minutes=20)) == "fresh" and ga3.calls == 0
+
+
+class PartGA(FakeGA):
+    """GA4 flags only the ad-unit read, every time — the country and sessions reads come whole (the busiest app on 16 Nov
+    2026: its ad-unit reads sampled, its first-session × country read whole)."""
+    def report_all(self, body, **kw):
+        rows = super().report_all(body, **kw)
+        self.last_metas = ([{"samplingMetadatas": [{"samplesReadCount": "1"}]}]
+                           if "adUnitName" in [x["name"] for x in body["dimensions"]] else [{}])
+        return rows
+
+
+def test_each_reads_own_flag_is_kept_and_a_sampled_ad_unit_read_never_marks_the_country_read():
+    """Owner, 16 Nov 2026: "sample data de esa ho hi nhi sakta … proper check kro" — the day keeps "s" in "mark" (one of
+    its reads was), but "mp" says which: the country read ("c") is whole, so the Breakeven card's day-1 base stands."""
+    hs, store = TODAY - timedelta(days=10), {"v": gv.STORE_V}
+    gv.step_app(PartGA(), store, TODAY, hs, NOW)
+    d = TODAY.isoformat()
+    assert store["mark"][d] == "s" and store["mp"][d] == {"u": "s"} and "c" not in store["mp"][d]
+    assert all(store["mp"][x] == {"u": "s"} for x in store["days"])                 # (the history too: per read)
+
+
+def test_a_day_marked_by_the_old_all_in_one_rule_is_read_alone_once_to_learn_its_reads_own_flags():
+    hs, store = TODAY - timedelta(days=20), {"v": gv.STORE_V}
+    gv.step_app(FakeGA(), store, TODAY, hs, NOW)
+    old = (TODAY - timedelta(days=9)).isoformat()                                  # a final day, as an older store kept it:
+    store["mark"][old] = "s"
+    store["mp"].pop(old)
+    store["rr"][old] = 1                                                           # … even one read alone before
+    ga = PartGA()
+    gv.step_app(ga, store, TODAY, hs, NOW + timedelta(minutes=10))                 # (the window is fresh: only that day)
+    assert _ranges(ga) == [(old, old)] and store["mp"][old] == {"u": "s"}
+    ga2 = PartGA()
+    gv.step_app(ga2, store, TODAY, hs, NOW + timedelta(minutes=20))
+    assert ga2.calls == 0                                                          # known now: never again
+
+
+class UnitRawGA(RawGA):
+    """Only the ad-unit read of a still-changing range comes from a sample (its revenue off: × 1.5); a final day read
+    alone is whole, and the country and sessions reads always are."""
+    def report_all(self, body, **kw):
+        rows = super().report_all(body, **kw)
+        unit = "adUnitName" in [x["name"] for x in body["dimensions"]]
+        hot = bool(self.last_metas and self.last_metas[0].get("samplingMetadatas"))
+        if unit and hot:
+            rows = [dict(r, totalAdRevenue=r["totalAdRevenue"] * 1.5) for r in rows]
+        else:
+            self.last_metas = [{}]
+        return rows
+
+
+def test_a_final_day_whose_ad_unit_read_was_sampled_is_read_once_more_alone_and_healed():
+    """The lone re-read heals whichever read of a final day was sampled — the ad-unit and sessions rows feed the eCPM tab
+    and the CPI screen — not only the country one; "rr" still asks it once."""
+    hs, store = TODAY - timedelta(days=20), {"v": gv.STORE_V}
+    gv.step_app(UnitRawGA(TODAY), store, TODAY, hs, NOW)
+    d = (TODAY - timedelta(days=2)).isoformat()
+    assert store["mark"][d] == "s" and store["mp"][d] == {"u": "s"} and store["days"][d]["u"][0][3] == 1.5
+    later, t2 = TODAY + timedelta(days=3), NOW + timedelta(days=3)
+    ga = UnitRawGA(later)
+    gv.step_app(ga, store, later, hs, t2)
+    left = [(TODAY - timedelta(days=i)).isoformat() for i in (2, 3, 4)]               # final now, newest first
+    assert _ranges(ga)[1:] == [(x, x) for x in left] and sorted(store["rr"]) == sorted(left)
+    assert all(x not in store["mark"] and store["mp"][x] == {} and store["days"][x]["u"][0][3] == 1 for x in left)
+    ga2 = UnitRawGA(later)
+    gv.step_app(ga2, store, later, hs, t2 + timedelta(hours=1))
+    assert ga2.calls == 3                                                             # the window only: never again
+
+
+def test_a_window_refresh_replaces_each_days_flags_and_a_sample_outranks_a_threshold(monkeypatch):
+    """The newest read of a still-changing day replaces its flags (a country read sampled at one refresh and whole at the
+    next is whole: never merged); "mark" is "s" when any read was sampled even if another was only thresholded."""
+    from admob_iq import be_ecpm as bec
+    hs, store = TODAY - timedelta(days=10), {"v": gv.STORE_V}
+    seq = {"u": "t", "c": "s", "s": None}
+    monkeypatch.setattr(gv, "_mark", lambda ga: seq[ga.part])
+
+    class Tag(FakeGA):
+        def report_all(self, body, **kw):
+            dims = [x["name"] for x in body["dimensions"]]
+            self.part = "u" if "adUnitName" in dims else ("c" if "countryId" in dims else "s")
+            return super().report_all(body, **kw)
+    gv.step_app(Tag(), store, TODAY, hs, NOW)
+    d = TODAY.isoformat()
+    assert store["mark"][d] == "s" and store["mp"][d] == {"u": "t", "c": "s"} and bec._sampled_base(store, {d}) == {d}
+    seq.update(u=None, c=None)
+    gv.step_app(Tag(), store, TODAY, hs, NOW + timedelta(hours=1))
+    assert d not in store["mark"] and store["mp"][d] == {} and bec._sampled_base(store, {d}) == set()
+
+
+def test_a_backfill_chunk_never_overwrites_a_day_already_read_alone():
+    """A run that stopped before the backfill started leaves it to begin at the window's edge; a day read alone meanwhile
+    (final, its own read) keeps that read and its flags — the coarser chunk could be a sample of it, never asked again."""
+    hs, store = TODAY - timedelta(days=20), {"v": gv.STORE_V}
+    ga = RawGA(TODAY, stop_after=3)                                     # the window, then a stop: no backfill yet
+    try:
+        gv.step_app(ga, store, TODAY, hs, NOW)
+        raise AssertionError("no stop")
+    except gf.Stop:
+        pass
+    assert not store.get("backfill")
+    later, t2 = TODAY + timedelta(days=1), NOW + timedelta(days=1)
+    gone = (TODAY - timedelta(days=4)).isoformat()                      # left the window: read alone, whole
+
+    class ChunkSampled(UnitRawGA):                                      # … while the backfill chunk's ad-unit read is
+        def report_all(self, body, **kw):                               # a sample (× 1.5)
+            rows = FakeGA.report_all(self, body, **kw)
+            a, b = (date.fromisoformat(body["dateRanges"][0][k]) for k in ("startDate", "endDate"))
+            unit = "adUnitName" in [x["name"] for x in body["dimensions"]]
+            chunk = (b - a).days > gv.RECENT_DAYS
+            if unit and chunk:
+                rows = [dict(r, totalAdRevenue=r["totalAdRevenue"] * 1.5) for r in rows]
+            self.last_metas = [{"samplingMetadatas": [{"samplesReadCount": "1"}]}] if unit and chunk else [{}]
+            return rows
+    gv.step_app(ChunkSampled(later), store, later, hs, t2)
+    assert store["rr"] == {gone: 1} and gone not in store["mark"] and store["mp"][gone] == {}
+    assert store["days"][gone]["u"][0][3] == 1                          # its lone (whole) read, not the chunk's
+    older = (TODAY - timedelta(days=5)).isoformat()
+    assert store["mark"][older] == "s" and store["mp"][older] == {"u": "s"}    # (the chunk's own days keep its flags)
+
+
+class Filling(FakeGA):
+    """GA4 still filling a day: one under RECENT_DAYS old (by `today`) reads half its final numbers, unflagged."""
+    def __init__(self, today, **kw):
+        super().__init__(**kw)
+        self.today = today
+
+    def report_all(self, body, **kw):
+        rows = super().report_all(body, **kw)
+        out = []
+        for r in rows:
+            d = date(int(r["date"][:4]), int(r["date"][4:6]), int(r["date"][6:]))
+            if (self.today - d).days < gv.RECENT_DAYS and "totalAdRevenue" in r:
+                r = dict(r, totalAdRevenue=r["totalAdRevenue"] / 2, eventCount=r["eventCount"] // 2)
+            out.append(r)
+        return out
+
+
+def test_the_first_backfill_chunk_takes_a_day_that_left_the_window_unflagged_and_heals_a_sampled_lone_read_part():
+    """The first chunk (from the window's edge) holds every day's FINAL read: a day that left the window unflagged (its
+    read made while GA4 was still filling it) takes the chunk's; a day read alone (in "rr") keeps each of its reads,
+    except one that was a sample where the chunk's is whole — never asked again either way."""
+    hs, store = TODAY - timedelta(days=20), {"v": gv.STORE_V}
+    ga = Filling(TODAY, stop_after=3)                                    # the window (half filled), then a stop
+    try:
+        gv.step_app(ga, store, TODAY, hs, NOW)
+        raise AssertionError("no stop")
+    except gf.Stop:
+        pass
+    plain = (TODAY - timedelta(days=4)).isoformat()                      # leaves the window unflagged
+    assert store["days"][plain]["c"][1] == ["n", "XA", 0.6, 30] and plain not in store["mark"]
+    lone = (TODAY - timedelta(days=6)).isoformat()                       # (made by hand: read alone, its ad-unit read
+    store["days"][lone] = {"u": [["n", "App open", "unit_open", 9.0, 50]], "c": [], "s": []}   # a sample)
+    store["mark"][lone], store["mp"][lone], store["rr"] = "s", {"u": "s"}, {lone: 1}
+    later = TODAY + timedelta(days=1)
+    ga2 = FakeGA()
+    gv.step_app(ga2, store, later, hs, NOW + timedelta(days=1))
+    assert store["days"][plain]["c"][1] == ["n", "XA", 1.2, 60] and store["mp"][plain] == {}    # the chunk's final read
+    assert store["days"][lone]["u"][0] == ["n", "App open", "unit_open", 1, 50]                # the whole chunk part
+    assert store["mp"][lone] == {} and lone not in store["mark"] and store["rr"] == {lone: 1}
+    assert store["days"][lone]["c"] == [] and store["days"][lone]["s"] == []                  # (its own whole parts stay)
+    ga3 = FakeGA()
+    gv.step_app(ga3, store, later, hs, NOW + timedelta(days=1, minutes=10))
+    assert ga3.calls == 0                                                                      # never asked again
