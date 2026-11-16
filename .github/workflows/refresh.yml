@@ -272,6 +272,14 @@ jobs:
           GA4_NVRP:             ${{ vars.GA4_NVRP || 'true' }}
           GA4_NVRP_BUDGET_SEC:  ${{ vars.GA4_NVRP_BUDGET_SEC }}
           GA4_NVRP_MAX_CALLS:   ${{ vars.GA4_NVRP_MAX_CALLS }}
+          # … and their D0 … D30 cells (admob_iq/fetch/ga4_cohort_paid.py; data/ga4_cohort_paid/ in the private repo,
+          # kept for good): ga4_cohort's own 2-D read with the same in-list, before the paid cube — the source of their
+          # All row once its backfill is done. GA4_COHORTP=false stops the reads without a code push (their All row then
+          # the paid cube's country cells summed); GA4_COHORTP_BUDGET_SEC = its seconds per build (empty: the module's);
+          # GA4_COHORTP_MAX_CALLS = an app's calls a build (empty: ga4_cohort's)
+          GA4_COHORTP:          ${{ vars.GA4_COHORTP || 'true' }}
+          GA4_COHORTP_BUDGET_SEC: ${{ vars.GA4_COHORTP_BUDGET_SEC }}
+          GA4_COHORTP_MAX_CALLS: ${{ vars.GA4_COHORTP_MAX_CALLS }}
           # … the Breakeven tab from them: BE_PAID=true builds it from Google Ads users only, with its Organic view
           # (needs GA4_CUBEP; off: the tab's files as without it)
           BE_PAID:              ${{ vars.BE_PAID || 'false' }}

@@ -6,15 +6,20 @@ day by day (split by install-day halves; a day still flagged read with every ins
 whole answer; the day's cap leaves measured loss in "lo"; a thresholded block's days in "lf"; a refresh cut by a Stop
 goes on from its next day; a heavy refresh reads only its days not yet read alone when final), the one-time check of
 the history an older version read, no day left unread between the backfill, the check and the refresh (the floor
-"rf"; another version's refresh read again), a resumed backfill never calling a dropped block again, the older days'
-marks in the older file, a whole-day answer that is not whole measuring nothing, the check's time room, and
-counts-only lines."""
+"rf"; another version's refresh read again; a refresh after a pause longer than the window reaches: from the last
+one's first day not final then, on both instances), a resumed backfill never calling a dropped block again, the
+older days' marks in the older file, a whole-day answer that is not whole measuring nothing, the check's time room,
+and counts-only lines."""
+import copy
 import gzip
 import json
 import os
 from datetime import date, datetime, timedelta, timezone
 
+import pytest
+
 from admob_iq.fetch import ga4_cohort as gc
+from admob_iq.fetch import ga4_cohort_paid as gcp
 
 NOW = datetime(2026, 10, 13, 6, 0, tzinfo=timezone.utc)
 TODAY = date(2026, 10, 13)
@@ -420,6 +425,44 @@ def test_a_stop_between_the_backfill_and_its_refresh_leaves_no_day_unread():
     gc.merge(want, gc.read_block(FakeGA(), FakeGA.HS, nxt), FakeGA.HS, nxt)
     assert store["x"] == want["x"] and "rf" not in store and store["rs"] == [gc.gu._now_iso(NOW + timedelta(days=1)),
                                                                              "2026-09-10"]
+
+
+class _Late(FakeGA):
+    """FakeGA on property day `today`: an activity day not final there yet (after today − FINAL_LAG) has half its
+    revenue so far."""
+    def __init__(self, today, **kw):
+        super().__init__(**kw)
+        self.today = today
+
+    def report_all(self, body, event=None, events=None, extra=None, page_rows=None):
+        edge = (self.today - timedelta(days=gc.FINAL_LAG)).strftime("%Y%m%d")
+        return [dict(r, totalAdRevenue=r["totalAdRevenue"] / 2) if r["date"] > edge else r
+                for r in super().report_all(body, event, events, extra, page_rows)]
+
+
+@pytest.mark.parametrize("m", [gc, gcp.MOD], ids=["ga4_cohort", "ga4_cohort_paid"])
+def test_a_refresh_after_a_long_pause_reads_every_day_since_the_last_one(m):
+    """The read switched off (GA4_COHORT / GA4_COHORTP=false), or the app failing or deferred, for longer than the
+    window reaches (45 days): the next refresh reads from the last refresh's first day that was not final then (its
+    read_today − FINAL_LAG + 1) — the days before its window in blocks —, so no activity day between the two refreshes
+    is left unread, nor one read before it was final (both instances: the same code); one the window still reaches
+    (32 days on): the window alone, as ever."""
+    first = {"v": gc.STORE_V}
+    m.step_app(_Late(TODAY), first, TODAY, FakeGA.HS, NOW)                  # the backfill + the first refresh
+    assert first["read_today"] == TODAY.isoformat() and "rf" not in first
+    for days, want in ((32, [(TODAY - timedelta(days=2), TODAY + timedelta(days=32))]),
+                       (45, [(TODAY - timedelta(days=2), TODAY + timedelta(days=45 - 35)),
+                             (TODAY + timedelta(days=45 - 34), TODAY + timedelta(days=45))])):
+        store, later = copy.deepcopy(first), TODAY + timedelta(days=days)
+        ga = _Late(later)
+        assert m.step_app(ga, store, later, FakeGA.HS, NOW + timedelta(days=days)) == "fetched"
+        assert [tuple(date.fromisoformat(q[0]["dateRanges"][0][k]) for k in ("startDate", "endDate"))
+                for q in ga.asked] == want, days                           # (days before the window: blocks)
+        truth = {}
+        gc.merge(truth, gc.read_block(FakeGA(), FakeGA.HS, later), FakeGA.HS, later)
+        for D in gc._days(FakeGA.HS, later - timedelta(days=gc.FINAL_LAG)):  # every final day: its whole cells
+            assert _day_cells(store["x"], D) == _day_cells(truth["x"], D), (days, D)
+        assert "rf" not in store and store["read_today"] == later.isoformat()
 
 
 def test_a_refresh_by_another_version_is_read_again():

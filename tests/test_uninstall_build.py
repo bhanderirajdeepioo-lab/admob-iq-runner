@@ -403,6 +403,63 @@ def test_the_google_ads_steps_run_after_screens_the_light_one_first_only_when_sw
         health.FAULTS.clear()
 
 
+def test_the_google_ads_users_d0_d30_read_runs_before_the_paid_cube_only_when_switched_on(site, monkeypatch, capsys):
+    """GA4_COHORTP off (the default): never run, nothing printed. On: after the Google Ads users' first-session read,
+    right BEFORE their cohort cube (the light read first: the cube's long walk never leaves it a property already
+    under Screens' floors — one blind call, every app deferred), its own budget (the build's, else the module's) and
+    its counts line; its own bug (an "error" in its status) or an exception prints its health line and costs that
+    step only; an app failing run after run (counts "stuck", ga4_paid.streak) prints its StuckAppError line. (The ROI
+    step started with it: tests/test_roi_paid.py.)"""
+    from admob_iq import health
+    from admob_iq.fetch import ga4_cohort_paid as gop
+    from admob_iq.fetch import ga4_cube_paid as gcp
+    from admob_iq.fetch import ga4_nvr_paid as gnp
+    data, out, _ = site
+    order = []
+
+    def step(name, status):
+        def refresh_all(cfg, d, apps, now, clock, budget=None, **kw):
+            order.append((name, budget))
+            return copy.deepcopy(status)
+        return refresh_all
+    monkeypatch.setattr(gnp, "refresh_all", step("nvr paid", {"counts": {}}))
+    monkeypatch.setattr(gcp, "refresh_all", step("cube paid", {"counts": {}}))
+    monkeypatch.setattr(gop, "refresh_all", step("cohort paid", {"counts": {"selected": 5, "with_ga4": 3, "fetched": 2,
+                                                                            "stuck": 0}}))
+    assert settings()["ga4_cohortp"] is False
+    run(data, out, ga4_settings(ga4_cubep=True))
+    assert order == [("cube paid", gcp.BUDGET_SEC)] and "cohort paid" not in capsys.readouterr().err
+    order.clear()
+    dash, _ = run(data, out, ga4_settings(ga4_nvrp=True, ga4_cubep=True, ga4_cohortp=True, ga4_cohortp_budget_sec=40))
+    err = capsys.readouterr().err
+    assert order == [("nvr paid", gnp.BUDGET_SEC), ("cohort paid", 40), ("cube paid", gcp.BUDGET_SEC)]   # the light
+    #                                                                                                    reads first
+    lines = [ln for ln in err.splitlines() if "cohort paid" in ln]
+    assert lines == ["ga4 cohort paid: apps 5, with GA4 3, fetched 2, fresh 0, failed 0, deferred 0, waiting 0, "
+                     "blocks with (other) 0, days read alone 0, days with loss 0, flagged days 0, days with hidden "
+                     "(other) 0, days checked again 0, calls 0, tokens 0"]
+    assert len(dash["uninstall"]["apps"]) == 3
+    order.clear()
+    run(data, out, ga4_settings(ga4_cohortp=True))                       # (its own switch: the module's budget)
+    assert order == [("cohort paid", gop.BUDGET_SEC)]
+    capsys.readouterr()
+    for status, why in (({"counts": {}, "error": "KeyError"}, "KeyError"),
+                        ({"counts": {"selected": 5, "with_ga4": 3, "failed": 1, "stuck": 1}}, "StuckAppError"),
+                        (None, "ZeroDivisionError")):
+        monkeypatch.setattr(gop, "refresh_all", step("cohort paid", status) if status else lambda *a, **k: 1 / 0)
+        dash, _ = run(data, out, ga4_settings(ga4_cohortp=True))
+        lines = [ln for ln in capsys.readouterr().err.splitlines() if "cohort paid" in ln]
+        assert lines[-1] == "ga4 cohort paid skipped: %s" % why and len(lines) == (1 if status is None else 2), why
+        assert len(dash["uninstall"]["apps"]) == 3                      # the tab as always
+        health.FAULTS.clear()
+        try:
+            for ln in lines:
+                health.scan(ln)
+            assert health.FAULTS == {"ga4 cohort paid": why}            # the banner names it
+        finally:
+            health.FAULTS.clear()
+
+
 # ── privacy + determinism ────────────────────────────────────────────────────────────────────────
 
 def test_the_log_line_counts_the_update_windows_that_crashed_and_only_then(site, capsys, monkeypatch):

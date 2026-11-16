@@ -36,9 +36,11 @@ Per app and run (at most MAX_CALLS calls; the property's quota floors, the run's
     ("rh"), then tries the block again (whole: blocks again). The refresh floor "rf": a refresh starts no later than
     it (days before the window first, in blocks), until one completes — set when the backfill completes (its last day
     + 1: a Stop before the first refresh never leaves a day between them unread), when the history check is made on a
-    store whose backfill is done (the window an older version last read, "chk" covers the days before it) and when
+    store whose backfill is done (the window an older version last read, "chk" covers the days before it), when
     another version refreshed the window since this one did ("rs" = [the "recent_at" this version wrote, its window's
-    first day]: a different "recent_at" → from that day, "fa" / "rn" dropped — its block may have hidden "(other)");
+    first day]: a different "recent_at" → from that day, "fa" / "rn" dropped — its block may have hidden "(other)")
+    and when the last refresh lies further back than the window reaches (the read switched off, the app failing or
+    deferred that long: from its read_today − FINAL_LAG + 1, the first day it read before that day was final);
   * once per CHK_V, the history an older version read (blocks only: what an in-list hid is missing, nothing said so)
     read again (_recheck: "chk" {"v", "next", "end", "al", "c" / "n" / "m" / "s"} → {"v", "done"}; a store with
     nothing read yet: done at once) — a block (whole: merged, the same final cells), else its days alone; at most
@@ -73,9 +75,12 @@ from . import ga4
 from . import ga4_audience as gaud
 from . import ga4_cube as gcu
 from . import ga4_uninstall as gu
-from .ga4_firstopen import App, Stop
+from .ga4_firstopen import App, Stop    # App: the GA4 client's class — a second instance of this module
+#                                         (fetch.ga4_paid.instance) sets its own: fetch.ga4_cohort_paid's holds every
+#                                         read to Google Ads users
 
 DIR = "ga4_cohort"
+NAME = "ga4 cohort"                 # the log line's label (a second instance's own)
 STORE_V = 1
 LAGS = 31                           # lag 0 … 30
 BLOCK = 30                          # activity days a call (in-list ≤ 60 install days, ≤ 1,800 rows)
@@ -391,6 +396,11 @@ def step_app(ga, store, today, hs, now, info=None):
                                                             # when a Stop cuts it and the property's day changes)
     if gu._hours_since(store.get("recent_at"), now) >= REFRESH_HOURS:
         w = max(hs, recent)                                 # the window's own first day
+        rt0 = _day(store.get("read_today"))                 # the last refresh's day: the days from its first one not
+        if rt0 is not None:                                 # final then on were read before they were final — a
+            g = max(hs, rt0 - timedelta(days=FINAL_LAG - 1))    # refresh more than the window after it (the read
+            if g < w:                                       # switched off, the app failing or deferred that long)
+                _floor(store, g)                            # reads from there (no day left unread or not final)
         rs = store.get("rs")
         if isinstance(rs, list) and len(rs) == 2 and rs[0] != store.get("recent_at"):
             if _day(rs[1]):                                 # another version refreshed the window since this one did
@@ -606,7 +616,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC):
 def log_line(status):
     """The build log's ONE line for this step — counts only."""
     c = (status or {}).get("counts") or {}
-    return ("ga4 cohort: apps %d, with GA4 %d, fetched %d, fresh %d, failed %d, deferred %d, waiting %d, blocks with "
+    return (NAME + ": apps %d, with GA4 %d, fetched %d, fresh %d, failed %d, deferred %d, waiting %d, blocks with "
             "(other) %d, days read alone %d, days with loss %d, flagged days %d, days with hidden (other) %d, "
             "days checked again %d, calls %d, tokens %d%s"
             % tuple([gaud._int(c.get(k)) for k in COUNTS]

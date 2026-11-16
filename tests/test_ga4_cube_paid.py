@@ -9,8 +9,9 @@ in its filter; every request GA4 itself got, whichever client sent it — and fo
 into data/ga4_cube_paid/ (the cube's formats, q's whole reads too, no users file), while the base cube on the same GA4
 reads everyone, unfiltered, into its own store; a property under Screens' quota floors deferred by the paid cube,
 never by the cube; an app GA4 refuses run after run "stuck" on its third failed run; the counts-only log line; the
-switches, the stage names and the workflow's repo variables (every GA4_CUBEP_* / GA4_NVRP_* knob the modules read).
-The build's wiring (after Screens, the light paid read first): tests/test_uninstall_build.py. SYNTHETIC values only."""
+switches, the stage names and the workflow's repo variables (every GA4_CUBEP_* / GA4_NVRP_* / GA4_COHORTP_* knob the
+paid modules read).
+The build's wiring (after Screens, the light paid reads first): tests/test_uninstall_build.py. SYNTHETIC values only."""
 import gzip
 import importlib
 import json
@@ -334,17 +335,20 @@ def test_the_switches_the_stage_names_and_the_workflow(monkeypatch):
     s = settings()                                                     # (a bad number never breaks the build)
     assert (s["ga4_cubep"], s["ga4_cubep_budget_sec"], s["ga4_nvrp"], s["ga4_nvrp_budget_sec"]) == (True, 90, True, 0)
     i = sc.STAGES.index("ga4_screens")
-    assert sc.STAGES[i + 1:i + 3] == ("ga4_nvr_paid", "ga4_cube_paid")    # after every other GA4 step
+    assert sc.STAGES[i + 1:i + 4] == ("ga4_nvr_paid", "ga4_cohort_paid", "ga4_cube_paid")    # after every other GA4
+    #                                                                                   step (the light reads first)
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(root, ".github", "workflows", "refresh.yml"), encoding="utf-8") as f:
         wf = yaml.safe_load(f)                                          # (the file still parses)
     env = [st for st in wf["jobs"]["refresh"]["steps"] if st.get("name") == "Build dashboard + send alerts"][0]["env"]
     assert env["GA4_CUBEP"] == "${{ vars.GA4_CUBEP || 'true' }}" and env["GA4_NVRP"] == "${{ vars.GA4_NVRP || 'true' }}"
+    assert env["GA4_COHORTP"] == "${{ vars.GA4_COHORTP || 'true' }}"
+    from admob_iq.fetch import ga4_cohort_paid as gop
     knobs = set()                                                       # every knob the paid modules read from the
-    for mod in (cp, gnp):                                               # environment reaches the runner (a repo
+    for mod in (cp, gnp, gop):                                          # environment reaches the runner (a repo
         with open(mod.__file__, encoding="utf-8") as f:                 # variable never set in vain)
-            knobs |= set(re.findall(r'"(GA4_(?:CUBEP|NVRP)_[A-Z_]+)"', f.read()))
+            knobs |= set(re.findall(r'"(GA4_(?:CUBEP|NVRP|COHORTP)_[A-Z_]+)"', f.read()))
     assert knobs == {"GA4_CUBEP_REPAIR_CALLS", "GA4_CUBEP_MAX_CALLS", "GA4_CUBEP_Q_CALLS", "GA4_CUBEP_Q_SEC",
-                     "GA4_CUBEP_RF_CALLS", "GA4_CUBEP_WORKERS", "GA4_NVRP_MAX_CALLS"}
-    for k in sorted(knobs | {"GA4_CUBEP_BUDGET_SEC", "GA4_NVRP_BUDGET_SEC"}):
+                     "GA4_CUBEP_RF_CALLS", "GA4_CUBEP_WORKERS", "GA4_NVRP_MAX_CALLS", "GA4_COHORTP_MAX_CALLS"}
+    for k in sorted(knobs | {"GA4_CUBEP_BUDGET_SEC", "GA4_NVRP_BUDGET_SEC", "GA4_COHORTP_BUDGET_SEC"}):
         assert env[k] == "${{ vars.%s }}" % k, k

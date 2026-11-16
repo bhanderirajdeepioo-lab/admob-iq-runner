@@ -20,7 +20,8 @@ up with its complement to the unfiltered one, and GA4's paid new users match the
   * instance(base, name, **over): a SECOND, independent instance of a fetch module's own source file — its own module
     globals (the store's folder, the client's class, the log line's label, its knobs), the same shared modules under
     it — so a paid store runs the fetch's whole code as it is: never a copy, never a refactor (fetch.ga4_cube_paid:
-    the cohort cube; fetch.ga4_nvr_paid: the first-session country read). The base module is never touched;
+    the cohort cube; fetch.ga4_nvr_paid: the first-session country read; fetch.ga4_cohort_paid: the D0 … D30 cells).
+    The base module is never touched;
   * streak(mod, data_dir, out, now): ga4_cecpm's stuck rule beside a paid store's run (the base fetches retry a failed
     app every RETRY_HOURS and never count it): an app failing FAIL_LINE runs in a row counts "stuck" — the build
     prints the health banner's line, so a paid read GA4 refuses run after run never fails silently.

@@ -203,12 +203,18 @@ def settings() -> dict:
         "ga4_cecpm_use": _env("GA4_CECPM_USE", "false").lower() == "true",
         # ⚖️ Breakeven's Google Ads | Organic split (owner, 16 Nov 2026): the cohort cube (fetch.ga4_cube_paid) and the
         # first-session country read (fetch.ga4_nvr_paid) of Google Ads users only — the cube's and ga4_nvr's own reads
-        # with GA4's first-user channel in-list, own stores, run after every other GA4 step. Off: nothing of them is
-        # read, written or printed; *_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
+        # with GA4's first-user channel in-list, own stores, run after every other GA4 step (the D0 … D30 read below
+        # between them). Off: nothing of them is read, written or printed; *_BUDGET_SEC = its own seconds per build
+        # (unset: 0 → the module's BUDGET_SEC)
         "ga4_cubep": _env("GA4_CUBEP", "false").lower() == "true",
         "ga4_cubep_budget_sec": _int_env(("GA4_CUBEP_BUDGET_SEC",), 0),
         "ga4_nvrp": _env("GA4_NVRP", "false").lower() == "true",
         "ga4_nvrp_budget_sec": _int_env(("GA4_NVRP_BUDGET_SEC",), 0),
+        # … and their D0 … D30 cells (fetch.ga4_cohort_paid: ga4_cohort's own 2-D read with the same in-list, its own
+        # store, run before the paid cube) — the source of their All row in roi_build's Google Ads users' pass. Off:
+        # nothing of it is read, written or printed, and that row stays the paid cube's country cells summed
+        "ga4_cohortp": _env("GA4_COHORTP", "false").lower() == "true",
+        "ga4_cohortp_budget_sec": _int_env(("GA4_COHORTP_BUDGET_SEC",), 0),
         # … the Breakeven tab built from them (BE_PAID, with GA4_CUBEP: roi_build's Google Ads users' pass into a build
         # scratch folder, then the tab's Google Ads | Organic views). Off: every file exactly as without it
         "be_paid": _env("BE_PAID", "false").lower() == "true",

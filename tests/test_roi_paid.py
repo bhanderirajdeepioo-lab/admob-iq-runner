@@ -13,8 +13,15 @@ its packs expands from it alone); "busy" (its walk not through: the progress) / 
 "fail" (a raising pass — or its Ads split past the all-users thru, or the all-users walk / 🌍 part it rides on: only
 it lost, never in silence — its files gone, its health line); the scratch folder never under out_dir / data_dir (made
 by start, removed by the next start / off / the exit); the counts-only ROI line; the switch, the stage name, the
-workflow variable and uninstall_build's wiring (BE_TAB off: no pass). SYNTHETIC values only (the runner repo is
-public)."""
+workflow variable and uninstall_build's wiring (BE_TAB off: no pass; GA4_COHORTP handed on). With GA4_COHORTP
+(start(cohortp=True)): the paid All rows from the Google Ads users' own D0 … D30 store (fetch.ga4_cohort_paid's
+folder, ga4_cohort's format) worked by hand — never the paid cube's cells summed —, from the day its backfill began
+(none it never read), with the packs, every other field of the paid file and every all-users output as without it;
+the file's "all" ("cohort" | "cube") and "newest" (that read's read_today, as every user's file has ga4_cohort's:
+be_build's final-cell gates on it; the paid cube's newest day — the Organic ages — in "cnew"); "busy" until that
+store's backfill is done and a refresh read the recent days (its
+progress), the paid cube's own busy / none first; be_build's pack gaps on the paid file it makes (pack_gaps on
+"cohort", pack_gaps_p on "cube"). SYNTHETIC values only (the runner repo is public)."""
 import copy
 import gzip
 import hashlib
@@ -26,6 +33,7 @@ import pytest
 
 from admob_iq import be_build as beb
 from admob_iq import roi_build as rb
+from admob_iq.fetch import ga4_cohort_paid as cop
 from admob_iq.fetch import ga4_cube_paid as cp
 from tests.test_roi_build import (CHS, CINST, CRATE, CTODAY, T, _cc_app_step, _cc_cube, _cc_run, _cc_users, _cc_world,
                                   _expand, _pack_rows, _stub_app)
@@ -48,11 +56,12 @@ def _tree(root):
     return out
 
 
-def _run(tmp_path, monkeypatch, name, cubep=True, paid=None, head=None, prep=None, **kw):
+def _run(tmp_path, monkeypatch, name, cubep=True, paid=None, head=None, prep=None, cohortp=False, **kw):
     """app_step + finish on the country world (**kw: _cc_world's) + the paid cube when `paid` is a dict (_cc_cube's
     arguments over PINST / PRATE; head: fields set on its head after; prep(data): a test's own change to the stores,
-    after) → the roi file's JSON bytes, every out_dir file, the pointer, the header rules, the ROI line, PAID, the
-    scratch files (name → JSON bytes), the folder, acc. Asserts the build wrote nothing under data_dir."""
+    after; cohortp: GA4_COHORTP — the pass's All row from the Google Ads users' D0 … D30 store) → the roi file's JSON
+    bytes, every out_dir file, the pointer, the header rules, the ROI line, PAID, the scratch files (name → JSON bytes),
+    the folder, acc. Asserts the build wrote nothing under data_dir."""
     data, P, pre, spend, acc0 = _cc_world(tmp_path / name, **kw)
     if paid is not None:
         _cc_cube(data, **dict({"cube_mod": cp.MOD, "inst": PINST, "rate": PRATE}, **paid))
@@ -65,7 +74,7 @@ def _run(tmp_path, monkeypatch, name, cubep=True, paid=None, head=None, prep=Non
     out = tmp_path / name / "out"
     out.mkdir()
     before = _tree(data)
-    acc = rb.start(cube=True, cmon=acc0.cmon, cubep=cubep)
+    acc = rb.start(cube=True, cmon=acc0.cmon, cubep=cubep, cohortp=cohortp)
     store, a = {"history_start": CHS.isoformat(), "stream_id": "222"}, {"app_id": "a~1", "app_name": "Alpha"}
     rb.app_step(acc, store, a, KEY, {"tz": "UTC"}, pre, {}, str(out), str(data), ids=["a~1"])
     assert not acc.fails and len(acc.apps) == 1
@@ -186,9 +195,10 @@ def test_paid_rows_come_from_the_paid_cube_only(tmp_path, monkeypatch):
     body, prow = _paid(r)
     allf = json.loads(r["body"])
     cd = allf["cd"]
-    assert set(body) == {"v", "key", "b", "rows", "packs", "thru", "fthru", "newest", "loss", "unk", "billed"}
+    assert set(body) == {"v", "key", "b", "rows", "packs", "thru", "fthru", "newest", "loss", "unk", "billed", "all"}
     assert (body["v"], body["key"], body["thru"], body["fthru"], body["newest"]) == (1, KEY, "2026-10-13", "2026-10-10",
                                                                                     "2026-10-13")
+    assert body["all"] == "cube"                                    # (GA4_COHORTP off: the paid cube's cells summed)
     assert body["loss"] == {"days": 0, "share": 0.0}
     # its own unknown-spend days: here the all-users file's (both cubes read through the same day)
     assert body["unk"] == cd["geo"]["unk"] == [["2026-08-01", "2026-08-31"], ["2026-09-15", "2026-09-15"],
@@ -356,6 +366,201 @@ def test_paid_pass_time_never_counts_in_the_forecast_budget(tmp_path, monkeypatc
     rb.app_step(acc, store, a, KEY, {"tz": "UTC"}, pre, {}, str(out), str(data), ids=["a~1"])
     assert not acc.fails and acc.pdn["ok"] == 1 and fc.t0 == pytest.approx(57.0)
     rb.start()
+
+
+# ── GA4_COHORTP: the paid All row from the Google Ads users' own D0 … D30 read ─────────────────────────────────────
+COR, COU = 50000, 40                    # their D0 … D30 store (made up): micros at age 0 (+ 100 an age), users on day 0
+#                                         (2 on each later day) — never what the paid cube's cells sum to (PRATE, PINST)
+LO, LF, NOBODY = date(2026, 9, 20), date(2026, 8, 10), date(2026, 9, 3)
+
+
+def _co_store(data, done=True, rt=CTODAY, stream="222", skip=(), lo=(), lf=(), refreshed=True, frm=CHS):
+    """fetch.ga4_cohort_paid's store of app a~1 (its own folder, ga4_cohort's format): every install day CHS … rt but
+    `skip` (the read named no Google Ads user of it) earns COR + 100 × age micros at each age lived, COU users on day 0
+    and 2 later; lo / lf: activity days whose read kept "(other)" / GA4 flagged; done: its backfill through;
+    refreshed: a refresh read the recent days (its read_today); frm: the day its backfill began at (the activity days
+    before it never read: no cell)."""
+    x, X = {}, CHS
+    while X <= rt:
+        live = [frm <= X + timedelta(days=L) <= rt for L in range(31)]
+        if X not in skip and any(live):
+            x[X.isoformat()] = {"r": [COR + 100 * L if live[L] else 0 for L in range(31)],
+                                "u": [(COU if L == 0 else 2) if live[L] else 0 for L in range(31)]}
+        X += timedelta(days=1)
+    body = {"v": 1, "app_id": "a~1", "package": "p.q", "property_id": "111", "stream_id": stream, "time_zone": "UTC",
+            "hs": CHS.isoformat(), "backfill": dict({"from": frm.isoformat(), "next": "2026-09-09"},
+                                                    **({"done": True} if done else {})), "x": x}
+    if refreshed:
+        body["read_today"] = rt.isoformat()
+    if lo:
+        body["lo"] = {D.isoformat(): 1234 for D in lo}
+    if lf:
+        body["lf"] = {D.isoformat(): 1 for D in lf}
+    cop.MOD.save_store(str(data), "a~1", body, CTODAY)
+
+
+def _d_of(rt=CTODAY, X=date(2026, 8, 5)):
+    """The All row's d of install day X by hand: the store's cells × the app's weekly k (1.2), cumulative."""
+    cum, d = 0.0, []
+    for L in range(min(30, (rt - X).days) + 1):
+        cum += (COR + 100 * L) / 1e6 * 1.2
+        d.append(round(cum, 4))
+    return d
+
+
+def test_paid_all_row_comes_from_their_own_d0_d30_read_never_the_cube_sum(tmp_path, monkeypatch):
+    """GA4_COHORTP on and their D0 … D30 store done: the paid All rows are made from it exactly as every user's are
+    from ga4_cohort — its cells × the app's weekly k, its users (n = day 0's), its own finality (read_today − 3), every
+    install day hs … read_today (one it named no Google Ads user of: a real 0), q bit 1 from its own "lo" / "lf", the
+    paid cube's 30-day columns on top of its D30 (t at day 60 from them once final) — never the paid cube's country
+    cells summed; the packs, every other field of the paid file and every all-users output byte for byte as with the
+    switch off; the switch off with the store on disk: never read (the file of a build without the store)."""
+    prep = lambda d_: _co_store(d_, skip={NOBODY}, lo={LO}, lf={LF})    # noqa: E731
+    co = _run(tmp_path, monkeypatch, "co", paid={}, cohortp=True, prep=prep)
+    cube = _run(tmp_path, monkeypatch, "cube", paid={}, prep=prep)      # the switch off, the store on disk
+    plain = _run(tmp_path, monkeypatch, "plain", paid={})               # … and no store at all
+    pf = "roi_%s_p.json.gz" % KEY
+    assert co["paid"] == cube["paid"] == {KEY: {"st": "ok", "file": pf}} and co["acc"].pdn["ok"] == 1
+    assert cube["scratch"] == plain["scratch"]                          # (the switch off: the store never read)
+    bc, pc = _paid(co)
+    bk, pk = _paid(cube)
+    assert (bc["all"], bk["all"]) == ("cohort", "cube") and pc == pk
+    assert {n: v for n, v in co["scratch"].items() if n != pf} == {n: v for n, v in cube["scratch"].items() if n != pf}
+    assert {k: v for k, v in bc.items() if k not in ("rows", "all", "cnew")} == \
+        {k: v for k, v in bk.items() if k not in ("rows", "all")}       # (packs, edges, newest, loss, unk, billed)
+    assert bc["cnew"] == bk["newest"] and "cnew" not in bk              # (the paid cube's newest day: both reads' here)
+    for r in (co, cube):                                                # every all-users output as without the pass
+        assert r["body"] == plain["body"] and r["out"] == plain["out"] and r["dash"] == plain["dash"]
+    tail = "ads split unread 0"
+    assert co["line"] == plain["line"] and co["line"].endswith(tail + ", paid ok 1 busy 0 none 0 fail 0")
+    rows, krow = {x[0]: x for x in bc["rows"]}, {x[0]: x for x in bk["rows"]}
+    assert [x[0] for x in bc["rows"]] == DAYS                           # every install day hs … read_today
+    d = _d_of()
+    x, k = rows["2026-08-05"], krow["2026-08-05"]
+    assert (x[1], x[4], x[5], x[6]) == (COU, d, 31, [COU] + [2] * 30)   # n, d (final), u: the store's own
+    assert (k[1], k[6]) == (sum(PINST.values()), None) and k[4] != d    # (the cube's sum: other numbers)
+    assert x[7][J30] == d[30] and x[7][:J30 + 1] == [d[a] for a in T[:J30 + 1]]
+    b1 = 30 * sum(PRATE.values()) / 1e6 * 1.2                           # D60: the paid cube's bucket 1 on ITS D30
+    assert x[14] == [pytest.approx(d[30] + b1, abs=1e-4)] and x[15] == 1 and x[7][T.index(60)] == x[14][0]
+    assert (x[8], x[9]) == (x[14][0], "2026-10-04")                     # so far: the furthest of its own
+    assert x[2:4] == k[2:4] and x[13] == k[13] and x[3] == 10.0         # the app's own spend
+    assert x[10] is None and x[11] in ("Worse", "Watch", "Normal", "Better", "Too early")   # judged (≥ 30 installs)
+    assert x[12] == 1 and rows["2026-09-01"][12] == 1                   # its "lf" (Aug 10) / "lo" (Sep 20) in its d
+    assert rows["2026-08-15"][12] == 0 and rows["2026-09-25"][12] == 0
+    z = rows[NOBODY.isoformat()]                                        # a day it named no Google Ads user of: a
+    assert (z[1], z[4], z[5], z[6]) == (0, [0.0] * 31, 31, [0] * 31)    # real 0, never left out
+    y = rows["2026-10-12"]                                              # read through Oct 13, none final (Oct 10)
+    assert (y[4], y[5], y[7]) == (d[:2], 0, [None] * len(T))
+    assert rows["2026-09-20"][5] == 21                                  # final through read_today − 3 (Oct 10)
+
+
+def test_paid_all_rows_start_at_the_day_their_d0_d30_backfill_began(tmp_path, monkeypatch):
+    """Their D0 … D30 read's backfill began after the history start (ga4_cohort's backfill runs once, from the start
+    it saw — the history start moved back since: the days before it never read): the paid All rows start at that day
+    ("from"), every activity day of each read — an earlier install day has no row, never a $0 / ROAS-0 day nobody
+    read nor one whose unread early ages count as 0 revenue."""
+    frm = date(2026, 9, 10)
+    r = _run(tmp_path, monkeypatch, "from", paid={}, cohortp=True, prep=lambda d_: _co_store(d_, frm=frm))
+    assert r["paid"] == {KEY: {"st": "ok", "file": "roi_%s_p.json.gz" % KEY}}
+    body, _ = _paid(r)
+    assert body["all"] == "cohort" and [x[0] for x in body["rows"]] == [d for d in DAYS if d >= frm.isoformat()]
+    x = body["rows"][0]
+    assert (x[1], x[4], x[5], x[6]) == (COU, _d_of(X=frm), 31, [COU] + [2] * 30)   # its own cells from day 0, final
+
+
+def test_paid_file_newest_day_is_never_before_its_last_all_row(tmp_path, monkeypatch):
+    """The paid file's "newest", its All rows from their D0 … D30 read: THAT read's read_today — as every user's file
+    has ga4_cohort's (its rows final through it − FINAL_LAG, none past it) —, the D0 … D30 read ahead of the paid cube
+    or behind it; the paid cube's newest day (its packs': the Organic pass's ages) in "cnew"; the edges ("thru" /
+    "fthru": the packs') never move. be_build on the file: no D0 … D30 cell of an All row past its final edge (df)
+    passes asof's gate (X + a + LAG ≤ newest), the anchor's / _holes' limit (newest − CLAG) stays before the rows'
+    newest final cell (3 days old: often still empty), and the Organic ages count from the older of the two cubes'
+    newest days — never from the D0 … D30 read's."""
+    fn, pf = "roi_%s.json.gz" % KEY, "roi_%s_p.json.gz" % KEY
+
+    def be_side(r, body, rt):                                           # (before the next run's start: its folder)
+        newest, app = beb.load(str(r["od"]), str(r["data"]), KEY, fn, True, (r["dir"], pf))[:2]
+        nw = rt.toordinal()
+        assert newest == rt.isoformat()
+        fe = max(x.X + len(x.dd) - 1 for x in app if x.dd)                 # the rows' newest final cell (read_today
+        assert fe == nw - rb.gco.FINAL_LAG and nw - beb.CLAG < fe           # − 3): never the anchor's / _holes'
+        n = 0
+        for x in app:
+            for j, a in enumerate(beb.GRID):
+                if a <= 30 and a in beb.ASOF and x.X + a + beb.LAG <= nw and x.cum[j] is not None:
+                    assert x.fin[j] is not None, (x.day, a)                 # asof's gate: a final cell, never one
+                    n += 1                                                  # past df
+        assert n > 300
+        oi = beb._OIn.of(json.loads(r["body"])["cd"], body)                # every user's cube: through Oct 13
+        assert oi.nw == min(date.fromisoformat(body["cnew"]), CTODAY).toordinal()
+    rt = CTODAY + timedelta(days=1)
+    ahead = _run(tmp_path, monkeypatch, "ahead", paid={"holes": (CTODAY,)}, cohortp=True,     # (the paid cube read
+                 prep=lambda d_: _co_store(d_, rt=rt))                                          # through Oct 12)
+    ba, _ = _paid(ahead)
+    assert (ba["newest"], ba["cnew"], ba["rows"][-1][0], ba["thru"], ba["fthru"]) == \
+        ("2026-10-14", "2026-10-12", "2026-10-14", "2026-10-12", "2026-10-10")
+    assert {x[0]: x for x in ba["rows"]}["2026-08-05"][4] == _d_of(rt)
+    be_side(ahead, ba, rt)
+    rt = CTODAY - timedelta(days=1)
+    behind = _run(tmp_path, monkeypatch, "behind", paid={}, cohortp=True, prep=lambda d_: _co_store(d_, rt=rt))
+    bb, _ = _paid(behind)
+    assert (bb["newest"], bb["cnew"], bb["rows"][-1][0], bb["thru"], bb["fthru"]) == \
+        ("2026-10-12", "2026-10-13", "2026-10-12", "2026-10-13", "2026-10-10")
+    assert {x[0]: x for x in bb["rows"]}["2026-10-07"][5] == 3          # (final through Oct 9 there)
+    be_side(behind, bb, rt)
+
+
+def test_paid_pass_busy_until_their_d0_d30_backfill_is_done(tmp_path, monkeypatch, capsys):
+    """GA4_COHORTP on: no store of the stream yet (none, or another stream's) → "busy" with no progress; its backfill
+    not through, or through with no refresh yet → "busy" with its "from" / "next"; nothing written, every all-users
+    output as with the switch off, counted busy, no health line. The paid cube's own walk not through: ITS progress
+    first; no paid cube of the stream: "none" — whatever the D0 … D30 read."""
+    off = _run(tmp_path, monkeypatch, "off", cubep=False)
+    prog = {"st": "busy", "from": "2026-08-01", "next": "2026-09-09"}
+    capsys.readouterr()
+    for name, prep, want in (("nostore", None, {"st": "busy"}),
+                             ("stream", lambda d_: _co_store(d_, stream="999"), {"st": "busy"}),
+                             ("backfill", lambda d_: _co_store(d_, done=False), prog),
+                             ("norefresh", lambda d_: _co_store(d_, refreshed=False), prog)):
+        r = _run(tmp_path, monkeypatch, name, paid={}, cohortp=True, prep=prep)
+        assert r["paid"] == {KEY: want} and r["scratch"] == {}, name
+        assert r["line"].endswith(", paid ok 0 busy 1 none 0 fail 0") and r["acc"].pdn["busy"] == 1, name
+        assert r["body"] == off["body"] and r["out"] == off["out"] and r["dash"] == off["dash"], name
+    assert "roi paid" not in capsys.readouterr().err
+    walk = _run(tmp_path, monkeypatch, "walk", paid={"done": False}, cohortp=True,
+                head={"from": "2026-08-01", "walk_at": "2026-10-13T05:00:00Z"},
+                prep=lambda d_: _co_store(d_, done=False))
+    assert walk["paid"] == {KEY: {"st": "busy", "from": "2026-08-01", "next": "2026-10-11", "at": "2026-10-13"}}
+    none = _run(tmp_path, monkeypatch, "none", paid={"stream": "999"}, cohortp=True, prep=_co_store)
+    assert none["paid"] == {KEY: {"st": "none"}} and none["scratch"] == {}
+
+
+def test_be_build_holds_their_own_all_rows_against_their_packs(tmp_path, monkeypatch):
+    """be_build on roi_build's own paid file: "all" "cohort" → every user's pack-gap rule on it (pack_gaps: its All rows
+    — an independent read — against its packs, on its own newest / fthru), never pack_gaps_p; "cube" → pack_gaps_p,
+    every user's All rows the reference (as before GA4_COHORTP)."""
+    seen = []
+    real_g, real_p = beb.pack_gaps, beb.pack_gaps_p
+    monkeypatch.setattr(beb, "pack_gaps", lambda *a: seen.append(("all", a)) or real_g(*a))
+    monkeypatch.setattr(beb, "pack_gaps_p", lambda *a: seen.append(("ref", a)) or real_p(*a))
+    for name, co in (("co", True), ("cube", False)):
+        r = _run(tmp_path, monkeypatch, name, paid={}, cohortp=co, prep=_co_store)
+        body, _ = _paid(r)
+        fn, pf = "roi_%s.json.gz" % KEY, "roi_%s_p.json.gz" % KEY
+        seen.clear()
+        got = beb.load(str(r["od"]), str(r["data"]), KEY, fn, True, (r["dir"], pf))
+        (kind, args), = seen
+        S_own, S_every = {}, {}
+        for x in body["rows"]:
+            beb._fday(S_own, x)
+        for x in json.loads(r["body"])["rows"]:
+            beb._fday(S_every, x)
+        assert sum(S_own.values()) > 0 and got[0] == body["newest"] and got[4] == set()
+        if co:
+            assert kind == "all" and args[0] == S_own and args[2:] == (date(2026, 10, 13).toordinal(),
+                                                                       date(2026, 10, 10).toordinal())
+        else:
+            assert kind == "ref" and args[0] == S_every != S_own
 
 
 # ── busy / none / fail: only the paid pass ──────────────────────────────────────────────────────────────────────────
@@ -566,14 +771,17 @@ def test_switch_stage_workflow_and_the_uninstall_wiring(tmp_path, monkeypatch):
     # and the tab is: be_build, the pass's only reader, runs only with BE_TAB on (off: no pass at all, nothing wasted)
     monkeypatch.setattr(gu, "refresh_all", lambda *a, **k: copy.deepcopy(tvb.STATUS))
     monkeypatch.setattr(cp, "refresh_all", lambda *a, **k: {"counts": {}})         # (no GA4: no network in tests)
+    monkeypatch.setattr(cop, "refresh_all", lambda *a, **k: {"counts": {}})
     got, real = [], rb.start
 
     def start(**k):
-        got.append(k.get("cubep"))
+        got.append((k.get("cubep"), k.get("cohortp")))
         return real(**k)
     monkeypatch.setattr(rb, "start", start)
     for i, kw in enumerate(({"ga4_cubep": True, "be_paid": False}, {"ga4_cubep": True, "be_paid": True},
-                            {"ga4_cubep": True, "be_paid": True, "be_tab": False})):
+                            {"ga4_cubep": True, "be_paid": True, "be_tab": False},
+                            {"ga4_cubep": True, "be_paid": True, "ga4_cohortp": True})):
         tvb.vbuild(str(tmp_path / str(i) / "data"), str(tmp_path / str(i) / "site"), s=tvb.ga4_settings(**kw))
-    assert got == [False, True, False]
-    rb.start()                                                                       # (its scratch folder let go)
+    assert got == [(False, False), (True, False), (False, False), (True, True)]     # (GA4_COHORTP: the pass's All
+    rb.start()                                                                       # row from its store) — its
+    #                                                                                  scratch folder let go

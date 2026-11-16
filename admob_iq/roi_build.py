@@ -172,23 +172,38 @@ completeness (thru / fthru / full / fin / q: a day it has not folded is not fina
 cube has). Country rows: _cc_rows — the 🌍 rows' own code — on the ALL-USERS scale (each country's k_c by month, else
 the app's k: a property of the measurement — a k of the paid cells would undo the split) and the same Google Ads cost
 by country × day (+ the days after the all-users cube's thru the spend cache knows — a raise of that split costs only
-this pass —; later ones unknown). The All row: the paid cube's country cells D0 … D30 summed over every country ("--"
-too) + its 30-day columns (the app's weekly k, as the All row's), the app's own spend, NO install-day file (xs empty:
-that file is every user's, and _cohorts takes n, the checkpoints and "so far" from it), every install day hs … thru
-(a day read with no Google Ads user is a real 0), its t past D30 and ≈ bits as a country row's. Files in a BUILD
-SCRATCH folder only (PAID_DIR, made by start and removed by the next start / off / the process's exit: never the site,
-never data/ — both committed every run, and nothing on the page reads them; be_build does, in this process; a folder
-a killed run left behind goes once stale): roi_<key>_p.json.gz = {"v", "key", "b" (its packs' build), "rows" (the paid
-All rows, as "rows"), "packs": [[file, sha1-12]], "thru", "fthru", "newest" (the paid cube's newest day), "loss":
-{"days", "share"} (its measured "(other)": days, the largest share of a day), "unk": [[first, last]] (inclusive runs
-of ISO days: THIS pass's install days hs … thru whose Google Ads cost by country is unknown — the all-users file's,
-the days after its thru the split could not settle, the days after the spend cache's last one), "billed" (true / false:
-the split is in the spend cache's currency, spend as billed known)} and its packs roi_<key>_p<NN>.json.gz (the country
+this pass —; later ones unknown). The All row — GA4_COHORTP on (start(cohortp=True)): THEIR OWN D0 … D30 read
+(fetch.ga4_cohort_paid: ga4_cohort's 2-D read, date × firstSessionDate, with the same in-list — GA4's own response
+metadata says it answers that shape whole where any read holding install day × country together, the paid cube's
+included, comes from a sample on a busy day: owner, "pakka hi hota he aur data hota hi he") made into rows exactly as
+every user's All row is made from ga4_cohort (_paid_all: _cohorts with that store, its read_today and finality rule,
+the paid cube's 30-day columns on top of its D30, q bit 1 from its own "lo" / "lf"), every install day hs (or the
+later day its backfill began at: none it never read) … its read_today; until its backfill is done and a refresh read
+the recent days the pass is "busy" with that store's
+progress. GA4_COHORTP off: the paid cube's country cells D0 … D30 summed over every country ("--" too) + its 30-day
+columns, every install day hs … thru, its t past D30 and ≈ bits as a country row's (as before the switch). Either way
+on the app's weekly k (as the All row's), the app's own spend, NO install-day file (xs empty: that file is every
+user's, and _cohorts takes n, the checkpoints and "so far" from it; a day read with no Google Ads user is a real 0).
+Files in a BUILD SCRATCH folder only (PAID_DIR, made by start and removed by the next start / off / the process's
+exit: never the site, never data/ — both committed every run, and nothing on the page reads them; be_build does, in
+this process; a folder a killed run left behind goes once stale): roi_<key>_p.json.gz = {"v", "key", "b" (its packs'
+build), "rows" (the paid All rows, as "rows"), "packs": [[file, sha1-12]], "thru", "fthru" (its packs' edges: the
+paid cube's), "newest" (the newest day of the read its All rows come from: the paid cube's — with "all" "cohort" the
+D0 … D30 read's read_today, as every user's file has ga4_cohort's: the rows final through it − FINAL_LAG, none past
+it; "cnew" then: the paid cube's newest day, its packs'), "loss": {"days", "share"} (its measured "(other)": days, the
+largest share of a day), "unk": [[first, last]]
+(inclusive runs of ISO days: THIS pass's install days hs … thru whose Google Ads cost by country is unknown — the
+all-users file's, the days after its thru the split could not settle, the days after the spend cache's last one),
+"billed" (true / false: the split is in the spend cache's currency, spend as billed known), "all" ("cohort": the All
+rows from their own D0 … D30 read — an independent read of the packs' cube, be_build's pack gaps rule of every user's
+file applies; "cube": the packs' cells summed)} and its packs roi_<key>_p<NN>.json.gz (the country
 packs' format {"v", "b", "key", "ix", "c": {cc: rows}}, filled the same way). A short [X] row of a paid pack (the
 format contract: be_build reads them) is _zrow(X, the paid file's "thru", "fthru", X inside ITS "unk", cc, ITS
 "billed") — spend null on a day inside "unk" (and always on "--"), else 0 — never by the all-users file's "geo" "unk"
 (that one ends at the all-users thru). PAID[key] = {"st": "ok", "file"} | {"st": "busy", "from", "next", "at"} (the
-paid walk not at the final edge yet) | {"st": "none"} (no paid cube of the stream, or nothing in it) | {"st": "fail"}
+paid walk not at the final edge yet; GA4_COHORTP on: also their D0 … D30 read's backfill not done or no refresh yet —
+its "from" / "next", none with no store of the stream) | {"st": "none"} (no paid cube of the stream, or nothing in
+it) | {"st": "fail"}
 (the pass raised — or, the switch on, the all-users walk or the 🌍 part it rides on raised, so it could not run: its
 files removed, its health line "roi paid skipped: <Type>", counted — only the paid pass is lost, never in silence);
 no entry: it did not run for a reason of its own (the switch or the cube off, the all-users walk not through, no
@@ -351,17 +366,20 @@ class Acc:
         self.dvn = {"apps": 0, "rows": 0, "failed": 0, "months": 0, "cached": 0, "kb": 0, "toobig": 0, "changed": 0}
         self.dvf = set()                            # 📱 … the Devices files written / kept this build (kept by _clean)
         self.cubep = False                          # ⚖️ the Google Ads users' pass (GA4_CUBEP, BE_PAID, BE_TAB)
+        self.cohortp = False                        # … its All row from their own D0 … D30 read (GA4_COHORTP)
         self.pdn = {"ok": 0, "busy": 0, "none": 0, "fail": 0}   # … its apps by PAID status (the ROI line)
 
 
-def start(cal=None, adsrc=None, cube=False, cmon=None, cubep=False):
+def start(cal=None, adsrc=None, cube=False, cmon=None, cubep=False, cohortp=False):
     """cal: the forecast's eCPM calendar (fc_calendar.seasons, from build_static), handed to the forecast's run;
     adsrc: the ⚙️ ad setting changes' reports (engine.adcfg.Source, from build_static); cube: GA4_CUBE (off: the cube
     is never read, the file as without it); cmon: AdMob by country × month (the country filter's AdMob ÷ GA4 match);
     cubep: ⚖️ the Google Ads users' pass (uninstall_build: GA4_CUBEP and BE_PAID, with BE_TAB on — be_build, its only
     reader, runs only then) — PAID_DIR made here (a folder that cannot be made: every app's pass "fail", counted — never
     the ROI section; the stale ones a killed run left behind removed first: _paid_sweep). PAID starts empty on every
-    build, the last build's folder removed."""
+    build, the last build's folder removed. cohortp: GA4_COHORTP (uninstall_build) — the pass's All row from the Google
+    Ads users' own D0 … D30 read (fetch.ga4_cohort_paid; "busy" until its backfill is done); off: the paid cube's
+    country cells summed, as before it."""
     global PAID, PAID_DIR, _PAID_EXIT
     acc = Acc()
     acc.cal = cal
@@ -369,6 +387,7 @@ def start(cal=None, adsrc=None, cube=False, cmon=None, cubep=False):
     acc.cube = bool(cube)
     acc.cmon = cmon if isinstance(cmon, dict) else None
     acc.cubep = bool(cubep)
+    acc.cohortp = bool(cohortp)
     _paid_drop()
     PAID = {}
     if acc.cubep:
@@ -2035,16 +2054,22 @@ def _cc_set(cv, cost, thru):
     return ccs
 
 
-def _post(r, late, kbits=None):
-    """One _cohorts row of a pass's own cube cells (the 🌍 country rows, ⚖️ the paid All row), after its spend / users:
-    t at day 60 / 90 / 180 from its 30-day columns once final there, and its ≈ bits — only on a row with something of
-    its own to be off (never a short one): late's bits of every activity day the row uses (2: a day the cube measured
-    loss on, 4: one GA4 flagged — the cells are the cube's own) | kbits(r, nd) (a country row's k_c bits; nd: how many
-    of its D0 … D30 cells it has)."""
+def _tm(r):
+    """A row with no install-day read past day 30 (xs empty: the 🌍 country rows, ⚖️ the paid All row): t at day 60 /
+    90 / 180 from its 30-day columns once final there."""
     if r.get("m"):
         for a_ in (60, 90, 180):
             if a_ // LATE_STEP - 2 < r["mf"]:
                 r["t"][T.index(a_)] = r["m"][a_ // LATE_STEP - 2]
+
+
+def _post(r, late, kbits=None):
+    """One _cohorts row of a pass's own cube cells (the 🌍 country rows, ⚖️ the paid All row), after its spend / users:
+    t at day 60 / 90 / 180 from its 30-day columns once final there (_tm), and its ≈ bits — only on a row with
+    something of its own to be off (never a short one): late's bits of every activity day the row uses (2: a day the
+    cube measured loss on, 4: one GA4 flagged — the cells are the cube's own) | kbits(r, nd) (a country row's k_c bits;
+    nd: how many of its D0 … D30 cells it has)."""
+    _tm(r)
     bits = 0
     if r["n"] or (r["s"] or 0) > 0 or (r["sp"] or 0) > 0 or r["na"]:
         X, nd = r["X"], len(r["d"] or [])
@@ -2415,7 +2440,43 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
 
 
 # ── ⚖️ the Google Ads users' pass (fetch.ga4_cube_paid: the paid cube) ───────────────────────────────────────────────
-def _paid_pass(ctx, P, spend, fxf, data_dir, aid, sid, key):
+def _paid_all(cop, P, spend, fxf, late, walk):
+    """⚖️ The Google Ads users' All rows from THEIR OWN D0 … D30 read (cop: fetch.ga4_cohort_paid's store of the app's
+    stream, its backfill done — ga4_cohort's 2-D read, date × firstSessionDate, with the paid filter: the shape GA4
+    answers whole where any read holding install day × country together, the paid cube's, comes from a sample on a
+    busy day) — exactly as app_step makes every user's All row from ga4_cohort: _cohorts on the app's weekly k with
+    that store, its read_today and its own finality rule (read_today − FINAL_LAG: edge None), the 30-day columns from
+    the paid cube (late: its "B", its full / fin / q; walk: the pass's memo, the country rows' too) on top of its D30 —
+    but xs EMPTY (the install-day file is every user's: _cohorts would take n, the checkpoints and "so far" from it) and
+    every install day from hs — or the later day its backfill began at ("from": ga4_cohort's backfill runs once, from
+    the history start it saw, and never reads before it again; a history start moved back after it leaves the days
+    before unread) — … read_today: every activity day of those was read (one the read named no Google Ads user of is
+    a real 0, never left out); an earlier one has no row (as app_step's All row has no D0 … D30 cell of a day
+    ga4_cohort never read). q bit 1: a day of its d whose read kept revenue in
+    "(other)" or GA4 flagged with nothing to measure it by (the store's own "lo" / "lf", as app_step's — the tie to
+    the install-day read is every user's: nothing of theirs to tie to); the columns' bits as _cohorts gives them (only
+    what the row still takes from the paid cube's cells); t at 60 / 90 / 180 from the columns once final (_tm: no
+    install-day read past day 30). → the rows (_cohorts' dicts), statused."""
+    hs, rt = P["hs"], _d(cop["read_today"])
+    fr = (cop.get("backfill") or {}).get("from")
+    D = max(hs, _d(fr)) if fr else hs               # (the first install day all of whose days the read covers)
+    x = {k: v for k, v in (cop.get("x") or {}).items() if k >= _iso(D)}
+    while D <= rt:
+        x.setdefault(_iso(D), {"r": [], "u": [0]})
+        D += ONE
+    got = _cohorts({"pre": P["pre"], "sc": P["sc"], "xs": {}, "S": P["S"], "hs": hs}, spend, fxf,
+                   {"read_today": _iso(rt), "x": x}, rt,
+                   {"B": late["B"], "full": late["full"], "fin": late["fin"], "q": late["q"], "walk": walk})
+    olo = {str(k) for f in ("lo", "lf") for k in (cop.get(f) or {})}
+    for r in got:
+        if r["d"]:
+            r["q"] = any(_iso(r["X"] + timedelta(days=L)) in olo for L in range(len(r["d"])))
+        _tm(r)
+    _statuses(got)
+    return got
+
+
+def _paid_pass(ctx, P, spend, fxf, data_dir, aid, sid, key, cohortp=False):
     """⚖️ One app's rows of Google Ads users only (see the module doc), after its 🌍 country part ran (ctx: what that
     part measured, _cty) → its PAID status ("ok": the files written to PAID_DIR | "busy" | "none"). Raises on a failure
     (the caller: "fail", counted) — also ctx "err", the raise of the Ads split past the all-users thru (_cty kept it):
@@ -2423,7 +2484,10 @@ def _paid_pass(ctx, P, spend, fxf, data_dir, aid, sid, key):
     ever). The file's "unk" / "billed": the days of its rows whose cost by country is unknown and the split's currency
     — what a short [X] row of its packs expands with (_zrow; the module doc's format contract). One app at a time: the
     paid cube's cells are let go country by country, the rows once in their files — nothing of it is kept for the next
-    app but its PAID entry."""
+    app but its PAID entry. cohortp (GA4_COHORTP, start): the All rows from the Google Ads users' own D0 … D30 read
+    (fetch.ga4_cohort_paid's store of the stream: _paid_all) — "busy" with that store's progress until its backfill is
+    done and a refresh read the recent days (no store of the stream yet: "busy", no progress); off: the paid cube's
+    country cells summed, as before it. The file's "all": which of the two made its All rows ("cohort" | "cube")."""
     from .fetch import ga4_cube_paid as gcp
     if not PAID_DIR:
         raise RuntimeError("no scratch folder")
@@ -2439,6 +2503,16 @@ def _paid_pass(ctx, P, spend, fxf, data_dir, aid, sid, key):
             and not any(cvp.C.values()):
         PAID[key] = {"st": "none"}                  # no paid cube of this stream, or nothing in it (no country named)
         return "none"
+    cop = None
+    if cohortp:                                     # their All rows from their own D0 … D30 read (GA4_COHORTP): only
+        from .fetch import ga4_cohort_paid as gcop  # once its backfill is done and a refresh read the recent days
+        cop = gcop.MOD.load_store(data_dir, aid)
+        if cop is not None and str(cop.get("stream_id") or "") != str(sid or ""):
+            cop = None                              # (another stream's: read again from the start, as ga4_cohort's)
+        bf = (cop or {}).get("backfill") or {}
+        if not (bf.get("done") and (cop or {}).get("read_today")):
+            PAID[key] = dict({f: bf[f] for f in ("from", "next") if bf.get(f)}, st="busy")   # its progress
+            return "busy"
     if ctx.get("err") is not None:                  # the Ads split past the all-users thru raised (_cty): its own type
         raise ctx.pop("err")                        # (popped: no frame of this pass held by it once it is caught)
     hs, info = P["hs"], late["info"]
@@ -2447,39 +2521,45 @@ def _paid_pass(ctx, P, spend, fxf, data_dir, aid, sid, key):
     unk = ctx["unk"] | {X for X in days if X > ctx["span"]} if days[-1] > ctx["span"] else ctx["unk"]
     px = _px(hs, edges, P, ctx["kc"], _appk(P, months), ctx["unp"], ctx["cost"], unk, ctx["billed"], ctx["fxg"],
              spend)
-    # the All row: the paid cube's country cells D0 … D30 summed over every country ("--" too) + its 30-day columns
-    # (late "B": the app's weekly k, as the All row's), xs EMPTY — the install-day file is every user's: _cohorts
-    # would take n, the checkpoints and "so far" from it — and every install day hs … thru (one the paid cube read
-    # with no Google Ads user is a real 0, never left out)
-    R, N = {}, {}
-    for xs in cvp.E.values():
-        for X, arr in xs.items():
-            cur = R.get(X)
-            if cur is None:
-                R[X] = list(arr)
-                continue
-            if len(cur) < len(arr):
-                cur.extend([0] * (len(arr) - len(cur)))
-            for i, v in enumerate(arr):
-                if v:
-                    cur[i] += v
-    for xs in cvp.N.values():
-        for X, n in xs.items():
-            N[X] = N.get(X, 0) + n
-    x = {}
-    for D in days:
-        Xi = _iso(D)
-        x[Xi] = {"r": R.pop(Xi, None) or [], "u": [N.get(Xi, 0)]}
-    R = N = None
-    Pp = {"pre": P["pre"], "sc": P["sc"], "xs": {}, "S": P["S"], "hs": hs}
-    got = _cohorts(Pp, spend, fxf, {"read_today": _iso(thru), "x": x}, thru,
-                   {"B": late["B"], "full": late["full"], "fin": late["fin"], "q": late["q"], "walk": px["walk"]},
-                   edge=fthru)
-    x = late["B"] = None
-    for r in got:                                   # as a country row: no users read, no install-day read to tie to
-        r["u"], r["q"] = None, False
-        _post(r, late)
-    _statuses(got)
+    rnew = None                                     # (the paid D0 … D30 read's last day, when it made the All rows)
+    if cop is not None:                             # the All rows: their own D0 … D30 read, as every user's (_paid_all)
+        rnew = _iso(_d(cop["read_today"]))
+        got = _paid_all(cop, P, spend, fxf, late, px["walk"])
+        cop = late["B"] = None
+    else:
+        # the All row: the paid cube's country cells D0 … D30 summed over every country ("--" too) + its 30-day
+        # columns (late "B": the app's weekly k, as the All row's), xs EMPTY — the install-day file is every user's:
+        # _cohorts would take n, the checkpoints and "so far" from it — and every install day hs … thru (one the paid
+        # cube read with no Google Ads user is a real 0, never left out)
+        R, N = {}, {}
+        for xs in cvp.E.values():
+            for X, arr in xs.items():
+                cur = R.get(X)
+                if cur is None:
+                    R[X] = list(arr)
+                    continue
+                if len(cur) < len(arr):
+                    cur.extend([0] * (len(arr) - len(cur)))
+                for i, v in enumerate(arr):
+                    if v:
+                        cur[i] += v
+        for xs in cvp.N.values():
+            for X, n in xs.items():
+                N[X] = N.get(X, 0) + n
+        x = {}
+        for D in days:
+            Xi = _iso(D)
+            x[Xi] = {"r": R.pop(Xi, None) or [], "u": [N.get(Xi, 0)]}
+        R = N = None
+        Pp = {"pre": P["pre"], "sc": P["sc"], "xs": {}, "S": P["S"], "hs": hs}
+        got = _cohorts(Pp, spend, fxf, {"read_today": _iso(thru), "x": x}, thru,
+                       {"B": late["B"], "full": late["full"], "fin": late["fin"], "q": late["q"], "walk": px["walk"]},
+                       edge=fthru)
+        x = late["B"] = None
+        for r in got:                               # as a country row: no users read, no install-day read to tie to
+            r["u"], r["q"] = None, False
+            _post(r, late)
+        _statuses(got)
     rows = [_row_out(r) for r in got]
     got = None
     # the country rows: the same code as the 🌍 rows, on the all-users k_c and Google Ads cost
@@ -2500,8 +2580,15 @@ def _paid_pass(ctx, P, spend, fxf, data_dir, aid, sid, key):
     out = meta = None
     name = "%s%s_p.json.gz" % (PREFIX, key)
     body = {"v": PAID_V, "key": key, "b": bid, "rows": rows, "packs": packs, "thru": _iso(thru), "fthru": _iso(fthru),
-            "newest": info.get("till"), "loss": {"days": info.get("oth") or 0, "share": info.get("omax")},
-            "unk": _ranges(sorted(X for X in unk if X <= thru)), "billed": bool(ctx["billed"])}   # (its [X] rows')
+            "newest": info.get("till") if rnew is None else rnew,
+            "loss": {"days": info.get("oth") or 0, "share": info.get("omax")},
+            "unk": _ranges(sorted(X for X in unk if X <= thru)), "billed": bool(ctx["billed"]),   # (its [X] rows')
+            "all": "cohort" if rnew is not None else "cube"}
+    if rnew is not None:                            # "newest": the read its All rows come from — their D0 … D30
+        body["cnew"] = info.get("till")             # read's read_today, as every user's file has ga4_cohort's (rows
+    #                                                 final through it − FINAL_LAG, none past it: be_build's every
+    #                                                 final-cell gate on it); the paid cube's newest day (its packs':
+    #                                                 the Organic pass's ages) in its own field
     _gz_fast(os.path.join(PAID_DIR, name), json.dumps(body, ensure_ascii=False, separators=(",", ":"),
                                                       sort_keys=True).encode("utf-8"))
     PAID[key] = {"st": "ok", "file": name}
@@ -2514,7 +2601,7 @@ def _paid_step(acc, ctx, P, spend, fxf, data_dir, aid, sid, key):
     the build as without it."""
     try:
         with _sc.stage("roi_paid"):                 # (⏱ measure only, stage_clock: summed over the apps)
-            st = _paid_pass(ctx, P, spend, fxf, data_dir, aid, sid, key)
+            st = _paid_pass(ctx, P, spend, fxf, data_dir, aid, sid, key, cohortp=acc.cohortp)
     except Exception as e:
         _paid_lost(acc, key, type(e).__name__)
         return

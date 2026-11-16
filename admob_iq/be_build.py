@@ -143,13 +143,19 @@ was. Each app has one SOURCE a build:
     packs from there (GA4's own reads of the users whose FIRST-USER channel is Cross-network / Paid Search, never a split
     of totals), the first-session eCPM from fetch.ga4_nvr_paid's store (the same "c" "n" rows rule), AdMob's daily
     revenue for _holes from the all-users ROI file's "life" (AdMob has no source split; a hole is a date GA4 lost on
-    every cohort while AdMob was normal — the same rule on these rows). PACK GAPS of src "p" (pack_gaps_p): the paid All
-    row and the paid packs are ONE read — the paid cube's cells — so a date it folded near-empty sinks both and their
-    ratio never moves; the paid packs' daily revenue is held against an INDEPENDENT read instead, the all-users All rows'
-    final daily revenue (ga4_cohort's exact store): a date is a gap when that share falls under PACK_GAP × its median
-    over the GAP_N dates before. Everything after it (fit, K3, the curves, the calibration, predict, the card, the
-    countries table, the B columns) runs unchanged on these rows. The file: "src": "p", and on each day with an eCPM
-    card "ecs": "a" beside it (be_ecpm's read stays every user's — its Google Ads users' split is not built).
+    every cohort while AdMob was normal — the same rule on these rows). Its "newest" (every final-cell gate: asof,
+    backtest's ages, the anchor, _holes, the pack gaps) is that of the read its All rows come from — with "cohort" their
+    D0 … D30 read's read_today, as every user's file has ga4_cohort's. PACK GAPS of src "p": with their All rows made
+    from their own D0 … D30 read (the paid file's "all": "cohort" — roi_build with GA4_COHORTP, fetch.ga4_cohort_paid's
+    2-D read) those rows are an independent read of the paid packs again, as every user's All rows are of theirs: src
+    "a"'s rule (pack_gaps: their All rows against their packs, on the paid file's own edges). Otherwise ("cube", or a
+    file without "all": pack_gaps_p) the paid All row and the paid packs are ONE read — the paid cube's cells — so a
+    date it folded near-empty sinks both and their ratio never moves; the paid packs' daily revenue is held against an
+    INDEPENDENT read instead, the all-users All rows' final daily revenue (ga4_cohort's exact store): a date is a gap
+    when that share falls under PACK_GAP × its median over the GAP_N dates before. Everything after it (fit, K3, the
+    curves, the calibration, predict, the card, the countries table, the B columns) runs unchanged on these rows. The
+    file: "src": "p", and on each day with an eCPM card "ecs": "a" beside it (be_ecpm's read stays every user's — its
+    Google Ads users' split is not built).
   src "a" — any other app: the file of the step without the switch, byte for byte, + "src": "a" and "pw" (for the page's
     "Google Ads users ka data … abhi aa raha hai"): {"st": "busy" (+ "from" / "next" as the pass gave them: GA4's Google
     Ads users' history still being read; no "from" / "next": their first-session history still being read) | "none" (no
@@ -507,10 +513,12 @@ def pack_gaps(S_all, S_cty, newest, fthru=None):
 
 
 def pack_gaps_p(S_ref, S_cty, newest, fthru=None, ref_newest=None):
-    """⚖️ src "p": the activity dates (ordinals) on which the Google Ads users' packs lost revenue. Their All row is the
-    same read as their packs (the paid cube's cells: a date folded near-empty sinks both, their ratio never moves), so
-    the packs' FINAL daily revenue (S_cty) is held against an INDEPENDENT read — every user's All rows' final daily
-    revenue (S_ref: ga4_cohort's exact store, re-read and whole): their share ρ[D] = S_cty[D] ÷ S_ref[D] on the dates D ≤
+    """⚖️ src "p" whose All rows are the paid cube's cells summed (the paid file's "all": "cube" — or no "all"; with
+    "cohort", their own D0 … D30 read, pack_gaps applies): the activity dates (ordinals) on which the Google Ads users'
+    packs lost revenue. Their All row is the same read as their packs (the paid cube's cells: a date folded near-empty
+    sinks both, their ratio never moves), so the packs' FINAL daily revenue (S_cty) is held against an INDEPENDENT
+    read — every user's All rows' final daily revenue (S_ref: ga4_cohort's exact store, re-read and whole): their
+    share ρ[D] = S_cty[D] ÷ S_ref[D] on the dates D ≤
     newest − CLAG (≤ the packs' own final edge fthru, ≤ ref_newest − CLAG: both reads final there) with S_ref[D] ≥
     PACK_MIN. D is a gap when ρ[D] < PACK_GAP × the median ρ of the GAP_N dates before it that were not gaps (within 3 ×
     GAP_N days, ≥ 3 of them — _holes' rule: a long gap never sets its own baseline) and the packs usually carry ≥
@@ -543,14 +551,16 @@ def load(out_dir, data_dir, key, fn, want_adm=False, paid=None, org=False):
     install day). want_adm: (newest, app, cty, adm, gaps) — AdMob's daily revenue and the pack-gap dates (pack_gaps).
     paid: (folder, file) — ⚖️ src "p" (the module doc): the rows, packs, "newest" and final edge of roi_build's Google
     Ads users' file there, the first-session eCPM of fetch.ga4_nvr_paid's store; from the all-users ROI file fn: AdMob's
-    daily revenue (AdMob has no source split) and its All rows — the pack gaps' independent read (pack_gaps_p). org
+    daily revenue (AdMob has no source split) and its All rows — the pack gaps' independent read (pack_gaps_p) — unless
+    the paid file's own All rows are one ("all": "cohort": their own D0 … D30 read — pack_gaps on them). org
     (with paid): one more value at the end — the Organic pass's inputs (_OIn: the Google Ads users' cells collected here
     while their packs are read — each read once a build; None: a side without packs or edges, no Organic file)."""
     src_dir = out_dir if paid is None else paid[0]
     body = _read(os.path.join(src_dir, fn if paid is None else paid[1]))
     ab = body if paid is None else _read(os.path.join(out_dir, fn))      # (every user's ROI file)
-    S_all, S_cty = {}, {}
-    for r in ab.get("rows") or []:
+    own = paid is not None and body.get("all") == "cohort"   # ⚖️ their All rows from their own D0 … D30 read: an
+    S_all, S_cty = {}, {}                                    # independent read of their packs again (pack_gaps)
+    for r in (body if own else ab).get("rows") or []:
         _fday(S_all, r)                          # (src "p": every user's All rows — the gaps' independent read)
     oi = _OIn.of(ab.get("cd") or {}, body) if paid is not None and org else None
     ref_nw = _od(ab.get("newest")) if paid is not None else None       # (every user's read: final through − CLAG)
@@ -626,6 +636,8 @@ def load(out_dir, data_dir, key, fn, want_adm=False, paid=None, org=False):
     nw = date.fromisoformat(newest).toordinal()
     if paid is None:
         return newest, app, cty, adm, pack_gaps(S_all, S_cty, nw, ft)
+    if own:
+        return (newest, app, cty, adm, pack_gaps(S_all, S_cty, nw, ft)) + tail
     return (newest, app, cty, adm, pack_gaps_p(S_all, S_cty, nw, ft, ref_nw)) + tail
 
 
@@ -1938,8 +1950,9 @@ def _once(X, cum, own):
 
 class _OIn:
     """⚖️ What the Organic pass of one src "p" app reads besides every user's packs (organic()): both cubes' edges — ta /
-    fa (every user's "cd": read / folded through), tp / fp (the Google Ads users' file's), nw (the older newest day: the
-    ages), lim (the install days both read through) —, every user's packs, the Google Ads users' [X] rows' unknown
+    fa (every user's "cd": read / folded through), tp / fp (the Google Ads users' file's), nw (the older of the two
+    cubes' newest days: the ages; the Google Ads users' file's "cnew" when it has one), lim (the install days both read
+    through) —, every user's packs, the Google Ads users' [X] rows' unknown
     spend days ("unk" of their file: None for a file without it) and "billed", own (_ng_own), and their cells (users, the final
     cumulative revenue at the GRID ages: _ocells) of every country × install day ≤ lim with something in it — added
     while load() reads their packs (each pack read once a build), held compactly (three arrays a country: an app's may
@@ -1955,7 +1968,8 @@ class _OIn:
         o = cls()
         o.ta, o.fa, o.tp, o.fp = ta, fa, tp, fp
         o.lim = min(ta, tp)                       # (the install days both cubes read through: a later one, no organic)
-        o.nw = min(_od(cd.get("newest")) or ta, _od(pb.get("newest")) or tp)
+        o.nw = min(_od(cd.get("newest")) or ta, _od(pb.get("cnew", pb.get("newest"))) or tp)   # (the paid cube's:
+        #                                         "cnew" when the file has it — its "newest" then their D0 … D30 read's)
         o.apacks = cd["packs"]
         o.unk, o.billed = _ranges_of(pb.get("unk")), bool(pb.get("billed", True))
         o.own = _ng_own(cd)

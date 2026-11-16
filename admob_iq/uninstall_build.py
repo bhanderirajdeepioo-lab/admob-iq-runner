@@ -394,8 +394,21 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                     print("ga4 nvr paid skipped: StuckAppError", file=sys.stderr)
         except Exception as e:
             print("ga4 nvr paid skipped: %s" % type(e).__name__, file=sys.stderr)
+    if s.get("ga4_cohortp"):                            # ⚖️ … and their D0 … D30 cells (GA4_COHORTP): ga4_cohort's 2-D
+        try:                                            # read with the paid filter — their All row's source —, a light
+            from .fetch import ga4_cohort_paid as gcop  # read: before the paid cube (its long walk never leaves this
+            with _sc.stage("ga4_cohort_paid"):          # one a property under the floors); own store and budget, a
+                st_op = gcop.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,   # failure costs it only
+                                         budget=s.get("ga4_cohortp_budget_sec") or gcop.BUDGET_SEC)
+                print(gcop.log_line(st_op), file=sys.stderr)
+                if st_op.get("error"):                  # its own bug: the health banner's line too
+                    print("ga4 cohort paid skipped: %s" % st_op["error"], file=sys.stderr)
+                elif (st_op.get("counts") or {}).get("stuck"):      # an app failing run after run: the banner too
+                    print("ga4 cohort paid skipped: StuckAppError", file=sys.stderr)
+        except Exception as e:
+            print("ga4 cohort paid skipped: %s" % type(e).__name__, file=sys.stderr)
     if s.get("ga4_cubep"):                              # ⚖️ … and their cohort cube (GA4_CUBEP): the cube's reads with
-        try:                                            # the paid filter, after the light read above; own store and
+        try:                                            # the paid filter, after the light reads above; own store and
             from .fetch import ga4_cube_paid as gcp     # budget, a failure costs that step only
             with _sc.stage("ga4_cube_paid"):
                 st_cp = gcp.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
@@ -453,8 +466,9 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                                cube=bool(s.get("ga4_cube")),     # GA4_CUBE off: the file as without the cube
                                cmon=(revenue or {}).get("country_m"),   # AdMob by country × month (country filter)
                                cubep=bool(s.get("ga4_cubep") and s.get("be_paid")   # ⚖️ Google Ads users' pass:
-                                          and s.get("be_tab", True)))   # scratch files for Breakeven — only while its
-        else:                                                           # one reader runs (be_build.enabled: BE_TAB)
+                                          and s.get("be_tab", True)),   # scratch files for Breakeven — only while its
+                               cohortp=bool(s.get("ga4_cohortp")))      # one reader runs (be_build.enabled: BE_TAB);
+        else:                                                           # its All row from GA4_COHORTP's store when on
             rb.off(out_dir)
     except Exception as e:
         print("roi skipped: %s" % type(e).__name__, file=sys.stderr)

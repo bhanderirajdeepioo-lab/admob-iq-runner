@@ -33,8 +33,9 @@ each read's own filters). What the cube's docstring says of its reads, files and
   * its budget: the build's (GA4_CUBEP_BUDGET_SEC), else BUDGET_SEC (the cube's); GA4_CUBEP_WORKERS: the properties
     read side by side (the cube's WORKERS unless set; each property has its own GA4 quota, so more only shortens a long
     history backfill — the owner, 16 Nov 2026: "fast karo aaj hi");
-  * its quota: Screens' stricter floors (ga4_paid.App) — the build runs it after every other GA4 step, so it takes
-    only what they leave, in this build and the next (the paid history's backfill never starves a live feature);
+  * its quota: Screens' stricter floors (ga4_paid.App) — the build runs it after every other GA4 step (the Google Ads
+    users' two light reads before it: fetch.ga4_nvr_paid, fetch.ga4_cohort_paid), so it takes only what they leave, in
+    this build and the next (the paid history's backfill never starves a live feature);
   * a stuck app (ga4_paid.streak: failing FAIL_LINE runs in a row — the cube itself retries a failed app every
     RETRY_HOURS and never counts it) → counts "stuck": the build prints the health banner's line.
 Switched by GA4_CUBEP. Never raises; never prints. PUBLIC LOG: counts only — log_line ("ga4 cube paid: apps …", the

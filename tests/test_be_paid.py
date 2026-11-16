@@ -5,12 +5,14 @@ packs, fetch.ga4_nvr_paid's store). Covered: with the switch off every output of
 switch existed (digests worked out once with that build); src "p" only when roi_build's pass is "ok" for the app, its
 file is there and their first-session store is read back (its backfill done) — its rows, packs and first-session store
 read, AdMob's daily revenue and the pack gaps' reference (every user's All rows: a paid-cube date folded near-empty marks
-the card) from the all-users file — every other app src "a" with the paid walk's progress ("pw"), one whose source cannot
-be told too; the caches and the calibration per source, never mixed, once a UTC day each, none for a source without an
-app, calib.json stamped with its mode (a same-day rollback answers every app as a build that never had the switch); too
-few Google Ads users' days for a first calibration: a state, not a failure; "ecs" beside the eCPM card; the counts line;
-the Organic file worked by hand (users — final only —, revenue at the card ages from final cells only, "--" / "ZZ"
-revenue once, per user, fin, a drift left out and counted — never clamped, the 30-day columns' double rounding never one
+the card) from the all-users file — or, the paid file's All rows from their own D0 … D30 read ("all": "cohort"), every
+user's pack-gap rule on its own All rows — every other app src "a" with the paid walk's progress ("pw"), one whose
+source cannot be told too; the caches and the calibration per source, never mixed, once a UTC day each, none for a
+source without an app, calib.json stamped with its mode (a same-day rollback answers every app as a build that never
+had the switch); too few Google Ads users' days for a first calibration: a state, not a failure; "ecs" beside the
+eCPM card; the counts line; the Organic file worked by hand (users — final only —, revenue at the card ages from
+final cells only, "--" / "ZZ" revenue once, per user, fin, a drift left out and counted — never clamped, the 30-day
+columns' double rounding never one
 —, the benchmark's weights and cv), and on roi_build's own paid files; each paid pack read once a build and the Organic
 pass only after the app's file, timed as its own stage of the tab; a Google Ads users' [X] row on a day of unknown
 spend; failure isolation (an Organic
@@ -176,12 +178,14 @@ def _fold(q, D, keep):
     return q
 
 
-def paid_world(tmp, twin=True, life=None, fold=None):
+def paid_world(tmp, twin=True, life=None, fold=None, own=False):
     """tests/test_be_build.py's world (+ app d, every user's: a twin of app a's covered countries) and app a's Google Ads
     users' pass in tmp/scratch — its file (the paid All rows: Σ its pack's rows a day), its one pack (each country row
     _scale'd) and its first-session store (FS of each "c" row); app a's all-users "cd" gets its edges (read and folded
     through the newest day) and `life` (AdMob's daily revenue); fold: (D, keep) — the paid cube's activity date D folded
-    near-empty (_fold: its All rows too, Σ of its pack) → (site, data, dashboard, the scratch folder)."""
+    near-empty (_fold: its All rows too, Σ of its pack); own: the paid All rows from their own D0 … D30 read (the file's
+    "all": "cohort" — an independent read: Σ of the pack's rows as GA4 has them whole, never folded) → (site, data,
+    dashboard, the scratch folder)."""
     site, data, dash = T.make(tmp)
     if twin:
         T.write_app(site, data, KD, dict(T.CTY), T.NDAYS, T.TODAY, 29)
@@ -198,7 +202,7 @@ def paid_world(tmp, twin=True, life=None, fold=None):
     pc, allr = {}, {}
     for cc, rows in pk["c"].items():
         pc[cc] = [_scale(r) if fold is None else _fold(_scale(r), *fold) for r in rows]
-        for q in pc[cc]:
+        for q in (pc[cc] if not own else [_scale(r) for r in rows]):
             a = allr.setdefault(q[0], [0, 0.0, 0.0, [0.0] * len(q[4]), [0.0] * (len(q[14]) if len(q) > 14 else 0)])
             a[0] += q[1]
             a[1] += q[2]
@@ -212,8 +216,9 @@ def paid_world(tmp, twin=True, life=None, fold=None):
     with open(os.path.join(str(scr), pn), "wb") as f:
         f.write(gzip.compress(praw, mtime=0))
     _wr(os.path.join(str(scr), "roi_%s_p.json.gz" % KA),
-        {"v": 1, "key": KA, "b": "synthb", "rows": rows, "packs": [[pn, hashlib.sha1(praw).hexdigest()[:12]]],
-         "thru": TD, "fthru": TD, "newest": TD, "loss": {"days": 0, "share": 0.0}})
+        dict({"v": 1, "key": KA, "b": "synthb", "rows": rows, "packs": [[pn, hashlib.sha1(praw).hexdigest()[:12]]],
+              "thru": TD, "fthru": TD, "newest": TD, "loss": {"days": 0, "share": 0.0}},
+             **({"all": "cohort"} if own else {})))
     nv = _rd(os.path.join(data, "ga4_nvr", KA + ".json.gz"))
     for rv in nv["days"].values():
         rv["c"] = [[k, cc, round(rev * FS[0], 6), int(im * FS[1])] for k, cc, rev, im in rv["c"]]
@@ -469,6 +474,55 @@ def test_a_paid_cube_date_folded_near_empty_marks_the_card(tmp_path, monkeypatch
     _go(dash, data, site, {"be_paid": True})
     days = [x for x in _be(site, KA)["days"] if x.get("card")]
     assert len(days) > 100 and not any(any(x["card"]["chk"]) for x in days)
+
+
+def test_their_own_d0_d30_all_rows_are_an_independent_read_of_their_packs_again(tmp_path, monkeypatch):
+    """roi_build's paid file with "all": "cohort" (GA4_COHORTP: the paid All rows from the Google Ads users' own D0 …
+    D30 read, never the paid cube's cells summed): those rows are an independent read of the paid packs again, so
+    every user's rule applies — pack_gaps on the paid file's OWN All rows and packs, its own newest / fthru — never
+    pack_gaps_p (every user's All rows as the reference). The paid cube folds a date near-empty (3 % of it) in the packs
+    while their own read has it whole: a gap, and each card day whose window holds it "data check" — no other point;
+    "cube" written out (as roi_build does with the switch off) → pack_gaps_p, exactly as a file without "all"."""
+    D = T.TODAY - timedelta(days=40)
+    site, data, dash, scr = paid_world(tmp_path / "own", fold=(D, 0.03), own=True)
+    pf = (scr, "roi_%s_p.json.gz" % KA)
+    pb = _rd(os.path.join(scr, pf[1]))
+    assert pb["all"] == "cohort"
+    S_own, S_cty = {}, {}
+    for r in pb["rows"]:
+        be._fday(S_own, r)
+    for rows in _rd(os.path.join(scr, pb["packs"][0][0]))["c"].values():
+        for r in rows:
+            be._fday(S_cty, r)
+    assert S_cty[D.toordinal()] < 0.05 * S_own[D.toordinal()]              # (the packs lost the date, their All rows
+    #                                                                         did not)
+    seen = []
+    real_g, real_p = be.pack_gaps, be.pack_gaps_p
+    with monkeypatch.context() as m:
+        m.setattr(be, "pack_gaps", lambda *a: seen.append(("own", a)) or real_g(*a))
+        m.setattr(be, "pack_gaps_p", lambda *a: seen.append(("ref", a)) or real_p(*a))
+        got = be.load(site, data, KA, "roi_%s.json.gz" % KA, True, pf)
+        (kind, args), = seen
+        assert kind == "own" and args == (S_own, S_cty, T.TODAY.toordinal(), T.TODAY.toordinal())
+        assert got[4] == {D.toordinal()}
+        seen.clear()
+        _wr(os.path.join(scr, pf[1]), dict(pb, all="cube"))               # "cube": the reference rule, as before
+        assert be.load(site, data, KA, "roi_%s.json.gz" % KA, True, pf)[4] == {D.toordinal()}
+        assert [k for k, _ in seen] == ["ref"] and seen[0][1][4] == T.TODAY.toordinal()
+        _wr(os.path.join(scr, pf[1]), pb)
+    _state(monkeypatch, scr)
+    _, line, err = _go(dash, data, site, {"be_paid": True})
+    a = _be(site, KA)
+    assert a["src"] == "p" and err == ""
+    n = 0
+    for x in a["days"]:
+        if not x.get("card"):
+            continue
+        X = date.fromisoformat(x["d"])
+        want = [1 if X <= D <= X + timedelta(days=be.GRID[j]) else 0 for j in be.CARD_J]
+        assert x["card"]["chk"] == want, x["d"]
+        n += sum(want)
+    assert n > 20
 
 
 def test_the_paid_pack_gaps_follow_the_apps_own_share(tmp_path):
