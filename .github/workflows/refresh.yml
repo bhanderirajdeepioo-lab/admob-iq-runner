@@ -223,6 +223,10 @@ jobs:
           # build may start its days with (empty: 30; 0 = off)
           GA4_CUBE_GUARD:       ${{ vars.GA4_CUBE_GUARD || 'true' }}
           GA4_CUBE_RF_CALLS:    ${{ vars.GA4_CUBE_RF_CALLS }}
+          # Its settle check (a folded day, once settled, gets GA4's whole day total once; a day the month holds partly
+          # short of it is read again by the refold): GA4_CUBE_CK_CALLS = the day totals a build may read an app
+          # (empty: 10; 0 = off, as before)
+          GA4_CUBE_CK_CALLS:    ${{ vars.GA4_CUBE_CK_CALLS }}
           # Its users (GA4's own activeUsers of the same reads, files of their own next to the cube): GA4_CUBE_U=false
           # stops keeping them (no file written, no users fill), GA4_CUBE_U_USE=false = the page ignores them. The
           # history fills, each its own calls / seconds a build inside the budget above: All users (one whole

@@ -71,6 +71,13 @@ def _q_off(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _ck_off(monkeypatch):
+    """The settle check (a day total read once a folded day settled) off for the tests of the cube's own reads (their
+    call counts are the cube's); its own tests (test_ga4_cube_partial.py) turn it on."""
+    monkeypatch.setattr(cu, "CK_CALLS", 0)
+
+
+@pytest.fixture(autouse=True)
 def _u_off(monkeypatch):
     """The users (u: their own files, the two users fills) off for the tests of the cube's own reads and files; the u
     tests below turn them on (U_ON) themselves — and check every revenue file byte for byte the same either way."""
@@ -1495,7 +1502,8 @@ def test_build_hook_switch(tmp_path, monkeypatch, capsys):
         "deeper 0, capped 0, hidden 0, futile 0, loss 0, flagged 0, months read again 0, repair days 0, "
         "months repaired 0, q days 0, q flagged 0, q calls 0, q left 0, q unscanned 0, q errors 0, q settling 0, "
         "q reread 0, q recovered 0, q fl waiting 0, q early 0, held 0, folded low 0, refold days 0, "
-        "months refolded 0, refold waiting 0, refold given up 0, calls 0, tokens 0"]
+        "months refolded 0, refold waiting 0, refold given up 0, day totals checked 0, partly short 0, "
+        "check errors 0, refold merged lower 0, calls 0, tokens 0"]
     monkeypatch.setattr(cu, "refresh_all", lambda *a, **k: 1 / 0)
     dash = tub.dashboard()
     ub.run_uninstall(dash, data, out, tub.ga4_settings(ga4_cube=True), now=tub.NOW)
@@ -1798,7 +1806,8 @@ def test_q_in_the_run_two_rounds_counts_and_files(monkeypatch, tmp_path):
     line = cu.log_line(out)
     assert (", q days %d, q flagged 0, q calls %d, q left %d, q unscanned 0, q errors 0, q settling 4, q reread 0, "
             "q recovered 0, q fl waiting 0, q early 0, held 0, folded low 0, refold days 0, months refolded 0, "
-            "refold waiting 0, refold given up 0, calls " % (c["q_days"], c["q_calls"], c["q_left"])) in line
+            "refold waiting 0, refold given up 0, day totals checked 0, partly short 0, "
+            "check errors 0, refold merged lower 0, calls " % (c["q_days"], c["q_calls"], c["q_left"])) in line
     assert "example" not in line and "x~" not in line
 
 
@@ -2318,7 +2327,9 @@ def test_q_settle_counts_in_the_run(monkeypatch, tmp_path):
     line = cu.log_line(out)
     assert ", q flagged 8, " in line and (", q errors 0, q settling 4, q reread 2, q recovered 1, q fl waiting 2, "
                                           "q early 1, held 0, folded low 0, refold days 0, months refolded 0, "
-                                          "refold waiting 0, refold given up 0, calls ") in line and "x~" not in line \
+                                          "refold waiting 0, refold given up 0, day totals checked 0, "
+                                          "partly short 0, check errors 0, refold merged lower 0, calls ") in line \
+        and "x~" not in line \
         and "example" not in line
 
 

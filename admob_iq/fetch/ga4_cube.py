@@ -85,7 +85,8 @@ split version):
     hot.json.gz = {"v", "app_id", "package", "property_id", "stream_id", "time_zone", "hs", "from", "next", "done",
       "walk_at", "hot_at", "hot_today", "hot_cyc" ([when, property day] of a round of the hot days a Stop cut: the next
       run reads only its days not read since), "heavy", "cut" / "hcut" (the final / hot day a Stop cut as the run's first
-      read: {"D", "n" calls it had, "k" times}), "rep" (the repair's state, below), "d": {D: {the ledger's fields + "b",
+      read: {"D", "n" calls it had, "k" times}), "rep" (the repair's state, below), "rf" (the refold's), "ck" (the
+      settle check's), "d": {D: {the ledger's fields + "b",
       "c", "e" of that one day (+ "hd" / "fu" / "dp": the split's depth when past its first level)}}}
 — the head (progress) and the NON-FINAL days (today − 2 … today), each replaced when read again. The ROI build reads only
 a hot day's ledger and "b"; its "c" / "e" are kept in the same shapes as the months for a per-country / D0 … D30 view
@@ -170,7 +171,8 @@ day started only with room for it: _room), one month at a time:
   * the queue (head "rf" "q", made once a property day from the months of the edge and the one before — RF_MONTHS: a
     day folded early is in them —, no GA4 call): every month with a day read early (before RF_RIPE days old) and folded
     collapsed — marked "lo", or (folded before the guard, so with no mark) under LOW × its folded neighbours' median
-    and not "rd" —, started only once one of them is RF_RIPE days old;
+    and not "rd" — or a day the settle check (below) found partly short, started only once one of them is RF_RIPE days
+    old;
   * every day of the month is read again into its copy <YYYY-MM>.rf.json.gz (kept across runs, its own file: never the
     repair's), the collapsed days first: one still collapsed (against its "lo" peak, else its neighbours; a flagged
     answer against its neighbours) while under RF_MAX (10) days old is never merged — the month waits ("wait"), that
@@ -194,9 +196,43 @@ day started only with room for it: _room), one month at a time:
     folded ends that month's repair, its copy dropped — never merged —, that day read first when the month is tried
     again: "blk") and never takes, nor goes on with, a month holding a "lo" day (the refold's).
   head "rf" = {"scan" (the property day the queue was made), "q": [[YYYY-MM, [its collapsed days]]], "k" (the month
-  being read again), "at", "cand", "c" / "n" / "m" / "s" (its calls / days / the most calls a day / seconds a call),
-  "cut", "wait" ([day, since when]), "skip" ({YYYY-MM: until}: given up lately), "log": [[month, its collapsed days,
-  when (, the day it was given up on)]] (the last LOG_KEEP)}.
+  being read again), "at", "cand", "ps" (the candidates that are partly short, below), "c" / "n" / "m" / "s" (its
+  calls / days / the most calls a day / seconds a call), "cut", "wait" ([day, since when]), "skip" ({YYYY-MM: until}:
+  given up lately), "log": [[month, its collapsed days, when (, the day it was given up on)]] (the last LOG_KEEP)}.
+
+The settle check (check(); GA4_CUBE_CK_CALLS, CK_CALLS 10 a run, an app; 0 = off; 16 Nov 2026 — measured on the real
+properties, every month the refold read again a week and more after the walk folded it, and GA4's whole no-country
+reads made once a day settled, against those folds: a whole day's total had moved by little either way since, but on a
+few days the fold had kept a day short by more — GA4 still adding to it after D + 3 (it takes an event up to 72 hours
+late) or answering it partly empty —, on one day on most apps; the fold guard, made for a collapse, never sees a day
+partly short, and the walk never reads a folded day again, so the country rows kept it short for good): a folded day
+of the refold's months (RF_MONTHS) CK_AGE (7) property days old or more whose read was made before it settled (under
+CK_AGE days after it: a read made later is as settled as the check) gets GA4's whole total of it once — ONE light call
+(day_total: dimension date only, no filter — nothing to roll up or drop; the total the split measures hidden "(other)"
+by) —, oldest first, at most CK_CALLS and CK_SEC (5) seconds a run, each only with room for one call (calls and time:
+_room); its queue is made again once a property day (a run with nothing due reads no month file; a day whose read
+failed goes last, never holding the others). A day GA4 flagged ("fl": its hidden part unknown, the total would always look bigger) or folded
+collapsed ("lo": the refold's anyway) is never checked; a total GA4 sampled, cut or flagged is kept as None (nothing to
+judge by; never read again). A day whose month holds less than that total by PART (3 %) of it and PS_MIN (1 USD) or
+more, by a read made before it settled, is PARTLY SHORT (_ps; a whole day's total moves by less once folded): its month
+is a refold candidate as a collapsed day's is (the queue made again in the same run while no refold builds a copy;
+else the next queue; one found while a refold of its month builds the copy joins that refold's candidates, unless
+the copy holds it already), the refold reading it first (the candidates go first). In the refold its read again still short
+against that total waits (never merged so; read again once a property day) while under RF_MAX days old; then it is
+merged as it is — but a read still short and partly LOWER than the walk's fold (by PART and PS_MIN) is never merged: the
+day is never a candidate again (its tries: PS_TRIES) and that refold is given up (the copy dropped, the month as it
+was; no skip: the next queue reads what else the month needs — that day then as GA4 answers it). A refold's read made
+once the day settled ends it (as settled as the check). Every other day a refold reads is merged as before (only a
+collapse waits): a settled one merged partly lower than the walk's fold (unflagged; measured: a settled day moves by
+little) is counted, "refold merged lower" — GA4's own answer then, never waited on; a young one is checked later. The
+check off (CK_CALLS 0): the refold as before it, a refold started meanwhile too. A second instance of this module
+(fetch.ga4_cube_paid) runs the check on its own store too, with this module's CK_CALLS (GA4_CUBE_CK_CALLS) — its own
+refold switch (GA4_CUBEP_RF_CALLS 0) turns both off there.
+  head "ck" = {D: [GA4's whole total of the day (micros) | None, when, refolds that merged it — PS_TRIES: given up on]}
+  (the days of the refold's months only: older ones go), "ckq" (the queue: days still to check, oldest first), "cks"
+  (the property day it was made). The log: "day totals checked", "partly short" (found in the run), "check errors" (a
+  check that ended on an error other than a Stop: the check ends for the app this run, never its run; that day goes
+  last in the queue), "refold merged lower" (settled days a refold merged partly lower than the walk's fold, above).
 
 q — the WHOLE read of ages 31 … 420 (owner, 21 Oct 2026: real data only, nothing GA4 dropped left out). GA4 folds the
 country "(other)" BEFORE any filter, so no split above gets it back (measured: the repair read nothing back). But one
@@ -394,7 +430,16 @@ RF_SKIP_DAYS = 7
 RF_MONTHS = 2                       # the refold's queue: the months of the edge and the one before (a day folded
 #                                     early is in them)
 RF = ".rf.json.gz"                  # a month's copy while the refold builds it
-RF_FIELDS = ("k", "at", "c", "n", "m", "cut", "cand", "wait")
+RF_FIELDS = ("k", "at", "c", "n", "m", "cut", "cand", "wait", "ps")
+CK_CALLS = int(os.environ.get("GA4_CUBE_CK_CALLS") or 10)   # day totals the settle check may read a run, an app (0 =
+#                                     no check: no day found partly short, the refold as before it)
+CK_SEC = 5.0                        # … and seconds it may take a run, an app (its own slice: the walk, the hot days
+#                                     and the refold keep the rest of the budget)
+CK_AGE = 7                          # a folded day is checked once it is this many property days old (GA4 takes an
+#                                     event up to 72 hours late and processes it after that: settled)
+PART = 0.03                         # partly short: GA4's settled day total beyond what the month holds of the day by
+PS_MIN = 1_000_000                  # … this share of that total and at least this many micros (1 USD)
+PS_TRIES = 1                        # refolds that may merge a partly short day; then it stays as GA4 answered it
 QJ = 13                             # q: buckets 1 … 13 = ages 31 … 420 from the whole no-country day read
 QL = LAGS - 1 + STEP * QJ           # 420: the oldest age q keeps (the read is whole to 427; bucket 14 = 421 … 450)
 QDIMS = ("firstSessionDate",)
@@ -1274,6 +1319,7 @@ class Cube:
         self.rp = None                  # the repair's copy of a month: {"k", "mo", "dirty", "done"}
         self.rf = None                  # the refold's copy of a month: the same shape (its own file, RF)
         self.held = self.low = self.rf_days = self.refolded = self.rf_gave = 0     # the fold guard's / the refold's
+        self.checked = self.ps_new = self.ck_errors = self.rf_lower = 0     # the settle check's
         self.qm, self.qtouched = {}, set()  # q month files loaded / changed in the run
         self.q_days = self.q_fl = self.q_calls = self.q_err = 0
         self.q_rr = self.q_rok = 0      # stored "fl" days read again in the run / of them "ok" now
@@ -1758,8 +1804,16 @@ def step_app(ga, cube, today, hs, now):
         h.pop("hot_cyc", None)
     if Q_CALLS > 0:
         did = q_fwd(ga, cube, now, hot_now, today) or did  # q of the hot days this run read, settled folded days
+    if RF_CALLS > 0 and CK_CALLS > 0:
+        try:
+            did = check(ga, cube, now, today) or did        # settled folded days: GA4's whole total, once each
+        except Stop:
+            raise
+        except Exception:
+            cube.ck_errors += 1                             # the check ends for the app this run, never its run
     if RF_CALLS > 0:
-        did = refold(ga, cube, now, today) or did           # months holding a day folded collapsed: read again
+        did = refold(ga, cube, now, today) or did           # months holding a day folded collapsed (or partly short:
+        #                                                     the settle check's): read again
     if REPAIR_CALLS > 0 and not (RF_CALLS > 0 and (h.get("rf") or {}).get("k")):
         did = repair(ga, cube, now) or did                  # with what the run has left (never beside a refold)
     return "fetched" if did else "fresh"
@@ -1844,19 +1898,154 @@ def _early(led, D, tz=None):
 
 def _cand(cube, D, led):
     """A folded day the refold reads again: read early and folded collapsed — marked "lo" by the guard, or (folded
-    before it, with no mark: "rd" says the guard saw a real drop) low against its folded neighbours."""
+    before it, with no mark: "rd" says the guard saw a real drop) low against its folded neighbours —, or one the
+    settle check found partly short (_ps; at any age)."""
+    if CK_CALLS > 0 and _ps(cube, D.isoformat(), led):
+        return True
     if not isinstance(led, dict) or not _early(led, D, cube.tz()):
         return False
     return bool(led.get("lo")) or not led.get("rd") and _nb_low(cube, D, int(led.get("t") or 0))
 
 
-def _rf_scan(cube, today):
-    """The refold's queue (no GA4 call): the months of the edge and the one before (RF_MONTHS) → [[YYYY-MM, [its
-    candidate days]]], oldest first (a month unreadable now: the walk reads it again whole)."""
+def _rf_months(today):
+    """The refold's months (RF_MONTHS): the final edge's and the ones before it → [YYYY-MM, …], newest first."""
     M, ks = (today - timedelta(days=FINAL_LAG)).replace(day=1), []
     for _ in range(RF_MONTHS):
         ks.append(M.isoformat()[:7])
         M = (M - timedelta(days=1)).replace(day=1)
+    return ks
+
+
+def _ck(cube):
+    """The settle check's head entries {D: [total | None, when, refolds that merged it]} — {} when there are none (or
+    the head's are damaged: never trusted)."""
+    c = cube.head.get("ck")
+    return c if isinstance(c, dict) else {}
+
+
+def _read_age(led, D, tz=None):
+    """How many property days after day D (a date) its ledger's read was made ("at", UTC; tz: the property's time
+    zone) — None: unknown."""
+    p = _pday(led.get("at"), tz) if isinstance(led, dict) else None
+    return None if p is None else (p - D).days
+
+
+def _ck_due(cube, D, led, today):
+    """Day D (YYYY-MM-DD) due the settle check: folded, CK_AGE property days old or more, by a read made before it
+    settled (under CK_AGE days after it — a read made later is as settled as the check's total) — never one GA4
+    flagged ("fl": its hidden part unknown) or one folded collapsed ("lo": the refold's anyway)."""
+    if not isinstance(led, dict) or led.get("fl") or led.get("lo"):
+        return False
+    d = _d(D)
+    a = _read_age(led, d, cube.tz())
+    return (today - d).days >= CK_AGE and a is not None and a < CK_AGE
+
+
+def _short(rec, tot):
+    """A day's read (a ledger or a record: its "t") short of GA4's settled total of it (micros) by PART of that total
+    and PS_MIN or more."""
+    return tot - int(rec.get("t") or 0) >= max(PART * tot, PS_MIN)
+
+
+def _locked(c):
+    """A settle check's entry ([total, when, tries]) a refold gave up on (PS_TRIES): its day never judged again."""
+    return isinstance(c, list) and len(c) == 3 and int(c[2] or 0) >= PS_TRIES
+
+
+def _ps(cube, D, led):
+    """Day D (YYYY-MM-DD) partly short (module doc: the settle check): GA4's whole total of it, read once it settled
+    (head "ck"), beyond what its month holds of it (led: its ledger) by PART of that total and PS_MIN or more — only
+    while that is a read made before the day settled (a refold's read made after it is as settled as the check), never
+    a day GA4 flagged ("fl") or one folded collapsed ("lo"), nor one a refold gave up on (PS_TRIES)."""
+    c = _ck(cube).get(D)
+    if not (isinstance(c, list) and len(c) == 3 and isinstance(c[0], (int, float))) or int(c[2] or 0) >= PS_TRIES:
+        return False
+    if not isinstance(led, dict) or led.get("fl") or led.get("lo"):
+        return False
+    a = _read_age(led, _d(D), cube.tz())
+    return a is not None and a < CK_AGE and _short(led, int(c[0]))
+
+
+def check(ga, cube, now, today):
+    """The settle check (module doc) → True when a day total was read. Its queue (head "ckq", oldest first) is made
+    from the refold's months once a property day ("cks": no month file read in a run with nothing due) — the days left
+    in it, in their order, then every other day due (_ck_due) not checked yet. Then each day of it, at most CK_CALLS a
+    run and CK_SEC seconds (the app's clock), each only with room for one call (calls and time), gets GA4's whole total
+    of it once (day_total; None when GA4 sampled, cut or flagged that answer): head "ck" {D: [total, when, 0]} — a day
+    no longer due (a refold read it again since) leaves the queue with no call. A day found partly short (_ps) lets the
+    refold's queue be made again in this run (no refold building a copy now: the next queue has it). Raises Stop (what
+    was read is kept; the app's own call cap only ends the check)."""
+    h, now_iso = cube.head, gu._now_iso(now)
+    ks = _rf_months(today)
+    first = min(ks) + "-01"
+    ck = h.get("ck")
+    if ck is not None and not isinstance(ck, dict):         # damaged: let go (never trusted)
+        h.pop("ck")
+        ck = None
+        cube.dirty = True
+    if ck is not None:
+        old = [D for D in ck if not (isinstance(D, str) and D >= first)]
+        for D in old:                                       # days before the refold's months: never judged again
+            ck.pop(D)
+        if old:
+            cube.dirty = True
+        if not ck:
+            h.pop("ck")
+            ck = None
+    q = h.get("ckq")
+    if not isinstance(q, list) or h.get("cks") != today.isoformat():
+        left = [D for D in q if isinstance(D, str)] if isinstance(q, list) else []     # in their order (a day whose
+        q = left + sorted(D for k in ks if k not in cube.bad    # read failed is last), the newly due days after them
+                          for D, led in cube.ledgers(k).items()  # (a month unreadable now: the walk reads it again)
+                          if (ck is None or D not in ck) and D not in left and _ck_due(cube, D, led, today))
+        h["ckq"], h["cks"] = q, today.isoformat()
+        cube.dirty = True
+    clk = getattr(ga, "clock", None)
+    t0 = clk() if clk is not None else None
+    did = found = False
+    n = 0
+    try:
+        while q and n < CK_CALLS:
+            if t0 is not None and clk() - t0 >= CK_SEC or not _room(ga, {}, first=1, least=1):
+                break
+            D = q[0]
+            led = cube.ledger(D) if isinstance(D, str) and D >= first else None
+            if led is None or ck is not None and D in ck or not _ck_due(cube, D, led, today):
+                q.pop(0)                                    # changed since the queue was made: no call
+                cube.dirty = True
+                continue
+            try:
+                tot = day_total(ga, _d(D))
+            except Stop:
+                raise
+            except Exception:
+                q.append(q.pop(0))                          # an error: that day last (never a queue stuck on it)
+                cube.dirty = True
+                raise
+            q.pop(0)
+            if ck is None:
+                ck = h["ck"] = {}
+            ck[D] = [tot, now_iso, 0]
+            n += 1
+            cube.dirty = did = True
+            cube.checked += 1
+            if _ps(cube, D, led):
+                cube.ps_new += 1
+                found = True
+    except Stop as e:
+        if str(e) != "calls":                               # the budget, the property's quota: the app stops here
+            raise
+    finally:
+        rf = h.get("rf")
+        if found and isinstance(rf, dict) and not rf.get("k") and rf.pop("scan", None) is not None:
+            cube.dirty = True                               # the refold's queue made again (this run)
+    return did
+
+
+def _rf_scan(cube, today):
+    """The refold's queue (no GA4 call): the months of the edge and the one before (RF_MONTHS) → [[YYYY-MM, [its
+    candidate days]]], oldest first (a month unreadable now: the walk reads it again whole)."""
+    ks = _rf_months(today)
     rf = cube.head.setdefault("rf", {})
     skip = {m: u for m, u in (rf.get("skip") or {}).items() if str(u) > today.isoformat()}   # given up lately
     if skip:
@@ -1917,6 +2106,9 @@ def refold(ga, cube, now, today):
             if k not in cube.bad and any((today - _d(D)).days >= RF_RIPE for D in days):
                 cube.drop_rf(k)                             # a copy no head names (a run killed after its month was
                 rf.update(k=k, at=now_iso, c=0, n=0, cand=list(days))   # written): never used
+                ps = [D for D in days if CK_CALLS > 0 and _ps(cube, D, cube.ledgers(k).get(D))]
+                if ps:                                      # the partly short ones: judged on their settled total
+                    rf["ps"] = ps
             # (no candidate ripe yet: the next day's queue has it again)
     k = rf.get("k")
     if not k:
@@ -1927,39 +2119,71 @@ def refold(ga, cube, now, today):
         cube.drop_rf(k)
         for f in RF_FIELDS:
             rf.pop(f, None)
+        if CK_CALLS > 0:
+            rf.pop("scan", None)                            # the queue made again next run
         cube.dirty = True
         return False
     acc = cube.rf_copy(k)
     cand = set(rf.get("cand") or []) | {D for D, led in live["days"].items() if isinstance(led, dict) and led.get("lo")}
+    ps, ck = (set(rf.get("ps") or []), _ck(cube)) if CK_CALLS > 0 else (set(), {})
+    if CK_CALLS > 0:                                        # partly short days the check found since it started, not
+        new = {D for D, led in live["days"].items()         # read into the copy yet: candidates too (read first,
+               if D not in acc["days"] and D not in ps and _ps(cube, D, led)}  # judged on their settled total)
+        if new:
+            ps |= new
+            cand |= new
+            rf["ps"], rf["cand"] = sorted(ps), sorted(set(rf.get("cand") or []) | new)
+            cube.dirty = True
     todo = sorted((D for D in live["days"] if D not in acc["days"]), key=lambda D: (D not in cand, D))
-    did, c0, gave = False, ga.calls, None
+    did, c0, gave, skip = False, ga.calls, None, True
     try:
         for D in todo:
             if ga.calls - c0 >= RF_CALLS or not _room(ga, rf):
                 break
+            w = rf.get("wait")
+            if CK_CALLS > 0 and isinstance(w, list) and len(w) == 3 and w[0] == D and w[2] == today.isoformat():
+                break                                       # a day waiting on a partly short / partly lower read: read
+            #                                                 again once a property day
             last = ga.calls
             rec = _read_day(ga, _d(D), now_iso, rf, DAY_CAP)
             _took(ga, rf, ga.calls - last)
             did = True
             old = live["days"][D] if isinstance(live["days"][D], dict) else {}
             age = (today - _d(D)).days
-            if D in cand:                                   # a collapsed day: against its "lo" peak, else neighbours
+            ot, nt = int(old.get("t") or 0), int(rec.get("t") or 0)
+            c = ck.get(D) if D in ps else None
+            if not (isinstance(c, list) and len(c) == 3 and isinstance(c[0], (int, float))):
+                c = None
+            why = None                                      # not merged now: "c" collapsed, "s" still short
+            if c is not None:                               # a partly short day: against GA4's settled total of it
+                if _short(rec, int(c[0])):                  # (the settle check's)
+                    why = "s"
+            elif D in cand:                                 # a collapsed day: against its "lo" peak, else neighbours
                 lo = int(old.get("lo") or 0)
-                low = _low(cube, _d(D), rec, lo if lo >= PK_MIN else 0)
-            else:                                           # any other: against what the walk folded of it (GA4
-                ot = int(old.get("t") or 0)                 # may be emptying a young day right now)
-                low = ot >= PK_MIN and int(rec.get("t") or 0) < COLLAPSE * ot
-            if low:
-                if D in cand and age < RF_RIPE:
+                if _low(cube, _d(D), rec, lo if lo >= PK_MIN else 0):
+                    why = "c"
+            elif ot >= PK_MIN and nt < COLLAPSE * ot:       # any other: against what the walk folded of it (GA4 may
+                why = "c"                                   # be emptying a young day right now)
+            if why:
+                w = rf.get("wait")
+                since = w[1] if isinstance(w, list) and (len(w) == 2 or CK_CALLS > 0 and len(w) == 3) \
+                    and w[0] == D else now_iso
+                if why == "c" and D in cand and age < RF_RIPE:
                     rec["lo"] = int(old.get("lo") or 0) or 1    # a newer "lo" day: as it is, still "lo"
-                elif D not in cand or age < RF_MAX:         # GA4 holds it collapsed now: the month waits, never
-                    w = rf.get("wait")                      # merged so (read again next run) — a day the walk had
-                    since = w[1] if isinstance(w, list) and len(w) == 2 and w[0] == D else now_iso   # whole, at any
-                    rf["wait"] = [D, since]                 # age (counted: "refold waiting") — at most RF_WAIT_DAYS
-                    cube.dirty = True
-                    if D not in cand and gu._hours_since(since, now) >= RF_WAIT_DAYS * 24:
-                        gave = D
+                elif D not in cand or age < RF_MAX:         # the month waits, never merged so (read again next run;
+                    rf["wait"] = [D, since, today.isoformat()] if why == "s" else [D, since]   # still short: once a
+                    cube.dirty = True                       # property day) — a day the walk had whole, at any age
+                    if D not in cand and gu._hours_since(since, now) >= RF_WAIT_DAYS * 24:     # (counted: "refold
+                        gave = D                            # waiting") — at most RF_WAIT_DAYS
                     break
+                elif why == "s" and ot - nt >= max(PART * ot, PS_MIN):     # RF_MAX days old, still short and partly
+                    c[2] = PS_TRIES                         # LOWER than the walk's fold: never merged so — the day never
+                    gave, skip = D, False                   # a candidate again, this refold given up (no skip: the next
+                    cube.dirty = True                       # queue reads what else the month needed, that day as GA4
+                    break                                   # answers it then)
+            elif CK_CALLS > 0 and D not in cand and age >= CK_AGE and not rec.get("fl") and not old.get("fl") \
+                    and ot - nt >= max(PART * ot, PS_MIN):  # a settled day merged partly lower than the walk's fold
+                cube.rf_lower += 1                          # (GA4's own answer now): counted, never waited on
             if (rf.get("wait") or [None])[0] == D:
                 rf.pop("wait")
             if D not in cand and old.get("rd"):
@@ -1981,9 +2205,12 @@ def refold(ga, cube, now, today):
     if gave:                                                # GA4 kept a day the walk had whole collapsed too long:
         cube.drop_rf(k)                                     # given up — the month as it was (never a collapsed read
         rf["log"] = (list(rf.get("log") or []) + [[k, sorted(cand), now_iso, gave]])[-LOG_KEEP:]    # put in), read
-        rf.setdefault("skip", {})[k] = (today + timedelta(days=RF_SKIP_DAYS)).isoformat()      # again later
+        if skip:                                            # again later (a partly short day given up on: nothing
+            rf.setdefault("skip", {})[k] = (today + timedelta(days=RF_SKIP_DAYS)).isoformat()      # else waits)
         for f in RF_FIELDS:
             rf.pop(f, None)
+        if CK_CALLS > 0:
+            rf.pop("scan", None)                            # the queue made again next run
         cube.rf_gave += 1
         cube.dirty = True
         return did
@@ -1995,6 +2222,10 @@ def refold(ga, cube, now, today):
         old_t = {D: int(live["days"][D].get("t") or 0) for D in sorted(cand) if isinstance(live["days"].get(D), dict)}
         acc["rf"] = {"at": rf.get("at"), "done": now_iso, "t0": old_t,
                      "t1": {D: int(acc["days"][D].get("t") or 0) for D in old_t}}
+        for D in sorted(ps):                                # a partly short day merged: one refold of it more (at
+            c = ck.get(D)                                   # PS_TRIES it is never a candidate again)
+            if isinstance(c, list) and len(c) == 3:
+                c[2] = int(c[2] or 0) + 1
         cube.m[k] = acc
         cube.touched.add(k)
         cube.rf["done"] = True
@@ -2802,7 +3033,8 @@ def save_state(data_dir, state):
 COUNTS = ("selected", "with_ga4", "fetched", "fresh", "failed", "deferred", "waiting", "days", "split", "deeper",
           "capped", "hidden", "futile", "loss", "flagged", "reread", "repair_days", "repaired", "q_days", "q_flagged",
           "q_calls", "q_left", "q_unscanned", "q_errors", "q_settling", "q_reread", "q_recovered", "q_fl_wait",
-          "q_early", "held", "low", "rf_days", "refolded", "rf_wait", "rf_gave", "calls", "tokens")
+          "q_early", "held", "low", "rf_days", "refolded", "rf_wait", "rf_gave", "checked", "ps_new", "ck_errors",
+          "rf_lower", "calls", "tokens")
 U_COUNTS = ("u_kept", "u_days", "u_calls", "u_left", "uc_days", "uc_calls", "uc_left", "u_unscanned", "u_other",
             "u_errors")
 # U_COUNTS (the log line's last part, only with U_ON): "u_kept" days whose users the walk's own reads kept (no call
@@ -2818,7 +3050,9 @@ U_COUNTS = ("u_kept", "u_days", "u_calls", "u_left", "uc_days", "uc_calls", "uc_
 # "q_settling" days folded without q that have not settled yet (Q_SETTLE: no read before), "q_reread" stored "fl" days
 # read again in the run, "q_recovered" those that came back "ok", "q_fl_wait" stored "fl" days still to be read again
 # (not final: q_due) after the run, "q_early" "ok" days taken out of the q files in the run with their week (an "ok"
-# read before its day settled there: q_early — back in "p", read again once settled)
+# read before its day settled there: q_early — back in "p", read again once settled); "checked" the settle check's day
+# totals read, "ps_new" the days it found partly short in the run, "ck_errors" checks that ended on an error other than
+# a Stop, "rf_lower" settled days a refold merged partly lower than the walk's fold (GA4's own answer then)
 
 
 def q_round(fill, now, over, lock, counts, workers=WORKERS):
@@ -3000,6 +3234,10 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, wo
                     counts["refolded"] += cube.refolded
                     counts["rf_wait"] += bool((cube.head.get("rf") or {}).get("wait"))
                     counts["rf_gave"] += cube.rf_gave
+                    counts["checked"] += cube.checked
+                    counts["ps_new"] += cube.ps_new
+                    counts["ck_errors"] += cube.ck_errors
+                    counts["rf_lower"] += cube.rf_lower
                     counts["loss"] += cube.loss
                     counts["flagged"] += cube.flagged
                     counts["reread"] += cube.reread
@@ -3088,8 +3326,8 @@ def log_line(status):
             "split %d, deeper %d, capped %d, hidden %d, futile %d, loss %d, flagged %d, months read again %d, "
             "repair days %d, months repaired %d, q days %d, q flagged %d, q calls %d, q left %d, q unscanned %d, "
             "q errors %d, q settling %d, q reread %d, q recovered %d, q fl waiting %d, q early %d, held %d, "
-            "folded low %d, refold days %d, months refolded %d, refold waiting %d, refold given up %d, calls %d, "
-            "tokens %d%s%s"
+            "folded low %d, refold days %d, months refolded %d, refold waiting %d, refold given up %d, "
+            "day totals checked %d, partly short %d, check errors %d, refold merged lower %d, calls %d, tokens %d%s%s"
             % tuple([gaud._int(c.get(k)) for k in COUNTS]
                     + [(", u kept %d, u days %d, u calls %d, u left %d, uc days %d, uc calls %d, uc left %d, "
                         "u unscanned %d, u other %d, u errors %d" % tuple(gaud._int(c.get(k)) for k in U_COUNTS))

@@ -27,12 +27,14 @@ D11 = date(2026, 10, 11)
 
 @pytest.fixture(autouse=True)
 def _defaults(monkeypatch):
-    """q, the users and the repair off (their own tests); the guard and the refold on, as in the build."""
+    """q, the users, the repair and the settle check off (their own tests); the guard and the refold on, as in the
+    build."""
     monkeypatch.setattr(cu, "Q_CALLS", 0)
     monkeypatch.setattr(cu, "U_ON", False)
     monkeypatch.setattr(cu, "REPAIR_CALLS", 0)
     monkeypatch.setattr(cu, "GUARD", True)
     monkeypatch.setattr(cu, "RF_CALLS", 30)
+    monkeypatch.setattr(cu, "CK_CALLS", 0)                          # the settle check: test_ga4_cube_partial.py
 
 
 def at(day, hour=1, minute=0):
@@ -621,7 +623,8 @@ def test_the_repair_never_runs_beside_a_refold(monkeypatch):
 def test_counts_in_the_log_line():
     line = cu.log_line({"counts": {"held": 2, "low": 1, "rf_days": 14, "refolded": 1, "rf_wait": 1, "rf_gave": 1}})
     assert (", q early 0, held 2, folded low 1, refold days 14, months refolded 1, refold waiting 1, "
-            "refold given up 1, calls 0, tokens 0") in line
+            "refold given up 1, day totals checked 0, partly short 0, check errors 0, refold merged lower 0, calls 0, "
+            "tokens 0") in line
 
 
 def test_settings_and_the_workflow(monkeypatch):
