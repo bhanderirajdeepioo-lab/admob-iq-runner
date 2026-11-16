@@ -246,9 +246,29 @@ jobs:
           GA4_CECPM_BUDGET_SEC: ${{ vars.GA4_CECPM_BUDGET_SEC }}
           # … the Breakeven card's eCPM index from it: GA4_CECPM_USE=true shows it (off: the tab's files as without it)
           GA4_CECPM_USE:        ${{ vars.GA4_CECPM_USE || 'false' }}
+          # ⚖️ Breakeven's Google Ads | Organic split: the cohort cube and the first-session country read of Google Ads
+          # users only (admob_iq/fetch/ga4_cube_paid.py, ga4_nvr_paid.py; data/ga4_cube_paid/, data/ga4_nvr_paid/ in the
+          # private repo, kept for good) — the cube's and ga4_nvr's own reads with GA4's first-user channel in-list, run
+          # after every other GA4 step under Screens' stricter quota floors. GA4_CUBEP / GA4_NVRP = false stops the
+          # reads without a code push; *_BUDGET_SEC = its seconds per build (empty: the module's); GA4_CUBEP_MAX_CALLS =
+          # an app's calls a build (empty: the cube's), GA4_CUBEP_Q_CALLS / GA4_CUBEP_Q_SEC = its q history fill's
+          # calls / seconds a build (empty: 120 / 20; 0 calls = q off: no whole read); GA4_CUBEP_RF_CALLS = the calls a
+          # build may start its refold days with (empty: 30; 0 = its refold off — GA4_CUBE_RF_CALLS above is the cube's
+          # own only); GA4_CUBEP_REPAIR_CALLS = its repair's (empty: 0 = off); GA4_NVRP_MAX_CALLS = an app's calls a
+          # build of the paid nvr read (empty: ga4_nvr's)
+          GA4_CUBEP:            ${{ vars.GA4_CUBEP || 'true' }}
+          GA4_CUBEP_BUDGET_SEC: ${{ vars.GA4_CUBEP_BUDGET_SEC }}
+          GA4_CUBEP_MAX_CALLS:  ${{ vars.GA4_CUBEP_MAX_CALLS }}
+          GA4_CUBEP_Q_CALLS:    ${{ vars.GA4_CUBEP_Q_CALLS }}
+          GA4_CUBEP_Q_SEC:      ${{ vars.GA4_CUBEP_Q_SEC }}
+          GA4_CUBEP_RF_CALLS:   ${{ vars.GA4_CUBEP_RF_CALLS }}
+          GA4_CUBEP_REPAIR_CALLS: ${{ vars.GA4_CUBEP_REPAIR_CALLS }}
+          GA4_NVRP:             ${{ vars.GA4_NVRP || 'true' }}
+          GA4_NVRP_BUDGET_SEC:  ${{ vars.GA4_NVRP_BUDGET_SEC }}
+          GA4_NVRP_MAX_CALLS:   ${{ vars.GA4_NVRP_MAX_CALLS }}
           # 🖼️ Screens (admob_iq/fetch/ga4_screens.py; data/ga4_screens/ in the private repo, kept for good): GA4 views and
-          # ad impressions per screen class per day with every layer, read AFTER every other GA4 step under stricter
-          # quota floors. GA4_SCREENS=false stops the reads without a code push; GA4_SCREENS_BUDGET_SEC = its seconds per
+          # ad impressions per screen class per day with every layer, read AFTER every live GA4 step under stricter
+          # quota floors (only the Google Ads users' reads above run after it). GA4_SCREENS=false stops the reads without a code push; GA4_SCREENS_BUDGET_SEC = its seconds per
           # build (empty: 150). SCREENS_STAGED_DIR: the history job's folder (screens-backfill.yml writes ONLY
           # ga4_screens_bf/ in the private repo, since the push below replaces data/), merged into data/ga4_screens first
           GA4_SCREENS:          ${{ vars.GA4_SCREENS || 'true' }}

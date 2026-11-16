@@ -111,7 +111,8 @@ app cut off by the budget goes after the others next run (a long backfill never 
 FIRST read a Stop cut with less than the run's whole allowance ("late": not that day's cut) goes first next run, and
 its property starts first (the day gets a whole allowance: its cut counts or it is read). Switched by
 GA4_CUBE (off: nothing read, written or printed; the ROI build leaves the store unread). Never raises; never prints
-(log_line: counts only).
+(log_line: counts only). A second instance of this module (fetch.ga4_paid.instance: its own globals — APP, NAME, DIR
+and its knobs) runs this same code on a store of its own: fetch.ga4_cube_paid, Google Ads users only.
 
 The repair (repair()) — months folded before the deeper split, whose days still carry "(other)" loss, are read again
 and REPLACED whole. Only once the walk reached the final edge in the run and the hot days are read, with what the run
@@ -352,6 +353,10 @@ from . import ga4_uninstall as gu
 from .ga4_firstopen import Stop
 
 DIR = "ga4_cube"
+APP = None                          # the GA4 client's class (None: ga4_firstopen.App) — a second instance of this
+#                                     module (fetch.ga4_paid.instance) sets its own: fetch.ga4_cube_paid's holds every
+#                                     read to Google Ads users
+NAME = "ga4 cube"                   # the log line's label (a second instance's own)
 V = 1
 LAGS = 31                           # ages 0 … 30 day by day ("e"); from 31 on in 30-day buckets ("b", "c")
 STEP = 30                           # bucket j = ages 30j+1 … 30j+30
@@ -2940,7 +2945,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, wo
                 today = now.astimezone(ZoneInfo(tz)).date()
                 cube = Cube(data_dir, aid, r["stream_id"])
                 cube.head["time_zone"] = tz                 # (q's settle rule: the property's day, from the first run)
-                ga = gf.App(tok, pid, r["stream_id"], prop, over=over, max_calls=MAX_CALLS)
+                ga = (APP or gf.App)(tok, pid, r["stream_id"], prop, over=over, max_calls=MAX_CALLS)
                 ga.clock, ga.t_end, ga.t_app = clock, t0 + budget, clock()    # the time a day needs (_room)
                 ga.full = ga.t_end - ga.t_app >= FULL_SHARE * budget          # the run's whole allowance (_read_day)
                 try:
@@ -3079,7 +3084,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=BUDGET_SEC, wo
 def log_line(status):
     """The build log's ONE line for this step — counts only."""
     c = (status or {}).get("counts") or {}
-    return ("ga4 cube: apps %d, with GA4 %d, fetched %d, fresh %d, failed %d, deferred %d, waiting %d, days folded %d, "
+    return (NAME + ": apps %d, with GA4 %d, fetched %d, fresh %d, failed %d, deferred %d, waiting %d, days folded %d, "
             "split %d, deeper %d, capped %d, hidden %d, futile %d, loss %d, flagged %d, months read again %d, "
             "repair days %d, months repaired %d, q days %d, q flagged %d, q calls %d, q left %d, q unscanned %d, "
             "q errors %d, q settling %d, q reread %d, q recovered %d, q fl waiting %d, q early %d, held %d, "

@@ -5,7 +5,8 @@ the user's first session, "returning" = session 2 on) with the ad revenue and im
 country. Measured (ga4_nvr_probe, 2 Nov 2026, 28 days): accepted on all 28 apps, every split tied to the read without it
 (revenue 1.00; the biggest app's ad-unit split 0.95 of the impressions).
 
-THREE reads a range [a, b], pinned to the app's Android stream (ga4.Ga4App), every row paged (USD):
+THREE reads a range [a, b] (READS; PARTS = the ones made, in this order), pinned to the app's Android stream
+(ga4.Ga4App), every row paged (USD):
   u   date × newVsReturning × adFormat × adUnitName → totalAdRevenue, eventCount   (eventName == ad_impression)
   c   date × newVsReturning × countryId             → totalAdRevenue, eventCount   (eventName == ad_impression)
   s   date × newVsReturning                         → sessions, activeUsers
@@ -31,7 +32,9 @@ Per app and run (at most MAX_CALLS calls; the property's quota floors as the Aud
     read alone once more too, to learn them;
   * the backfill: CHUNK_DAYS at a time, newest first, from the day before the recent window back to the app's history
     start (the Uninstall store's). Days older than RECENT_DAYS are final in GA4.
-Switched by GA4_NVR. Never raises; never prints (log_line: counts only).
+Switched by GA4_NVR. Never raises; never prints (log_line: counts only). A second instance of this module
+(fetch.ga4_paid.instance: its own globals — APP, NAME, DIR, PARTS and its knobs) runs this same code on a store of its
+own: fetch.ga4_nvr_paid, the "c" read of Google Ads users only.
 """
 import json
 import os
@@ -47,11 +50,20 @@ from . import ga4_firstopen as gf
 from . import ga4_uninstall as gu
 
 DIR = "ga4_nvr"
+APP = None                          # the GA4 client's class (None: ga4_firstopen.App) — a second instance of this
+#                                     module (fetch.ga4_paid.instance) sets its own: fetch.ga4_nvr_paid's holds every
+#                                     read to Google Ads users
+NAME = "ga4 nvr"                    # the log line's label (a second instance's own)
 STORE_V = 2                         # 2: impressions = ad_impression events (3 Nov 2026) — a v1 store is read again
 NVR = "newVsReturning"
 AD = ("totalAdRevenue", "publisherAdImpressions")
 EVENT = "ad_impression"
 EV = ("totalAdRevenue", "eventCount")                # the ad reads: impressions = ad_impression events (EVENT)
+READS = {"u": ((NVR, "adFormat", "adUnitName"), EV, EVENT),     # a part → its read: the dimensions after date, the
+         "c": ((NVR, "countryId"), EV, EVENT),                  # metrics, the eventName filter (None: every event)
+         "s": ((NVR,), ("sessions", "activeUsers"), None)}
+PARTS = ("u", "c", "s")             # the reads made, in this order — a day's record holds exactly these parts (a second
+#                                     instance's own: fetch.ga4_nvr_paid reads "c" only)
 RECENT_DAYS = 5                     # today … 4 days back: refreshed every REFRESH_HOURS (older days are final in GA4)
 REFRESH_HOURS = 1.0
 CHUNK_DAYS = 90                     # one backfill read (3 calls): ≤ 90 days × 2 × ~230 countries of rows
@@ -99,14 +111,15 @@ def _remark(mark, d, flags):
 
 
 def read(ga, a, b):
-    """[a, b] → ({YYYY-MM-DD: {"u": [...], "c": [...], "s": [...]}} for every day of the range, {day: "s" | "t"} when a page
-    of any read was sampled / thresholded, {day: {part: "s" | "t"}} — EACH read's own flag ({} = all three whole): one
-    sampled read never stands for the others (owner, 16 Nov 2026: "sample data de esa ho hi nhi sakta … proper check kro"
-    — the busiest app's country read came whole while its ad-unit read of the same day was sampled))."""
-    days = {(a + timedelta(days=i)).isoformat(): {"u": [], "c": [], "s": []} for i in range((b - a).days + 1)}
+    """[a, b] → ({YYYY-MM-DD: {"u": [...], "c": [...], "s": [...]}} for every day of the range — the parts of PARTS,
+    read in that order —, {day: "s" | "t"} when a page of any read was sampled / thresholded, {day: {part: "s" | "t"}}
+    — EACH read's own flag ({} = all of them whole): one sampled read never stands for the others (owner, 16 Nov 2026:
+    "sample data de esa ho hi nhi sakta … proper check kro" — the busiest app's country read came whole while its
+    ad-unit read of the same day was sampled))."""
+    days = {(a + timedelta(days=i)).isoformat(): {p: [] for p in PARTS} for i in range((b - a).days + 1)}
     part_mk = {}
-    for part, dims, mets, ev in (("u", (NVR, "adFormat", "adUnitName"), EV, EVENT), ("c", (NVR, "countryId"), EV, EVENT),
-                                 ("s", (NVR,), ("sessions", "activeUsers"), None)):
+    for part in PARTS:
+        dims, mets, ev = READS[part]
         rows = ga.report_all(body(a, b, dims, mets), event=ev, page_rows=PAGE_ROWS)
         for r in rows:
             d = ga4._d(r.get("date"))
@@ -178,11 +191,11 @@ def step_app(ga, store, today, hs, now):
         got, mk, pm = read(ga, a, top)
         for d, rec in got.items():
             cur = days.get(d)
-            if d in rr and isinstance(cur, dict) and all(p in cur for p in ("u", "c", "s")):
+            if d in rr and isinstance(cur, dict) and all(p in cur for p in PARTS):
                 own = mp.get(d)                         # read alone already (final; "rr" never asks it again): each
                 if isinstance(own, dict):               # of its reads stays, unless the chunk's is better (whole >
                     own = dict(own)                     # thresholded > sampled)
-                    for p in ("u", "c", "s"):
+                    for p in PARTS:
                         if RANK[pm[d].get(p)] > RANK[own.get(p)]:
                             cur[p] = rec[p]
                             if pm[d].get(p):
@@ -299,7 +312,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
             today = now.astimezone(ZoneInfo(tz)).date()
             path = store_path(data_dir, aid)
             store = load_store(path) or {"v": STORE_V}
-            ga = gf.App(access[owner], pid, r["stream_id"], prop, over=over, max_calls=MAX_CALLS)
+            ga = (APP or gf.App)(access[owner], pid, r["stream_id"], prop, over=over, max_calls=MAX_CALLS)
             try:
                 res = step_app(ga, store, today, hs, now)
                 st.pop("deferred", None)
@@ -334,7 +347,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
 def log_line(status):
     """The build log's ONE line for this step — counts only."""
     c = (status or {}).get("counts") or {}
-    return ("ga4 nvr: apps %d, with GA4 %d, fetched %d, fresh %d, failed %d, deferred %d, waiting %d, calls %d, "
+    return (NAME + ": apps %d, with GA4 %d, fetched %d, fresh %d, failed %d, deferred %d, waiting %d, calls %d, "
             "tokens %d%s" % tuple([gaud._int(c.get(k)) for k in ("selected", "with_ga4", "fetched", "fresh", "failed",
                                                                  "deferred", "waiting", "calls", "tokens")]
                                   + [(", error " + status["error"]) if (status or {}).get("error") else ""]))

@@ -333,6 +333,76 @@ def test_run_uninstall_and_its_wrapper_return_the_files_for_headers(site):
     assert files[0] == ASSET and len(files) == 4 and "uninstall" in dash
 
 
+# ── the Google Ads users' GA4 steps (fetch.ga4_nvr_paid, fetch.ga4_cube_paid): after every other GA4 step ──────────
+
+def test_the_google_ads_steps_run_after_screens_the_light_one_first_only_when_switched_on(site, monkeypatch, capsys):
+    """GA4_NVRP / GA4_CUBEP off (the default): never run, nothing printed. On: after Screens (the last live GA4 step:
+    the paid backfill takes only what every live step left), the light paid read before the paid cube, each with its
+    own budget (the build's, else the module's) and its counts line; its own bug (an "error" in its status) or an
+    exception prints its "<step> skipped: <Type>" line (the health banner's) and costs that step only; an app failing
+    run after run (counts "stuck", ga4_paid.streak — as ga4_cecpm's) prints "<step> skipped: StuckAppError"."""
+    from admob_iq import health
+    from admob_iq.fetch import ga4_cube_paid as gcp
+    from admob_iq.fetch import ga4_nvr_paid as gnp
+    from admob_iq.fetch import ga4_screens as gsn
+    data, out, _ = site
+    order = []
+
+    def step(name, status):
+        def refresh_all(cfg, d, apps, now, clock, budget=None, **kw):
+            order.append((name, budget))
+            return copy.deepcopy(status)
+        return refresh_all
+    monkeypatch.setattr(gsn, "refresh_all", step("screens", {"counts": {}}))
+    monkeypatch.setattr(gnp, "refresh_all", step("nvr paid", {"counts": {"selected": 5, "with_ga4": 3, "fetched": 2,
+                                                                         "stuck": 0}}))
+    monkeypatch.setattr(gcp, "refresh_all", step("cube paid", {"counts": {"selected": 5, "with_ga4": 3, "fetched": 1,
+                                                                          "stuck": 0}}))
+    assert (settings()["ga4_nvrp"], settings()["ga4_cubep"]) == (False, False)
+    run(data, out, ga4_settings(ga4_screens=True))
+    assert order == [("screens", gsn.BUDGET_SEC)] and "paid" not in capsys.readouterr().err
+    order.clear()
+    dash, _ = run(data, out, ga4_settings(ga4_screens=True, ga4_nvrp=True, ga4_cubep=True, ga4_cubep_budget_sec=70))
+    err = capsys.readouterr().err
+    assert order == [("screens", gsn.BUDGET_SEC), ("nvr paid", gnp.BUDGET_SEC), ("cube paid", 70)]
+    paid = [ln for ln in err.splitlines() if "paid" in ln]
+    assert paid[0] == ("ga4 nvr paid: apps 5, with GA4 3, fetched 2, fresh 0, failed 0, deferred 0, waiting 0, "
+                       "calls 0, tokens 0")
+    assert len(paid) == 2 and paid[1].startswith("ga4 cube paid: apps 5, with GA4 3, fetched 1, fresh 0, ")
+    assert ", u kept" not in paid[1] and "skipped" not in err and len(dash["uninstall"]["apps"]) == 3
+    monkeypatch.setattr(gnp, "refresh_all", lambda *a, **k: 1 / 0)
+    monkeypatch.setattr(gcp, "refresh_all", step("cube paid", {"counts": {}, "error": "KeyError"}))
+    dash, _ = run(data, out, ga4_settings(ga4_nvrp=True, ga4_cubep=True))
+    paid = [ln for ln in capsys.readouterr().err.splitlines() if "paid" in ln]
+    assert paid[0] == "ga4 nvr paid skipped: ZeroDivisionError" and paid[2] == "ga4 cube paid skipped: KeyError"
+    assert len(paid) == 3 and paid[1].startswith("ga4 cube paid: apps 0, ") and paid[1].endswith(", error KeyError")
+    assert len(dash["uninstall"]["apps"]) == 3                          # the tab as always
+    health.FAULTS.clear()
+    try:
+        for ln in paid:
+            health.scan(ln)
+        assert health.FAULTS == {"ga4 nvr paid": "ZeroDivisionError", "ga4 cube paid": "KeyError"}   # the banner
+    finally:
+        health.FAULTS.clear()
+    monkeypatch.setattr(gnp, "refresh_all", step("nvr paid", {"counts": {"selected": 5, "with_ga4": 3, "failed": 3,
+                                                                         "stuck": 2}}))
+    monkeypatch.setattr(gcp, "refresh_all", step("cube paid", {"counts": {"selected": 5, "with_ga4": 3, "failed": 1,
+                                                                          "stuck": 1}}))
+    dash, _ = run(data, out, ga4_settings(ga4_nvrp=True, ga4_cubep=True))
+    paid = [ln for ln in capsys.readouterr().err.splitlines() if "paid" in ln]
+    assert len(paid) == 4 and paid[0].startswith("ga4 nvr paid: apps 5, with GA4 3, fetched 0, fresh 0, failed 3, ")
+    assert paid[1] == "ga4 nvr paid skipped: StuckAppError" and paid[3] == "ga4 cube paid skipped: StuckAppError"
+    assert paid[2].startswith("ga4 cube paid: apps 5, with GA4 3, fetched 0, fresh 0, failed 1, ")
+    assert len(dash["uninstall"]["apps"]) == 3
+    health.FAULTS.clear()
+    try:
+        for ln in paid:
+            health.scan(ln)
+        assert health.FAULTS == {"ga4 nvr paid": "StuckAppError", "ga4 cube paid": "StuckAppError"}   # the banner
+    finally:
+        health.FAULTS.clear()
+
+
 # ── privacy + determinism ────────────────────────────────────────────────────────────────────────
 
 def test_the_log_line_counts_the_update_windows_that_crashed_and_only_then(site, capsys, monkeypatch):

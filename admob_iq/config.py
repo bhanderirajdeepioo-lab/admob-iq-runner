@@ -201,8 +201,17 @@ def settings() -> dict:
         # … its card part (be_ecpm: the eCPM index day 1 = the first session, against the country's benchmark):
         # GA4_CECPM_USE=false = the reads go on, the Breakeven files exactly as without it
         "ga4_cecpm_use": _env("GA4_CECPM_USE", "false").lower() == "true",
+        # ⚖️ Breakeven's Google Ads | Organic split (owner, 16 Nov 2026): the cohort cube (fetch.ga4_cube_paid) and the
+        # first-session country read (fetch.ga4_nvr_paid) of Google Ads users only — the cube's and ga4_nvr's own reads
+        # with GA4's first-user channel in-list, own stores, run after every other GA4 step. Off: nothing of them is
+        # read, written or printed; *_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
+        "ga4_cubep": _env("GA4_CUBEP", "false").lower() == "true",
+        "ga4_cubep_budget_sec": _int_env(("GA4_CUBEP_BUDGET_SEC",), 0),
+        "ga4_nvrp": _env("GA4_NVRP", "false").lower() == "true",
+        "ga4_nvrp_budget_sec": _int_env(("GA4_NVRP_BUDGET_SEC",), 0),
         # 🖼️ Screens: GA4 views and ad impressions per screen class per day, every layer (fetch.ga4_screens: the recent
-        # days every 3 / 12 hours, the history newest first; runs after every other GA4 step, stricter quota floors).
+        # days every 3 / 12 hours, the history newest first; runs after every live GA4 step, stricter quota floors —
+        # only the Google Ads users' reads above run after it, under the same floors).
         # Off: nothing of it is read, written or printed; GA4_SCREENS_BUDGET_SEC = its own seconds per build (unset: 0 →
         # the module's BUDGET_SEC); SCREENS_STAGED_DIR = the history job's folder in the private clone, merged first
         # (unset: no merge)

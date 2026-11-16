@@ -77,8 +77,9 @@ A recent day turning final moves into its month file (a whole record never gives
 never to one made while recent) and is read once more as final (the read's "upto" catches it up). A store file that is
 there but cannot be read is never written over (StoreError: that app fails the run, the file stays).
 
-Per run (the hourly build; this step runs after every other GA4 step): properties side by side (WORKERS), each app's
-calls ≤ APP_CALLS, the run's clock BUDGET_SEC. Pass 1, most stale first: every due read (t v w a every 3 h, the layers
+Per run (the hourly build; this step runs after every live GA4 step — only the Google Ads users' reads,
+fetch.ga4_nvr_paid and fetch.ga4_cube_paid, run after it, under these same floors): properties side by side
+(WORKERS), each app's calls ≤ APP_CALLS, the run's clock BUDGET_SEC. Pass 1, most stale first: every due read (t v w a every 3 h, the layers
 every 12 h) — its final days since "upto", then the recent window with the truth read just before — in at most 60 % of
 the clock. Pass 2: the backfill, newest first by chunk across every read, the last 90 final days of every app first.
 The property stops for this run (deferred, kept) under STRICTER floors than the other GA4 steps: an hourly token bucket

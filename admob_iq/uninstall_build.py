@@ -372,7 +372,7 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         except Exception as e:
             print("ga4 cohort ecpm skipped: %s" % type(e).__name__, file=sys.stderr)
     if s.get("ga4_screens"):                            # 🖼️ Screens (GA4_SCREENS): views and ad impressions per screen
-        try:                                            # class per day, every layer — AFTER every other GA4 step (it
+        try:                                            # class per day, every layer — AFTER every live GA4 step (it
             from .fetch import ga4_screens as gsn       # takes only what they leave: stricter quota floors); own store,
             with _sc.stage("ga4_screens"):              # a failure costs that step only
                 print(gsn.log_line(gsn.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
@@ -381,6 +381,32 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
                       file=sys.stderr)
         except Exception as e:
             print("ga4 screens skipped: %s" % type(e).__name__, file=sys.stderr)
+    if s.get("ga4_nvrp"):                               # ⚖️ Breakeven's Google Ads users: their first-session eCPM by
+        try:                                            # country (GA4_NVRP) — ga4_nvr's country read with the paid
+            from .fetch import ga4_nvr_paid as gnp      # filter, AFTER Screens (every live GA4 step first: the paid
+            with _sc.stage("ga4_nvr_paid"):             # backfill takes only what they leave); own store, a failure
+                st_np = gnp.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,    # costs that step only
+                                        budget=s.get("ga4_nvrp_budget_sec") or gnp.BUDGET_SEC)
+                print(gnp.log_line(st_np), file=sys.stderr)
+                if st_np.get("error"):                  # its own bug: the health banner's line too
+                    print("ga4 nvr paid skipped: %s" % st_np["error"], file=sys.stderr)
+                elif (st_np.get("counts") or {}).get("stuck"):      # an app failing run after run: the banner too
+                    print("ga4 nvr paid skipped: StuckAppError", file=sys.stderr)
+        except Exception as e:
+            print("ga4 nvr paid skipped: %s" % type(e).__name__, file=sys.stderr)
+    if s.get("ga4_cubep"):                              # ⚖️ … and their cohort cube (GA4_CUBEP): the cube's reads with
+        try:                                            # the paid filter, after the light read above; own store and
+            from .fetch import ga4_cube_paid as gcp     # budget, a failure costs that step only
+            with _sc.stage("ga4_cube_paid"):
+                st_cp = gcp.refresh_all(cfg, data_dir, apps, now, clock or time.monotonic,
+                                        budget=s.get("ga4_cubep_budget_sec") or gcp.BUDGET_SEC)
+                print(gcp.log_line(st_cp), file=sys.stderr)
+                if st_cp.get("error"):                  # its own bug: the health banner's line too
+                    print("ga4 cube paid skipped: %s" % st_cp["error"], file=sys.stderr)
+                elif (st_cp.get("counts") or {}).get("stuck"):      # an app failing run after run: the banner too
+                    print("ga4 cube paid skipped: StuckAppError", file=sys.stderr)
+        except Exception as e:
+            print("ga4 cube paid skipped: %s" % type(e).__name__, file=sys.stderr)
     state = gu.load_state(data_dir)
     os.makedirs(out_dir, exist_ok=True)
     details, rows, no_ga4, files = [], [], [], [ASSET]
