@@ -637,24 +637,40 @@ def test_the_ranking_cuts_every_pair_at_the_shorter_curve():
     assert be._cpair([cross, late] * 10) == 100.0
 
 
-def test_a_day_outside_the_learned_range_is_not_answered():
-    """A country's CPI or eCPM_fs outside the range its benchmark learned from gets no answer (its spend: "data kam"),
-    never an extrapolated one: the app's curve is the country inside alone."""
-    flat = [[j, [math.log(1.5), -1.0, 0.0], -0.2, 0.2, 40, math.log(1.5)] for j in range(13)]   # cheaper CPI → more ROAS
+def test_a_day_outside_the_learned_range_is_answered_at_its_edge_moved_by_the_ratio():
+    """Owner, 16 Nov 2026: "Cpi kitna bhi uppar jaye uspe vo rule mat lagao … benchmark se kitna plus hua he aur ecpm
+    kitna benchmark se badla he": a country whose CPI or eCPM_fs is outside the range its benchmark learned from is
+    answered too — its curve at the range's edge, moved by the ratio past it (twice the edge's CPI: half the ROAS; an
+    eCPM_fs under the range: as much lower); an eCPM_fs above the range moves it no further than the range's top. Every
+    such country counts in the app's curve (no "data kam" for it); K3's own chances only inside the range."""
+    flat = [[j, [math.log(1.5), -0.5, 0.25], -0.2, 0.2, 40, math.log(1.5)] for j in range(13)]
     rng = [math.log(1.0), math.log(4.0), math.log(1.0), math.log(6.0)]
     fc = {"origin": "2031-01-01", "fits": {
-        cc: {"k3": [math.log(31.0), 0.0, 0.0, 0.5, 400, 30, 0, 10], "cv": flat, "rng": rng} for cc in ("AA", "BB", "CC")}}
+        cc: {"k3": [math.log(31.0), 0.0, 0.0, 0.5, 400, 30, 0, 10], "cv": flat, "rng": rng}
+        for cc in ("AA", "BB", "CC", "DD", "EE", "FF")}}
     cal = {"built": "2031-01-01", "cty": {str(H): [[0.0, 0.0], [1.0, 1.0]] for H in be.HS},
            "pit": {"0.1": 0.1, "0.5": 0.5, "0.9": 0.9}, "band": {}}
     day = "2030-12-30"
-    app_row = R(day=day, sp=300.0, na=150.0, obs=0, oc=1.0)
+    app_row = R(day=day, sp=600.0, na=300.0, obs=0, oc=1.0)
     row = lambda cpi, ecpm: R(day=day, sp=100.0, na=50.0, cpi=cpi, c=math.log(cpi), e=math.log(ecpm))
-    cs = {"AA": row(2.0, 3.0), "BB": row(0.026, 3.0), "CC": row(2.0, 0.1)}      # inside; CPI below; eCPM_fs below
+    cs = {"AA": row(2.0, 3.0), "BB": row(8.0, 3.0), "CC": row(2.0, 0.5), "DD": row(2.0, 12.0), "EE": row(0.5, 3.0),
+          "FF": row(8.0, 12.0)}
+    want = {"AA": 1.5 * 2 ** -0.5 * 3 ** 0.25,                 # inside: the curve itself
+            "BB": 1.5 * 4 ** -0.5 * 3 ** 0.25 / 2.0,           # CPI twice the top: the edge's curve, halved
+            "CC": 1.5 * 2 ** -0.5 * 0.5,                       # eCPM_fs half the bottom: the edge's curve, halved
+            "DD": 1.5 * 2 ** -0.5 * 6 ** 0.25,                 # eCPM_fs above the top: held at the top
+            "EE": 1.5 * 1 ** -0.5 * 3 ** 0.25 * 2.0,           # CPI half the bottom: the edge's curve, doubled
+            "FF": 1.5 * 4 ** -0.5 * 6 ** 0.25 / 2.0}           # both out: CPI by the ratio, eCPM_fs held at the top
+    for cc, x in cs.items():
+        ages, mid, lo, hi = be.curve_at(flat, rng, x)
+        assert math.exp(mid[1]) == pytest.approx(want[cc], rel=1e-9)
+        assert math.exp(lo[1]) == pytest.approx(want[cc] * math.exp(-0.2), rel=1e-9)     # (its band moves with it)
     out = be.predict("k", fc, cal, ("2030-12-31", [app_row], {day: cs}))["days"][0]
-    assert [x[0] for x in out["cty"]] == ["AA"] and out["cov"] == pytest.approx(1 / 3, abs=1e-3)
-    assert sorted(x[0] for x in out["unc"]) == ["BB", "CC"]
-    assert out["app"]["roas"][1] == pytest.approx(1.5 / 2.0, abs=1e-3)          # AA's curve at CPI 2: 1.5 × 2^−1
-    assert out["app"]["roas"][0] == pytest.approx(1.0 / 300.0, abs=1e-4)        # (day 0 is observed: its real ROAS)
+    assert sorted(x[0] for x in out["cty"]) == sorted(cs) and out["cov"] == 1.0 and out["unc"] == []
+    assert out["app"]["roas"][1] == pytest.approx(sum(want.values()) / 6, abs=1e-4)   # each by its spend share
+    assert out["app"]["roas"][0] == pytest.approx(1.0 / 600.0, abs=1e-4)               # (day 0 is observed: real)
+    pk = {x[0]: x[4:7] for x in out["cty"]}
+    assert all(v is not None for v in pk["AA"]) and all(pk[cc] == [None] * 3 for cc in cs if cc != "AA")
     # the edges: the learned range itself is inside (stored widened), and only usable days before O count
     O = date(2031, 1, 1).toordinal()
     rows = [R(day="2030-12-01", c=0.1234567, e=-0.5), R(day="2030-12-02", c=0.9, e=0.7654321),
@@ -664,7 +680,103 @@ def test_a_day_outside_the_learned_range_is_not_answered():
     g = be._rng(rows, O)
     assert g == [0.123456, 0.9, -0.5, 0.765433]                # (the young days being answered never widen it)
     assert be._seen(g, rows[0]) and be._seen(g, rows[1]) and not any(be._seen(g, x) for x in rows[2:])
-    assert be._rng(rows[2:], O) is None and not be._seen(None, rows[0])     # nothing learned: nothing answered
+    assert be._rng(rows[2:], O) is None and not be._seen(None, rows[0])     # nothing learned: no fit at all
+    assert be._edge(g, rows[0]) == (rows[0].c, rows[0].e, 0.0)               # inside: no move
+    # a row under $5 / 30 new users outside its range is not read past it ("data kam", as before): on a young day
+    # where it alone has a benchmark it would otherwise stand for the whole app
+    young = R(day=day, sp=1000.0, na=500.0, obs=0, oc=10.0)
+    tiny = lambda jd: R(day=day, sp=0.5, na=5.0, cpi=0.01, c=math.log(0.01), e=math.log(3.0), jd=jd,   # noqa: E731
+                        cum=[0.5] + [None] * 12, obs=0, oc=0.5)
+    big = R(day=day, sp=999.5, na=495.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0))                # (no benchmark)
+    one = {"origin": "2031-01-01", "fits": {"AA": fc["fits"]["AA"]}}
+    out = be.predict("k", one, cal, ("2030-12-31", [young], {day: {"AA": tiny(False), "ZB": big}}))["days"][0]
+    assert "app" not in out and out["card"] is None and out["cw"] == "c" and out["cty"] == []
+    assert sorted(u[0] for u in out["unc"]) == ["ZB", "…"] and out["cov"] == 0.0
+    out = be.predict("k", one, cal, ("2030-12-31", [young], {day: {"AA": tiny(True), "ZB": big}}))["days"][0]
+    assert [x[0] for x in out["cty"]] == ["AA"] and "app" in out                # judged: read at the edge
+
+
+def test_the_back_tests_answer_a_country_outside_its_range_as_predict_does_and_k3_learns_only_inside(tmp_path,
+                                                                                                      monkeypatch):
+    """The two back-tests read the same curves as predict (_edge past the range): a narrower learned range answers the
+    same days with the same countries (only how far each is moved changes), while K3's maps get only the rows inside."""
+    site, data, dash = make(tmp_path)
+    newest, app, cty = be.load(site, data, KEYS["a"], "roi_%s.json.gz" % KEYS["a"])
+    A0, C0 = be.backtest(KEYS["a"], newest, app, cty, {})
+    rb0, cb0, sk0, au0, n0, ga0, gc0 = be.asof(KEYS["a"], newest, app, cty, {})
+    orig = be._rng
+
+    def narrow(rows, O):
+        g = orig(rows, O)
+        if g is None:
+            return None
+        mc, me = (g[0] + g[1]) / 2, (g[2] + g[3]) / 2
+        return [mc - 0.01, mc + 0.01, me - 0.01, me + 0.01]     # most days outside
+    monkeypatch.setattr(be, "_rng", narrow)
+    seen, orig_at = [], be.curve_at
+
+    def rec(cf, g, x):                                          # every covered row read through the edge rule
+        seen.append(be._seen(g, x))
+        return orig_at(cf, g, x)
+    monkeypatch.setattr(be, "curve_at", rec)
+    A1, C1 = be.backtest(KEYS["a"], newest, app, cty, {})
+    nb = len(seen)
+    rb1, cb1, sk1, au1, n1, ga1, gc1 = be.asof(KEYS["a"], newest, app, cty, {})
+    assert nb and not all(seen[:nb]) and len(seen) > nb and not all(seen[nb:])   # (outside rows too, in both)
+    has = lambda A: [(x["X"], x["O"]) for x in A if x.get("a")]                    # noqa: E731
+    assert has(A1) == has(A0) and len(has(A0)) >= 50                               # every day still answered
+    assert any(x["a"]["roas"] != y["a"]["roas"] for x, y in zip(A0, A1) if x.get("a"))   # (moved, not dropped)
+    assert 0 < len(C1) < len(C0)                                                   # K3: only the rows inside
+    cnt = lambda E: {k: len(v) for k, v in E.items()}                              # noqa: E731
+    assert n1 == n0 and cnt(rb1) == cnt(rb0) and cnt(cb1) == cnt(cb0) and cnt(gc1) == cnt(gc0)   # the same rows …
+    assert any(sorted(rb1[k]) != sorted(rb0[k]) for k in rb0)                      # … read off the moved curves
+    # one day by hand: the shift's app error at day 1 → 7 off the countries' curves at the edge (curve_at), as asof reads
+    nw = date.fromisoformat(newest).toordinal()
+    byday = {}
+    for cc_, rows in cty.items():
+        for x in rows:
+            byday.setdefault(x.day, {})[cc_] = x
+    F = {}
+    r = next(r for r in app if be._usable(r) and r.cum and r.cum[1] and r.X + 6 + be.LAG <= nw and r.cum[4] is not None
+             and any(cc_ in be._fits_at(cty, be._month(r.X + 1 + be.LAG), F) and not be._seen(
+                 be._fits_at(cty, be._month(r.X + 1 + be.LAG), F)[cc_][2], x) for cc_, x in byday[r.day].items()
+                 if x.c is not None and x.e is not None))
+    cov = be._fits_at(cty, be._month(r.X + 1 + be.LAG), F)
+    parts = [(x.sp,) + tuple(orig_at(cov[cc_][1], cov[cc_][2], x)[:2]) for cc_, x in byday[r.day].items()
+             if cc_ in cov and x.c is not None and x.e is not None]
+    ages, roas = be.combine(parts)
+    ra = r.cum[1] / r.sp
+    sh = be._bound(ages, be._shifted(ages, roas, 1, ra), 1, ra, be._gq(None, KEYS["a"], "app"))
+    v6 = dict(be._after(ages, sh, 1, ra))[6]
+    assert math.log(max(r.cum[4] / r.sp, be.ROAS_FLOOR) / v6) in [pytest.approx(e, abs=1e-12) for e in rb1[(1, 6)]]
+
+
+def test_the_back_tests_skip_a_small_row_outside_its_range_as_predict_does(tmp_path):
+    """The judged gate (_answers) holds in backtest() and asof() too: a covered country's row under $5 / 30 new users
+    outside its learned range is not answered there ("data kam", as in predict) — the back-tests come out exactly as if
+    the row were not there — while one inside its range still is."""
+    site, data, dash = make(tmp_path)
+
+    def run(c, e, drop):
+        newest, app, cty = be.load(site, data, KEYS["a"], "roi_%s.json.gz" % KEYS["a"])
+        days = set()
+        for i, x in enumerate(cty["AA"]):
+            if i >= 150 and i % 9 == 0:                         # (made small, as load() builds one: no cells)
+                x.sp, x.n, x.jd, x.cpi, x.c = 2.0, 10, False, math.exp(c), c
+                x.na = 2.0 / x.cpi
+                if e is not None:
+                    x.e = e
+                x.cum = x.fin = x.dd = None
+                days.add(x.day)
+        if drop:
+            cty["AA"] = [x for x in cty["AA"] if x.day not in days]
+        A, C = be.backtest(KEYS["a"], newest, app, cty, {})
+        rb, cb, sk, au, n, ga, gc = be.asof(KEYS["a"], newest, app, cty, {})
+        norm = lambda E: {k: sorted(v) for k, v in E.items()}             # noqa: E731
+        return A, C, norm(rb), norm(cb), sk, au, n, norm(ga), norm(gc)
+    assert run(math.log(0.01), None, False) == run(math.log(0.01), None, True)          # outside: as if not there
+    inn, gone = run(math.log(0.5), math.log(5.0), False), run(math.log(0.5), math.log(5.0), True)
+    assert inn[0] != gone[0] and inn[2] != gone[2]                                       # inside: answered
 
 
 def _one(fc_fits, cal, app_row, cs, day="2030-12-30"):
@@ -1063,6 +1175,42 @@ def test_a_calibration_without_the_shifts_ranges_is_made_again_the_same_day(tmp_
         assert json.load(f)["cv"] == be.CALV
 
 
+def test_a_failed_remake_after_calv_moved_keeps_the_last_good_one_shifting_and_tries_again(tmp_path, monkeypatch, capsys):
+    """CALV moved past a calibration that already carries the shift's parts (cv ≥ SHIFT_CV): if the remake fails, the
+    days stay shifted on the kept one (never every app's shift off for a failed remake), and every build tries again."""
+    site, data, dash = make(tmp_path)
+    be.run(dash, data, site, {}, NOW)
+    be.pop_line()
+    shifted = sum("anc" in (d.get("app") or {}) for d in body_of(site, "a")["days"])
+    p = os.path.join(data, "be_tab", "calib.json")
+    with open(p, encoding="utf-8") as f:
+        cal = json.load(f)
+    first_skill = cal["skill"]
+    sentinel = {k: {"auc": [1.0] * 3, "c": [1.0] * 3, "n": 1} for k in cal["skill"]}
+    with open(p, "w", encoding="utf-8") as f:                                    # (an older content with the parts)
+        json.dump(dict(cal, cv=be.SHIFT_CV, skill=sentinel), f)
+    calls = {"n": 0}
+
+    def boom(*a, **k):
+        calls["n"] += 1
+        return 1 / 0
+    monkeypatch.setattr(be, "calibrate", boom)
+    capsys.readouterr()
+    assert be.run(copy.deepcopy(dash), data, site, {}, NOW + timedelta(hours=3)) == ["/be_*"]
+    assert be.pop_line().endswith("calib no") and "be skipped: ZeroDivisionError" in capsys.readouterr().err
+    assert shifted and sum("anc" in (d.get("app") or {}) for d in body_of(site, "a")["days"]) == shifted
+    b_skill = body_of(site, "a")["skill"]
+    assert b_skill != sentinel[KEYS["a"]] and b_skill["n"] > 1                    # this build's own skill, not the kept
+    with open(p, encoding="utf-8") as f:
+        kept = json.load(f)
+    assert kept["cv"] == be.SHIFT_CV and kept["skill"][KEYS["a"]] == b_skill and set(kept["skill"]) == set(first_skill)
+    be.run(copy.deepcopy(dash), data, site, {}, NOW + timedelta(hours=4))
+    assert calls["n"] == 2                                                       # (tried again on the next build)
+    be.pop_line()
+    assert be._shifts({"cv": be.CALV}) and not be._shifts({"cv": be.SHIFT_CV - 1}) and not be._shifts({})
+    assert not be._shifts({"cv": True}) and not be._shifts(None)
+
+
 def test_a_skill_kept_from_before_the_shift_passes_through_as_it_was():
     """A calibration kept from before the shift (its new one failed) carries one install-time C (a number): the file keeps
     it as it was — the page reads that shape with its own old words — never the old AUC under the new day labels."""
@@ -1388,13 +1536,16 @@ def test_a_fits_cache_without_fv_or_an_older_one_is_refitted_the_same_day(tmp_pa
 
 
 def _card_world(specs, day="2030-12-14", gaps=(), whole=False, jd=True):
-    """specs {cc: (spend, cum at j 0..5, fin at j 0..5, curve medians log at j 0..5 or None for no entry, in-range?[,
-    small?])} → the card of one install day through predict() (whole: the day's body; small: a row under $5 / 30 new
-    users — it carries only its card cells kc / kf, like load() builds it)."""
+    """specs {cc: (spend, cum at j 0..5, fin at j 0..5, curve medians log at j 0..5 or None for no entry, covered (a
+    benchmark)? — True, False (none) or "out" (one whose learned range the day's CPI / eCPM_fs is outside)[, small?])}
+    → the card of one install day through predict() (whole: the day's body; small: a row under $5 / 30 new users — it
+    carries only its card cells kc / kf, like load() builds it)."""
     fits, cs = {}, {}
     for cc, (sp, cum, fin, med, ok, *sm) in specs.items():
         cv = [[j, [m, 0.0, 0.0], -0.2, 0.2, 40, m] for j, m in enumerate(med) if m is not None]
-        fits[cc] = {"k3": [math.log(31.0), 0.0, 0.0, 0.5, 400, 30, 0, 10], "cv": cv, "rng": WIDE if ok else [9, 9, 9, 9]}
+        if ok:                             # (no benchmark: no fit — a CPI / eCPM_fs outside the range is covered now)
+            fits[cc] = {"k3": [math.log(31.0), 0.0, 0.0, 0.5, 400, 30, 0, 10], "cv": cv,
+                        "rng": [9, 9, 9, 9] if ok == "out" else WIDE}
         if sm and sm[0]:
             cs[cc] = R(day=day, sp=sp, na=sp / 2, cpi=2.0, c=math.log(2.0), e=math.log(3.0), kc=list(cum), kf=list(fin), jd=False)
         else:
@@ -1412,11 +1563,11 @@ def test_the_card_joins_each_countries_own_median_by_the_days_spend_share():
     """One set S per card = the covered countries with a curve entry at every card day (small rows too): roas = Σ
     cumulative ÷ Σ spend, bench = spend-weighted exp(its curve median), cv = S's spend ÷ the day's whole country spend;
     a day where a country of S has no cell is null for BOTH lines (the set never changes along the line); fin needs every
-    country's final cell AND a date at least CLAG days old; an out-of-range country is no covered country."""
+    country's final cell AND a date at least CLAG days old; a country without a benchmark is no covered country."""
     L = math.log
     specs = {"AA": (300.0, [30, 60, 90, 120, 150, 180], [30, 60, 90, 120, 150, None], [L(0.2), L(0.4), L(0.6), L(0.8), L(1.0), L(1.2)], True),
              "BB": (100.0, [40, 50, None, None, 100, 110], [40, 50, None, None, 100, 110], [L(0.5), L(0.7), L(0.9), L(1.1), L(1.4), L(1.6)], True),
-             "CC": (100.0, [10, 20, 30, 40, 50, 60], [10, 20, 30, 40, 50, 60], [L(0.1)] * 6, False),    # (out of range)
+             "CC": (100.0, [10, 20, 30, 40, 50, 60], [10, 20, 30, 40, 50, 60], [L(0.1)] * 6, False),    # (no benchmark)
              "DD": (50.0, [5] * 6, [5] * 6, [L(0.1), L(0.1), L(0.1), None, L(0.1), L(0.1)], True)}      # (no curve entry at 3)
     c = _card_world(specs)
     assert c["roas"][0] == pytest.approx((30 + 40) / 400, abs=1e-4)             # (CC, DD not in S: 400 of 550)
@@ -1427,6 +1578,10 @@ def test_the_card_joins_each_countries_own_median_by_the_days_spend_share():
     assert c["roas"][4] == pytest.approx(250 / 400, abs=1e-4)
     assert c["fin"] == [1, 1, 0, 0, 1, 0]                                           # j = 5: AA's cell is not final
     assert c["roas"][5] == pytest.approx(290 / 400, abs=1e-4) and c["bench"][5] == pytest.approx((300 * 1.2 + 100 * 1.6) / 400, abs=1e-4)
+    o = _card_world({"AA": specs["AA"], "EE": (100.0, [10, 20, 30, 40, 50, 60], [10, 20, 30, 40, 50, 60], [L(0.1)] * 6,
+                                                 "out")})          # outside its learned range: in S, both lines
+    assert o["cv"][0] == 1.0 and o["roas"][0] == pytest.approx((30 + 10) / 400, abs=1e-4)
+    assert o["bench"][0] == pytest.approx((300 * 0.2 + 100 * 0.1) / 400, abs=1e-4)
     d = _card_world({"AA": (100.0, [None] * 6, [None] * 6, [L(0.2)] * 6, True)}, whole=True)    # nothing known at any j
     assert d["card"] is None and d["cw"] == "r"
     assert _card_world({"AA": (50.0, [5] * 6, [5, 5, None, 5, 5, 5], [L(0.2)] * 6, True)})["fin"] == [1, 1, 0, 1, 1, 1]

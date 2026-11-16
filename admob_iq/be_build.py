@@ -23,9 +23,10 @@ breaks even (the page shows the days of its period).
   changed): per country its judged days with a CPI and an eCPM_fs — the days whose BE is visible by O are events,
   every other trained day "BE > its age so far" (censored at the largest observed grid age); the bot: a Huber fit of
   log(BE + 1) on log CPI and log eCPM_fs, events with |robust z| > 3 dropped; ≥ 20 kept events = a COVERED country
-  (fewer: uncovered, never estimated); the log CPI / log eCPM_fs range of its usable days (a later day outside it is
-  not answered: no past day there — never extrapolated). K3: log(BE + 1) = a + b·log CPI + c·log eCPM_fs + σ·ε, right-censored normal
-  errors (Schmee–Hahn EM). Its ROAS curve: per GRID age, Huber → bot → Huber of log ROAS(age) on the same inputs over
+  (fewer: uncovered, never estimated); the log CPI / log eCPM_fs range of its usable days (a later judged day outside
+  it is answered at the range's edge and moved by the ratio past it — _edge; a smaller row outside it is not answered:
+  _answers; K3's own chances only inside it). K3: log(BE + 1)
+  = a + b·log CPI + c·log eCPM_fs + σ·ε, right-censored normal errors (Schmee–Hahn EM). Its ROAS curve: per GRID age, Huber → bot → Huber of log ROAS(age) on the same inputs over
   the days that reached that age (the kept residuals' 10 / 90 % = its range), up to the first age with < 20 kept days
   (the curve's limit). Each curve entry also stores the country's median of log ROAS(age) over its usable past days
   (rmed): the card's benchmark is built from these, per country (see the card below). "bm" (fits[cc]["bm"] = [bCPI,
@@ -45,14 +46,18 @@ breaks even (the page shows the days of its period).
   log real ÷ shifted ROAS per (a, age) (the app's range, "bandb") and per (a, age, size bucket) (a country's,
   "cbandb", every size pooled as "all"), and per app its skill (below). A calibration that fails keeps the last good
   file (tried again the next UTC day; none yet: every build); one without the shift's ranges (cv < CALV) is made again.
-  predict (every build, from the caches only): per install day each covered country whose CPI and eCPM_fs are inside
-  its learned range: its curve at them (made non-decreasing in age), weighted by its share of the day's covered spend and summed = the app's ROAS
+  predict (every build, from the caches only): per install day each covered country with a CPI and an eCPM_fs that day
+  (_answers): its curve at them (made non-decreasing in age; past its learned range the edge's curve moved by the ratio,
+  _edge),
+  weighted by its share of the day's covered spend and summed = the app's ROAS
   curve (a country whose curve stops earlier keeps its last value: a lower bound) — the owner's rule, never an average
   of the countries' BE days — → app BE = where it first reaches 100 % (linear between grid ages), the band and its
   crossings (the page reads ROAS at 30 / 90 / 180 off this same curve: one curve, one answer — a separately
   calibrated P beside it contradicted its BE day); per covered country its calibrated
-  K3 P's and days (null past the longest age its data watched, that limit beside it); the uncovered countries as their
-  spend share (no benchmark, or a CPI / eCPM_fs outside it: "x % spend: data kam"; the ones under 0.5 % as one "…"
+  K3 P's (null when its CPI / eCPM_fs is outside its learned range: K3 answers only inside it) and days (null past the
+  longest age its data watched, that limit beside it); the uncovered countries as their
+  spend share (no benchmark, no CPI / eCPM_fs that day, or a row under $5 / 30 new users outside its learned range:
+  "x % spend: data kam"; the ones under 0.5 % as one "…"
   rest); the card: ROAS so far at days 1, 2, 3, 4,
   7, 14 against the countries' own median past ROAS joined by the day's spend (below). A day under 4 days old (age < 4)
   is provisional: GA4's country and first-session reads are not final yet, and neither are Google Ads' installs (the
@@ -111,7 +116,8 @@ breaks even (the page shows the days of its period).
                           made elsewhere), "anc" (the grid age it is shifted at; absent: not shifted)} (absent: nothing
                           covered), "chk" 1 (a GA4 hole date in its first week: "data check" — information only, still shifted), "unc": [[cc, share], …,
                           ["…", rest]], "cty":
-                          [[cc, share, CPI, eCPM_fs, P30, P90, P180, median, low, high, lim, rk, bm], …] (bm = [bCPI (USD, 4 dp), beCPM_fs
+                          [[cc, share, CPI, eCPM_fs, P30, P90, P180, median, low, high, lim, rk, bm], …] (P30 / P90 /
+                          P180 null outside the country's learned range; bm = [bCPI (USD, 4 dp), beCPM_fs
                           (USD, 3 dp), bBE (days, 1 dp, or null: beyond bLim), bLim] — the country's benchmark, or null
                           for an old fits cache; rk 1 / 2 / 3:
                           the country broke even — median = its real day: exact / "≤" / not final yet; 0: off its
@@ -178,7 +184,10 @@ GAP, GAP_N = 0.35, 7                 # a hole date: the older cohorts' revenue u
 HOLE_MIN, HOLE_W = 10, 7             # … with ≥ 10 cohorts adding up; "data check" on a day with one in its first 7 days
 ADM_OK, ADM_N = 0.5, 14              # … while AdMob's own revenue that date was ≥ 0.5 × its 14 days before (else: real)
 HOLE_SHARE = 0.05                    # … and those cohorts usually carry ≥ 5 % of it (a smaller signal is noise, not a hole)
-CALV = 3                             # calib.json content: 3 = with the shift's ranges + growth bound (older: made again)
+CALV = 4                             # calib.json content: 3 = with the shift's ranges + growth bound; 4 = a judged
+                                     # country row past its range answered at the edge (_answers / _edge) (older: made again)
+SHIFT_CV = 3                         # … the first content with the shift's parts: a remake that fails keeps one this new
+                                     # shifting (an older one, or none, leaves the shift off)
 CLAG = LAG + 1                       # a daily cell 3 days old is often still empty (a country's split lags: most
                                      # country cells dated 3 days ago carried no revenue yet, and a few small apps' own
                                      # rows — measured 15 Nov 2026): the shift reads a daily cell at least 4 days old
@@ -319,8 +328,8 @@ def _usable(r):
 def _rng(rows, O):
     """The log CPI / log eCPM_fs range a country's benchmark learned from — its usable days settled by O (install day +
     SETTLE ≤ O: the only days K3 and the curves train on; never the young days being answered) — as [c lo, c hi, e lo,
-    e hi], widened to the stored 6 decimals; None: no such day. A day outside it is not answered (no past day there:
-    "data kam") — never extrapolated."""
+    e hi], widened to the stored 6 decimals; None: no such day. A judged day outside it is answered at its edge (_edge);
+    a smaller one is not (_answers)."""
     u = [r for r in rows if r.X + SETTLE <= O and _usable(r)]
     if not u:
         return None
@@ -328,9 +337,48 @@ def _rng(rows, O):
     return [lo(min(r.c for r in u)), hi(max(r.c for r in u)), lo(min(r.e for r in u)), hi(max(r.e for r in u))]
 
 
+def _shifts(cal):
+    """Does a calibration carry the shift's ranges and growth bound (cv ≥ SHIFT_CV)? A remake after CALV moved that
+    fails keeps the last good one shifting, tried again every build until a new one is made."""
+    v = (cal or {}).get("cv")
+    return isinstance(v, int) and not isinstance(v, bool) and v >= SHIFT_CV
+
+
 def _seen(g, x):
-    """Whether a day's CPI and eCPM_fs lie inside a benchmark's learned range g (_rng; None: nothing learned)."""
+    """Whether a day's CPI and eCPM_fs lie inside a benchmark's learned range g (_rng; None: nothing learned) — K3's own
+    chances only there (the curves answer a judged row past it too: _answers / _edge)."""
     return g is not None and g[0] <= x.c <= g[1] and g[2] <= x.e <= g[3]
+
+
+def _answers(g, x):
+    """Is a covered country's row answered that day? Its CPI and eCPM_fs are known, and they are inside the range its
+    benchmark learned from (g), or the row is judged (≥ $5, ≥ 30 new users — _edge reads it past the range): a smaller
+    row's CPI / eCPM_fs outside the range is a few installs' or impressions' noise, not a move, and on a day it alone is
+    covered it would stand for the whole app — it stays "data kam", as before."""
+    return x.c is not None and x.e is not None and (x.jd or _seen(g, x))
+
+
+def _edge(g, x):
+    """A day's CPI and eCPM_fs past the range its benchmark learned from (owner, 16 Nov 2026: "Cpi kitna bhi uppar jaye
+    uspe vo rule mat lagao … benchmark se kitna plus hua he aur ecpm kitna benchmark se badla he"): the curve is read at
+    the range's edge and moved by the ratio past it — ROAS = revenue ÷ spend, so a CPI twice the edge's halves it (half
+    the edge's doubles it) and an eCPM_fs under the range lowers it as much. An eCPM_fs ABOVE the range moves it no further than the range's top: the
+    back-test on every app's past days showed the later sessions do not keep such a first session (the ratio over-shot
+    there; held at the top it did not) → (log CPI, log eCPM_fs) to read the curve at, and the log shift to add. Only a
+    judged row is read past its range (_answers)."""
+    c = min(max(x.c, g[0]), g[1])
+    e = min(max(x.e, g[2]), g[3])
+    return c, e, (min(x.e, g[3]) - e) - (x.c - c)
+
+
+def curve_at(cf, g, x):
+    """A country's curve for a day: curve_predict at its CPI / eCPM_fs, past its learned range g at the edge moved by
+    the ratio (_edge) → (ages, log ROAS median, low, high), each non-decreasing in age."""
+    c, e, d = _edge(g, x)
+    ages, mid, lo, hi = curve_predict(cf, c, e)
+    if d:
+        mid, lo, hi = ([v + d for v in s] for s in (mid, lo, hi))
+    return ages, mid, lo, hi
 
 
 def _read(path):
@@ -968,12 +1016,12 @@ def backtest(key, newest, app, cty, F=None):
         for r in months[O]:
             parts = []
             for cc, x in byday.get(r.day, {}).items():
-                if cc not in cov or x.c is None or x.e is None or not _seen(cov[cc][2], x):
+                if cc not in cov or not _answers(cov[cc][2], x):
                     continue
-                k3, cf, _ = cov[cc]
+                k3, cf, g = cov[cc]
                 b = k3["beta"]
-                mid = pava([bb[0] + bb[1] * x.c + bb[2] * x.e for _, bb, *_ in cf])        # (curve_predict's median)
-                parts.append((x, [GRID[j] for j, *_ in cf], mid, b[0] + b[1] * x.c + b[2] * x.e, k3))
+                pa, mid, _, _ = curve_at(cf, g, x)                              # (past its range: at the edge)
+                parts.append((x, pa, mid, b[0] + b[1] * x.c + b[2] * x.e if _seen(g, x) else None, k3))
             rec = {"key": key, "X": r.X, "O": O, "age": nw - r.X, "be": r.be, "hi": r.hi, "obs": r.obs,
                    "tc": [None if v is None else round(math.log(max(v / r.sp, ROAS_FLOOR)), 4) for v in r.cum]}
             csp = sum(p[0].sp for p in parts)
@@ -994,7 +1042,7 @@ def backtest(key, newest, app, cty, F=None):
                 rec["be_a"] = _r(crossing(ages, roas), 4)
             A.append(rec)
             for x, _, _, mu, k3 in parts:
-                if x.jd:
+                if x.jd and mu is not None:              # (K3's maps: only the days inside its range, as it answers)
                     C.append((round(mu, 4), round(k3["s"], 4), x.hi, x.be, x.obs, rec["age"]))
     return A, C
 
@@ -1086,9 +1134,9 @@ def asof(key, newest, app, cty, F=None, gq=None):
             cov = _fits_at(cty, _month(r.X + a + LAG), F)
             parts, rows_c = [], []
             for cc, x in cs.items():
-                if cc not in cov or x.c is None or x.e is None or not _seen(cov[cc][2], x):
+                if cc not in cov or not _answers(cov[cc][2], x):
                     continue
-                pa, mid, _, _ = curve_predict(cov[cc][1], x.c, x.e)
+                pa, mid, _, _ = curve_at(cov[cc][1], cov[cc][2], x)
                 parts.append((x.sp, pa, mid))
                 rows_c.append((x, pa, mid))
             if not parts:
@@ -1471,7 +1519,7 @@ def predict(key, fc, cal, pin, sk=None):
     gaps = pin[4] if len(pin) > 4 else ()   # (pack-gap dates: the card's "data check")
     holes = _holes(rows, nw, adm)         # the calendar dates GA4 lost on every cohort while AdMob did not
     gr, cgr = _gq(cal.get("grow"), key, "app"), _gq(cal.get("grow"), key, "cty")
-    ok = cal.get("cv") == CALV            # the shift only with a calibration that has its ranges and bound (a failed first
+    ok = _shifts(cal)                     # the shift only with a calibration that has its ranges and bound (a failed first
     #                                       one after the shift shipped: the unshifted curve and its band, as before)
 
     def each():                           # every day's covered countries and its model curve, the shift's anchor (its
@@ -1481,13 +1529,13 @@ def predict(key, fc, cal, pin, sk=None):
             cov, unc, rest = [], [], 0.0
             for cc, x in sorted(cs.items(), key=lambda kv: -kv[1].sp):
                 f = fc["fits"].get(cc)
-                if not f or x.c is None or x.e is None or not _seen(f["rng"], x):
+                if not f or not _answers(f["rng"], x):
                     if x.sp / tot >= REST:
                         unc.append([cc, round(x.sp / tot, 4)])
                     else:
                         rest += x.sp / tot
                     continue
-                cov.append((cc, x, f) + tuple(curve_predict(f["cv"], x.c, x.e)))
+                cov.append((cc, x, f) + tuple(curve_at(f["cv"], f["rng"], x)))
             if rest > 0:
                 unc.append([REST_CC, round(rest, 4)])
             csp = sum(c[1].sp for c in cov)
@@ -1503,8 +1551,9 @@ def predict(key, fc, cal, pin, sk=None):
         ctys = []
         for cc, x, f, ages, mid, clo, chi in cov:
             b0, b1, b2, s_, tmax = f["k3"][:5]
-            mu = b0 + b1 * x.c + b2 * x.e
-            pk = [iso_pred(cmh[H], p_le(mu, s_, H)) if cmh[H] else None for H in HS]   # (K3's chances: kept, not shown)
+            mu = b0 + b1 * x.c + b2 * x.e if _seen(f["rng"], x) else None     # (K3: only inside its range)
+            pk = [iso_pred(cmh[H], p_le(mu, s_, H)) if cmh[H] and mu is not None else None
+                  for H in HS]                   # (K3's chances: kept, not shown)
             clim = ages[-1]                      # its curve's limit (the longest age its data watched there)
             if x.rbe is not None:                # it broke even: its real day (the ROI row's), no range — never a model's
                 k = x.rbe[1] if x.rbe[1] != "s" or x.sfa <= nw - x.X - LAG else "bn"     # (a not-final so-far read: not asli)
@@ -1799,8 +1848,9 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                 if old is None:
                     raise NoCalib()
                 cal = dict(old, tried=today)             # (no cv stamped: a calibration without the shift's parts
-                if SKL and old.get("cv") == CALV:        # stays unshifted and is tried again; over one that has them,
-                    cal["skill"] = SKL                   # this build's own skill — asof() / skill2() ran before)
+                if SKL and _shifts(old):                 # stays unshifted and is tried again; over one that has them,
+                    cal["skill"] = SKL                   # this build's own skill — asof() / skill2() ran before; an
+                #                                          older content than CALV is tried again every build)
                 save_calib(data_dir, cal)
             del A, C, RB, CB, GA, GC, GK
             for aid, key, fc, pin in held:

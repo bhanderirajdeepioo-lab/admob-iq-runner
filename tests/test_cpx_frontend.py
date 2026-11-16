@@ -1075,7 +1075,7 @@ def test_breakeven_day_opened_countries_data_kam_and_the_card(out):
     assert [r[2] for r in b["d25i"]["cty"]["rows"]] == ["₹%.1f · B ₹%.1f +11%%" % (0.31 * k, 0.28 * k), "₹%.1f · B ₹%.1f +24%%" % (0.62 * k, 0.5 * k)] == ["₹26.3 · B ₹23.7 +11%", "₹52.5 · B ₹42.4 +24%"]
     assert [r[3] for r in b["d25i"]["cty"]["rows"]] == ["₹%.1f · B ₹%.1f +14%%" % (4.0 * k, 3.5 * k), "₹%.1f · B ₹%.1f +19%%" % (9.6 * k, 8.04 * k)]   # eCPM in the view's currency, like CPI (the owner's mock: "₹70 · B ₹50")
     assert d["kam"] == "15% spend: data kam (3 countries + baaki chhote) — Show names" and d["names"] == ""
-    assert d["kam_t"].startswith("data kam = us country ke 20 se kam asli-BE wale purane din, ya is din ka CPI / eCPM unke purane din ki range ke bahar (ya aaya hi nahi)")
+    assert d["kam_t"].startswith("data kam = us country ke 20 se kam asli-BE wale purane din, ya is din ka CPI / eCPM aaya hi nahi")
     u = b["d25u"]                                                                       # the names on tap: top few + the folded rest
     assert u["kam"].endswith("— Hide names") and u["names"] == "[BR] Name BR 6% · [SA] Name SA 3% · [AE] Name AE 2% · baaki chhote countries 4%"
     # the ROAS card: ROAS so far at days 1 2 3 4 (day 7 / 14 not reached at age 4) vs the benchmark at all six, printed on the points
@@ -1114,7 +1114,7 @@ def test_breakeven_day_opened_countries_data_kam_and_the_card(out):
     assert h["pv"] and h["cty"] is None and h["note"].startswith("Is din kisi country ka benchmark nahi")
     assert h["kam"] == "100% spend: data kam (3 countries + baaki chhote) — Show names"
     assert h["card"]["none"] and h["card"]["svg"] is None and h["card"]["vs"] == ""         # no covered country: no card, and why
-    assert h["card"]["note"].startswith("Kisi country ka benchmark nahi — ROAS card unhi countries se banta hai")
+    assert h["card"]["note"].startswith("Kisi country ka benchmark nahi (ya $5 / 30 naye users se chhoti country ka CPI / eCPM uski purani range ke bahar) — ROAS card unhi countries se banta hai")
     assert any(x.startswith("⏳ Abhi final nahi") for x in h["card"]["fn"])              # the provisional note in the details
     q = b["d29"]["card"]["svg"]                                                         # age 0: one point; the benchmark's own labels above its points
     assert [p["v"] for p in q["pt"]] == ["10.0%"] and all(p["y"] < d0["y"] for p, d0 in zip(q["nt"][1:], q["db"][1:]))
@@ -1270,7 +1270,7 @@ def test_breakeven_real_days_by_their_kind_and_never_100_percent_under_100(out):
     assert nf["cells"][3:6] == ["—", "—", "—"]
     assert nf["titles"].count('30 din ka data GA4 se poora nahi aaya — yahan asli number nahi (ab tak ka ROAS "So far" me)') == 1   # (long past: not a lag)
     assert nf["titles"].count('90 din ka data abhi final nahi (2–3 din me asli) — ab tak ka ROAS "So far" me') == 1         # (within the lag)
-    assert "kisi country ka benchmark nahi — data kam, andaza nahi" in nf["titles"]                 # (180 > 95: not lived)
+    assert "kisi country ka benchmark nahi (ya chhoti country ka CPI / eCPM purani range ke bahar) — data kam, andaza nahi" in nf["titles"]                 # (180 > 95: not lived)
     near = k["near"]
     assert near["cells"][3] == "99.9%" and "andaze se 30 din tak ROAS 99.9% — 100% se kam: abhi breakeven nahi" in near["titles"]
     c = out["be"]["ctyk"]
@@ -1445,7 +1445,7 @@ def test_breakeven_roas_card_same_countries_marks_and_filled_benchmark_dots(out)
     n = out["be"]["cardnone"]                                                            # a card with nothing to draw says why (never empty axes)
     assert n[0].endswith("Is din spend $5 se kam ya 30 se kam naye users — ROAS card nahi (sirf asli numbers).")
     assert n[1].endswith("Is din ka country-wise spend nahi aaya — card countries se banta hai, isliye nahi.")
-    assert n[2].endswith("Kisi country ka benchmark nahi — ROAS card unhi countries se banta hai jinka benchmark hai, isliye nahi.")
+    assert n[2].endswith("Kisi country ka benchmark nahi (ya $5 / 30 naye users se chhoti country ka CPI / eCPM uski purani range ke bahar) — ROAS card unhi countries se banta hai jinka benchmark hai, isliye nahi.")
     assert n[3].endswith("Benchmark wali countries ka ROAS abhi GA4 se nahi aaya — aane par card banega.")
     assert n[4].endswith("Is din ka ROAS card nahi bana.") and out["be"]["cardnone_null"].endswith(n[0][-60:])
     assert out["be"]["cardnone_svg"] == [False, False]
