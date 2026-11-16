@@ -258,7 +258,8 @@ def test_the_property_that_waited_longest_goes_first(tmp_path, monkeypatch):
     from admob_iq.fetch import ga4_uninstall as gu
     order = []
     caps = []
-    monkeypatch.setattr(fc, "step_app", lambda ga, store, steps, today, now, first=None: order.append(ga.property_id) or "fresh")
+    monkeypatch.setattr(fc, "step_app", lambda ga, store, steps, today, now, first=None, **k:
+                        order.append(ga.property_id) or "fresh")
     monkeypatch.setattr(gf, "App", lambda tok, pid, sid, prop, over=None, max_calls=gf.MAX_CALLS: caps.append(max_calls) or
                         type("A", (), {"calls": 0, "tok": 0, "property_id": pid})())
     monkeypatch.setattr(fc.ga4, "access_token", lambda *a: "tok")
