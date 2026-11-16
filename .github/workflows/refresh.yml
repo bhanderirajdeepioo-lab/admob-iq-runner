@@ -272,6 +272,9 @@ jobs:
           GA4_NVRP:             ${{ vars.GA4_NVRP || 'true' }}
           GA4_NVRP_BUDGET_SEC:  ${{ vars.GA4_NVRP_BUDGET_SEC }}
           GA4_NVRP_MAX_CALLS:   ${{ vars.GA4_NVRP_MAX_CALLS }}
+          # … the Breakeven tab from them: BE_PAID=true builds it from Google Ads users only, with its Organic view
+          # (needs GA4_CUBEP; off: the tab's files as without it)
+          BE_PAID:              ${{ vars.BE_PAID || 'false' }}
           # 🖼️ Screens (admob_iq/fetch/ga4_screens.py; data/ga4_screens/ in the private repo, kept for good): GA4 views and
           # ad impressions per screen class per day with every layer, read AFTER every live GA4 step under stricter
           # quota floors (only the Google Ads users' reads above run after it). GA4_SCREENS=false stops the reads without a code push; GA4_SCREENS_BUDGET_SEC = its seconds per

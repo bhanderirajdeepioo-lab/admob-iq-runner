@@ -451,8 +451,10 @@ def run_uninstall(dashboard, data_dir, out_dir, s, now=None, clock=None, revenue
         if val_on and rb.enabled(s):
             roi_acc = rb.start(cal=(revenue or {}).get("cal"), adsrc=(revenue or {}).get("adsrc"),
                                cube=bool(s.get("ga4_cube")),     # GA4_CUBE off: the file as without the cube
-                               cmon=(revenue or {}).get("country_m"))   # AdMob by country × month (country filter)
-        else:
+                               cmon=(revenue or {}).get("country_m"),   # AdMob by country × month (country filter)
+                               cubep=bool(s.get("ga4_cubep") and s.get("be_paid")   # ⚖️ Google Ads users' pass:
+                                          and s.get("be_tab", True)))   # scratch files for Breakeven — only while its
+        else:                                                           # one reader runs (be_build.enabled: BE_TAB)
             rb.off(out_dir)
     except Exception as e:
         print("roi skipped: %s" % type(e).__name__, file=sys.stderr)

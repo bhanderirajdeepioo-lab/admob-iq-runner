@@ -209,6 +209,9 @@ def settings() -> dict:
         "ga4_cubep_budget_sec": _int_env(("GA4_CUBEP_BUDGET_SEC",), 0),
         "ga4_nvrp": _env("GA4_NVRP", "false").lower() == "true",
         "ga4_nvrp_budget_sec": _int_env(("GA4_NVRP_BUDGET_SEC",), 0),
+        # … the Breakeven tab built from them (BE_PAID, with GA4_CUBEP: roi_build's Google Ads users' pass into a build
+        # scratch folder, then the tab's Google Ads | Organic views). Off: every file exactly as without it
+        "be_paid": _env("BE_PAID", "false").lower() == "true",
         # 🖼️ Screens: GA4 views and ad impressions per screen class per day, every layer (fetch.ga4_screens: the recent
         # days every 3 / 12 hours, the history newest first; runs after every live GA4 step, stricter quota floors —
         # only the Google Ads users' reads above run after it, under the same floors).

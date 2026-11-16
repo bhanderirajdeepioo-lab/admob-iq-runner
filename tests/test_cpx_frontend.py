@@ -13,6 +13,11 @@ the scoreboard, the level rows it marks, the Agent decisions list, the owner's b
 its own file fetched only when it opens, the 14 newest install days with every cell and every "—"'s why, a day opened (its
 countries, "data kam" + the names on tap, the ROAS card with its values printed on the points), the period's days, one day at a
 time, keep(), the missing / refused / hostile / developer cases, and the layout a 375 px phone needs.
+⚖️ The users switch (owner, 16 Nov 2026: "google ads and organic dono ka alag alag dekh saku esa kar do"; spec B4, tests/cpx_fixture.js
+paid()): an old file (no "src") byte for byte as before; Google Ads | Organic on top of a file with "src"; the Google Ads view =
+today's tab + its one line (src "a": every user's, and why — the walk's state); Organic fetched the first time it opens, refused
+unless whole, its day table (the answer first) and one day open at a time (the per-age table and the chart from one country set),
+the build's null users, every note word for word, no page jump, the phone.
 Skipped where node is not installed. No real data."""
 import json
 import os
@@ -1560,3 +1565,297 @@ def test_breakeven_percent_vs_b_colour_provisional_be_kinds_and_phone(out):
     assert "@container cpx (max-width:520px){.cpx-mrow{" in css                                     # the screen's phone step is a container query
     assert "@container cpx (max-width:520px){.cpx-bed .cpx-t td .cpx-bi{display:block}}" in css
     assert "@media (max-width:520px)" not in css
+
+
+# ── ⚖️ Breakeven · the users switch (owner, 16 Nov 2026: "haan sirf google ads wale users se karo · google ads and organic dono ka
+# alag alag dekh saku esa kar do"; spec B4): Google Ads | Organic on top of the tab when the file has "src" (the build's be_paid
+# on); tests/cpx_fixture.js paid() has the closed forms used here ──
+BE_O = "be_c0000000000a_o.json.gz"
+SW_P = ('<div class="cpx-besw" role="group" aria-label="Users"><button type="button" class="cpx-besb" data-cpx-besrc="p" aria-pressed="true">'
+        'Google Ads</button><button type="button" class="cpx-besb" data-cpx-besrc="o" aria-pressed="false">Organic</button></div>')
+SW_ON_P, SW_ON_O = [["p", True, "Google Ads"], ["o", False, "Organic"]], [["p", False, "Google Ads"], ["o", True, "Organic"]]
+NOTE_P = "Sirf Google Ads se aaye users ki kamai ÷ Google Ads spend (GA4: first user channel Cross-network + Paid Search)"
+NOTE_A = "Google Ads users ka data GA4 se abhi aa raha hai — tab tak ye saare users ka hai"
+NOTE_O = ("Organic = jo users Google Ads se nahi aaye (Play search, direct, baaki) — inka koi spend nahi, isliye ROAS / breakeven nahi; "
+          "sirf ginti aur kamai, unke apne purane dino ke median se")
+NOTE_NO = "Organic data abhi nahi bana — Google Ads users ka data aane ke baad banega"   # (only while the Google Ads view says "abhi aa raha hai")
+NOTE_NB = "Organic data is build me nahi bana"                                  # (every other case without an Organic file)
+NOTE_A_ST = {"none": "Is app ke Google Ads users GA4 me nahi mile — ye saare users ka hai",             # src "a" by the build's pw.st:
+             "fail": "Google Ads users ka data is build me nahi ban paya — ye saare users ka hai",     # nothing on its way → its own
+             "off": "Google Ads users ka data is build me nahi bana — ye saare users ka hai",          # reason, never "abhi aa raha hai"
+             "cal": "Google Ads users ka model abhi ban raha hai (purane din kam) — tab tak ye saare users ka hai"}
+DRIFT = "kuch din GA4 ke do reads me farak — un countries ko chhoda"
+GA4F = "GA4 farak"                                                                  # the drift's own word ("data check" = a GA4 hole)
+DAYS_FN = ("Day 1, 2, 3, 4, 7, 14 = install ke din se utne din (Day 1 = sirf install ka din) · Day 30, 60, 90 … = install ke 30, 60, 90 "
+           "din baad tak")
+ORG_FN = "Upar ka date picker is tab pe lagu nahi — yahan saare organic install din, naya upar (30-30 karke). Din pe tap = har card din ki kamai vs benchmark."
+OPEN_FN = ('Per user, % aur chart sirf benchmark wali countries ke users se, baaki users "data kam" (poore din ka per user upar row me) · benchmark '
+           'per user = har country ka apna median (uske purane install din, usi din tak), is din ke organic users ke share se joda · khokhla = abhi final nahi.')
+NOT_FINAL = "abhi final nahi — GA4 ka data 2–3 din me final hota hai"
+NO_BENCH = "benchmark nahi bana — inki countries ke purane din kam (30+ organic users wale 20 se kam din)"
+ORG_AG = [0, 1, 2, 3, 6, 13, 30, 60]                                                  # the file's card ages (the GRID's, as lived)
+ORG_DAYS = [d.isoformat() for d in days("2026-02-23", "2026-03-29")][::-1] + ["2026-01-10"]   # newest on top
+# the page before the switch (16 Nov 2026): tests/cpx_frontend.js's 96 old-file renders hashed — taken by running this harness on that
+# page (its _.set ignores BSRC); recompute only for a change the Google Ads view is meant to get
+OLD_BE_SHA = "5d107bfff4f0ab20a441a5f7a54aabb348e1a7cbef237c398e9c2f4f67a4e65c"
+
+
+def _opu(a):                       # the fixture's per user at card age a ($)
+    return round(0.02 + 0.004 * a, 4)
+
+
+def _olab(a):                      # a card age → its day (day k = age k − 1; the 30-day columns by their age)
+    return a + 1 if a < 30 else a
+
+
+def _usd(v):                       # the page's fU (under $10k)
+    return "$%.2f" % v if abs(v) < 100 else "$" + format(round(v), ",")
+
+
+def _pu(v):                        # the page's per-unit $ (beCpi without a rate)
+    return "$%.3f" % v if v < 0.1 else "$%.2f" % v
+
+
+def test_breakeven_old_file_is_todays_tab_byte_for_byte(out):
+    """be_paid off = no "src" in the file: the tab renders exactly as on the 16 Nov 2026 page — 96 renders (₹ and $, every day
+    opened, the names shown, 5 a page, every other app's state, the hostile file) hashed with the users switch left on Organic
+    and an "org" pointer present: no switch, no note, the Organic file never fetched."""
+    assert out["be"]["guard"] == {"sha": OLD_BE_SHA, "n": 96, "org": [], "sw": 0}
+
+
+def test_breakeven_switch_google_ads_view_is_todays_tab_plus_its_line(out):
+    """src "p": the switch on top (Google Ads pressed: the default), its one line, then today's tab exactly — the same file without
+    "src" rendered (the table, a day open, the names shown, 5 a page); the eCPM card says "(saare users)" (be_ecpm's read is every
+    user's: not split), a day without one has no such title, a file without "ecs" none."""
+    for g in out["paid"]["ga"]:
+        assert g["pre"] == SW_P + '<p class="cpx-fn">' + NOTE_P + "</p>" and g["tail"] and g["sw"] == SW_ON_P
+    e = out["paid"]["ecs"]
+    assert e["d25"] == ["ROAS so far", "eCPM index (1 day = 100) (saare users)"] and e["d24"] == ["ROAS so far"]
+    assert out["be"]["ec"]["title"] == "eCPM index (1 day = 100)"
+
+
+def test_breakeven_switch_src_a_says_every_users_data_and_the_walks_progress(out):
+    """src "a" (this app's Google Ads users not in from GA4 yet, the walk busy): the switch, the line under it with the paid walk's
+    progress when "pw" has a real one ("next" past "from"), then today's tab (every user's); its Organic view says no file yet and
+    fetches none."""
+    a = out["paid"]["a"]
+    assert a["sw"] == SW_ON_P and a["lines"][0] == ["vm", NOTE_A + " (14 Feb se pehle ke din padh liye)"]
+    assert a["lines"][-1][1].startswith("Is app ka koi judge layak install din nahi")
+    assert a["swo"] == SW_ON_O and a["org"] == [["fn", NOTE_O], ["note", NOTE_NO]] and not any(f.endswith("_o.json.gz") for f in a["loads"])
+
+
+def test_breakeven_src_a_line_and_organic_note_follow_the_walks_state(out):
+    """The build's "pw".st decides both views' words (review finding: "abhi aa raha hai" was said for every state, also where
+    nothing is coming): busy — or no "pw" / no state the page knows — "abhi aa raha hai" (+ its progress date) and the Organic
+    view's "abhi nahi bana … aane ke baad banega"; none / fail / off / cal: each its own reason, no date, and Organic "is build me
+    nahi bana"; a src "p" file without an Organic file: "is build me nahi bana" (its Google Ads users' data is there)."""
+    pw, pwo = out["paid"]["pw"], out["paid"]["pwo"]
+    S, DEC, MAR = NOTE_A_ST, " (31 Dec 2025 se pehle ke din padh liye)", " (1 Mar se pehle ke din padh liye)"   # (another year: its year)
+    #        none  busy, not past its start  none (junk next)  no st  not a dict  a list  busy  fail
+    assert pw == [NOTE_A, NOTE_A, S["none"], NOTE_A, NOTE_A, NOTE_A, NOTE_A + DEC, S["fail"],
+                  S["off"], S["cal"], S["none"], S["fail"], S["off"],          # (a date beside a state with nothing coming: not said)
+                  NOTE_A + MAR, NOTE_A, NOTE_A, NOTE_A, NOTE_A, NOTE_A]           # unknown / hostile / inherited / a list / busy / case
+    coming = [True, True, False, True, True, True, True, False, False, False, False, False, False, True, True, True, True, True, True]
+    assert pwo == [[["fn", NOTE_O], ["note", NOTE_NO if c else NOTE_NB]] for c in coming]
+    assert out["paid"]["pwp"] == [["fn", NOTE_O], ["note", NOTE_NB]]
+    a = out["paid"]["ast"]                                                     # the tab's own render, Beta's file in each state
+    assert a["busy"] == {"ga": ["vm", NOTE_A + " (14 Feb se pehle ke din padh liye)"], "org": [["fn", NOTE_O], ["note", NOTE_NO]], "loads": []}
+    for st in ("none", "fail", "off", "cal"):
+        assert a[st] == {"ga": ["vm", S[st]], "org": [["fn", NOTE_O], ["note", NOTE_NB]], "loads": []}, st
+
+
+def test_breakeven_organic_loads_lazily_once_and_fills_its_slot(out):
+    z = out["paid"]["lazy"]
+    assert z["ga"] == [BE_A] and z["sw"] == SW_ON_P                                 # the Google Ads view: its own file only
+    t = z["tap"]
+    assert t["src"] == "o" and t["sw"] == SW_ON_O and t["wait"] == [["fn", NOTE_O], ["note", "⏳ Loading…"]]
+    assert t["loads"] == [BE_A, BE_O] and t["urls"] == [BE_O + "?v=b00000a"]          # (the app file's version)
+    assert z["loaded"] == {"table": True, "loads": [BE_A, BE_O]}
+    assert z["back"] == {"src": "p", "table": True, "org": False} and z["again"] == 1   # back and forth: never fetched again
+    r = out["paid"]["arrive"]                                                        # the app file, then its Organic file: the slot filled
+    assert r == {"wait": [["note", "⏳ Loading…"]], "slot": True, "loads": [BE_A, BE_O]}
+
+
+def test_breakeven_organic_failed_refused_and_missing_files(out):
+    p = out["paid"]
+    f = p["fail"]
+    assert f["lines"] == [["fn", NOTE_O], ["note", "⚠️ Organic data load nahi hua. Try again"]] and f["retry"] == BE_O
+    assert f["after"] == {"loads": [BE_O], "table": True}                             # Try again: its file again, then the table
+    for k in ("key", "v", "days", "ages1", "agesd", "agesf", "ages0", "noages"):       # another key / v / no days / card ages not 0, 1 … up
+        assert p["refused"][k] == "⚠️ Organic data load nahi hua. Try again", k
+    for k in ("other", "path", "app", "none"):                                         # anything but its own name (or none): said, never fetched
+        assert p["ptr"][k] == {"lines": [["fn", NOTE_O], ["note", NOTE_NB]], "loads": [], "o": None}, k   # (src "p": not "aane ke baad")
+
+
+def test_breakeven_organic_day_table(out):
+    """Every Organic install day, newest on top, 30 at a time, the answer first (owner's at-a-glance rule, as the Google Ads table:
+    in view on a phone): Date | vs benchmark (the newest FINAL card day with a benchmark: the benchmark countries' per user ÷ their
+    benchmark − 1, coloured by the % printed; "x% users: data kam" for the users outside them; a drift day "GA4 farak" beside it) |
+    Revenue so far (total · the whole day's per user: the newest card day with a number, "day N tak", "not final" when it is not) |
+    Organic users (null while not final: "—"); every "—" says why; under the table the card days defined (one footnote) and the
+    drift's words."""
+    t = out["paid"]["table"]
+    assert [h[0] for h in t["head"]] == ["Date", "vs benchmark", "Revenue so far", "Organic users"] and all(h[1] for h in t["head"][1:])
+    assert [r["d"] for r in t["rows"]] == ORG_DAYS[:30] and t["more"] and t["open"] == 0 and t["box"] == "cpx-x cpx-bex"
+    assert t["more60"] == ORG_DAYS and t["dn"] == 60                                  # "Show 30 more": the rest (10 Jan last)
+    assert t["sw"] == SW_ON_O and t["lines"] == [["fn", NOTE_O], ["fn", DAYS_FN], ["fn", GA4F + " = " + DRIFT + "."], ["fn", ORG_FN]]
+    rows, dl = {r["d"]: r for r in t["rows"]}, {d: (c, ti) for d, c, ti in t["dl"]}
+    special = {"2026-03-28", "2026-03-27", "2026-03-25", "2026-03-15", "2026-03-10", "2026-03-26"}
+    for d, r in rows.items():
+        assert r["exp"] == "false" and len(r["cells"]) == 4 and r["cells"][0].startswith(str(int(d[8:])))
+        if d in special:
+            continue
+        age = (date(2026, 3, 29) - date.fromisoformat(d)).days
+        fin = [a for a in ORG_AG if a + 3 <= age]
+        if not fin:                                                                    # nothing final yet: "—" + why, twice
+            assert r["cells"][1:] == ["—", "—", "500"] and r["titles"] == [NOT_FINAL, NOT_FINAL] and dl[d] == (None, None)
+            continue
+        a = max(fin)
+        assert r["cells"][1:] == ["+25%% vs B on day %d" % _olab(a), "%s · %s/user day %d tak" % (_usd(500 * _opu(a)), _pu(_opu(a)), _olab(a)), "500"], d
+        assert dl[d][0] == "cpx-good"
+    assert rows["2026-03-26"]["cells"][1:] == ["+25% vs B on day 1", "$24.68 · $0.020/user day 1 tak", "1,234"]
+    assert rows["2026-03-28"]["cells"][1:] == ["—", "$9.00 · $0.018/user day 1 tak (not final)", "500"] and rows["2026-03-28"]["titles"] == [NOT_FINAL]
+    r = rows["2026-03-27"]                                                              # its users not final yet (n null): "—" + why, never 0
+    assert r["cells"][1:] == ["—", "—", "—"] and r["titles"] == [NOT_FINAL] * 3 and dl["2026-03-27"] == (None, None)
+    r = rows["2026-03-25"]                                                              # 80 % of its users in the benchmark's countries, −25 %
+    assert r["cells"][1:] == ["−25% vs B on day 2 20% users: data kam", "$12.00 · $0.024/user day 2 tak", "500"] and dl["2026-03-25"][0] == "cpx-bad"
+    assert "benchmark aur % sirf un countries ke users se jinka is din tak benchmark bana — baaki users ka data kam" in r["titles"]
+    assert dl["2026-03-25"][1] == "benchmark wali countries ke users ka per user $0.014 vs benchmark $0.019"
+    r = rows["2026-03-15"]                                                              # a drift day: its own word, beside the answer
+    assert r["cells"][1:] == ["+25% vs B on day 7 " + GA4F, "$22.00 · $0.044/user day 7 tak", "500"] and DRIFT in r["titles"]
+    assert rows["2026-03-10"]["cells"][1] == "—" and rows["2026-03-10"]["titles"] == [NO_BENCH]   # no benchmark at any day
+    assert out["paid"]["long"] == ["26 Mar", "+25% vs B on day 1", "—", "1,234"]      # an array longer than the card ages: unknown (24 Mar's
+    #                                                                                   trimmed ones read as the others: the loop above)
+    k25, k26 = 1 / fxd(date(2026, 3, 25)), 1 / fxd(date(2026, 3, 26))                # the ₹ view: the day's own rate (beK)
+    assert out["paid"]["k"]["d25"] == pytest.approx(k25) and out["paid"]["k"]["d26"] == pytest.approx(k26)
+    assert out["paid"]["table_inr"] == [["2026-03-26", "₹%.1fk · ₹%.2f/user day 1 tak" % (24.68 * k26 / 1e3, 0.02 * k26)],
+                                        ["2026-03-25", "₹%.1fk · ₹%.2f/user day 2 tak" % (12 * k25 / 1e3, 0.024 * k25)]] == [
+        ["2026-03-26", "₹2.0k · ₹1.64/user day 1 tak"], ["2026-03-25", "₹1.0k · ₹2.03/user day 2 tak"]]
+
+
+def test_breakeven_organic_words_its_own(out):
+    """The Organic view's words (review findings): a drift is "GA4 farak" ("data check" is a GA4 hole on this tab), no count of the
+    users a drift left out (a lower bound printed as exact), a row's day "day N tak" (never "by day N": the Google Ads table's
+    words for another count), the card days defined once under the table (no "Day N =" in an open day: Day 30+ broke it)."""
+    w = out["paid"]["owords"]
+    assert w["n"] > 20 and w["bad"] == [] and w["tak"] > 0 and w["foot"] == 0
+
+
+def test_breakeven_organic_day_opened_its_table_and_chart(out):
+    """A tap opens the day under its row (its own cell across the 4 columns): one row per card day it has lived (Day 1, 2, 3, 4, 7,
+    14, 30, 60 …), the answer first: % (the benchmark countries' per user ÷ their benchmark − 1, plain while not final) · Per user
+    (THAT per user — the same country set as the % and the chart, "x% users: data kam" beside it; the whole day's is the row's) ·
+    Benchmark per user · Revenue (total) — and days 1 … 14 drawn as the ROAS card: the benchmark countries' per user vs their
+    benchmark (dashed, filled dots, ahead of a young day too), every value printed, hollow = not final; no 100 % line."""
+    p = out["paid"]
+    d = p["d25"]
+    assert d["n"] == 1 and d["span"] == "4" and d["row"]["exp"] == "true" and d["h4"] == ["Revenue by day"]
+    assert d["tbl"]["head"] == ["Day", "%", "Per user", "Benchmark per user", "Revenue (total)"]
+    assert d["tbl"]["rows"] == [["Day 1", "−25%", "$0.012 20% users: data kam", "$0.016", "$10.00"], ["Day 2", "−25%", "$0.014 20% users: data kam", "$0.019", "$12.00"],
+                                ["Day 3", "—", "—", "$0.022", "—"], ["Day 4", "—", "—", "$0.026", "—"]]       # (lived, not final: "—" + why)
+    assert d["tbl"]["titles"].count(NOT_FINAL) == 6 and [x[1] for x in d["dl"]] == ["cpx-bad", "cpx-bad"]
+    assert "benchmark wali countries ke users ka per user (poore din ka per user upar row me)" in d["tbl"]["titles"]   # (its header)
+    s = d["svg"]
+    assert s["view"] == "0 0 320 168" and s["title"] == ["Revenue per user"] and s["ax"] == ["1 day", "2 days", "3 days", "4 days", "7 days", "14 days"]
+    assert [q["v"] for q in s["pt"]] == ["$0.012", "$0.014"] and [q["v"] for q in s["nt"]] == ["$0.016", "$0.019", "$0.022", "$0.026", "$0.035", "$0.058"]
+    # one country set (review finding: the table printed the whole day's $0.020 / $0.024 while the % and the chart used $0.012 /
+    # $0.014 — Day 2 above its benchmark, yet −25 %): the table's Per user IS the chart's line, below its benchmark as the % says
+    assert [r[2].split()[0] for r in d["tbl"]["rows"][:2]] == [q["v"] for q in s["pt"]]
+    for r in d["tbl"]["rows"][:2]:
+        assert r[1].startswith("−") and float(r[2].split()[0][1:]) < float(r[3][1:])
+    assert d["row"]["cells"][2] == "$12.00 · $0.024/user day 2 tak"                   # (the whole day's per user: the row's)
+    assert s["paths"] == [["cpx-nl", 6], ["cpx-ln cpx-l2", 2]] and s["filled"] == 6 and not s["be1"] and not s["ch"]
+    for q, b in zip(s["pt"], s["nt"]):                                                 # the lower one below its point, the higher above
+        assert q["y"] > b["y"]
+    assert d["dots"] == [[False, "20% users: data kam"]] * 2
+    assert d["lines"] == [["fn", OPEN_FN]]                                             # (the days' own definition: under the table, once)
+    i = p["d25i"]                                                                      # the ₹ view: every number at the day's own rate
+    k = 1 / fxd(date(2026, 3, 25))
+    assert i["tbl"]["rows"][0] == ["Day 1", "−25%", "₹%.2f 20%% users: data kam" % (0.012 * k), "₹%.2f" % (0.016 * k), "₹%d" % round(10 * k)]
+    assert [q["v"] for q in i["svg"]["pt"]] == ["₹%.2f" % (0.012 * k), "₹%.2f" % (0.0144 * k)]
+    assert [r[2].split()[0] for r in i["tbl"]["rows"][:2]] == [q["v"] for q in i["svg"]["pt"]]
+    f = p["d15"]                                                                       # a drift day: its word and the sentence, no count
+    assert f["lines"] == [["fn", GA4F + " — " + DRIFT + "."], ["fn", OPEN_FN]] and f["row"]["cells"][1].endswith(" " + GA4F)
+    assert [r[0] for r in f["tbl"]["rows"]] == ["Day 1", "Day 2", "Day 3", "Day 4", "Day 7", "Day 14"] and f["tbl"]["rows"][5] == ["Day 14", "—", "—", "$0.058", "—"]
+    assert [x[0] for x in f["dl"]] == ["+25%"] * 5 and {x[1] for x in f["dl"]} == {"cpx-good"}
+    n = p["d28"]                                                                       # a number not final yet: said, plain %, hollow point
+    assert n["tbl"]["rows"] == [["Day 1", "+20%", "$0.018 not final", "$0.015", "$9.00 not final"], ["Day 2", "—", "—", "$0.019", "—"]]
+    assert n["dl"] == [["+20%", "cpx-flat", "benchmark wali countries ke users ka per user $0.018 vs benchmark $0.015 — abhi final nahi, isliye rang nahi"]]
+    assert n["dots"] == [[True, None]]
+    b = p["d10"]                                                                       # no benchmark (no set): "—" + why, its revenue; no chart
+    assert [r[1:4] for r in b["tbl"]["rows"]] == [["—", "—", "—"]] * 6 and b["tbl"]["titles"].count(NO_BENCH) == 18 and b["svg"] is None
+    assert [r[4] for r in b["tbl"]["rows"]] == [_usd(500 * _opu(a)) for a in (0, 1, 2, 3, 6, 13)]
+    u = p["d27"]                                                                       # its users not final yet (n null): no weights — "abhi
+    assert u["tbl"]["rows"] == [["Day %d" % (a + 1), "—", "—", "—", "—"] for a in (0, 1, 2)]   # final nahi", never "benchmark nahi bana"
+    assert u["tbl"]["titles"].count(NOT_FINAL) == 12 and NO_BENCH not in u["tbl"]["titles"] and u["svg"] is None
+    z = p["d29"]                                                                       # nothing yet: its benchmark ahead, no line of its own
+    assert z["tbl"]["rows"] == [["Day 1", "—", "—", "$0.016", "—"]] and z["svg"]["pt"] == [] and z["dots"] == []
+    j = p["j10"]                                                                       # an old day: the 30-day columns by their age
+    assert [r[0] for r in j["tbl"]["rows"]] == ["Day 1", "Day 2", "Day 3", "Day 4", "Day 7", "Day 14", "Day 30", "Day 60"]
+    assert j["tbl"]["rows"][6:] == [["Day 30", "+25%", "$0.14", "$0.11", "$70.00"], ["Day 60", "+25%", "$0.26", "$0.21", "$130"]]
+    assert j["row"]["cells"][1:3] == ["+25% vs B on day 60", "$130 · $0.26/user day 60 tak"]
+
+
+def test_breakeven_switch_taps_one_day_open_and_the_view_kept(out):
+    """Taps through the screen's handler: one day open at a time (the same day again closes it; a non-date does nothing); the open day
+    is the tab's — switching the view keeps it open where the other view has that day; a switch shows 30 again; the switch is the
+    viewer's for the page's life (another app opens on its Chart tab; back on Breakeven: still Organic)."""
+    t = out["paid"]["taps"]
+    assert t[0] == {"open": "2026-03-25", "n": 1, "exp": ["2026-03-25"], "org": True}
+    assert t[1] == {"open": "2026-03-15", "n": 1, "exp": ["2026-03-15"], "org": True}
+    assert t[2] == {"open": None, "n": 0, "exp": [], "org": True} and t[3] == t[2]
+    assert t[4] == {"open": "2026-03-25", "n": 1, "exp": ["2026-03-25"], "org": False, "src": "p", "ga": True}
+    assert t[5] == {"open": "2026-03-25", "n": 1, "exp": ["2026-03-25"], "org": True, "src": "o"}
+    assert t[6] == {"dn": 30, "src": "p"}
+    k = out["paid"]["kept"]
+    assert k["tab"] == "ch" and k["src"] == "o" and k["sw"] == SW_ON_O and k["lines"] == [["fn", NOTE_O], ["note", NOTE_NO]]
+
+
+def test_breakeven_switch_never_moves_the_page(out):
+    """Owner's rule (no page jump on taps): the tapped segment back where it was (keep(), 1280 and 375 px), the page's height held
+    through the repaint; a tap on the segment already on (or a junk value) does nothing at all."""
+    for w in ("375", "1280"):
+        k = out["paid"]["keep"][w]
+        assert k["dy"] == [120] and k["src"] == "o" and k["held"] == "900px" and k["sel"] == ['[data-cpx-besrc="o"]']
+        assert k["same"] == {"dy": [], "sel": [], "html": True, "src": "o"}
+
+
+def test_breakeven_switch_hostile_dev_phone_classes(out):
+    p = out["paid"]
+    h = p["hostile"]                                                                    # junk: "—" + why, a bad date dropped, nothing raw
+    assert h["raw"] == [] and not h["esc"]                                              # (nothing of the file's text is ever printed)
+    assert [r["d"] for r in h["rows"]] == ["2026-03-26", "2026-03-25"]
+    assert h["rows"][0]["cells"] == ["26 Mar", "—", "—", "—"] and h["rows"][0]["titles"] == [NOT_FINAL, NOT_FINAL, "organic users ki ginti nahi aayi"]
+    assert h["rows"][1]["cells"] == ["25 Mar", "+25% vs B on day 1", "$3.00 · — day 4 tak (not final)", "—"]   # (a value past its age 4: never read)
+    assert h["d25"]["tbl"]["rows"] == [["Day 1", "+25%", "$0.10", "$0.080", "—"], ["Day 2", "—", "—", "$0.10", "$1.00"], ["Day 3", "—", "—", "—", "$2.00 not final"],
+                                       ["Day 4", "—", "—", "$0.12", "$3.00 not final"]]
+    assert [q["v"] for q in h["d25"]["svg"]["pt"]] == ["$0.10"]
+    assert h["d26"][0] == ["note", "Is din ka koi number nahi aaya."]
+    assert p["dev"] == {"html": "", "loads": [], "o": None, "of": None}                 # the developer copy: no Breakeven at all
+    y = p["layout"]                                                                     # 375 px: as the Google Ads view (test_breakeven_fits_a_phone)
+    assert y["same"] and y["sw"] and y["tables"] == ["cpx-x cpx-bex", "cpx-x"]
+    assert y["bed"] == {"td": "TD", "cls": "cpx-bedc", "span": "4", "box": True} and y["head"] == 4 and set(y["cells"]) == {4}
+    assert y["svgs"] == [["cpx-svg cpx-bes", "0 0 320 168", None, None, None]] and not y["style"] and y["widths"] == 0
+    page = _page()
+    css = page[page.index("/* ---- 📉 CPI vs eCPM (CPX)"):page.index("/* ---------- 👥 Audience")]
+    assert ".cpx-besw{display:inline-flex;max-width:100%;" in css and "min-height:34px" in css   # the switch: never wider than the screen, a tap target
+    assert '.cpx-besb[aria-pressed="true"]{background:linear-gradient(90deg,var(--blue2),var(--cyan2));color:#fff}' in css
+    assert ".seg button.on{background:linear-gradient(90deg,var(--blue2),var(--cyan2));color:#fff}" in page   # (the page's own segment look)
+    assert all(c.startswith("cpx-") for c in p["classes"]), p["classes"]
+    for c in p["classes"]:
+        if c.startswith("cpx-be"):
+            assert "." + c in css, c
+    assert p["dup_ids"] == [] and set(p["ids"]) <= {"cpx-bex", "cpx-bed", "cpx-beox"} and p["bad_words"] == []
+
+
+def test_breakeven_switch_wiring_literals():
+    src = _page()
+    m = src[src.index("const CPX=(()=>{"):src.index("function renderCpx(){")]
+    assert "let BOPEN=null, BUNC=false, BSRC='p';" in m and "'BSRC' in o" in m
+    assert len(re.findall(r"BSRC=(?!=)", m)) == 3                                       # declared, the switch's tap, the test hook — never reset
+    assert "const S=beSrc(F); if(!S) return beAds(r,F,P);" in m                         # no "src": today's tab, nothing else
+    assert m.index("if((b=t.closest('[data-cpx-besrc]')))") < m.index("if(t.closest('.cpx-det')) return;")
+    assert "keep(`[data-cpx-besrc=\"${k}\"]`" in m                                      # no page jump
+    assert "a.org==='be_'+a.key+'_o.json.gz'" in m and "loadF(n,a.v," in m              # its own name, through the module's loader
+    assert "o.push(beCard(x.card,x.ec,x.cw,x.ecs==='a'));" in m
+    assert "BSRC==='o'?beOrg(r,F,S):beSrcN(F,S)+beAds(r,F,P)" in m                     # the Organic view knows the file's source + state

@@ -96,9 +96,9 @@ def streak(mod, data_dir, out, now):
     `out`): each app's failed runs in a row, "fails" in the store's state (mod.load_state / save_state) — a run that
     tried the app and failed adds one (its "last_try" is this run's), a fetched / fresh one ends the streak, a deferred
     or waiting app and one the RETRY_HOURS gate held back (failed, not tried) keep theirs — and out["counts"]["stuck"]
-    = the apps failed in this run with FAIL_LINE or more in a row (the build prints its step's skipped line with
-    StuckAppError: the health banner). A run that ended in an "error" is left as it is (its own line is the banner); a failure here
-    → out["error"]. → out. Never raises."""
+    = the apps failed in this run with FAIL_LINE or more in a row (the build prints the step's health line with the
+    type StuckAppError: the health banner). A run that ended in an "error" is left as it is (its own line is the
+    banner); a failure here → out["error"]. → out. Never raises."""
     if out.get("error"):
         return out
     try:

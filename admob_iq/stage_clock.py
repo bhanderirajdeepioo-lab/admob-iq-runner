@@ -83,10 +83,10 @@ STAGES = (
     "ga4_nvr", "ga4_nvr_uc", "ga4_device", "ga4_cohort", "ga4_cube", "ga4_cecpm", "ga4_screens", "ga4_nvr_paid",
     "ga4_cube_paid",
     "active_prepass", "value_prepass", "uninstall_store_load", "uninstall_eval", "active_apps", "value_apps",
-    "roi_apps", "roi_cube", "roi_country", "roi_device", "adcfg", "forecast", "impact_any", "cohort_files",
-    "impact_any_finish", "uninstall_asset", "active_finish", "value_finish", "roi_finish",
+    "roi_apps", "roi_cube", "roi_country", "roi_paid", "roi_device", "adcfg", "forecast", "impact_any",
+    "cohort_files", "impact_any_finish", "uninstall_asset", "active_finish", "value_finish", "roi_finish",
     "tabs", "uninstall_studio", "active_studio", "value_studio", "audience_tab", "firstopen_tab", "source_tab", "nvr_tab",
-    "scr_tab", "cpi_tab", "be_tab",
+    "scr_tab", "cpi_tab", "be_tab", "be_organic",
     "intraday", "dashboard_write", "baseline_write", "mediation_daily", "deductions_daily", "static_files",
     "review", "review_studio", "headers", "alerts", "deploy_guard", "teardown",
 )

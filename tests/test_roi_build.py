@@ -689,13 +689,16 @@ CINST = {"AA": 40, "BB": 5, "CC": 3, "--": 2}          # installs a day by count
 CRATE = {"AA": 100000, "BB": 1000, "CC": 20000, "--": 10000}   # GA4 micros a day per install day, at every age
 
 
-def _cc_cube(root, holes=(), loss=None, flags=(), inst=None, rate=None, only=None, done=True):
+def _cc_cube(root, holes=(), loss=None, flags=(), inst=None, rate=None, only=None, done=True, cube_mod=None,
+             hot_from=CHOT, stream="222"):
     """A cube from CHS to CTODAY where every install day X of a country earns rate[cc] on every activity day D ≥ X
     (ages 0 … 30 in "e", later in "c" and "b"); inst[cc] installs on each install day (only: {cc: the install days
-    it has}); every day folded before CHOT, hot from it, except `holes`."""
-    from admob_iq.fetch import ga4_cube as cu
+    it has}); every day folded before hot_from (CHOT), hot from it, except `holes`. cube_mod: the cube module whose
+    store it is (fetch.ga4_cube; ⚖️ fetch.ga4_cube_paid.MOD: the Google Ads users' store, its own folder)."""
+    from admob_iq.fetch import ga4_cube
+    cu = cube_mod or ga4_cube
     inst, rate, only = inst or CINST, rate or CRATE, only or {}
-    cube = cu.Cube(str(root), "a~1", "222")
+    cube = cu.Cube(str(root), "a~1", stream)
     D = CHS
     while D <= CTODAY:
         e, c, b, t = {}, {}, {}, 0
@@ -719,13 +722,13 @@ def _cc_cube(root, holes=(), loss=None, flags=(), inst=None, rate=None, only=Non
         rec = {"st": "loss" if lo else "ok", "rows": 1, "loss": lo, "t": t + lo, "fl": 1 if D in flags else 0,
                "via": "block", "at": "2026-10-13T06:00:00Z", "b": b, "c": c, "e": e}
         if D not in holes:
-            if D >= CHOT:
+            if D >= hot_from:
                 cube.head["d"][D.isoformat()] = rec
             else:
                 cube.fold(D, rec)
         D += timedelta(days=1)
     cube.save()
-    cube.head.update(done=done, stream_id="222", next=CHOT.isoformat())
+    cube.head.update(done=done, stream_id=stream, next=hot_from.isoformat())
     cube.save_head()
 
 

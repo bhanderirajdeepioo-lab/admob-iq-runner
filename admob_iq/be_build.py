@@ -132,9 +132,87 @@ breaks even (the page shows the days of its period).
                           spend, oldest first)
   dashboard["be"]        {"v", "origin", "calib", "apps": {app id: {"key", "file", "v", "n", "cov"}}}
 
+⚖️ GOOGLE ADS USERS ONLY (owner, 16 Nov 2026: "haan sirf google ads wale users se karo · google ads and organic dono ka
+alag alag dekh saku esa kar do"; BE_PAID, s["be_paid"]): the ROAS above was EVERY new user's cohort revenue ÷ the Google
+Ads spend — organic users keep earning when the spend drops, and on a tiny spend that made an early breakeven that never
+was. Each app has one SOURCE a build:
+  src "p" — roi_build's Google Ads users' pass is "ok" for it (roi_build.PAID: run_uninstall ran it earlier in this same
+    process), its file is in that pass's scratch folder (roi_build.PAID_DIR) and their first-session store is there
+    with its history read (without it no country of theirs has an eCPM_fs: no model at all; with its backfill not done
+    yet the models would train on its recent days only — "busy" until then): load reads the paid All rows and the paid
+    packs from there (GA4's own reads of the users whose FIRST-USER channel is Cross-network / Paid Search, never a split
+    of totals), the first-session eCPM from fetch.ga4_nvr_paid's store (the same "c" "n" rows rule), AdMob's daily
+    revenue for _holes from the all-users ROI file's "life" (AdMob has no source split; a hole is a date GA4 lost on
+    every cohort while AdMob was normal — the same rule on these rows). PACK GAPS of src "p" (pack_gaps_p): the paid All
+    row and the paid packs are ONE read — the paid cube's cells — so a date it folded near-empty sinks both and their
+    ratio never moves; the paid packs' daily revenue is held against an INDEPENDENT read instead, the all-users All rows'
+    final daily revenue (ga4_cohort's exact store): a date is a gap when that share falls under PACK_GAP × its median
+    over the GAP_N dates before. Everything after it (fit, K3, the curves, the calibration, predict, the card, the
+    countries table, the B columns) runs unchanged on these rows. The file: "src": "p", and on each day with an eCPM
+    card "ecs": "a" beside it (be_ecpm's read stays every user's — its Google Ads users' split is not built).
+  src "a" — any other app: the file of the step without the switch, byte for byte, + "src": "a" and "pw" (for the page's
+    "Google Ads users ka data … abhi aa raha hai"): {"st": "busy" (+ "from" / "next" as the pass gave them: GA4's Google
+    Ads users' history still being read; no "from" / "next": their first-session history still being read) | "none" (no
+    paid store of the app, or nothing in it: GA4 has none of their reads) | "fail" (the pass raised, or here its file
+    was gone, unreadable, its rows raised or its source could not be told — the "be paid" health line with its type,
+    counted: never a silent switch back) | "off" (their data not made this build: no pass ran for the app — its cube
+    or country part not there —, or nothing of their first-session store read yet — its read off, not run yet or of
+    another version) | "cal" (no Google Ads users' calibration yet: too few of their breakeven days for one, or its
+    first one failed)}.
+  be_paid off: every file exactly as without it (no "src" key at all), no Organic file.
+  The caches never mix: fits_<key>.json.gz / calib.json are src "a"'s, fitsp_<key>.json.gz / calib_p.json src "p"'s,
+  each calibration made from its own source's apps only (the same once-a-UTC-day rule and CALV each; a source with no app
+  that build: none of it made); predict reads its source's — an app that changes source refits from its own cache.
+  calib.json made with be_paid on carries "bp": 1 (made from that build's src "a" apps only); one made in the other mode
+  is made again at once, its growth bound never used for it (BE_PAID off the same UTC day: every app answered with a
+  calibration of every app, never the switch-on one's; a calib.json never made with the switch on has no stamp — byte
+  for byte as before). No calibration of a source yet and its first one failing costs only that source's apps this
+  build (be_paid off: the whole step, as before). No Google Ads users' calibration yet and their back-test with no
+  covered country at any month start (too few of their breakeven days — a STATE, not a failure): calib_p.json becomes a
+  stub {"v", "tried", "apps"} (load_calib refuses it), the apps go on as src "a" ("cal": never counted as failed, no
+  health line) and, every one of them tried then (none new, none that raised), nothing of them is read or tried again
+  that UTC day (no paid load, no back-test, no Organic pass). A real exception there: its health line, counted, tried
+  again the next build.
+🌱 ORGANIC (src "p" apps only; the page's Google Ads | Organic switch): every new user who is NOT a Google Ads user = the
+all-users cells − the Google Ads users' cells per country × install day, from the two cubes' own reads (the probe measured
+the paid read + its complement = the whole read) — the all-users packs (out_dir, one at a time) and the paid packs
+(scratch: the Google Ads users' cells collected while load() reads their packs — each pack read ONCE a build — and
+held compactly, one array per country, until the app's src "p" file exists: the pass runs only for an app whose file
+was made, its Organic file written with it), one app at a time, through the install day both cubes read through. Users
+n_o = n_a − n_p; revenue cum_o = cum_a − cum_p at the card ages (GRID) from FINAL cells only (both rows final there).
+USERS ARE FINAL ONLY on an install day whose day 0 BOTH cubes folded (X ≤ the older fthru): a younger day's two counts
+are two reads made at different times (each cube's own hot read) — "n" null there, no benchmark set (no "s" values),
+no users-drift test. A country-day whose Google Ads side is above the all-users one — its users (a final day), or a
+cell by more than the rounding (_otol) — is DRIFT (two reads made at different times): left out of every organic number
+and counted on its day ("dr"), never clamped to 0 (a difference inside the rounding is rounding: 0). The day's line:
+users Σ every country ("--" / "ZZ" too; "XX" is Google Ads cost only), revenue Σ the named countries (null where a
+country of it is not final) + "--" / "ZZ" COUNTED ONCE: on an activity month whose named GA4 revenue is mostly on own
+/ pooled k_c (roi_build's own verdict per month, every user's cd "ng" "m": "own") AdMob already booked those users under
+their real countries (roi_build: the "--" row's revenue is inside the named countries' k_c), so each step of their
+revenue between two card ages whose days all lie in such months is left out (a step across both kinds is kept whole:
+its split is not measured); a file without the verdicts: the day's named rows decide it (pack row bit 16 off on most of
+their revenue so far: the day's "--" / "ZZ" revenue left out); their users always in n. Per user = revenue ÷ users, fin
+1 where it is final and the date at least CLAG days old (a country cell 3 days old is often still empty — the card's
+rule). Its benchmark (the owner's rule, as the card's, users in place of spend): per country and card age the median of cum_o ÷ n_o over its install days settled at the build's origin (X +
+SETTLE ≤ O; n_o ≥ MIN_N; ≥ MIN_KEPT such days, else none at that age); the day's = Σ w × each country's benchmark, w =
+its organic users share over the day's countries that have one at that age, beside the same countries' own per user
+(both lines from one set), cv = that set's users ÷ the day's — at the card days 1 … 14 whatever the day has lived (the
+page draws it ahead), past them where lived. A day a side's pack has as [X] (or not at all) is roi_build's own row of
+it (_zrow; a Google Ads users' one on a day in their file's "unk": spend null — a file without "unk" as before).
+  site/be_<key>_o.json.gz {"v", "key", "origin", "ages" (GRID through 30, then the 30-day columns the oldest day lived),
+                           "days": [{"d", "age", "n" (organic users; null: not final yet), "r" (revenue USD at the ages,
+                           AdMob-matched as the cells), "pu" (per user), "fin" (1 / 0), "s": {"pu" (the set's per user),
+                           "b" (its benchmark per user), "cv"}, "dr": [country-days left out, their organic users] (only
+                           when any)}]} (every install day with organic users or drift, oldest first; per-age lists
+                           trailing nulls trimmed) — written only with a day in it; a failure costs only it (counted,
+                           "be organic skipped: <Type>")
+  dashboard["be"]["apps"][id] gains "org" (that file) only when written; its "v" then covers both files (the page fetches
+  the Organic file with the app file's version: one build writes both).
+
 run(dashboard, data_dir, out_dir, s, now) → HEADER_PATHS (["/be_*"], ONE splat rule) or [] (no app / a failure: the
 files removed, no pointer). Never raises; any failure prints "be skipped: <ErrorType>" (the health banner) and one
-app's costs only that app (counted). off(out_dir): the switch (BE_TAB=false). ONE counts-only line (pop_line).
+app's costs only that app (counted). off(out_dir): the switch (BE_TAB=false). ONE counts-only line (pop_line); with
+be_paid: + ", src p N a N, calib p yes|no, org N, org fail N" (+ ", paid failed N": apps whose Google Ads source failed).
 """
 import bisect
 import gzip
@@ -151,6 +229,7 @@ from datetime import date, datetime, timezone
 from itertools import repeat
 from operator import add, mul
 
+from . import stage_clock as _sc
 from .db import write_gz_stable
 from .fetch import ga4_nvr as gv
 
@@ -197,6 +276,21 @@ PACK_GAP = 0.35                      # … and the country packs' sum of it unde
                                      # once, at D+3: it can be nearly empty while the app's All rows are whole)
 FV = 2                               # the fits cache content: 2 = with each country's benchmark triple "bm" (older: refit)
 SKIP_CC = frozenset(("--", "XX", "ZZ"))
+# ⚖️ Google Ads users only (BE_PAID; see the module doc) and their complement, the Organic file
+PPACK_RE = re.compile(r"^roi_[0-9a-f]{12}_p\d{2,3}\.json\.gz$")    # the Google Ads users' packs (roi_build.PAID_DIR)
+ORG_RE = re.compile(r"^be_[0-9a-f]{12}_o\.json\.gz$")              # the Organic files
+CALIB_P = "calib_p.json"             # the Google Ads users' calibration (src "p": made from its own apps only)
+ORG_V = 1
+NOT_SPLIT = "XX"                     # Google Ads' cost with no country (roi_build.NOT_SPLIT): no user, no revenue
+OTOL_W = 1e-4                        # drift's rounding: the cells are written to 4 decimals (two values rounded once each
+#                                      cross by one unit there; a 30-day column — ages past 30 — is rounded twice, on
+#                                      top of its day-30 cell already written: two units) …
+OTOL_K = 2.0                         # … ½ micro a GA4 row on each of the cell's days + 1 (fetch.ga4_cube's own rule) × the
+#                                      AdMob scale the cells carry (≤ engine.value.K_CLAMP's 2) …
+OTOL_R = 1e-6                        # … + 1 ppm of the cell
+OBENCH = 13                          # the Organic benchmark ahead of a day it has not lived: the card days 1 … 14
+K_APP = 16                           # a pack row's ≈ bit: a month of its revenue on the app's k (roi_build's k bits)
+NAN = float("nan")                   # (a cell not final, in the Organic pass's compact arrays)
 LINE = None
 
 
@@ -412,14 +506,58 @@ def pack_gaps(S_all, S_cty, newest, fthru=None):
     return {D for D, v in S_all.items() if D <= lim and v >= PACK_MIN and S_cty.get(D, 0.0) < PACK_GAP * v}
 
 
-def load(out_dir, data_dir, key, fn, want_adm=False):
+def pack_gaps_p(S_ref, S_cty, newest, fthru=None, ref_newest=None):
+    """⚖️ src "p": the activity dates (ordinals) on which the Google Ads users' packs lost revenue. Their All row is the
+    same read as their packs (the paid cube's cells: a date folded near-empty sinks both, their ratio never moves), so
+    the packs' FINAL daily revenue (S_cty) is held against an INDEPENDENT read — every user's All rows' final daily
+    revenue (S_ref: ga4_cohort's exact store, re-read and whole): their share ρ[D] = S_cty[D] ÷ S_ref[D] on the dates D ≤
+    newest − CLAG (≤ the packs' own final edge fthru, ≤ ref_newest − CLAG: both reads final there) with S_ref[D] ≥
+    PACK_MIN. D is a gap when ρ[D] < PACK_GAP × the median ρ of the GAP_N dates before it that were not gaps (within 3 ×
+    GAP_N days, ≥ 3 of them — _holes' rule: a long gap never sets its own baseline) and the packs usually carry ≥
+    PACK_MIN of that date (median ρ × S_ref[D]: a share of a few cents says nothing). The share is the app's own (Google
+    Ads users are 5 % of one app's revenue and 90 % of another's): only a fall from its own level is a gap."""
+    lim = newest - CLAG if fthru is None else min(newest - CLAG, fthru)
+    if ref_newest is not None:
+        lim = min(lim, ref_newest - CLAG)
+    out, ok = set(), []
+    for D in sorted(D for D, v in S_ref.items() if D <= lim and v >= PACK_MIN):
+        rho = S_cty.get(D, 0.0) / S_ref[D]
+        prev = [q for x, q in ok[-GAP_N:] if x >= D - 3 * GAP_N]
+        if len(prev) >= 3:
+            m = _median(prev)
+            if m > 0 and rho < PACK_GAP * m and m * S_ref[D] >= PACK_MIN:
+                out.add(D)
+                continue
+        ok.append((D, rho))
+    return out
+
+
+def _nvp():
+    """⚖️ fetch.ga4_nvr_paid's instance of ga4_nvr (the Google Ads users' first-session store: DIR, load_store)."""
+    from .fetch import ga4_nvr_paid
+    return ga4_nvr_paid.MOD
+
+
+def load(out_dir, data_dir, key, fn, want_adm=False, paid=None, org=False):
     """One app → (newest, the All rows, {cc: rows}), spend > 0 only, by day — every day (the tab answers every judged
-    install day). want_adm: (newest, app, cty, adm, gaps) — AdMob's daily revenue and the pack-gap dates (pack_gaps)."""
-    body = _read(os.path.join(out_dir, fn))
+    install day). want_adm: (newest, app, cty, adm, gaps) — AdMob's daily revenue and the pack-gap dates (pack_gaps).
+    paid: (folder, file) — ⚖️ src "p" (the module doc): the rows, packs, "newest" and final edge of roi_build's Google
+    Ads users' file there, the first-session eCPM of fetch.ga4_nvr_paid's store; from the all-users ROI file fn: AdMob's
+    daily revenue (AdMob has no source split) and its All rows — the pack gaps' independent read (pack_gaps_p). org
+    (with paid): one more value at the end — the Organic pass's inputs (_OIn: the Google Ads users' cells collected here
+    while their packs are read — each read once a build; None: a side without packs or edges, no Organic file)."""
+    src_dir = out_dir if paid is None else paid[0]
+    body = _read(os.path.join(src_dir, fn if paid is None else paid[1]))
+    ab = body if paid is None else _read(os.path.join(out_dir, fn))      # (every user's ROI file)
     S_all, S_cty = {}, {}
-    for r in body.get("rows") or []:
-        _fday(S_all, r)
-    st = gv.load_store(os.path.join(data_dir, gv.DIR, key + ".json.gz"))
+    for r in ab.get("rows") or []:
+        _fday(S_all, r)                          # (src "p": every user's All rows — the gaps' independent read)
+    oi = _OIn.of(ab.get("cd") or {}, body) if paid is not None and org else None
+    ref_nw = _od(ab.get("newest")) if paid is not None else None       # (every user's read: final through − CLAG)
+    life = ab.get("life") if want_adm else None
+    ab = None
+    nvm = gv if paid is None else _nvp()
+    st = nvm.load_store(os.path.join(data_dir, nvm.DIR, key + ".json.gz"))
     days = (st or {}).get("days") or {}
     nv_app = {}
     for day, rv in days.items():
@@ -442,11 +580,15 @@ def load(out_dir, data_dir, key, fn, want_adm=False):
                 e[1] += im
     del st, days
     cty = {}
-    for pf, _ in ((body.get("cd") or {}).get("packs") or []):
-        if not isinstance(pf, str) or not PACK_RE.match(pf):
+    cd = (body.get("cd") or {}) if paid is None else {"packs": body.get("packs"), "fthru": body.get("fthru")}
+    pre = PACK_RE if paid is None else PPACK_RE
+    for pf, _ in (cd.get("packs") or []):
+        if not isinstance(pf, str) or not pre.match(pf):
             raise ValueError("pack name")
-        pk = _read(os.path.join(out_dir, pf))
+        pk = _read(os.path.join(src_dir, pf))
         for cc, rows in pk["c"].items():
+            if oi is not None:
+                oi.add(cc, rows)                 # ⚖️ the Organic pass's Google Ads users' cells (its own failure: only it)
             if cc in SKIP_CC:
                 for r in rows:
                     _fday(S_cty, r)          # (no country, but the All row includes them)
@@ -463,23 +605,28 @@ def load(out_dir, data_dir, key, fn, want_adm=False):
     for v in cty.values():
         v.sort(key=lambda r: r.X)
     newest = body.get("newest") or (app[-1].day if app else None)
+    tail = (oi,) if paid is not None and org else ()
     if not want_adm:
-        return newest, app, cty
+        return (newest, app, cty) + tail
+    del body
     adm = {}                              # AdMob's own revenue of every day (the ROI file's "life": [day, AdMob USD, …]):
-    for e in body.get("life") or []:      # a GA4 hole is a date GA4 lost while AdMob did not
+    for e in life or []:                  # a GA4 hole is a date GA4 lost while AdMob did not
         try:
             if isinstance(e[1], (int, float)):
                 adm[date.fromisoformat(e[0]).toordinal()] = float(e[1])
         except (TypeError, ValueError, IndexError):
             continue
-    cd = body.get("cd") or {}
+    del life
     if not newest or not cd.get("packs"):
-        return newest, app, cty, adm, set()      # (no country packs: nothing to compare — no gap)
+        return (newest, app, cty, adm, set()) + tail      # (no country packs: nothing to compare — no gap)
     try:
         ft = date.fromisoformat(cd["fthru"]).toordinal()
     except (KeyError, TypeError, ValueError):
         ft = None
-    return newest, app, cty, adm, pack_gaps(S_all, S_cty, date.fromisoformat(newest).toordinal(), ft)
+    nw = date.fromisoformat(newest).toordinal()
+    if paid is None:
+        return newest, app, cty, adm, pack_gaps(S_all, S_cty, nw, ft)
+    return (newest, app, cty, adm, pack_gaps_p(S_all, S_cty, nw, ft, ref_nw)) + tail
 
 
 # ── the maths (pure Python: the runner has no numpy) ───────────────────────────────────────────────────────────────
@@ -1656,14 +1803,392 @@ def predict(key, fc, cal, pin, sk=None):
             "days": days}
 
 
+# ── ⚖️ Google Ads users only: an app's source, its Organic file (owner, 16 Nov 2026: "google ads and organic dono ka
+# alag alag dekh saku esa kar do") ───────────────────────────────────────────────────────────────────────────────────
+
+def _source(key, rbm, data_dir):
+    """An app's source this build, be_paid on (the module doc) → ("p", (folder, file)): roi_build's Google Ads users'
+    pass "ok" for it (rbm.PAID), its file in rbm.PAID_DIR and their first-session store there with its history read
+    (fetch.ga4_nvr_paid: without it no country of theirs has an eCPM_fs — no model at all; a backfill not done yet would
+    train the models on its recent days only) — or ("a", pw): the walk's progress for the page — or ("x", pw): "ok" but
+    its file is not there (every user's, and the health banner: never a silent switch). Raises when the store cannot be
+    read at all (the caller: that app only)."""
+    e = (rbm.PAID if isinstance(rbm.PAID, dict) else {}).get(key)
+    e = e if isinstance(e, dict) else {}
+    st = e.get("st")
+    if st == "ok":
+        d, f = rbm.PAID_DIR, e.get("file")
+        if not (isinstance(d, str) and d and f == "roi_%s_p.json.gz" % key and os.path.isfile(os.path.join(d, f))):
+            return "x", {"st": "fail"}              # (its file gone: as a pass that failed)
+        nm = _nvp()
+        s = nm.load_store(os.path.join(data_dir, nm.DIR, key + ".json.gz"))
+        if not isinstance(s, dict) or not s.get("days"):
+            return "a", {"st": "off"}               # (nothing of their first-session reads yet: GA4_NVRP off, none yet,
+            #                                          or a store of another version — read again by its fetch: their
+            #                                          data not made this build — never "none", GA4 having none of them:
+            #                                          their cube read them, its pass is "ok")
+        if not (s.get("backfill") or {}).get("done"):
+            return "a", {"st": "busy"}              # (their first-session history still being read back)
+        return "p", (d, f)
+    if st == "busy":
+        return "a", dict({k: e[k] for k in ("from", "next") if k in e}, st="busy")
+    return "a", {"st": st if st in ("none", "fail") else "off"}
+
+
+def _otol(a, v):
+    """How far two reads of one cell (age a; v: its larger value, USD) differ by rounding alone — the cube's own rule
+    (fetch.ga4_cube: ½ micro a GA4 row + 1, + 1 ppm) on the cells as the packs carry them: the micros of its a + 1 days
+    × the AdMob scale (≤ OTOL_K), written to 4 decimals (OTOL_W: two values rounded once each cross by one unit there;
+    a 30-day column, any age past 30, is rounded twice — its day-30 cell was written first —: two units)."""
+    return OTOL_W * (2 if a > 30 else 1) + OTOL_K * (0.5e-6 * (a + 1) + 1e-6) + OTOL_R * abs(v)
+
+
+def _od(s):
+    """An ISO day → its ordinal (None: not one)."""
+    try:
+        return date.fromisoformat(s).toordinal()
+    except (TypeError, ValueError):
+        return None
+
+
+def _packs_of(folder, packs, pre):
+    """(cc, rows) of every country of a pass's packs [[file, sha1-12]] — one pack in memory at a time (a country in two
+    packs is no pack set of roi_build's: raises)."""
+    seen = set()
+    for pf, _ in packs or []:
+        if not isinstance(pf, str) or not pre.match(pf):
+            raise ValueError("pack name")
+        pk = _read(os.path.join(folder, pf))
+        for cc, rows in (pk.get("c") or {}).items():
+            if cc in seen:
+                raise ValueError("pack country")
+            seen.add(cc)
+            yield cc, rows
+        del pk
+
+
+def _ocells(r):
+    """One pack row → (users, its FINAL cumulative revenue at the GRID ages: _fin); None for a short [X] (no user,
+    nothing — the same as a day the pack never wrote). Raises on a row of no known shape."""
+    if len(r) == 1:
+        return None
+    if len(r) < 14:
+        raise ValueError("pack row")
+    return int(r[1] or 0), tuple(_fin(r))
+
+
+def _ranges_of(v):
+    """[[first, last], …] inclusive ISO ranges (roi_build's _ranges) → their days (ordinals); None: no list (a file of
+    the format before it); a malformed entry is no day."""
+    if not isinstance(v, list):
+        return None
+    out = set()
+    for e in v:
+        a, b = (_od(e[0]), _od(e[1])) if isinstance(e, list) and len(e) == 2 else (None, None)
+        if a is not None and b is not None and b - a <= 4000:
+            out.update(range(a, b + 1))
+    return out
+
+
+def _ng_own(cd):
+    """roi_build's verdict per activity month (every user's "cd" "ng" "m": [USD, its unp, "own" | "app"] — "own" when
+    most of the month's named GA4 revenue is on an own / pooled k_c: AdMob's country report already placed the users
+    GA4 has no country for in those countries) → {(year, month): …} of the "own" months; None: no verdicts written."""
+    m = (cd.get("ng") or {}).get("m") if isinstance(cd.get("ng"), dict) else None
+    if not isinstance(m, dict) or not m:
+        return None
+    out = set()
+    for M, v in m.items():
+        if isinstance(M, str) and len(M) == 7 and isinstance(v, list) and len(v) > 2 and v[2] == "own":
+            try:
+                out.add((int(M[:4]), int(M[5:7])))
+            except ValueError:
+                continue
+    return out
+
+
+def _all_own(lo, hi, own):
+    """Is every activity day lo … hi (ordinals) in a month of `own`?"""
+    a, b = date.fromordinal(lo), date.fromordinal(hi)
+    y, m = a.year, a.month
+    while (y, m) <= (b.year, b.month):
+        if (y, m) not in own:
+            return False
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    return True
+
+
+def _once(X, cum, own):
+    """A "--" / "ZZ" country-day's organic revenue at the GRID ages counted ONCE: each step between two known ages (its
+    activity days X + the earlier age + 1 … X + the later age) left out when every one of its days is in an own month
+    (_ng_own: AdMob booked those users under their real countries — inside the named countries' k_c), kept otherwise (a
+    step across both kinds: its split is not measured — kept whole, as before). None where cum is."""
+    out, drop, prev, last = [], 0.0, 0.0, -1
+    for j, a in enumerate(GRID):
+        v = cum[j]
+        if v is None:
+            out.append(None)
+            continue
+        if _all_own(X + last + 1, X + a, own):
+            drop += v - prev
+        prev, last = v, a
+        out.append(v - drop)
+    return out
+
+
+class _OIn:
+    """⚖️ What the Organic pass of one src "p" app reads besides every user's packs (organic()): both cubes' edges — ta /
+    fa (every user's "cd": read / folded through), tp / fp (the Google Ads users' file's), nw (the older newest day: the
+    ages), lim (the install days both read through) —, every user's packs, the Google Ads users' [X] rows' unknown
+    spend days ("unk" of their file: None for a file without it) and "billed", own (_ng_own), and their cells (users, the final
+    cumulative revenue at the GRID ages: _ocells) of every country × install day ≤ lim with something in it — added
+    while load() reads their packs (each pack read once a build), held compactly (three arrays a country: an app's may
+    wait for the day's calibration); err: what adding them raised (organic() raises it: only the Organic file lost)."""
+    __slots__ = ("ta", "fa", "tp", "fp", "nw", "lim", "apacks", "unk", "billed", "own", "cells", "err")
+
+    @classmethod
+    def of(cls, cd, pb):
+        """Every user's "cd" + the Google Ads users' file → an empty holder, or None: a side without packs or edges."""
+        ta, fa, tp, fp = (_od(x) for x in (cd.get("thru"), cd.get("fthru"), pb.get("thru"), pb.get("fthru")))
+        if not cd.get("packs") or not pb.get("packs") or None in (ta, fa, tp, fp):
+            return None
+        o = cls()
+        o.ta, o.fa, o.tp, o.fp = ta, fa, tp, fp
+        o.lim = min(ta, tp)                       # (the install days both cubes read through: a later one, no organic)
+        o.nw = min(_od(cd.get("newest")) or ta, _od(pb.get("newest")) or tp)
+        o.apacks = cd["packs"]
+        o.unk, o.billed = _ranges_of(pb.get("unk")), bool(pb.get("billed", True))
+        o.own = _ng_own(cd)
+        o.cells, o.err = {}, None
+        return o
+
+    def add(self, cc, rows):
+        """One country's Google Ads users' rows of a pack (a country in two packs, or a row of no known shape: err)."""
+        if self.err is not None or cc == NOT_SPLIT:   # (Google Ads' cost with no country: no user, no revenue)
+            return
+        try:
+            if cc in self.cells:
+                raise ValueError("pack country")
+            xs, ns, cs = array("l"), array("l"), array("d")
+            for r in rows:
+                X = _od(r[0] if r else None)
+                if X is None:
+                    raise ValueError("pack row")
+                c = _ocells(r)
+                if c is not None and X <= self.lim:
+                    xs.append(X)
+                    ns.append(c[0])
+                    cs.extend(NAN if v is None else v for v in c[1])
+            self.cells[cc] = (xs, ns, cs) if xs else None
+        except Exception as e:
+            self.err, self.cells = e, {}
+
+    def pop(self, cc):
+        """A country's cells → {X: (users, cells)} (let go here; {}: none)."""
+        v = self.cells.pop(cc, None)
+        if not v:
+            return {}
+        xs, ns, cs = v
+        G = len(GRID)
+        return {X: (ns[i], tuple(None if c != c else c for c in cs[i * G:(i + 1) * G])) for i, X in enumerate(xs)}
+
+    def rest(self):
+        """The countries not popped yet that have cells (sorted)."""
+        return sorted(cc for cc, v in self.cells.items() if v)
+
+
+def _org_in(out_dir, fn, paid):
+    """organic() called on its own: _OIn from the two files, the Google Ads users' packs read here (the build hands
+    load()'s, where each is read once)."""
+    pb = _read(os.path.join(paid[0], paid[1]))
+    oi = _OIn.of(_read(os.path.join(out_dir, fn)).get("cd") or {}, pb)
+    if oi is not None:
+        for pf, _ in pb.get("packs") or []:
+            if not isinstance(pf, str) or not PPACK_RE.match(pf):
+                raise ValueError("pack name")
+            for cc, rows in (_read(os.path.join(paid[0], pf)).get("c") or {}).items():
+                oi.add(cc, rows)
+    return oi
+
+
+def _xrow(oi, side, X, cc):
+    """The row roi_build writes as [X] (or not at all) for a day of a side's pack — its own _zrow: no user, the cells 0
+    as far as that cube read through, final as far as it folded through; the spend null on "--" and, on the Google Ads
+    users' side, on a day in their file's "unk" (their [X] rows' days of unknown spend; a file without "unk": null, as
+    before it) — as a pack row (_row_out)."""
+    from . import roi_build as rbm
+    th, ft = (oi.ta, oi.fa) if side == "a" else (oi.tp, oi.fp)
+    Xd, td, fd = date.fromordinal(X), date.fromordinal(th), date.fromordinal(ft)
+    if side == "p" and oi.unk is not None:
+        return rbm._row_out(rbm._zrow(Xd, td, fd, X in oi.unk, cc, oi.billed))
+    return rbm._row_out(rbm._zrow(Xd, td, fd, False, rbm.NO_CC))
+
+
+class _OD:
+    """One install day's Organic sums: n its organic users (a day not final for users: its unread sum, never written),
+    c its country-days counted (cn the named ones), r[i] the named countries' revenue at GRID[i] (None: one of them not
+    final there), x the same of "--" / "ZZ" (counted once: _once), k / u the country-days left out as drift and their
+    organic users; per card
+    age the benchmark set's users S, Σ users × benchmark B and revenue R (None: a country of the set not final there)."""
+    __slots__ = ("n", "c", "cn", "r", "x", "k", "u", "S", "B", "R")
+
+    def __init__(self, g):
+        self.n = self.c = self.cn = self.k = self.u = 0
+        self.r, self.x, self.S, self.B, self.R = [0.0] * g, [0.0] * g, [0] * g, [0.0] * g, [0.0] * g
+
+
+def organic(out_dir, key, fn, paid, O, oi=None):
+    """⚖️ One src "p" app's Organic file body (the module doc) — or None: a side without country packs or their edges,
+    or no install day with organic users. fn: its all-users ROI file in out_dir ("cd": its packs, thru / fthru /
+    newest); paid: (folder, file) of roi_build's Google Ads users' file (its packs, thru / fthru / newest, "unk"); O: the
+    build's day (ordinal: the benchmark's settled days); oi: load()'s _OIn of the app (None: read here). Raises on a
+    failure (the caller: no Organic file, counted)."""
+    if oi is None:
+        oi = _org_in(out_dir, fn, paid)
+        if oi is None:
+            return None
+    if oi.err is not None:
+        raise oi.err
+    lim, nw, f0 = oi.lim, oi.nw, min(oi.fa, oi.fp)     # f0: users final through it (both cubes folded day 0)
+    G, zc = len(GRID), {}
+
+    def zero(side, X, cc):
+        """A day a side's pack has as [X] or not at all (a country it never named) → (users, its final cells): _xrow."""
+        k = (side, X, side == "p" and oi.unk is not None and X in oi.unk, cc == "--")
+        z = zc.get(k)
+        if z is None:
+            z = zc[k] = (0, tuple(_fin(_xrow(oi, side, X, cc))))
+        return z
+
+    acc, W = {}, {}
+
+    def one(cc, got):
+        """One country's install days [(X, all-users (users, final cells), Google Ads users' (…))] → organic users and
+        revenue into each day's sums (a drift: left out, counted); a real country's benchmark from its own organic days
+        (settled at O), then its part of each of its final days' benchmark set."""
+        kept, sk = [], cc in SKIP_CC
+        for X, (na, ca), (np_, cp) in got:
+            d = acc.get(X)
+            if d is None:
+                d = acc[X] = _OD(G)
+            young = X > f0                          # (its day 0 not folded on both: its users not final, no drift test)
+            cum, bad = [], not young and np_ > na   # (more Google Ads users than users: two reads apart)
+            for i in range(G):
+                if bad:
+                    break
+                va, vp = ca[i], cp[i]
+                if va is None or vp is None:
+                    cum.append(None)                # (not final on a side: no organic number there)
+                    continue
+                v = va - vp
+                if v < 0:
+                    if -v > _otol(GRID[i], max(va, vp)):
+                        bad = True                  # DRIFT, never clamped
+                        break
+                    v = 0.0                         # (inside the rounding: rounding)
+                cum.append(v)
+            if bad:
+                d.k += 1
+                d.u += max(0, na - np_)
+                continue
+            no = na - np_
+            d.n += no
+            d.c += 1
+            t = d.x if sk else d.r                  # ("--" / "ZZ": counted once — _once, or W below)
+            d.cn += not sk
+            for i, v in enumerate(_once(X, cum, oi.own) if sk and oi.own is not None else cum):
+                if v is None:
+                    t[i] = None
+                elif t[i] is not None:
+                    t[i] += v
+            if not sk and no > 0 and not young:
+                kept.append((X, no, cum))
+        if not kept:
+            return
+        bench = []                              # the median per user of its own settled days with ≥ MIN_N organic users
+        for i in range(G):
+            v = [c[i] / no for X, no, c in kept if X + SETTLE <= O and no >= MIN_N and c[i] is not None]
+            bench.append(_median(v) if len(v) >= MIN_KEPT else None)
+        for X, no, cum in kept:
+            d = acc[X]
+            for i, b in enumerate(bench):
+                if b is not None:
+                    d.S[i] += no
+                    d.B[i] += no * b
+                    d.R[i] = None if cum[i] is None or d.R[i] is None else d.R[i] + cum[i]
+
+    for cc, rows in _packs_of(out_dir, oi.apacks, PACK_RE):
+        if cc == NOT_SPLIT:
+            continue
+        mine, got, named = oi.pop(cc), [], cc not in SKIP_CC
+        for r in rows:
+            X = _od(r[0] if r else None)
+            if X is None:
+                raise ValueError("pack row")
+            if X > lim:
+                continue
+            a, p = _ocells(r), mine.pop(X, None)
+            if named and a is not None and oi.own is None:      # (no per-month verdicts: the day's named revenue so
+                w = r[8] if isinstance(r[8], (int, float)) and r[8] > 0 else 0.0   # far, its part on own / pooled
+                #                                                                   k_c — bit 16 off — decides it)
+                if w:
+                    e = W.setdefault(X, [0.0, 0.0])
+                    e[1] += w
+                    if not (r[12] if isinstance(r[12], int) else 0) & K_APP:
+                        e[0] += w
+            if a is None and p is None:
+                continue                            # (nothing on either side)
+            got.append((X, a or zero("a", X, cc), p or zero("p", X, cc)))
+        got += [(X, zero("a", X, cc), p) for X, p in sorted(mine.items())]     # days only the Google Ads side has
+        one(cc, got)
+        del got, mine
+    for cc in oi.rest():                            # countries only the Google Ads side names
+        one(cc, [(X, zero("a", X, cc), p) for X, p in sorted(oi.pop(cc).items())])
+    out, top = [], 0
+    for X in sorted(acc):
+        d = acc[X]
+        if d.n <= 0 and not d.k:
+            continue                                # (no organic user that day, nothing left out)
+        age, young = nw - X, X > f0
+        w = W.get(X)                                            # (W: only without per-month verdicts — then a day
+        if w is not None and w[1] > 0 and 2 * w[0] >= w[1]:     # whose named revenue is mostly on own / pooled k_c
+            r = [None if not d.cn else v for v in d.r]          # leaves its "--" / "ZZ" revenue out whole)
+        else:
+            r = [None if not d.c or v is None or x is None else v + x for v, x in zip(d.r, d.x)]
+        while r and r[-1] is None:
+            r.pop()
+        n = None if young else d.n
+        e = {"d": _iso(X), "age": age, "n": n, "r": [_r(v, 4) for v in r],
+             "pu": [None if v is None or not n or n <= 0 else round(v / n, 6) for v in r],
+             "fin": [1 if v is not None and X + GRID[i] <= nw - CLAG else 0 for i, v in enumerate(r)]}
+        ahead = [d.S[i] > 0 and (GRID[i] <= OBENCH or GRID[i] <= age) for i in range(G)]
+        s = {"pu": [round(d.R[i] / d.S[i], 6) if d.S[i] > 0 and d.R[i] is not None and GRID[i] <= age else None
+                    for i in range(G)],
+             "b": [round(d.B[i] / d.S[i], 6) if ahead[i] else None for i in range(G)],
+             "cv": [round(d.S[i] / d.n, 4) if ahead[i] else None for i in range(G)]}
+        for v in s.values():
+            while v and v[-1] is None:
+                v.pop()
+        e["s"] = s
+        if d.k:
+            e["dr"] = [d.k, d.u]
+        out.append(e)
+        top = max(top, age)
+    if not out:
+        return None
+    return {"v": ORG_V, "key": key, "origin": _iso(O), "ages": [a for a in GRID if a <= 30 or a <= top], "days": out}
+
+
 # ── the caches ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 def cache_dir(data_dir):
     return os.path.join(data_dir, DIR)
 
 
-def _fits_path(data_dir, key):
-    return os.path.join(cache_dir(data_dir), "fits_%s.json.gz" % key)
+def _fits_path(data_dir, key, src="a"):
+    """An app's fits cache — src "a" (every user's rows): fits_<key>.json.gz; ⚖️ src "p" (Google Ads users'):
+    fitsp_<key>.json.gz (the two never mix: an app that changes source refits from its own)."""
+    return os.path.join(cache_dir(data_dir), "fits%s_%s.json.gz" % ("p" if src == "p" else "", key))
 
 
 def _raw(body):
@@ -1671,10 +2196,10 @@ def _raw(body):
     return json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True, allow_nan=False).encode("utf-8")
 
 
-def load_fits(data_dir, key):
-    """The cached fits of an app (None: none, unreadable or another version → refit)."""
+def load_fits(data_dir, key, src="a"):
+    """The cached fits of an app (None: none, unreadable or another version → refit); src: its source's cache."""
     try:
-        f = _read(_fits_path(data_dir, key))
+        f = _read(_fits_path(data_dir, key, src))
     except (OSError, ValueError, EOFError, zlib.error):
         return None
     ok = isinstance(f, dict) and f.get("v") == V and isinstance(f.get("origin"), str) and \
@@ -1683,14 +2208,19 @@ def load_fits(data_dir, key):
     return f if ok else None
 
 
-def save_fits(data_dir, key, fc):
-    write_gz_stable(_fits_path(data_dir, key), _raw(fc))
+def save_fits(data_dir, key, fc, src="a"):
+    write_gz_stable(_fits_path(data_dir, key, src), _raw(fc))
 
 
-def load_calib(data_dir):
-    """calib.json (None: none or unreadable). A file whose maps are missing is no calibration."""
+def _calib_name(src):
+    """A source's calibration file: calib.json (src "a"), ⚖️ calib_p.json (src "p": its own apps only)."""
+    return CALIB_P if src == "p" else CALIB
+
+
+def load_calib(data_dir, src="a"):
+    """calib.json (None: none or unreadable). A file whose maps are missing is no calibration. src: its source's."""
     try:
-        with open(os.path.join(cache_dir(data_dir), CALIB), encoding="utf-8") as f:
+        with open(os.path.join(cache_dir(data_dir), _calib_name(src)), encoding="utf-8") as f:
             c = json.load(f)
     except (OSError, ValueError):
         return None
@@ -1699,9 +2229,9 @@ def load_calib(data_dir):
     return c if ok else None
 
 
-def save_calib(data_dir, cal):
-    """Sorted JSON, written only when it changed (atomic)."""
-    path = os.path.join(cache_dir(data_dir), CALIB)
+def save_calib(data_dir, cal, src="a"):
+    """Sorted JSON, written only when it changed (atomic). src: its source's file."""
+    path = os.path.join(cache_dir(data_dir), _calib_name(src))
     text = _raw(cal).decode("utf-8")
     try:
         with open(path, encoding="utf-8") as f:
@@ -1735,19 +2265,35 @@ def _clean(out_dir, keep):
     except OSError:
         return
     for nm in names:
-        if APP_RE.match(nm) and nm not in keep:
+        if (APP_RE.match(nm) or ORG_RE.match(nm)) and nm not in keep:      # (⚖️ the Organic files too)
             try:
                 os.remove(os.path.join(out_dir, nm))
             except OSError:
                 pass
 
 
-def _fail(e):
-    print("be skipped: %s" % type(e).__name__, file=sys.stderr)
+def _fail(e, step="be"):
+    print("%s skipped: %s" % (step, type(e).__name__), file=sys.stderr)
+
+
+def _tried_p(data_dir):
+    """⚖️ calib_p.json while no Google Ads users' calibration exists — the stub {"v", "tried", "apps"}: the UTC day their
+    first one was tried and found no covered country at any month start (too few of their breakeven days), and the apps
+    it was tried with (load_calib refuses it: no maps) — or None."""
+    try:
+        with open(os.path.join(cache_dir(data_dir), CALIB_P), encoding="utf-8") as f:
+            c = json.load(f)
+    except (OSError, ValueError):
+        return None
+    return c if isinstance(c, dict) and c.get("v") == V and isinstance(c.get("tried"), str) else None
 
 
 def run(dashboard, data_dir, out_dir, s=None, now=None):
-    """This build's files → HEADER_PATHS, or [] (no app / a failure: the files removed, no pointer). Never raises."""
+    """This build's files → HEADER_PATHS, or [] (no app / a failure: the files removed, no pointer). Never raises.
+    ⚖️ be_paid (the module doc): each app's source first (_source; its own try); the Google Ads users' apps as one pass
+    of their own with their own caches and calibration (phase "p": an app whose Google Ads source fails there, or that
+    has no calibration of them yet, goes on as src "a"), then every other app exactly as without the switch (phase "a",
+    its calib.json stamped with the mode it was made in)."""
     global LINE
     LINE = None
     if not isinstance(dashboard, dict):
@@ -1762,18 +2308,32 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             _clean(out_dir, set())
             LINE = "be: apps 0"
             return []
-        old = load_calib(data_dir)
-        need = old is None or old.get("cv") != CALV or (old.get("tried") or old["built"]) != today   # the first build
-        A, C, held, bodies = [], [], [], {}                     # of the UTC day (or an older calibration's content)
-        RB, CB, SKL, GA, GC, GK = {}, {}, {}, {}, {}, {}
-        n = {"refit": 0, "fail": 0, "ec": 0, "ec_fail": 0, "ec_stale": 0}
-        cal = old
+        paid = bool((s or {}).get("be_paid"))     # ⚖️ BE_PAID — off: not a byte of anything changes (no "src", no Organic)
+        loc, pw, orgs, bodies = {}, {}, {}, {}
+        n = {"refit": 0, "fail": 0, "ec": 0, "ec_fail": 0, "ec_stale": 0, "pfail": 0, "org_fail": 0}
+        if paid:
+            from . import roi_build as rbm       # (its PAID / PAID_DIR: run_uninstall ran its pass earlier, this process)
+            for aid, key, _ in apps:
+                try:
+                    k, v = _source(key, rbm, data_dir)
+                except Exception as e:          # its source not told (a store or module that cannot be read): that app
+                    n["pfail"] += 1             # only — every user's, counted and said
+                    pw[aid] = {"st": "fail"}
+                    _fail(e, "be paid")
+                    continue
+                if k == "p":
+                    loc[aid] = v
+                else:
+                    pw[aid] = v
+                if k == "x":                    # its pass "ok", its file gone: every user's, counted and said
+                    n["pfail"] += 1
+                    print("be paid skipped: FileNotFoundError", file=sys.stderr)
         bec = None
         if (s or {}).get("ga4_cecpm_use") and (s or {}).get("ga4_cecpm"):   # the card's eCPM index (be_ecpm,
             from . import be_ecpm as bec                        # GA4_CECPM_USE with its reads on): off, nothing of it is
             #                                                     read or written
 
-        def _predict(aid, key, fc, pin):
+        def _predict(aid, key, fc, pin, cal, src):
             body = predict(key, fc, cal, pin, (cal.get("skill") or {}).get(key))
             if bec is not None:
                 try:                                            # (its stores read again here: never held for every app)
@@ -1785,84 +2345,197 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                 except Exception as e:                          # costs the card's eCPM part only
                     n["ec_fail"] += 1
                     bec._fail(e)
+            if src == "p":                                      # ⚖️ the Google Ads users' file — its eCPM card stays
+                body["src"] = "p"                               # every user's read ("ecs": the page's "saare users")
+                for d in body["days"]:
+                    if "ec" in d:
+                        d["ecs"] = "a"
+            elif paid:
+                body["src"], body["pw"] = "a", pw.get(aid) or {"st": "off"}
             unc = {cc for cs in pin[2].values() for cc in cs} - set(fc["fits"])      # (the folded ones too)
             bodies[aid] = (key, fc, body, len(unc))
 
-        for aid, key, fn in apps:
+        def _org(aid, key, fn, oi):
+            """⚖️ A src "p" app's Organic file — only once its src "p" body exists (held as bytes: written with it); oi:
+            load()'s inputs (None: a side without packs or edges, no file). Its own try: a failure costs only it. Timed
+            as its own child of the tab (stage_clock "be_organic", summed over the apps: measure only)."""
             try:
-                fc = load_fits(data_dir, key)
-                refit = fc is None or fc["origin"] != today or fc.get("fv") != FV     # (fv: the benchmark triple)
-                newest, app, cty, adm, gaps = load(out_dir, data_dir, key, fn, True)
-                if not newest:
-                    continue
-                if refit:
-                    fc = fit(app, cty, O)
-                    save_fits(data_dir, key, fc)
-                    n["refit"] += 1
-                if bec is not None and (refit or fc.get("ec_v") != bec.stamp()):
-                    try:                                        # the eCPM benchmark: with the day's fit (once; again
-                        m = bec.load(data_dir, key, cty)        # when its rule changed)
-                        if m is not None:
-                            fc["ec"], fc["ec_v"] = bec.bench(cty, m, O, app), bec.stamp()
-                            fc["ec_h"] = not m.get("done")      # (made while GA4's history was being read)
-                            save_fits(data_dir, key, fc)
-                        del m
-                    except Exception as e:
-                        n["ec_fail"] += 1
-                        bec._fail(e)
-                if need:
-                    F = {}                                 # (one fit per month start, shared by the two back-tests)
-                    a_, c_ = backtest(key, newest, app, cty, F)
-                    A += a_
-                    C += c_
-                    rb, cb, sk_, au_, n0, ga, gc = asof(key, newest, app, cty, F, (old or {}).get("grow"))
-                    for E, e in ((RB, rb), (CB, cb), (GA, ga), (GC, gc)):
-                        for kk, v in e.items():
-                            E.setdefault(kk, array("d")).extend(v)
-                    SKL[key] = skill2(sk_, au_, n0)
-                    GK[key] = growth(ga, gc)              # (its own growth: its bound where it has enough days)
-                    del F, rb, cb, sk_, au_, ga, gc
-                pin = _pin(newest, app, cty, adm, gaps)
-                del app, cty
-                if not pin[1]:
-                    continue
-                if need:
-                    held.append((aid, key, fc, pin))       # (answered once the calibration is made)
-                else:
-                    _predict(aid, key, fc, pin)
-            except Exception as e:                       # one app's failure costs that app only (counted)
-                n["fail"] += 1
-                _fail(e)
-        ran = False
-        if need:
-            try:
-                if not C or not any(x.get("a") for x in A):
-                    raise ValueError("empty back-test")      # (every app failed or unusable: not a calibration)
-                cal = calibrate(A, C, O, RB, CB, GA, GC)
-                cal["skill"] = SKL
-                cal["grow"]["apps"] = {k: v for k, v in GK.items() if v.get("app") or v.get("cty")}
-                save_calib(data_dir, cal)
-                ran = True
-            except Exception as e:                       # the last good calibration stays (tried again tomorrow)
-                _fail(e)
-                if old is None:
-                    raise NoCalib()
-                cal = dict(old, tried=today)             # (no cv stamped: a calibration without the shift's parts
-                if SKL and _shifts(old):                 # stays unshifted and is tried again; over one that has them,
-                    cal["skill"] = SKL                   # this build's own skill — asof() / skill2() ran before; an
-                #                                          older content than CALV is tried again every build)
-                save_calib(data_dir, cal)
-            del A, C, RB, CB, GA, GC, GK
-            for aid, key, fc, pin in held:
+                with _sc.stage("be_organic"):
+                    ob = organic(out_dir, key, fn, loc[aid], O, oi) if oi is not None else None
+                if ob is not None:
+                    orgs[aid] = (PREFIX + key + "_o.json.gz", _raw(ob))
+                del ob
+            except Exception as e:
+                orgs.pop(aid, None)
+                n["org_fail"] += 1
+                _fail(e, "be organic")
+
+        def phase(src, group):
+            """One source's apps → (its calibration, made this build?, [apps that go on as src "a": their Google Ads
+            source failed, or no calibration of them yet]). src "a" with be_paid off: the step exactly as it was before
+            the switch."""
+            pa = src == "p"
+            old = load_calib(data_dir, src)
+            held, back, bad = [], [], set()
+            if pa and old is None:                              # ⚖️ no Google Ads users' calibration yet: tried today
+                tr = _tried_p(data_dir)                         # with these same apps and too few of their days → a
+                if tr is not None and tr["tried"] == today and \
+                        {k for _, k, _ in group} <= set(tr.get("apps") or ()):   # state: every user's ("cal"), nothing
+                    for aid, key, fn in group:                  # of them read or tried again today
+                        pw[aid] = {"st": "cal"}
+                        back.append((aid, key, fn))
+                    return None, False, back
+            mine = pa or old is None or bool(old.get("bp")) == paid    # (calib.json made in this mode? "bp": with BE_PAID)
+            need = old is None or old.get("cv") != CALV or (old.get("tried") or old["built"]) != today or not mine
+            A, C = [], []                                       # (need: the first build of the UTC day, an older
+            RB, CB, SKL, GA, GC, GK = {}, {}, {}, {}, {}, {}    # calibration's content, or one of the other mode)
+            gq0 = (old or {}).get("grow") if mine else None     # (the other mode's growth bound: never)
+            cal = old
+
+            def lose(aid, key, fn, e=None, st="fail", count=True):     # ⚖️ an app's Google Ads source failed (or has no
+                n["pfail"] += count                             # calibration yet): it goes on as src "a" (a failure:
+                pw[aid] = {"st": st}                            # counted, its health line)
+                back.append((aid, key, fn))
+                if e is not None:
+                    bad.add(key)
+                    _fail(e, "be paid")
+
+            for aid, key, fn in group:
                 try:
-                    _predict(aid, key, fc, pin)
-                except Exception as e:
-                    n["fail"] += 1
-                    _fail(e)
+                    fc = load_fits(data_dir, key, src)
+                    refit = fc is None or fc["origin"] != today or fc.get("fv") != FV     # (fv: the benchmark triple)
+                    oi = None
+                    if pa:                                      # (oi: the Organic pass's inputs, collected while its
+                        newest, app, cty, adm, gaps, oi = load(out_dir, data_dir, key, fn, True, loc[aid], True)   # packs
+                    else:                                       # are read)
+                        newest, app, cty, adm, gaps = load(out_dir, data_dir, key, fn, True)
+                    if not newest:
+                        if pa:                                  # (nothing of its Google Ads users: every user's)
+                            pw[aid] = {"st": "none"}
+                            back.append((aid, key, fn))
+                        continue
+                    if refit:
+                        fc = fit(app, cty, O)
+                        save_fits(data_dir, key, fc, src)
+                        n["refit"] += 1
+                    if bec is not None and (refit or fc.get("ec_v") != bec.stamp()):
+                        try:                                    # the eCPM benchmark: with the day's fit (once; again
+                            m = bec.load(data_dir, key, cty)    # when its rule changed)
+                            if m is not None:
+                                fc["ec"], fc["ec_v"] = bec.bench(cty, m, O, app), bec.stamp()
+                                fc["ec_h"] = not m.get("done")  # (made while GA4's history was being read)
+                                save_fits(data_dir, key, fc, src)
+                            del m
+                        except Exception as e:
+                            n["ec_fail"] += 1
+                            bec._fail(e)
+                    if need:
+                        F = {}                                 # (one fit per month start, shared by the two back-tests)
+                        a_, c_ = backtest(key, newest, app, cty, F)
+                        A += a_
+                        C += c_
+                        rb, cb, sk_, au_, n0, ga, gc = asof(key, newest, app, cty, F, gq0)
+                        for E, e in ((RB, rb), (CB, cb), (GA, ga), (GC, gc)):
+                            for kk, v in e.items():
+                                E.setdefault(kk, array("d")).extend(v)
+                        SKL[key] = skill2(sk_, au_, n0)
+                        GK[key] = growth(ga, gc)              # (its own growth: its bound where it has enough days)
+                        del F, rb, cb, sk_, au_, ga, gc
+                    pin = _pin(newest, app, cty, adm, gaps)
+                    del app, cty
+                    if not pin[1]:
+                        continue
+                    if need:
+                        held.append((aid, key, fn, fc, pin, oi))   # (answered once the calibration is made)
+                    else:
+                        _predict(aid, key, fc, pin, cal, src)
+                        if pa:
+                            _org(aid, key, fn, oi)             # ⚖️ its Organic file, now that its file exists
+                    del oi
+                except Exception as e:                       # one app's failure costs that app only (counted) — ⚖️ a
+                    if pa:                                   # src "p" one's only its Google Ads source
+                        lose(aid, key, fn, e)
+                    else:
+                        n["fail"] += 1
+                        _fail(e)
+            ran = False
+            if need and pa and len(back) == len(group):
+                need = False                             # (⚖️ every Google Ads users' app went on as every user's:
+            if need:                                     # no app of this source this build — none of it made)
+                thin = not C or not any(x.get("a") for x in A)
+                try:
+                    if thin and pa:                      # ⚖️ too few Google Ads users' breakeven days for a calibration:
+                        if old is None:                  # a state — the stub (tried again tomorrow, or with an app not
+                            save_calib(data_dir, {"v": V, "tried": today,    # tried: new, or one that raised), its apps
+                                                  "apps": sorted({k for _, k, _ in group} - bad)}, src)   # every user's
+                            for aid, key, fn, _, _, _ in held:
+                                lose(aid, key, fn, st="cal", count=False)
+                            held = []
+                        else:                            # (the last one stays, as a failed remake: tried tomorrow)
+                            cal = dict(old, tried=today)
+                            if SKL and _shifts(old):
+                                cal["skill"] = SKL
+                            save_calib(data_dir, cal, src)
+                    else:
+                        if thin:
+                            raise ValueError("empty back-test")      # (every app failed or unusable: not a calibration)
+                        cal = calibrate(A, C, O, RB, CB, GA, GC)
+                        cal["skill"] = SKL
+                        cal["grow"]["apps"] = {k: v for k, v in GK.items() if v.get("app") or v.get("cty")}
+                        if paid and not pa:
+                            cal["bp"] = 1                # ⚖️ made with BE_PAID on: from its src "a" apps only
+                        save_calib(data_dir, cal, src)
+                        ran = True
+                except Exception as e:                       # the last good calibration stays (tried again tomorrow)
+                    _fail(e, "be paid" if pa else "be")
+                    if old is None:
+                        if not paid:
+                            raise NoCalib()
+                        for aid, key, fn, _, _, _ in held:   # ⚖️ be_paid: no calibration yet of this source costs
+                            if pa:                           # only its apps — a Google Ads users' one goes on as src
+                                lose(aid, key, fn, st="cal")     # "a" (tried again the next build), an every-user one
+                            else:                                # has no file this build (counted), the other source's
+                                n["fail"] += 1                   # files stand
+                        held = []
+                    else:
+                        cal = dict(old, tried=today)         # (no cv stamped: a calibration without the shift's parts
+                        if SKL and _shifts(old):             # stays unshifted and is tried again; over one that has
+                            cal["skill"] = SKL               # them, this build's own skill — asof() / skill2() ran
+                        #                                      before; an older content than CALV is tried again every
+                        if paid and not pa:                  # build; ⚖️ stamped with this build's mode: a failed
+                            cal["bp"] = 1                    # remake is tried again tomorrow, as any)
+                        elif not pa:
+                            cal.pop("bp", None)
+                        save_calib(data_dir, cal, src)
+                del A, C, RB, CB, GA, GC, GK
+                for aid, key, fn, fc, pin, oi in held:
+                    try:
+                        _predict(aid, key, fc, pin, cal, src)
+                    except Exception as e:
+                        if pa:
+                            lose(aid, key, fn, e)
+                        else:
+                            n["fail"] += 1
+                            _fail(e)
+                        continue
+                    if pa:
+                        _org(aid, key, fn, oi)               # ⚖️ its Organic file, now that its file exists
+                held = None
+            return cal, ran, back
+
+        cals, ran, back = {}, {}, []
+        grp = [x for x in apps if x[0] in loc]
+        if grp:                                          # ⚖️ the Google Ads users' apps first: one whose source fails
+            cals["p"], ran["p"], back = phase("p", grp)  # there joins the others, every user's
+        grp = sorted([x for x in apps if x[0] not in loc] + back, key=lambda x: (x[1], x[0]))
+        if grp:
+            cals["a"], ran["a"], _ = phase("a", grp)
+        del grp, back
         if bec is not None and n["ec_stale"]:                   # GA4's reads stopped for an app: the banner, once
             print("be ecpm skipped: StaleWarning", file=sys.stderr)
         os.makedirs(out_dir, exist_ok=True)
         ptr, keep, nd, cov, unc = {}, set(), 0, 0, 0
+        ns = {"p": 0, "a": 0, "org": 0}
         for aid, (key, fc, body, nu) in sorted(bodies.items(), key=lambda kv: kv[1][0]):
             try:
                 raw = _raw(body)
@@ -1874,20 +2547,39 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                 continue
             keep.add(fn)
             days = body["days"]
-            ptr[aid] = {"key": key, "file": fn, "v": hashlib.sha1(raw).hexdigest()[:12], "n": len(days),
-                        "cov": days[-1]["cov"] if days else None}
+            og = orgs.pop(aid, None) if body.get("src") == "p" else None   # ⚖️ its Organic file: src "p" only, written
+            if og is not None:                                             # with its file; "v" then covers both
+                try:
+                    write_gz_stable(os.path.join(out_dir, og[0]), og[1])
+                    og = (og[0], hashlib.sha1(og[1]).digest())
+                except Exception as e:
+                    og = None
+                    n["org_fail"] += 1
+                    _fail(e, "be organic")
+            ptr[aid] = {"key": key, "file": fn, "v": hashlib.sha1(raw + og[1] if og else raw).hexdigest()[:12],
+                        "n": len(days), "cov": days[-1]["cov"] if days else None}
+            if og:
+                keep.add(og[0])
+                ptr[aid]["org"] = og[0]
+                ns["org"] += 1
+            if paid:
+                ns["p" if body.get("src") == "p" else "a"] += 1
             nd += len(days)
             cov += len(fc["fits"])
             unc += nu
         _clean(out_dir, keep)
-        LINE = "be: apps %d, days %d, covered %d, uncovered %d, refit %s, calib %s%s%s" % (
-            len(ptr), nd, cov, unc, "yes" if n["refit"] else "no", "yes" if ran else "no",
+        LINE = "be: apps %d, days %d, covered %d, uncovered %d, refit %s, calib %s%s%s%s" % (
+            len(ptr), nd, cov, unc, "yes" if n["refit"] else "no", "yes" if ran.get("a") else "no",
             (", failed %d" % n["fail"]) if n["fail"] else "",
             (", ecpm apps %d, ecpm failed %d, ecpm stale %d" % (n["ec"], n["ec_fail"], n["ec_stale"]))
-            if bec is not None else "")
+            if bec is not None else "",
+            (", src p %d a %d, calib p %s, org %d, org fail %d%s" % (
+                ns["p"], ns["a"], "yes" if ran.get("p") else "no", ns["org"], n["org_fail"],
+                (", paid failed %d" % n["pfail"]) if n["pfail"] else "")) if paid else "")
         if not ptr:
             return []
-        dashboard["be"] = {"v": V, "origin": today, "calib": cal.get("built"), "apps": ptr}
+        dashboard["be"] = {"v": V, "origin": today, "calib": (cals.get("a") or cals.get("p") or {}).get("built"),
+                           "apps": ptr}
         return list(HEADER_PATHS)
     except Exception as e:
         dashboard.pop("be", None)

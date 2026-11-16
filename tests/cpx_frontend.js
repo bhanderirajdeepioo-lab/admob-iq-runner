@@ -23,7 +23,13 @@
 //   * 🎯 Breakeven (cpx_fixture.js be(): spec_be_tab §5 + the agreed additions): the tab after Countries, its file fetched only
 //     when it opens (⏳ / ⚠️ + Try again, a late file filling its slot), the 14 days newest first with every cell and every "—"'s
 //     why, a day opened (countries, "data kam" + names on tap, the ROAS card's printed points), the period's days, one day at a
-//     time, keep(), the missing / refused / hostile / developer cases, and the layout facts a phone needs (miniDom).
+//     time, keep(), the missing / refused / hostile / developer cases, and the layout facts a phone needs (miniDom);
+//   * ⚖️ the users switch (cpx_fixture.js paid(): the build's be_paid on): an old file (no "src") hashed byte for byte against the
+//     16 Nov 2026 page (with the switch on Organic and an "org" pointer present), Google Ads | Organic on top of a file with "src",
+//     the Google Ads view = today's tab + its one line, src "a" by the walk's state (busy: its progress; none / fail / off / cal:
+//     their own words — and the Organic view's note beside each), the Organic file fetched once Organic opens (⏳ / ⚠️ + Try again
+//     / refused / no pointer), its day table (the answer first), one day open at a time (per-age table + chart: one country set),
+//     the build's null users, its own words (GA4 farak, day N tak), keep(), hostile / developer / phone.
 // Prints ONE JSON report; tests/test_cpx_frontend.py asserts on it.   usage: node cpx_frontend.js <index.html>
 'use strict';
 const fs = require('fs'), vm = require('vm'), path = require('path');
@@ -992,6 +998,157 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     BO.dup_ids = BER.map(h => [...h.matchAll(/\sid="([^"]*)"/g)].map(m => m[1])).filter(L => L.length !== new Set(L).size);
     BO.ids = [...new Set([...BH.matchAll(/\sid="([^"]*)"/g)].map(m => m[1]))];
     BO.bad_words = ['undefined', 'NaN', '[object Object]', 'Infinity', 'null'].filter(w => BER.some(h => txt(h).includes(w)));
+    // ── ⚖️ an old file (no "src": the build's be_paid off) is today's tab, byte for byte: every state of the tab rendered with the
+    // users switch on Organic too and an "org" pointer present (neither may change anything, nor fetch anything more) → one
+    // SHA-256, pinned in the test to the 16 Nov 2026 page's (this block run on that page gives the same: _.set ignores BSRC there) ──
+    { const OR = [], FA = FX.FILES['be_' + KEY.a + '.json.gz'], DS = FA.days.map(x => x.d); FX.DATA.be.apps[ID.a].org = 'be_' + KEY.a + '_o.json.gz'; LOADS = [];
+      const g = async o => { OR.push(await beGo(o)); };
+      for (const cur of ['INR', 'USD']) { CURV = cur;
+        for (const sw of ['p', 'o']) {
+          await g({ OPEN: ID.a, BSRC: sw }); for (const d of DS) await g({ OPEN: ID.a, BOPEN: d, BSRC: sw });
+          await g({ OPEN: ID.a, BOPEN: '2026-03-25', BUNC: true, BSRC: sw }); await g({ OPEN: ID.a, DN: 5, BSRC: sw });
+          for (const id of [ID.b, ID.c, ID.d, ID.e, ID.z]) await g({ OPEN: id, BSRC: sw });
+          await g({ OPEN: ID.z, BOPEN: '2026-03-25', BUNC: true, BSRC: sw }); await g({ OPEN: ID.z, BOPEN: '2026-03-26', BSRC: sw }); } }
+      CURV = 'INR'; delete FX.DATA.be.apps[ID.a].org;
+      BO.guard = { sha: require('crypto').createHash('sha256').update(OR.join('\u0000')).digest('hex'), n: OR.length, org: LOADS.filter(f => /_o\.json\.gz$/.test(f)),
+        sw: OR.filter(h => /data-cpx-besrc|cpx-besw|Organic/.test(h)).length }; }
+    // ── ⚖️ the users switch (owner, 16 Nov 2026: "google ads and organic dono ka alag alag dekh saku esa kar do"; cpx_fixture.js
+    // paid(): the build's be_paid on) — Google Ads | Organic on top of the tab, the viewer's state, a tap never moves the page; the
+    // Google Ads view = today's tab from the Google Ads users' file + its one line; src "a" says the data is every user's (with the
+    // walk's progress); Organic: its own file fetched the first time it is opened, refused unless whole, its day table (newest on
+    // top, 30 at a time), one day open at a time (its per-age table + the chart), every "—" with its why, escaping, the phone ──
+    const PO = {}; out.paid = PO; const PR = [], ORN = [];                    // every render of this block (classes / ids / words); the Organic ones
+    const pGo = async (o) => { o = Object.assign({ BSRC: 'p' }, o || {}); let h = await beGo(o);   // (Organic: its file is asked for once the app file is in — one more settle)
+      if (o.BSRC === 'o') { await settle(); CPX.paint(); h = tbOf(SCREEN.innerHTML); ORN.push(h); } PR.push(h); return h; };
+    const swOf = h => [...h.matchAll(/<button type="button" class="cpx-besb" data-cpx-besrc="([a-z])" aria-pressed="(true|false)">([^<]*)<\/button>/g)].map(m => [m[1], m[2] === 'true', m[3]]);
+    const fnOf2 = h => [...h.matchAll(/<p class="cpx-(fn|note|vm)(?: cpx-wait)?">([\s\S]*?)<\/p>/g)].map(m => [m[1], txt(m[2])]);
+    const H9 = '<img src=x onerror=alert(9)>';
+    FX = FXM.paid(FXM.be(build())); ctx.DATA = FX.DATA;
+    const ZA = 'be_' + KEY.a + '_o.json.gz', FBp = FX.FILES['be_' + KEY.a + '.json.gz'];
+    // the Google Ads view on src "p": the switch, its one line, then today's tab exactly (the same file without "src", rendered)
+    PO.ga = [];
+    for (const o of [{ OPEN: ID.a }, { OPEN: ID.a, BOPEN: '2026-03-15' }, { OPEN: ID.a, BOPEN: '2026-03-25', BUNC: true }, { OPEN: ID.a, DN: 5 }]) {
+      delete FBp.src; const old = await pGo(o); FBp.src = 'p'; const now = await pGo(o);
+      PO.ga.push({ pre: now.slice(0, Math.max(0, now.length - old.length)), tail: now.endsWith(old), sw: swOf(now) }); }
+    { const h = await pGo({ OPEN: ID.a, BOPEN: '2026-03-25' }), h2 = await pGo({ OPEN: ID.a, BOPEN: '2026-03-24' });
+      PO.ecs = { d25: [...h.matchAll(/class="cpx-tt">([^<]*)</g)].map(m => m[1]), d24: [...h2.matchAll(/class="cpx-tt">([^<]*)</g)].map(m => m[1]) }; }
+    // src "a": every user's data, said under the switch with the walk's progress; its Organic view: no file yet, never fetched
+    LOADS = []; { const hB = await pGo({ OPEN: ID.b }), hBo = await pGo({ OPEN: ID.b, BSRC: 'o' });
+      PO.a = { sw: swOf(hB), lines: fnOf2(hB), swo: swOf(hBo), org: fnOf2(hBo), loads: beL() }; }
+    // the line by the build's "pw".st (on its way: busy, no "pw" or a state the page does not know — the progress date then; not
+    // there this build: none / fail / off / cal, each its own words, no date) and the Organic view's note beside it (no file: "abhi
+    // nahi bana … aane ke baad banega" only while that line says the data is on its way; a src "p" file without one: not this build)
+    const PWS = [undefined, { st: 'busy', from: '2026-02-14', next: '2026-02-14' }, { st: 'none', from: '2025-10-01', next: 'x' }, { from: H9, next: H9 }, 'x', [1],
+      { st: 'busy', from: '2025-10-01', next: '2025-12-31' }, { st: 'fail', next: '2026-03-01' },
+      { st: 'off' }, { st: 'cal', from: '2025-10-01', next: '2026-03-01' }, { st: 'none' }, { st: 'fail', from: '2025-10-01', next: '2026-03-01' }, { st: 'off', from: '2025-10-01', next: '2026-03-01' },
+      { st: 'zzz', from: '2025-10-01', next: '2026-03-01' }, { st: H9 }, { st: 'constructor' }, { st: ['none'] }, { st: 'busy' }, { st: 'NONE' }];
+    PO.pw = PWS.map(pw => txt(_.beSrcN({ src: 'a', pw }, 'a')));
+    PO.pwo = PWS.map(pw => fnOf2(_.beOrg({ id: ID.b, name: 'Beta App' }, { src: 'a', pw }, 'a')));
+    PO.pwp = fnOf2(_.beOrg({ id: ID.b, name: 'Beta App' }, { src: 'p' }, 'p'));
+    // … and through the tab's own render (Beta's file, each state): the Google Ads view's line, the Organic view's — never a fetch
+    { const FB = FX.FILES['be_' + KEY.b + '.json.gz'], pw0 = FB.pw; PO.ast = {};
+      for (const st of ['busy', 'none', 'fail', 'off', 'cal']) { FB.pw = { st, from: '2025-10-01', next: '2026-02-14' }; LOADS = [];
+        const g = await pGo({ OPEN: ID.b }), o = await pGo({ OPEN: ID.b, BSRC: 'o' });
+        PO.ast[st] = { ga: fnOf2(g)[0], org: fnOf2(o), loads: beL().filter(f => /_o\.json\.gz$/.test(f)) }; }
+      FB.pw = pw0; }
+    // lazy: the Google Ads view never fetches the Organic file; a tap on Organic does (once), ⏳ while it loads, then the table
+    reset(); _.set({ OPEN: ID.a, TAB: 'be', BOPEN: null, BSRC: 'p' }); LOADS = []; URLS = []; CPX.paint(); await settle(); CPX.paint();
+    PO.lazy = { ga: beL(), sw: swOf(SCREEN.innerHTML) };
+    clickD('[data-cpx-besrc]', { cpxBesrc: 'o' });
+    PO.lazy.tap = { src: _.get().BSRC, sw: swOf(SCREEN.innerHTML), wait: fnOf2(tbOf(SCREEN.innerHTML)), loads: beL(), urls: URLS.filter(u => u.includes('_o.json.gz')) };
+    await settle(); CPX.paint(); PO.lazy.loaded = { table: SCREEN.innerHTML.includes('id="cpx-beox"'), loads: beL() };
+    clickD('[data-cpx-besrc]', { cpxBesrc: 'p' }); PO.lazy.back = { src: _.get().BSRC, table: SCREEN.innerHTML.includes('id="cpx-bex"'), org: SCREEN.innerHTML.includes('id="cpx-beox"') };
+    clickD('[data-cpx-besrc]', { cpxBesrc: 'o' }); await settle(); PO.lazy.again = beL().filter(f => f === ZA).length;
+    // a late Organic file fills the tab's slot (arrive): the app file first, then its Organic file — no paint in between
+    { const SL = { 'cpx-vls': { innerHTML: '' }, 'cpx-tb': { innerHTML: '' } }, gid = ctx.document.getElementById; ctx.document.getElementById = k => SL[k] || null;
+      reset(); _.set({ OPEN: ID.a, TAB: 'be', BOPEN: null, BSRC: 'o' }); LOADS = []; CPX.paint(); const lw = fnOf2(tbOf(SCREEN.innerHTML)); await settle();
+      PO.arrive = { wait: lw, slot: SL['cpx-tb'].innerHTML.includes('id="cpx-beox"'), loads: beL() }; ctx.document.getElementById = gid; }
+    // failed → ⚠️ + Try again (its own file), the retry loads it; refused (another key / v / no days / card ages not from 0 up) → ⚠️
+    FAIL.add(ZA); LOADS = []; { const h = await pGo({ OPEN: ID.a, BSRC: 'o' }); PO.fail = { lines: fnOf2(h), retry: (h.match(/data-cpx-retry="([^"]+)"/) || [])[1], loads: beL() }; }
+    FAIL.delete(ZA); LOADS = []; clickD('[data-cpx-retry]', { cpxRetry: ZA }); await settle(); CPX.paint(); PO.fail.after = { loads: beL(), table: SCREEN.innerHTML.includes('id="cpx-beox"') };
+    { const Z0 = FX.FILES[ZA], refuse = async o => { FX.FILES[ZA] = Object.assign({}, Z0, o); const h = await pGo({ OPEN: ID.a, BSRC: 'o' }); FX.FILES[ZA] = Z0; return fnOf2(h).map(l => l[1]).pop(); };
+      PO.refused = {}; for (const [k, o] of [['key', { key: 'ffffffffffff' }], ['v', { v: 2 }], ['days', { days: 'x' }], ['ages1', { ages: [1, 2, 3, 4, 7, 14, 30, 60] }], ['agesd', { ages: [0, 2, 1, 3, 6, 13, 30, 60] }],
+        ['agesf', { ages: [0, 1.5, 2, 3, 6, 13, 30, 60] }], ['ages0', { ages: [] }], ['noages', { ages: undefined }]]) PO.refused[k] = await refuse(o); }
+    // the pointer: anything but this app's own Organic name → no file (never fetched), as no "org" at all
+    { const O0 = FX.DATA.be.apps[ID.a].org; PO.ptr = {};
+      for (const [k, v] of [['other', 'be_' + KEY.z + '_o.json.gz'], ['path', '../' + ZA], ['app', 'be_' + KEY.a + '.json.gz'], ['none', undefined]]) {
+        if (v === undefined) delete FX.DATA.be.apps[ID.a].org; else FX.DATA.be.apps[ID.a].org = v; LOADS = [];
+        PO.ptr[k] = { lines: fnOf2(await pGo({ OPEN: ID.a, BSRC: 'o' })), loads: beL().filter(f => /_o\.json\.gz$/.test(f)), o: _.beO(ID.a) }; }
+      FX.DATA.be.apps[ID.a].org = O0; }
+    // the day table ($ view, then ₹): newest on top, 30 at a time
+    CURV = 'USD'; { const h = await pGo({ OPEN: ID.a, BSRC: 'o' });
+      PO.table = { head: [...h.matchAll(/<th([^>]*)>([^<]*)<\/th>/g)].map(m => [m[2], dec((m[1].match(/title="([^"]*)"/) || [])[1] || '')]), rows: rowsOf(h), more: /data-cpx-more="1"/.test(h),
+        lines: fnOf2(h), sw: swOf(h), open: (h.match(/class="cpx-bedr"/g) || []).length, box: (h.match(/<div class="(cpx-x[^"]*)" id="cpx-beox">/) || [])[1],
+        dl: [...h.matchAll(/<tr class="cpx-ber[^"]*" data-cpx-bed="([^"]+)">([\s\S]*?)<\/tr>/g)].map(m => { const q = m[2].match(/<span class="cpx-dl ([^"]+)" title="([^"]*)">([^<]*)</); return [dec(m[1]), q ? q[1] : null, q ? dec(q[2]) : null]; }) };
+      clickD('[data-cpx-more]'); PO.table.more60 = rowsOf(tbOf(SCREEN.innerHTML)).map(r => r.d); PO.table.dn = _.get().DN; }
+    CURV = 'INR'; PO.table_inr = rowsOf(await pGo({ OPEN: ID.a, BSRC: 'o' })).filter(r => ['2026-03-25', '2026-03-26'].includes(r.d)).map(r => [r.d, r.cells[2]]);
+    PO.k = { d25: _.beK('Alpha App', '2026-03-25'), d26: _.beK('Alpha App', '2026-03-26') };
+    { const AG = FX.FILES[ZA].ages, x = FX.FILES[ZA].days.find(y => y.d === '2026-03-26'), long = Object.assign({}, x, { r: x.r.concat([1]), pu: x.pu.concat([1]) });   // an array longer than the card ages: unknown
+      PO.long = rowsOf(_.beORow(long, 'Alpha App', AG))[0].cells; }
+    // a day opened ($ view): its per-age table (the days it has lived), the chart (days 1 … 14, every value printed), the notes
+    const oDay = async (d, o) => { const h = await pGo(Object.assign({ OPEN: ID.a, BSRC: 'o', BOPEN: d }, o || {})), x = bedOf(h) || '';
+      return { n: (h.match(/class="cpx-bedr"/g) || []).length, row: rowsOf(h).find(r => r.d === d), h4: [...x.matchAll(/<h4 class="cpx-h4">([^<]*)<\/h4>/g)].map(m => m[1]),
+        tbl: tblOf(x, '<table class="cpx-t cpx-beot">'), dl: [...x.matchAll(/<span class="cpx-dl ([^"]+)" title="([^"]*)">([^<]*)<\/span>/g)].map(m => [m[3], m[1], dec(m[2])]),
+        svg: svgOf(x), dots: [...x.matchAll(/<circle [^>]*class="cpx-dot cpx-l2( cpx-benf)?"(?:\/>|><title>([^<]*)<\/title>)/g)].map(m => [!!m[1], m[2] ? dec(m[2]) : null]),
+        lines: fnOf2(x), span: (h.match(/<td class="cpx-bedc" colspan="(\d+)">/) || [])[1] }; };
+    CURV = 'USD'; PO.d25 = await oDay('2026-03-25'); PO.d15 = await oDay('2026-03-15'); PO.d28 = await oDay('2026-03-28'); PO.d10 = await oDay('2026-03-10'); PO.d29 = await oDay('2026-03-29');
+    PO.d27 = await oDay('2026-03-27');
+    PO.j10 = await oDay('2026-01-10', { DN: 60 }); CURV = 'INR'; PO.d25i = await oDay('2026-03-25');
+    // taps through the screen's handler: one day open at a time (the same day again closes it, a non-date does nothing); the open day
+    // is the tab's (switching the view keeps it open where the other view has that day too); the switch sets the page back to 30
+    await pGo({ OPEN: ID.a, BSRC: 'o' }); const ost = () => ({ open: _.get().BOPEN, n: (SCREEN.innerHTML.match(/class="cpx-bedr"/g) || []).length,
+      exp: [...SCREEN.innerHTML.matchAll(/class="cpx-bedb" data-cpx-bed="([^"]+)" aria-expanded="true"/g)].map(m => m[1]), org: SCREEN.innerHTML.includes('id="cpx-beox"') });
+    PO.taps = [];
+    clickD('[data-cpx-bed]', { cpxBed: '2026-03-25' }); PO.taps.push(ost());
+    clickD('[data-cpx-bed]', { cpxBed: '2026-03-15' }); PO.taps.push(ost());
+    clickD('[data-cpx-bed]', { cpxBed: '2026-03-15' }); PO.taps.push(ost());
+    clickD('[data-cpx-bed]', { cpxBed: '"><x>' }); PO.taps.push(ost());
+    clickD('[data-cpx-bed]', { cpxBed: '2026-03-25' }); clickD('[data-cpx-besrc]', { cpxBesrc: 'p' }); PO.taps.push(Object.assign(ost(), { src: _.get().BSRC, ga: SCREEN.innerHTML.includes('id="cpx-bex"') }));
+    clickD('[data-cpx-besrc]', { cpxBesrc: 'o' }); PO.taps.push(Object.assign(ost(), { src: _.get().BSRC }));
+    _.set({ DN: 60 }); clickD('[data-cpx-besrc]', { cpxBesrc: 'p' }); PO.taps.push({ dn: _.get().DN, src: _.get().BSRC });
+    // the switch never moves the page: the tapped segment back where it was (1280 / 375), the page's height held through the repaint;
+    // the segment already on and a junk value: nothing at all
+    PO.keep = {};
+    for (const w of [1280, 375]) { await pGo({ OPEN: ID.a, BSRC: 'p' }); ctx.window.innerWidth = w; SCROLL = []; let n = 0; const QS = [];
+      const BTN = { getBoundingClientRect: () => ({ top: n++ === 0 ? 300 : 420 }) }; SCREEN.querySelector = s => { QS.push(s); return s === '[data-cpx-besrc="o"]' ? BTN : null; };
+      clickD('[data-cpx-besrc]', { cpxBesrc: 'o' }); PO.keep[w] = { dy: SCROLL.slice(), src: _.get().BSRC, held: SCREEN.style.minHeight, sel: [...new Set(QS)] };
+      SCROLL = []; QS.length = 0; const h0 = SCREEN.innerHTML; clickD('[data-cpx-besrc]', { cpxBesrc: 'o' }); clickD('[data-cpx-besrc]', { cpxBesrc: 'x' });
+      PO.keep[w].same = { dy: SCROLL.slice(), sel: QS.slice(), html: SCREEN.innerHTML === h0, src: _.get().BSRC };
+      SCREEN.querySelector = () => null; }
+    ctx.window.innerWidth = 1280;
+    // the switch is the viewer's: another app (its Chart tab first), the Breakeven tab again → still Organic (Beta: src "a", no file)
+    { reset(); _.set({ OPEN: ID.a, TAB: 'be', BSRC: 'o' }); CPX.paint(); await settle(); tapId = ID.b; tap('[data-cpx-app]'); const t1 = _.get().TAB; tabTap('be'); await settle(); CPX.paint();
+      PO.kept = { tab: t1, src: _.get().BSRC, sw: swOf(SCREEN.innerHTML), lines: fnOf2(tbOf(SCREEN.innerHTML)) }; }
+    // hostile text (Zeta's Organic file): escaped, a bad date dropped, junk values a "—" with why, a value past the day's age unread
+    CURV = 'USD'; { const z0 = await pGo({ OPEN: ID.z, BSRC: 'o' }), z1 = await pGo({ OPEN: ID.z, BSRC: 'o', BOPEN: '2026-03-25' }), z2 = await pGo({ OPEN: ID.z, BSRC: 'o', BOPEN: '2026-03-26' });
+      const all = z0 + z1 + z2;
+      PO.hostile = { raw: [H9, '<b>9</b>', '<i>'].filter(s => all.includes(s)), esc: all.includes('&lt;img src=x onerror=alert(9)&gt;'), rows: rowsOf(z0).map(r => ({ d: r.d, cells: r.cells, titles: r.titles })),
+        d25: { tbl: tblOf(bedOf(z1) || '', '<table class="cpx-t cpx-beot">'), svg: svgOf(bedOf(z1) || '') }, d26: fnOf2(bedOf(z2) || '') }; }
+    CURV = 'INR';
+    // the developer copy: no Breakeven at all (nothing fetched)
+    ctx.window.__DEV_VIEW__ = true; reset(); LOADS = []; _.set({ OPEN: ID.a, TAB: 'be', BSRC: 'o' }); CPX.paint(); await settle();
+    PO.dev = { html: SCREEN.innerHTML, loads: beL(), o: _.beO(ID.a), of: _.beOF(ID.a) }; ctx.window.__DEV_VIEW__ = false;
+    // a phone: the same render at 375 px; the day table and the open day's own table in scroll boxes, the open day a box of the table's
+    // box (td colspan 4 → .cpx-bed), the chart an SVG that scales, no inline style / width
+    { const hP = await pGo({ OPEN: ID.a, BSRC: 'o', BOPEN: '2026-03-25' }); ctx.window.innerWidth = 375; const hP2 = await pGo({ OPEN: ID.a, BSRC: 'o', BOPEN: '2026-03-25' }); ctx.window.innerWidth = 1280;
+      const RD = miniDom(hP), anc = (e, f) => { for (let x = e.parentNode; x && x.tagName !== '#R'; x = x.parentNode) if (f(x)) return x; return null; };
+      const bed = RD.querySelector('.cpx-bed'), td = bed && bed.parentNode, main = RD.querySelector('table');
+      PO.layout = { same: hP === hP2, tables: RD.querySelectorAll('table').map(t => { const b = anc(t, x => x.cls().includes('cpx-x')); return b ? b.getAttribute('class') : null; }),
+        bed: bed ? { td: td.tagName, cls: td.getAttribute('class'), span: td.getAttribute('colspan'), box: !!anc(bed, x => x.cls().includes('cpx-bex')) } : null,
+        svgs: RD.querySelectorAll('svg').map(s => [s.getAttribute('class'), s.getAttribute('viewBox'), s.getAttribute('width'), s.getAttribute('height'), s.getAttribute('style')]),
+        style: /\sstyle="/.test(hP), widths: (hP.match(/\swidth="[^"]*"/g) || []).length, head: main.querySelectorAll('th').length - (bed ? bed.querySelectorAll('th').length : 0),
+        cells: RD.querySelectorAll('tr.cpx-ber').map(r => r.children.filter(c => c.tagName === 'TD').length), sw: !!RD.querySelector('.cpx-besw') }; }
+    // every render of this block: cpx- classes only, ids unique per render, no junk words
+    const PH = PR.join('');
+    PO.classes = [...new Set((PH.match(/class="[^"]*"/g) || []).flatMap(c => c.slice(7, -1).split(/\s+/)).filter(Boolean))];
+    PO.dup_ids = PR.map(h => [...h.matchAll(/\sid="([^"]*)"/g)].map(m => m[1])).filter(L => L.length !== new Set(L).size);
+    PO.ids = [...new Set([...PH.matchAll(/\sid="([^"]*)"/g)].map(m => m[1]))];
+    PO.bad_words = ['undefined', 'NaN', '[object Object]', 'Infinity', 'null'].filter(w => PR.some(h => txt(h).includes(w)));
+    // the Organic view's own words: never the Google Ads table's "data check" (a GA4 hole there), no users count of a drift, no
+    // "by day" (its days are "day N tak", defined once under its table)
+    PO.owords = { n: ORN.length, bad: ['data check', 'nahi gine', 'Day N ='].filter(w => ORN.some(h => txt(h).includes(w))).concat(ORN.some(h => /by day \d/.test(txt(h))) ? ['by day N'] : []),
+      tak: ORN.filter(h => / day \d+ tak/.test(txt(h))).length, foot: ORN.filter(h => h.includes('id="cpx-beox"') && !h.includes('Day 1, 2, 3, 4, 7, 14 = install ke din se utne din')).length };
+    _.set({ BSRC: 'p' });
     FX = build(); ctx.DATA = FX.DATA;
   } catch (e) { errors.push(String(e && e.stack || e)); }
   console.log(JSON.stringify({ errors, out }));

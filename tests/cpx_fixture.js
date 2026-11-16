@@ -321,4 +321,46 @@ function be(fx) {
   DATA.be = { v: 1, origin: O, calib: CAL, apps: { [IDS.a]: ent('a'), [IDS.b]: ent('b'), [IDS.c]: ent('c'), [IDS.e]: { key: 'NOT-HEX', file: '../x.json.gz', v: 'x', n: 1, cov: 1 }, [IDS.z]: ent('z') } };
   return fx;
 }
-module.exports = { build, agent, be, addD, nD, days };
+// ── ⚖️ Breakeven · the users switch (owner, 16 Nov 2026: "google ads and organic dono ka alag alag dekh saku esa kar do"; the
+// build's be_paid on — spec B2 / B3 shapes) laid onto a be() output: Alpha's file src "p" (25 Mar's eCPM card "ecs": "a") and
+// its Organic file be_<key>_o.json.gz (the pointer's "org"); Beta's src "a" with the paid walk's progress "pw"; Zeta's src "p"
+// with a hostile Organic file. Made-up numbers in closed forms (hand math):
+//   * Alpha's Organic days: 10 Jan + 23 Feb … 29 Mar (36, oldest first in the file), age = days to 29 Mar; card ages the GRID's
+//     [0, 1, 2, 3, 6, 13, 30, 60] (as the oldest day lived them); n = 500 organic users (26 Mar: 1,234); at an age a the day has
+//     lived with a + 3 ≤ its age (final, fin 1): per user 0.02 + 0.004a $, revenue n × that, the benchmark countries' per user
+//     the same (cv 1) against their benchmark per user (0.02 + 0.004a) ÷ 1.25 (so +25 %); a lived age not final yet: nulls,
+//     fin 0; the benchmark at every age ≤ 13 (lived or not), past 13 only where lived;
+//   * 25 Mar: the benchmark countries hold 80 % of its users (cv 0.8), their per user × 0.6 (so −25 %); 15 Mar a drift day
+//     (dr [2, 150]); 24 Mar its arrays trimmed after the ages it has lived (the build may trim trailing nulls: read the same);
+//     10 Mar no benchmark at any age (no benchmark countries: no set per user either, as the build writes it); 27 Mar its users
+//     not final yet (the build's "n": null on the newest install days — no benchmark weights, so no set: s.pu / s.b / s.cv
+//     empty); 28 Mar a number not final yet at age 0 (revenue 9, per user 0.018, the set's 0.018, its benchmark 0.015: +20 %,
+//     fin 0); 29 Mar (age 0) nothing yet.
+//   usage: const fx = paid(be(build()));
+function paid(fx) {
+  const { DATA, FILES } = fx, NEW = '2026-03-29', AG = [0, 1, 2, 3, 6, 13, 30, 60], r4 = v => Math.round(v * 1e4) / 1e4, ageOf = x => nD(x, NEW) - 1;
+  const pu = a => r4(0.02 + 0.004 * a), bm = a => r4(pu(a) / 1.25), nul = () => AG.map(() => null);
+  const oday = x => { const ag = ageOf(x), n = x === '2026-03-26' ? 1234 : 500, fin = a => a + 3 <= ag;
+    const o = { d: x, age: ag, n, r: AG.map(a => (fin(a) ? r2(n * pu(a)) : null)), pu: AG.map(a => (fin(a) ? pu(a) : null)), fin: AG.map(a => (fin(a) ? 1 : 0)),
+      s: { pu: AG.map(a => (fin(a) ? pu(a) : null)), b: AG.map(a => (a <= 13 || a <= ag ? bm(a) : null)), cv: AG.map(a => (a <= 13 || a <= ag ? 1 : null)) } };
+    if (x === '2026-03-25') { o.s.pu = o.s.pu.map(v => (v == null ? null : r4(v * 0.6))); o.s.cv = o.s.cv.map(v => (v == null ? null : 0.8)); }
+    if (x === '2026-03-15') o.dr = [2, 150];
+    if (x === '2026-03-24') { for (const k of ['r', 'pu', 'fin']) o[k] = o[k].slice(0, 4); o.s.pu = o.s.pu.slice(0, 3); }
+    if (x === '2026-03-10') { o.s.pu = nul(); o.s.b = nul(); o.s.cv = nul(); }
+    if (x === '2026-03-27') { o.n = null; o.s = { pu: [], b: [], cv: [] }; }
+    if (x === '2026-03-28') { o.r[0] = 9; o.pu[0] = 0.018; o.s.pu[0] = 0.018; o.s.b[0] = 0.015; }
+    return o; };
+  const ofile = (k, o) => { const f = 'be_' + KEYS[k] + '_o.json.gz'; FILES[f] = Object.assign({ v: 1, key: KEYS[k], origin: '2026-03-30', ages: AG.slice() }, o); DATA.be.apps[IDS[k]].org = f; return f; };
+  const A = FILES['be_' + KEYS.a + '.json.gz'];
+  A.src = 'p'; A.days.find(x => x.d === '2026-03-25').ecs = 'a';
+  ofile('a', { days: ['2026-01-10'].concat(days('2026-02-23', NEW)).map(oday) });
+  Object.assign(FILES['be_' + KEYS.b + '.json.gz'], { src: 'a', pw: { st: 'busy', from: '2025-10-01', next: '2026-02-14' } });
+  const H = '<img src=x onerror=alert(9)>';
+  FILES['be_' + KEYS.z + '.json.gz'].src = 'p';
+  ofile('z', { days: [
+    { d: '2026-03-25', age: 4, n: H, r: [H, 1, 2, 3, 4, 5, 6, 7], pu: 'x', fin: [1, 1, H, 0, 0, 0, 0, 0], s: { pu: [0.1, H, null, null, null, null, null, null], b: [0.08, 0.1, H, 0.12, 0.13, 0.14, null, null], cv: [H, 2, -1, 0, 0, 0, 0, 0] }, dr: [H, 1] },
+    { d: H, age: 1, n: 5 },
+    { d: '2026-03-26', age: '<i>', n: '<b>9</b>', r: 'x', s: H, dr: 'x' }] });
+  return fx;
+}
+module.exports = { build, agent, be, paid, addD, nD, days };
