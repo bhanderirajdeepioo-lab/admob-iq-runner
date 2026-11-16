@@ -30,7 +30,9 @@ each read's own filters). What the cube's docstring says of its reads, files and
     GA4_CUBE_Q_* setting); GA4_CUBEP_RF_CALLS: the calls a run may start refold days with (30; 0 = off — the cube's
     GA4_CUBE_RF_CALLS is never its own); GA4_CUBEP_REPAIR_CALLS (above). Everything else is the cube's — its module
     defaults and its GA4_CUBE_* env (the fold guard, q's settle and retry rules, the caps);
-  * its budget: the build's (GA4_CUBEP_BUDGET_SEC), else BUDGET_SEC (the cube's);
+  * its budget: the build's (GA4_CUBEP_BUDGET_SEC), else BUDGET_SEC (the cube's); GA4_CUBEP_WORKERS: the properties
+    read side by side (the cube's WORKERS unless set; each property has its own GA4 quota, so more only shortens a long
+    history backfill — the owner, 16 Nov 2026: "fast karo aaj hi");
   * its quota: Screens' stricter floors (ga4_paid.App) — the build runs it after every other GA4 step, so it takes
     only what they leave, in this build and the next (the paid history's backfill never starves a live feature);
   * a stuck app (ga4_paid.streak: failing FAIL_LINE runs in a row — the cube itself retries a failed app every
@@ -59,16 +61,17 @@ MOD = ga4_paid.instance(ga4_cube, "admob_iq.fetch._ga4_cube_paid_impl", DIR="ga4
                         Q_SEC=_env("GA4_CUBEP_Q_SEC", 20, float),
                         RF_CALLS=_env("GA4_CUBEP_RF_CALLS", 30))
 BUDGET_SEC = MOD.BUDGET_SEC
+WORKERS = max(1, _env("GA4_CUBEP_WORKERS", ga4_cube.WORKERS))     # properties read side by side (each its own quota)
 
 
 def refresh_all(cfg, data_dir, apps, now=None, clock=None, budget=None):
     """The cube's run (ga4_cube.refresh_all) on the paid store, every read held to Google Ads users, then the stuck
     rule (ga4_paid.streak) → {"counts" (+ "stuck"), "apps": {app id: fetched|fresh|failed|deferred|waiting}}
     (+ "error"). now None: the clock's UTC now (the cube's own default, taken here: the stuck rule's run time);
-    budget None / 0: BUDGET_SEC. Never raises; never prints."""
+    budget None / 0: BUDGET_SEC; WORKERS properties side by side. Never raises; never prints."""
     now = now or datetime.now(timezone.utc)
-    return ga4_paid.streak(MOD, data_dir, MOD.refresh_all(cfg, data_dir, apps, now, clock, budget=budget or BUDGET_SEC),
-                           now)
+    return ga4_paid.streak(MOD, data_dir, MOD.refresh_all(cfg, data_dir, apps, now, clock, budget=budget or BUDGET_SEC,
+                                                          workers=WORKERS), now)
 
 
 def log_line(status):

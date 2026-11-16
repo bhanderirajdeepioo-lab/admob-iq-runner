@@ -258,7 +258,8 @@ jobs:
           # an app's calls a build (empty: the cube's), GA4_CUBEP_Q_CALLS / GA4_CUBEP_Q_SEC = its q history fill's
           # calls / seconds a build (empty: 120 / 20; 0 calls = q off: no whole read); GA4_CUBEP_RF_CALLS = the calls a
           # build may start its refold days with (empty: 30; 0 = its refold off — GA4_CUBE_RF_CALLS above is the cube's
-          # own only); GA4_CUBEP_REPAIR_CALLS = its repair's (empty: 0 = off); GA4_NVRP_MAX_CALLS = an app's calls a
+          # own only); GA4_CUBEP_REPAIR_CALLS = its repair's (empty: 0 = off); GA4_CUBEP_WORKERS = the properties it
+          # reads side by side (empty: the cube's 3; each property its own quota); GA4_NVRP_MAX_CALLS = an app's calls a
           # build of the paid nvr read (empty: ga4_nvr's)
           GA4_CUBEP:            ${{ vars.GA4_CUBEP || 'true' }}
           GA4_CUBEP_BUDGET_SEC: ${{ vars.GA4_CUBEP_BUDGET_SEC }}
@@ -267,6 +268,7 @@ jobs:
           GA4_CUBEP_Q_SEC:      ${{ vars.GA4_CUBEP_Q_SEC }}
           GA4_CUBEP_RF_CALLS:   ${{ vars.GA4_CUBEP_RF_CALLS }}
           GA4_CUBEP_REPAIR_CALLS: ${{ vars.GA4_CUBEP_REPAIR_CALLS }}
+          GA4_CUBEP_WORKERS:    ${{ vars.GA4_CUBEP_WORKERS }}
           GA4_NVRP:             ${{ vars.GA4_NVRP || 'true' }}
           GA4_NVRP_BUDGET_SEC:  ${{ vars.GA4_NVRP_BUDGET_SEC }}
           GA4_NVRP_MAX_CALLS:   ${{ vars.GA4_NVRP_MAX_CALLS }}

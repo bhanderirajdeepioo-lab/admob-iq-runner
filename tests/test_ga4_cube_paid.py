@@ -174,6 +174,28 @@ def test_its_own_knobs_from_the_environment_the_rest_the_cubes(monkeypatch):
         importlib.reload(cp)
 
 
+def test_the_properties_side_by_side_from_the_environment_reach_the_cube_run(monkeypatch, tmp_path):
+    """GA4_CUBEP_WORKERS (read at import; unset / empty: the cube's WORKERS, never below 1) is what refresh_all hands
+    the cube's run as its workers — the base cube's own WORKERS never changes."""
+    w0 = cu.WORKERS
+    try:
+        for v, want in (("8", 8), ("", cu.WORKERS), ("0", 1)):
+            monkeypatch.setenv("GA4_CUBEP_WORKERS", v)
+            m = importlib.reload(cp)
+            got = {}
+
+            def run(cfg, data_dir, apps, now, clock, budget=None, workers=None):
+                got.update(budget=budget, workers=workers)
+                return {"counts": {}, "apps": {}}
+            monkeypatch.setattr(m.MOD, "refresh_all", run)
+            out = m.refresh_all({}, str(tmp_path), [], budget=33)
+            assert (m.WORKERS, got, out["counts"]) == (want, {"budget": 33, "workers": want}, {"stuck": 0})
+        assert cu.WORKERS == w0
+    finally:
+        monkeypatch.delenv("GA4_CUBEP_WORKERS", raising=False)
+        importlib.reload(cp)
+
+
 # ── a whole run ─────────────────────────────────────────────────────────────────────────────────────────────────────
 def test_a_run_holds_every_read_to_google_ads_users_and_folds_only_theirs_into_its_own_store(monkeypatch, tmp_path):
     data, out, sent, srv = _run(monkeypatch, tmp_path)
@@ -323,6 +345,6 @@ def test_the_switches_the_stage_names_and_the_workflow(monkeypatch):
         with open(mod.__file__, encoding="utf-8") as f:                 # variable never set in vain)
             knobs |= set(re.findall(r'"(GA4_(?:CUBEP|NVRP)_[A-Z_]+)"', f.read()))
     assert knobs == {"GA4_CUBEP_REPAIR_CALLS", "GA4_CUBEP_MAX_CALLS", "GA4_CUBEP_Q_CALLS", "GA4_CUBEP_Q_SEC",
-                     "GA4_CUBEP_RF_CALLS", "GA4_NVRP_MAX_CALLS"}
+                     "GA4_CUBEP_RF_CALLS", "GA4_CUBEP_WORKERS", "GA4_NVRP_MAX_CALLS"}
     for k in sorted(knobs | {"GA4_CUBEP_BUDGET_SEC", "GA4_NVRP_BUDGET_SEC"}):
         assert env[k] == "${{ vars.%s }}" % k, k
