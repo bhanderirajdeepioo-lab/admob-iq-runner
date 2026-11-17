@@ -416,6 +416,9 @@ def _old_revenue(w, currency, today, tz_by_account):
     rev["all_apps"] = build_static.mediation_revenue(w.fetch_mediation(), rev["till"])
     rev["country"] = build_static.admob_country(w.fetch_country(), rev["till"])
     rev["country_m"] = build_static.admob_country_months(w.fetch_country(), rev["till"])
+    build_static.attach_country_history(rev["country_m"],               # + the ad-unit × country history's
+                                        build_static.admob_unit_country_months(w.fetch_adunit_country_monthly()),
+                                        rev["till"])                    # months (whole / not whole)
     till = date.fromisoformat(rev["till"])
     rev["cal"] = fc_calendar.seasons(w.fetch_mediation_unit(), till)
     rev["cal"]["hol"] = fc_calendar.holidays(w.fetch_country(), till)
@@ -442,6 +445,20 @@ def test_the_revenue_inputs_are_the_history_rows_with_the_same_numbers(tmp_path,
     ids = sorted({r["app_id"] for r in repo._rows["mu"]})
     assert len(ids) == 2 and _src_out(src, ids) == _src_out(old.pop("adsrc"), ids)
     assert {k: v for k, v in revenue.items() if k != "adsrc"} == old
+
+
+def test_the_roi_country_months_take_the_unit_history_where_the_country_report_misses(tmp_path, live):
+    """The seeded ad-unit rollup holds Apr / May / Jun of app~puzzle (two units, 30 days a cell): Apr and Jun whole, May
+    a day short; the mock country report holds only the last days of Jun and the current month (Jul). The ROI's
+    country months: the report's own "m" / "d" untouched, + "h" Apr and Jun from the rollup (its two units summed),
+    "hp" May — made while the rollup was loaded (released after the baseline report, never read again)."""
+    out, data = live(str(tmp_path))
+    _, revenue = live.seen[-1]
+    cm, own = revenue["country_m"], build_static.admob_country_months(FileRepo(data).fetch_country(), revenue["till"])
+    assert {k: cm[k] for k in ("m", "d")} == own
+    assert own["d"]["app~puzzle"]["2026-06"] != (1 << 30) - 1                 # (the report's own June: short)
+    assert cm["h"] == {"app~puzzle": {"2026-04": {"US": 100_000_000}, "2026-06": {"US": 100_000_000}}}
+    assert cm["hp"] == {"app~puzzle": ["2026-05"]}
 
 
 class _Strict(dict):

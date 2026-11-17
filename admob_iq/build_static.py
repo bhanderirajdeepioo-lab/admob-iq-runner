@@ -14,6 +14,7 @@ else config/accounts.yaml, else a built-in mock so the very first deploy still
 shows a working demo instead of crashing.
 """
 
+import calendar
 import json
 import os
 import re
@@ -439,6 +440,87 @@ def admob_country_months(rows, till):
     return {"m": out, "d": cov}
 
 
+_MON = re.compile(r"\d{4}-(?:0[1-9]|1[0-2])")
+
+
+def admob_unit_country_months(acm):
+    """The ad-unit × country monthly history (adunit_country_monthly: the mediation report — every ad source, as the
+    country report — pulled over each account's whole history by its own one-time backfill, so it holds months the
+    country report never read: that report's deep backfill ran once, for the accounts of its first run) →
+    {"w": {AdMob app id: {YYYY-MM: {country: earnings micros}}} — the months it holds WHOLE for the app id (one of its
+    (ad unit, country) cells had a row on every day: the rollup's "days"), "p": {AdMob app id: [YYYY-MM, …]} — the
+    months it holds rows of but not whole (a first month, a day with no row, an ad unit switched mid-month: never
+    taken whole for the app, roi_build._admob_hist)}. A cell it cannot read (a month key that is no month, a value
+    that is no number) is left out, never the rest; rollup cells none of which names an app (its shape changed) raise
+    LookupError — said by the caller, never a silent stop. Countries as the rollup keeps them ("All": no country, as
+    in the country report). New objects only, nothing of the rollup kept (it is released after the baseline report,
+    before the ROI step reads this). Small: apps × months × countries."""
+    from .db import ACM_FIELDS
+    ei, di = ACM_FIELDS.index("estimated_earnings_micros"), ACM_FIELDS.index("days")
+    units, money, most, seen, used = (acm or {}).get("units") or {}, {}, {}, 0, 0
+    for uid, by_cc in ((acm or {}).get("data") or {}).items():
+        if not isinstance(by_cc, dict):
+            continue
+        meta = units.get(uid)
+        aid = meta[0] if isinstance(meta, (list, tuple)) and meta and isinstance(meta[0], str) and meta[0] else None
+        for cc, by_m in by_cc.items():
+            if not (isinstance(cc, str) and cc) or not isinstance(by_m, dict):
+                continue
+            for M, arr in by_m.items():
+                seen += 1
+                if aid is None or not (isinstance(M, str) and _MON.fullmatch(M)):
+                    continue
+                try:
+                    e, n = int(arr[ei] or 0), int(arr[di] or 0)
+                except (TypeError, ValueError, IndexError, KeyError, OverflowError):
+                    continue
+                used += 1
+                by = money.setdefault(aid, {}).setdefault(M, {})
+                by[cc] = by.get(cc, 0) + e
+                mx = most.setdefault(aid, {})
+                mx[M] = max(mx.get(M, 0), n)
+    if seen and not used:
+        raise LookupError("no rollup cell names an app and a month")
+    w, p = {}, {}
+    for aid, by_m in money.items():
+        for M, by in by_m.items():
+            if most[aid][M] >= calendar.monthrange(int(M[:4]), int(M[5:]))[1]:
+                w.setdefault(aid, {})[M] = by
+            else:
+                p.setdefault(aid, []).append(M)
+    return {"w": w, "p": {aid: sorted(ms) for aid, ms in p.items()}}
+
+
+def attach_country_history(cm, hist, till):
+    """admob_country_months' {"m", "d"} + the ad-unit × country history (admob_unit_country_months), in place: "h" =
+    {AdMob app id: {YYYY-MM: {country: micros}}} its whole months, "hp" = {AdMob app id: [YYYY-MM, …]} the months it
+    holds rows of but not whole — finished months only (before the report's last day's month: the current month
+    is always the report's), and a month the app id's own country report holds whole is left out of "h" (the ROI
+    build reads the report there, every id's whole report makes the app's whole). "m" / "d" are never touched: the ROI
+    build (roi_build._admob_hist) decides per APP which months the history stands in for, on the report's own day
+    masks — so a month taken from the history never makes a neighbour of it look whole. `hist` is consumed: its
+    month dicts move into "h" (no copy) and it is emptied, so the months left out are freed before the ROI step.
+    → months put in "h"."""
+    from .roi_build import _admob_whole
+    lim, d = str(till or "")[:7], cm.get("d") or {}
+    h, hp, n = {}, {}, 0
+    if lim:
+        for aid, by_m in ((hist or {}).get("w") or {}).items():
+            mask = d.get(aid) or {}
+            for M, ccs in by_m.items():
+                if M < lim and ccs and not (mask.get(M) and _admob_whole(mask, M)):
+                    h.setdefault(aid, {})[M] = ccs
+                    n += 1
+        for aid, ms in ((hist or {}).get("p") or {}).items():
+            ms = [M for M in ms if M < lim]
+            if ms:
+                hp[aid] = ms
+    if isinstance(hist, dict):
+        hist.clear()
+    cm["h"], cm["hp"] = h, hp
+    return n
+
+
 @_sc.timed("account_tzs")
 def account_tzs(accounts, s, report_tz, mode, has_creds):
     """{account id: its reporting timezone} — the timezone each account's AdMob report rows are in: the configured
@@ -795,10 +877,12 @@ def _review_studio_step(dashboard, data_dir, out_dir, s, ran=True, now=None):
         return []
 
 
-def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, today, tz_by_account=None):
+def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, today, tz_by_account=None,
+                            acm_cm=None):
     """The uninstall step with the exact AdMob revenue per app per day (the update-impact card's ARPDAU) from the
-    network report already in `repo` — no extra report call (tz_by_account: account_tzs). A revenue failure only costs
-    that one row."""
+    network report already in `repo` — no extra report call (tz_by_account: account_tzs; acm_cm: the ad-unit × country
+    history's whole months, admob_unit_country_months — made at baseline_report, where the rollup is loaded anyway).
+    A revenue failure only costs that one row."""
     # every reader below takes the history's own rows, never the app-name wrapper's (_DisambiguatedRepo copies each
     # row of a renamed app on every fetch, and adcfg.Source would hold those copies through the whole ROI step): none
     # of them reads "app_name" or changes a row, so their numbers are the same either way
@@ -828,6 +912,11 @@ def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, to
                 revenue["country_m"] = admob_country_months(raw.fetch_country(), revenue["till"])
             except Exception as e:
                 print(f"roi country months skipped: {type(e).__name__}", file=sys.stderr)
+            if acm_cm and revenue.get("country_m") is not None:
+                try:                                   # … + the ad-unit × country history's months (the same money:
+                    attach_country_history(revenue["country_m"], acm_cm, revenue["till"])  # the ROI build takes
+                except Exception as e:                 # them where the country report is not whole)
+                    print(f"roi country history skipped: {type(e).__name__}", file=sys.stderr)
             try:                                       # 📅 the forecast's eCPM calendar: each past season's week / event
                 from .engine import fc_calendar        # effects, like for like per ad unit (the unit report already read)
                 till = date.fromisoformat(str(revenue["till"])[:10])
@@ -843,6 +932,8 @@ def _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, to
                                                 revenue["till"])
             except Exception as e:
                 print(f"ad settings skipped: {type(e).__name__}", file=sys.stderr)
+    if isinstance(acm_cm, dict):
+        acm_cm.clear()                                 # (moved into country_m, or not used: freed before the ROI step)
     return _uninstall_step(dashboard, data_dir, out_dir, s, revenue=revenue)
 
 
@@ -1709,6 +1800,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
 
     _sc.step("dashboard_build")
     baseline_payload = None
+    acm_cm = None                                          # (live) the ad-unit × country history's whole months (ROI)
     daily_files = None                                     # (live) the Mediation / Deductions daily files: _daily_prep
     if repo.has_data():
         # Hide the user's UNSELECTED apps from EVERY built view (one choke point) — the real repo
@@ -1750,6 +1842,12 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         except Exception as e:
             print(f"baseline report skipped: {e}", file=sys.stderr)
         acm = None                                      # (this view shares the rollup's inner dicts: freed with it)
+        try:                                            # 📈 ROI's country filter: the months of the ad-unit × country
+            acm_cm = admob_unit_country_months(         # history the country report never read whole — made now,
+                (repo._r if isinstance(repo, _DisambiguatedRepo) else repo).fetch_adunit_country_monthly())  # while
+        except Exception as e:                          # the rollup is loaded (never read again after its release)
+            acm_cm = None
+            print(f"roi country history skipped: {type(e).__name__}", file=sys.stderr)
         repo.release("acm")
     elif mode == "mock":
         dashboard = build_dashboard()                   # rich demo preview (no creds yet)
@@ -2043,8 +2141,10 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     uni_files, any_paths, acct_tz = [], [], {}
     if mode == "live" and has_creds and repo.has_data():
         acct_tz = account_tzs(accounts, s, report_tz, mode, has_creds)
-        uni_files = _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, today, acct_tz)
+        uni_files = _uninstall_with_revenue(dashboard, repo, data_dir, out_dir, s, report_tz, today, acct_tz,
+                                            acm_cm=acm_cm)
         any_paths = _impact_any_tail(out_dir)
+    acm_cm = None
     _sc.step("tabs")
     # 🧭 Uninstall Studio (the Uninstall tab's All-apps view): one lazy file from what the Uninstall step just wrote —
     # OPTIONAL (UNINSTALL_STUDIO) and failure-isolated; without this build's Uninstall data it leaves no file behind

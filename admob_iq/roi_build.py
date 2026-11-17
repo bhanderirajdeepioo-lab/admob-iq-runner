@@ -103,13 +103,17 @@ the file changes. Per country (every one GA4 names, "--" = GA4's "(not set)" = "
     > UNP_LIM of it (see k_c) — on a row with installs, revenue, Ads spend or Ads downloads (a row with none of them:
     no bit, nothing of it to be off). (32, a borrowed k_c, is gone with the borrowing.)
   * k_c (each country's AdMob ÷ GA4 per ACTIVITY month, like engine.value.scale): AdMob = the country report (every ad
-    source) of the app's AdMob ids × (1 − deduction); GA4 = Σ that month's "e" r + "c" of the country (every install
+    source) of the app's AdMob ids × (1 − deduction) — a finished month that report does not hold whole but the
+    ad-unit × country history holds whole for every one of the app's ids with money in it (the same money, every ad
+    source, each account's whole history: build_static.attach_country_history, _admob_hist) from that history;
+    GA4 = Σ that month's "e" r + "c" of the country (every install
     age); a month is measured on its own only when both sides cover it whole (every day folded / every day with an
     AdMob row, a one-day hole between rows read as a real 0) and both ≥ K_MIN_USD ("own"); a whole month below that is
     pooled with the whole months ≤ ±KC_POOL around it ("pool"); clamped to K_CLAMP; raw outside K_OK → ≈; none — a
-    thin month, or a month not whole on both sides (the current one, the history start's, a hole, every month before
-    the AdMob country report starts): never another month's k_c borrowed (owner: real data only — a borrowed one
-    carries other months' loss) → the app's own k of that month (its weekly kf weighted by GA4 revenue), "app k", ≈.
+    thin month, or a month not whole on both sides (the current one, the history start's, a hole, a month neither the
+    country report nor the ad-unit history holds whole): never another month's k_c borrowed (owner: real data only — a
+    borrowed one carries other months' loss) → the app's own k of that month (its weekly kf weighted by GA4 revenue),
+    "app k", ≈.
     "--" always on the app's k. GA4's revenue without a country — "(not set)" ("--") and the cube's measured "(other)"
     loss — is in no country's GA4 side, while AdMob's country report counts those users under a real country: each
     month's share of it (u, of the ledger's t) is measured and written ("kc" "unp"); a month above UNP_LIM marks its
@@ -1575,6 +1579,34 @@ def _admob_side(cmon, ids, mult):
     return A, mask
 
 
+def _admob_hist(cmon, ids, mult):
+    """The months the ad-unit × country history (build_static.attach_country_history: "h" its whole months of each
+    AdMob id, "hp" the months it holds rows of but not whole) holds whole for the APP → {month: {cc: USD × (1 −
+    deduction)}}: only a month every one of the app's AdMob ids with money in it — country report rows or history
+    cells — holds whole there (an id with rows that month the history does not hold whole, or with report rows and no
+    whole history month: the month stays as the report has it). Each id's month as a whole, summed over the ids; the
+    caller takes it only where the report itself does not hold the month whole."""
+    h, m = (cmon or {}).get("h") or {}, (cmon or {}).get("m") or {}
+    if not h:
+        return {}
+    part = {aid: set((cmon.get("hp") or {}).get(aid) or ()) for aid in ids}
+    out = {}
+    for M in sorted(set().union(*[set(h.get(aid) or ()) for aid in ids])):
+        got = {}
+        for aid in ids:
+            by = (h.get(aid) or {}).get(M)
+            if by is None:
+                if M in part[aid] or (m.get(aid) or {}).get(M):
+                    got = None                          # this id's money that month is not whole in the history
+                    break
+                continue
+            for cc, v in by.items():
+                got[cc] = got.get(cc, 0.0) + int(v or 0) / 1e6 * mult
+        if got:
+            out[M] = got
+    return out
+
+
 def _admob_whole(mask, M):
     """Every day of month M known on the AdMob side: a row, or a one-day hole between two rows (a real 0 — the known-day
     rule of active._rev_series; a day after the report's last row is never known)."""
@@ -2318,6 +2350,18 @@ def _cty(acc, cv, late, P, rows, spend, pre, a, store, rev, ded_rate, ids, key, 
         f0, f1 = _month_days(M)
         if f0 >= hs and cv.mdays.get(M, 0) == f1.day and _admob_whole(mask, M):
             whole.add(M)
+    hist = _admob_hist(acc.cmon, list(ids or [a["app_id"]]), mult)    # a month the report does not hold whole but the
+    for M in months:                                    # ad-unit × country history does, for every id of the app:
+        if M in whole or M not in hist:                 # the history's whole month (the same money) — judged on the
+            continue                                    # report's own masks above, so it never makes a neighbour
+        f0, f1 = _month_days(M)                         # month look whole
+        if f0 >= hs and cv.mdays.get(M, 0) == f1.day:
+            for e in A.values():
+                e.pop(M, None)                          # the report's part of the month goes: the whole one instead
+            for cc, v in hist[M].items():
+                A.setdefault(cc, {})[M] = v
+            whole.add(M)
+    hist = None
     appk = _appk(P, months)
     kc = _kc(cv.G, A, whole, months, appk)
     # GA4's revenue without a country per activity month ("(not set)" + the measured "(other)"), of every row

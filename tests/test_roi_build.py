@@ -964,6 +964,87 @@ def test_country_month_cover_and_deduction(tmp_path):
     assert AA2["2026-08-10"][4][21] == pytest.approx(22 * 0.12) and not AA2["2026-08-10"][12] & 8
 
 
+def _hist_world(tmp_path, ids=("a~1",), **kw):
+    """_cc_world's app with the ad-unit × country history handed to the ROI build ("h" / "hp", as
+    build_static.attach_country_history leaves them) — the history's own money, set per test."""
+    data, P, pre, spend, acc = _cc_world(tmp_path, **kw)
+    acc.cmon.update(h={}, hp={})
+    return data, P, pre, spend, acc
+
+
+def _aa(tmp_path, data, P, pre, spend, acc, ids=("a~1",), out="out", cc="AA"):
+    cv = rb._Cty(P["hs"])
+    late = rb._late(str(data), "a~1", "222", P, visit=cv.visit)
+    co = {"read_today": CTODAY.isoformat(), "stream_id": "222", "x": {}}
+    rows = rb._cohorts(P, spend, lambda d_: 1.0, co, CTODAY, late)
+    od = tmp_path / out
+    od.mkdir(exist_ok=True)
+    cd = rb._cty(acc, cv, late, P, rows, spend, pre, {"app_id": "a~1", "app_name": "Alpha"}, {"package": "p.q"},
+                 {"tz": "America/Los_Angeles"}, None, list(ids), "aaaaaaaaaaaa", str(od), str(data))
+    return cd, {r[0]: r for r in _expand(_pack_rows(od, cd)[cc], cd, cc)}
+
+
+def test_country_month_from_the_unit_history(tmp_path):
+    # Sep's country report two days short (the app's k there, 1.2: the test above); the ad-unit × country history
+    # holds Sep whole — its OWN money (AA × 1.1 of GA4, CC × 3.0) — so Sep is each country's own month from it: an Aug
+    # install day's ages in Sep at AA's 1.1, never the app's 1.2 nor the report's partial 1.0
+    data, P, pre, spend, acc = _hist_world(tmp_path, mask_off=("2026-09",))
+    cd0, AA0 = _aa(tmp_path, data, P, pre, spend, acc, out="o0")
+    assert AA0["2026-08-10"][4][30] == pytest.approx(22 * 0.15 + 9 * 0.12) and AA0["2026-08-10"][12] & 16
+    sep = {"AA": int(_ga4_month("AA", "2026-09", None, None) * 1.1), "CC": int(_ga4_month("CC", "2026-09", None, None) * 3)}
+    acc.cmon["h"] = {"a~1": {"2026-09": sep, "2026-10": {"AA": 1}}}       # (Oct, the current month: never whole)
+    cd, AA = _aa(tmp_path, data, P, pre, spend, rb.start(cube=True, cmon=acc.cmon))
+    assert AA["2026-08-10"][4][30] == pytest.approx(22 * 0.15 + 9 * 0.11)
+    # Oct: a history month too, but the cube's Oct is not whole (folded through the 12th) — the app's k there
+    assert AA["2026-09-20"][4][15] == pytest.approx(11 * 0.11 + 5 * 0.12)
+    k0, k1 = cd0["kc"], cd["kc"]                                             # AA's and CC's Sep: on their own now
+    assert k1["own_months"] == k0["own_months"] + 2 and k1["app_months"] < k0["app_months"]
+    # the history's month replaces the report's part WHOLE: a country it does not name (CC here) had no AdMob money
+    # that month — CC's thin Aug pools with that whole Sep at (Aug's AdMob + 0) ÷ (Aug's GA4 + Sep's GA4), never with
+    # the report's partial Sep (× 3.0)
+    acc.cmon["h"] = {"a~1": {"2026-09": {"AA": sep["AA"]}}}
+    _, CC = _aa(tmp_path, data, P, pre, spend, rb.start(cube=True, cmon=acc.cmon), out="o1", cc="CC")
+    g8, g9 = _ga4_month("CC", "2026-08", None, None), _ga4_month("CC", "2026-09", None, None)
+    kp = int(g8 * 3.0) / (g8 + g9)
+    assert kp < 1 and CC["2026-08-10"][4][30] == pytest.approx(31 * 0.02 * kp, rel=1e-3)
+    # a month the report holds whole is the report's, whatever the history says (Aug: AA × 1.5 stays)
+    acc.cmon["h"]["a~1"]["2026-08"] = {"AA": 1, "CC": 1}
+    _, AA2 = _aa(tmp_path, data, P, pre, spend, rb.start(cube=True, cmon=acc.cmon), out="o2")
+    assert AA2["2026-08-10"][4][21] == pytest.approx(22 * 0.15)
+
+
+def test_country_unit_history_needs_every_id_of_the_app(tmp_path):
+    # the app has two AdMob ids: a~1 (the world's report, Sep two days short) and a~2. The history holds Sep whole for
+    # a~1; a~2 has rows that month the history does NOT hold whole (its first month / a switch): Sep stays on the
+    # app's k — a~1's whole month alone is not the app's
+    data, P, pre, spend, acc = _hist_world(tmp_path, mask_off=("2026-09",))
+    sep = dict(acc.cmon["m"]["a~1"]["2026-09"])
+    acc.cmon["h"], acc.cmon["hp"] = {"a~1": {"2026-09": sep}}, {"a~2": ["2026-09"]}
+    _, AA = _aa(tmp_path, data, P, pre, spend, acc, ids=("a~1", "a~2"))
+    assert AA["2026-08-10"][4][30] == pytest.approx(22 * 0.15 + 9 * 0.12) and AA["2026-08-10"][12] & 16
+    # a~2 with report rows that month and no whole history month: the same
+    acc2 = rb.start(cube=True, cmon=dict(acc.cmon, hp={}, m=dict(acc.cmon["m"], **{"a~2": {"2026-09": {"AA": 5}}})))
+    _, AA2 = _aa(tmp_path, data, P, pre, spend, acc2, ids=("a~1", "a~2"), out="o2")
+    assert AA2["2026-08-10"][4][30] == pytest.approx(22 * 0.15 + 9 * 0.12)
+    # a~2 with nothing that month (no money anywhere): a~1's whole month is the app's
+    acc3 = rb.start(cube=True, cmon=dict(acc.cmon, hp={}))
+    _, AA3 = _aa(tmp_path, data, P, pre, spend, acc3, ids=("a~1", "a~2"), out="o3")
+    assert AA3["2026-08-10"][4][30] == pytest.approx(22 * 0.15 + 9 * 0.10)
+
+
+def test_country_unit_history_never_bridges_a_neighbour(tmp_path):
+    # the report stops on Aug 15 (a stall) and comes back on Sep 2: Aug is taken whole from the history; Sep — whose
+    # history is NOT whole, and whose report misses Sep 1 — must stay on the app's k: the history's Aug never makes
+    # Sep 1 "a one-day hole between two rows" (judged on the report's own masks)
+    data, P, pre, spend, acc = _hist_world(tmp_path)
+    acc.cmon["d"]["a~1"]["2026-08"] = (1 << 15) - 1
+    acc.cmon["d"]["a~1"]["2026-09"] = ((1 << 30) - 1) & ~1
+    acc.cmon["h"] = {"a~1": {"2026-08": dict(acc.cmon["m"]["a~1"]["2026-08"])}}
+    acc.cmon["hp"] = {"a~1": ["2026-09"]}
+    _, AA = _aa(tmp_path, data, P, pre, spend, acc)
+    assert AA["2026-08-10"][4][30] == pytest.approx(22 * 0.15 + 9 * 0.12) and AA["2026-08-10"][12] & 16
+
+
 def test_country_zero_rows_short_and_holes(tmp_path):
     # EE: installs on two days only; every other day of it has nothing → [X], and the page's expansion is the row
     inst = dict(CINST, EE=3)
@@ -1167,6 +1248,66 @@ def test_admob_country_months_every_month():
     assert got == {"m": {"a": {"2026-10": {"IN": 6, "US": 4}, "2024-07": {"IN": 9}}},       # every month, never cut
                    "d": {"a": {"2026-10": 0b11, "2024-07": 1 << 30}}}
     assert admob_country(rows, "2026-10-02") == {"a": {"2026-10-01": {"IN": [6, 10]}, "2026-10-02": {"US": [4, 9]}}}
+
+
+def _acm_cell(days, micros):
+    """One ad-unit × country × month cell of the rollup (db.ACM_FIELDS order: days … earnings … the ranges)."""
+    return [days, 10, 9, 8, 1, micros] + [0.0] * 12
+
+
+def test_admob_unit_country_months_whole_and_partial_months():
+    from admob_iq.build_static import admob_unit_country_months
+    acm = {"units": {"u1": ["a", "Banner", "Synth", "USD"], "u2": ["a", "Inter", "Synth", "USD"],
+                     "u3": ["b", "Banner", "Other", "USD"], "u4": None, "u6": ["c", "Banner", "Leap", "USD"]},
+           "data": {"u1": {"IN": {"2026-01": _acm_cell(31, 5), "2026-02": _acm_cell(27, 7), "bad": _acm_cell(31, 1),
+                                  "2026-13": _acm_cell(31, 1), "2026-00": _acm_cell(31, 1)},
+                           "All": {"2026-01": _acm_cell(2, 3)}},
+                    "u2": {"IN": {"2026-01": _acm_cell(4, 2), "2026-02": _acm_cell(10, 1)},
+                           "US": {"2026-01": _acm_cell(31, 9), "2026-03": [31, 1, 1, 1, 1, "x"]}},
+                    "u3": {"US": {"2026-02": _acm_cell(28, 4)}, "BR": {"2026-02": [28, 1]}},
+                    "u4": {"US": {"2026-01": _acm_cell(31, 9)}},          # no unit meta: no app
+                    "u5": {"US": {"2026-01": _acm_cell(31, 9)}},          # not in units: no app
+                    "u6": {"US": {"2028-02": _acm_cell(29, 6), "2024-02": _acm_cell(28, 2)}}}}
+    got = admob_unit_country_months(acm)
+    # Jan of "a": one cell had a row every day → whole, every cell of the app summed (its "All" too, as the country
+    # report); Feb of "a": no cell on all 28 days → partial; a cell that cannot be read (a month 13 / 00, a value that
+    # is no number, too short to hold earnings) is left out, never the rest; leap Februaries need their 29th day
+    assert got == {"w": {"a": {"2026-01": {"IN": 7, "US": 9, "All": 3}}, "b": {"2026-02": {"US": 4}},
+                         "c": {"2028-02": {"US": 6}}},
+                   "p": {"a": ["2026-02"], "c": ["2024-02"]}}
+    assert admob_unit_country_months(None) == {"w": {}, "p": {}} and admob_unit_country_months({"units": {}}) == {
+        "w": {}, "p": {}}
+    with pytest.raises(LookupError):                                       # cells, none naming an app: said, never
+        admob_unit_country_months({"units": {"u1": "a"}, "data": {"u1": {"US": {"2026-01": _acm_cell(31, 9)}}}})
+
+
+def test_attach_country_history_finished_months_the_report_misses():
+    from admob_iq.build_static import admob_country_months, attach_country_history
+    rows = []
+
+    def day(aid, d, cc, v=1):
+        rows.append({"app_id": aid, "report_date": d, "country": cc, "estimated_earnings_micros": v})
+    for i in range(1, 32):
+        day("a", "2026-01-%02d" % i, "IN")                                # Jan: a row every day — whole
+    for i in range(1, 29):
+        if i != 10:
+            day("a", "2026-02-%02d" % i, "IN")                            # Feb: one day with no row between two rows
+    for i in range(23, 32):                                               # — a real 0, whole (the ROI build's rule)
+        day("a", "2026-03-%02d" % i, "IN")                                # Mar: the report starts on the 23rd
+    day("a", "2026-05-02", "IN")                                          # May: the current month (till's)
+    cm = admob_country_months(rows, "2026-05-02")
+    before = json.loads(json.dumps(cm))
+    hist = {"w": {"a": {"2026-01": {"IN": 50}, "2026-02": {"IN": 60}, "2026-03": {"IN": 70, "US": 5},
+                        "2026-04": {"IN": 80}, "2026-05": {"IN": 90}},
+                  "b": {"2026-04": {"BR": 3}}},
+            "p": {"a": ["2025-12", "2026-05"], "b": ["2026-03"]}}
+    assert attach_country_history(cm, hist, "2026-05-02") == 3
+    assert {k: cm[k] for k in ("m", "d")} == before                       # the report's own months never touched
+    assert cm["h"] == {"a": {"2026-03": {"IN": 70, "US": 5}, "2026-04": {"IN": 80}}, "b": {"2026-04": {"BR": 3}}}
+    assert cm["hp"] == {"a": ["2025-12"], "b": ["2026-03"]}                # finished months only
+    assert hist == {}                                                      # consumed: moved, the rest freed
+    cm2 = admob_country_months(rows, "2026-05-02")
+    assert attach_country_history(cm2, {"w": {"a": {"2026-04": {"IN": 1}}}}, "") == 0 and cm2["h"] == {}
 
 
 # ── 🌍 review fixes ─────────────────────────────────────────────────────────────────────────────────────────────────
