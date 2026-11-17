@@ -6,12 +6,35 @@ problem, good or normal).
 ONE lazy file, site/firstopen.json.gz:
   {"v", "apps": [{key, app, app_id, steps {step: screen class}, steps_changed, first_day, final_till,
                   days: [[YYYY-MM-DD, first_open, splash, home, splash_any, home_any, language, permission, intro,
-                          sample (GA4 read only this share of the events: the numbers are estimates) | null], …]}],
+                          sample (GA4 read only this share of the events: the numbers are estimates) | null,
+                          x (1: first_open / splash / home are the country store's exact ones — EXACT COUNTS below;
+                          only with FIRSTOPEN_EXACT on)], …]}],
    "summary": [{key, app, status, why, s2h, usual, change, s2h_any, opened, opened_usual, fo_day, fo_day_usual,
                 steps {language|permission|intro: [share of Splash, last 7 days], usual}, final_days,
-                sample (the lowest of the 7 days, or null)}]}
+                sample (the lowest of the 7 days whose first_open / splash / home are GA4's sampled ones, or null),
+                sample_other (the lowest of the 7 days, for the steps that stay sampled: splash_any, home_any,
+                language, permission, intro — only with FIRSTOPEN_EXACT on)}]}
 and the pointer dashboard["firstopen"] = {"file", "v", "apps": {app: {status, s2h, usual, change, fo_day, id}}} (the hub's
 card and the tab's nav item read it). Every day of every store, nothing trimmed.
+
+EXACT COUNTS (owner, 17 Nov 2026: "Haan, banao" — the All countries counts of the apps whose funnel GA4 samples):
+the First open store reads 15 days a call and on the busiest apps GA4 SAMPLES every such read (it reads a share of the
+events and scales them: "sample"; measured: every day of a few big apps, on some of them a small share of the events,
+the day well off either way), while the country store (fetch.ga4_firstopen_cc) reads the SAME funnel one day at a
+time and mostly gets it whole. A day the First open store read sampled whose country store record is whole and
+unsampled — not held ("ho"), read once the day was final here (EX_AGE days after it or later), with the screens that
+day's First open read had (its last read: _day_sig, from "steps_changed"), with first opens and a Splash, no step much
+in no named country, not collapsed against the First open store's count of the day or the store's own days around it
+(exact_days) — takes first_open / splash /
+home from that record's day total, exact, and its row says so (x = 1); its other steps (splash_any, home_any, language,
+permission, intro) stay GA4's sampled estimates (the page marks those cells ≈, the day itself not), and a step's share
+of Splash stays that read's own (summarize: sp). Every other day as before. The summary's "sample" is then the lowest
+of the 7 days whose three are still sampled, "sample_other" the lowest of the 7 days for the other steps. Switch
+FIRSTOPEN_EXACT (s["firstopen_exact"]; off: every row and the summary exactly as before — no x, no sample_other). The
+log line: "exact days"; a failure: "first open exact skipped: <kind>" (the rows as before). Known limit: the First
+open store checks its screens and refreshes its last 15 days on clocks of their own, so for up to one refresh after a
+screens change its newest days may still hold the old screens' reads while _day_sig already names the new ones (a
+country day read with the new screens can be paired with such a row until that refresh reads it again).
 
 BY COUNTRY (owner, 20 Oct 2026: "country wise bhi dekh saku esa kara do"): per app with a country store (fetch.
 ga4_firstopen_cc, ≥ 1 real day) ONE more lazy file next to it, site/firstopen_cc_<key>.json.gz (key = the app's own):
@@ -70,6 +93,8 @@ MAX_GZ = 8 * 1024 * 1024
 FIELDS = gf.FIELDS
 WORSE, WATCH, BETTER = -0.05, -0.02, 0.05
 MIN_DAYS, MIN_SPLASH7, MIN_SPLASH28 = 35, 200, 400
+SX = len(FIELDS) + 1                # a day row's sample …
+XI = SX + 1                         # … and its x (EXACT COUNTS; a row without it: x = 0)
 CC_PREFIX = "firstopen_cc_"
 CC_MAX_GZ = MAX_GZ                  # the same guard, per country file
 CC_RE = re.compile(r"^firstopen_cc_[0-9a-f]{12}\.json\.gz$")
@@ -82,6 +107,122 @@ LINE = None
 
 def enabled(s):
     return bool((s or {}).get("firstopen_tab", True))
+
+
+def exact_on(s):
+    return bool((s or {}).get("firstopen_exact", True))
+
+
+def _x(r):
+    return len(r) > XI and bool(r[XI])
+
+
+EX_AGE = 2                          # a country read counts once made this many property days after its day (the
+#                                     page's final days are today − 2: the First open store's reads of them are no newer)
+EX_NB = 7                           # the country store's own whole days within ± this many of a day judge it …
+EX_NB_MIN = 3                       # … when there are at least this many of them (same screens)
+EX_LOW = 0.2                        # first opens under this × their median: an answer GA4 collapsed
+EX_STEP = 0.5                       # Splash ÷ first opens, or Home ÷ Splash, under this × its median: collapsed too
+EX_FLOOR = 0.2                      # … and first opens under this × the First open store's own (sampled) count of the
+#                                     day (REF_MIN or more): collapsed (measured: a whole day never far under it)
+EX_HALF = 0.5                       # first opens under this × EVERY reference there is (that count, the days around):
+#                                     partly collapsed (one reference alone may be off: a sampled count, a real drop)
+
+
+def _day_sig(store, d, sig):
+    """The screens the First open store's LAST read of day d was made with — it reads a day again while it is
+    RECENT_DAYS − 1 (14) days old or less: the "from" of the first screens change dated after that, else the current
+    ones — as sig() makes them (Splash and Home)."""
+    lim = (date.fromisoformat(d) + timedelta(days=gf.RECENT_DAYS - 1)).isoformat()
+    for ch in store.get("steps_changed") or []:
+        if isinstance(ch, dict) and str(ch.get("at") or "") > lim and isinstance(ch.get("from"), dict):
+            return sig(ch["from"])
+    return sig(store.get("steps") or {})
+
+
+def _pday(at, tz):
+    """A record's read time ("…Z") → the property's day then; None: not a time."""
+    t = gu._parse_iso(str(at)) if at else None
+    if t is None:
+        return None
+    try:
+        z = ZoneInfo(tz or "UTC")
+    except Exception:
+        z = timezone.utc
+    return t.astimezone(z).date()
+
+
+def _low_all(v, refs, k):
+    """v under k × every reference of refs that is there (None: not there) — and at least one is."""
+    r = [x for x in refs if x is not None]
+    return bool(r) and all(v < k * x for x in r)
+
+
+def _med(v):
+    v = sorted(v)
+    n = len(v)
+    return None if not n else (v[n // 2] if n % 2 else (v[n // 2 - 1] + v[n // 2]) / 2)
+
+
+def exact_days(data_dir, store, counts=None):
+    """The days of an app's First open store GA4 read SAMPLED whose country store record holds the same funnel's day
+    exact (module doc: EXACT COUNTS) → {D: [first_open, splash, home]}. A record counts when it is whole and unsampled
+    (not "none", "smp" null, not held "ho", "t" three ints), read EX_AGE property days or more after its day, with the
+    screens that day's First open read had (_day_sig), with first opens and a Splash, no step much in no named country
+    (the country store's own NONAME / REF_MIN rule), and not collapsed: first opens under EX_FLOOR × the First open
+    store's own count of the day (REF_MIN or more) or EX_LOW × the median of the store's own whole same-screens days
+    within EX_NB (at least EX_NB_MIN of them), or under EX_HALF × every one of those two there is; Splash ÷ first opens
+    or Home ÷ Splash under EX_STEP × every one there is of the days' median rate and the First open read's own rate
+    (each only with REF_MIN or more users under it). {} when there are none; on a failure {} and its kind in
+    counts["exact_err"] (the build prints its skipped line). Never raises."""
+    try:
+        from .fetch import ga4_firstopen_cc as fc
+        cc = fc.load_store(fc.store_path(data_dir, str(store.get("app_id") or "")))
+        ccd = (cc or {}).get("days") or {}
+        if not ccd:
+            return {}
+        tz, good = store.get("time_zone"), {}
+        for d, c in ccd.items():
+            t = c.get("t") if isinstance(c, dict) else None
+            if not (isinstance(t, list) and len(t) == 3 and all(type(v) is int and v >= 0 for v in t)) \
+                    or c.get("none") or c.get("smp") is not None or c.get("ho"):
+                continue
+            rd = _pday(c.get("at"), tz)
+            if rd is not None and (rd - date.fromisoformat(d)).days >= EX_AGE:
+                good[d] = c
+        out = {}
+        for d, rec in (store.get("days") or {}).items():
+            smp = (rec or {}).get("sample")
+            c = good.get(d)
+            if c is None or type(smp) not in (int, float) or not smp < 1 or c.get("sg") != _day_sig(store, d, fc.sig):
+                continue
+            t, p, ref = c["t"], fc._parts(c), int((rec or {}).get("first_open") or 0)
+            if t[0] <= 0 or t[1] <= 0 or any(p[j] - p[j + 3] >= max(fc.REF_MIN, fc.NONAME * p[j]) for j in range(3)) \
+                    or ref >= fc.REF_MIN and t[0] < EX_FLOOR * ref:
+                continue
+            d0 = date.fromisoformat(d)
+            nb = [good[k]["t"] for k in ((d0 + timedelta(days=i)).isoformat() for i in range(-EX_NB, EX_NB + 1) if i)
+                  if k in good and good[k].get("sg") == c.get("sg") and good[k]["t"][0] > 0 and good[k]["t"][1] > 0]
+            m0 = mo = ms = None                         # the days around: first opens, Splash ÷ them, Home ÷ Splash
+            if len(nb) >= EX_NB_MIN:                    # (a rate only with REF_MIN or more users under it)
+                m0 = _med(x[0] for x in nb)
+                if _med(x[1] for x in nb) >= fc.REF_MIN:
+                    mo = _med(x[1] / x[0] for x in nb)
+                if _med(x[2] for x in nb) >= fc.REF_MIN:
+                    ms = _med(x[2] / x[1] for x in nb)
+            f, sp_, h = (int((rec or {}).get(k) or 0) for k in ("first_open", "splash", "home"))
+            so = sp_ / f if sp_ >= fc.REF_MIN and f > 0 else None      # … and the First open read's own rates
+            sh = h / sp_ if h >= fc.REF_MIN and sp_ > 0 else None
+            if m0 is not None and t[0] < EX_LOW * m0 \
+                    or _low_all(t[0], [ref if ref >= fc.REF_MIN else None, m0], EX_HALF) \
+                    or _low_all(t[1] / t[0], [mo, so], EX_STEP) or _low_all(t[2] / t[1], [ms, sh], EX_STEP):
+                continue
+            out[d] = list(t)
+        return out
+    except Exception as e:
+        if counts is not None:
+            counts["exact_err"] = type(e).__name__
+        return {}
 
 
 def _names(dashboard):
@@ -103,8 +244,10 @@ def _today(store, now):
         return now.date()
 
 
-def summarize(app, key, rows, final_till):
-    """One app's rows (days ascending) → its summary entry (the status rule above)."""
+def summarize(app, key, rows, final_till, sp=None):
+    """One app's rows (days ascending) → its summary entry (the status rule above). sp: {D: Splash} of the rows whose
+    three are the country store's exact ones (EXACT COUNTS) — the Splash of the First open read their other steps come
+    from, so a step's share of Splash stays one read's (a sampled step ÷ an exact Splash is neither)."""
     fin = [r for r in rows if r[0] <= final_till]
     w7, p28 = fin[-7:], fin[-35:-7]
     ix = {f: i + 1 for i, f in enumerate(FIELDS)}
@@ -130,19 +273,27 @@ def summarize(app, key, rows, final_till):
     f7, f28 = s(w7, "first_open"), s(p28, "first_open")
     sa7 = s(w7, "splash_any")
     steps = {}
+    sp = sp or {}
+
+    def ss(rs):
+        return sum(int(sp.get(r[0], r[ix["splash"]]) or 0) for r in rs)
+    d7, d28 = ss(w7), ss(p28)
     for k in ("language", "permission", "intro"):
         if any(r[ix[k]] is not None for r in rows):
-            steps[k] = [s(w7, k) / s7 if s7 else None, s(p28, k) / s28 if s28 else None]
+            steps[k] = [s(w7, k) / d7 if d7 else None, s(p28, k) / d28 if d28 else None]
     r6 = lambda v: None if v is None else round(v, 6)
-    return {"key": key, "app": app, "status": status, "why": why, "s2h": r6(s2h), "usual": r6(usual), "change": r6(change),
+    out = {"key": key, "app": app, "status": status, "why": why, "s2h": r6(s2h), "usual": r6(usual), "change": r6(change),
             "s2h_any": r6(s(w7, "home_any") / sa7) if sa7 else None, "opened": r6(s7 / f7) if f7 else None,
             "opened_usual": r6(s28 / f28) if f28 else None, "fo_day": r6(f7 / len(w7)) if w7 else 0,
             "fo_day_usual": r6(f28 / len(p28)) if p28 else None,
             "steps": {k: [r6(a), r6(b)] for k, (a, b) in steps.items()}, "final_days": len(fin),
-            "sample": min([r[-1] for r in w7 if r[-1] is not None], default=None)}
+            "sample": min([r[SX] for r in w7 if r[SX] is not None and not _x(r)], default=None)}
+    if any(len(r) > XI for r in rows):                  # EXACT COUNTS on: the steps that stay sampled
+        out["sample_other"] = min([r[SX] for r in w7 if r[SX] is not None], default=None)
+    return out
 
 
-def build_data(dashboard, data_dir, now, counts):
+def build_data(dashboard, data_dir, now, counts, exact=False):
     names = _names(dashboard)
     d = os.path.join(data_dir, gf.DIR)
     if not os.path.isdir(d):
@@ -158,18 +309,26 @@ def build_data(dashboard, data_dir, now, counts):
         aid = str(store.get("app_id") or "")
         app = names.get(aid) or store.get("package") or aid
         key = gu.file_key(aid)
-        rows = []
+        rows, sp, ex = [], {}, exact_days(data_dir, store, counts) if exact else {}
         for day in sorted(store["days"]):
             rec = store["days"][day] or {}
-            rows.append([day] + [rec.get(f) if rec.get(f) is not None else (0 if f in ("first_open", "splash", "home")
-                                                                          else None) for f in FIELDS] + [rec.get("sample")])
+            row = [day] + [rec.get(f) if rec.get(f) is not None else (0 if f in ("first_open", "splash", "home")
+                                                                        else None) for f in FIELDS] + [rec.get("sample")]
+            if exact:                                   # EXACT COUNTS: the country store's exact three, said so
+                e = ex.get(day)
+                if e is not None:
+                    sp[day] = row[2]                    # (the steps' own read's Splash: summarize)
+                    row[1:4] = e
+                row.append(1 if e is not None else 0)
+            rows.append(row)
+        counts["exact"] = counts.get("exact", 0) + len(ex)
         final_till = (_today(store, now) - timedelta(days=2)).isoformat()
         if store.get("package"):
             counts.setdefault("_pkg", {})[key] = str(store["package"])
         apps.append({"key": key, "app": app, "app_id": aid, "steps": store.get("steps"),
                      "steps_changed": store.get("steps_changed") or [], "first_day": rows[0][0], "final_till": final_till,
                      "days": rows})
-        summary.append(summarize(app, key, rows, final_till))
+        summary.append(summarize(app, key, rows, final_till, sp))
     if not apps:
         return None
     counts["apps"] = len(apps)
@@ -446,7 +605,7 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
     dashboard.pop("firstopen", None)
     try:
         counts = {}
-        data = build_data(dashboard, data_dir, now or datetime.now(timezone.utc), counts)
+        data = build_data(dashboard, data_dir, now or datetime.now(timezone.utc), counts, exact=exact_on(s))
         if data is None:
             _remove(out_dir)
             LINE = "first open: apps 0, skipped %d" % counts.get("skipped", 0)
@@ -475,6 +634,10 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
         LINE += ", installs: apps %d, kb %d" % (counts["ads_apps"], counts["ads_kb"] // 1024)
         if counts["ads_failed"] or counts["ads_big"]:
             LINE += ", failed %d, too big %d" % (counts["ads_failed"], counts["ads_big"])
+        if exact_on(s):
+            LINE += ", exact days %d" % counts.get("exact", 0)
+            if counts.get("exact_err"):                 # never silent: the health banner's shape
+                print("first open exact skipped: %s" % counts["exact_err"], file=sys.stderr)
         return list(HEADER_PATHS)
     except Exception as e:
         dashboard.pop("firstopen", None)

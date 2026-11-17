@@ -315,6 +315,9 @@ jobs:
           AUDIENCE_TAB:         ${{ vars.AUDIENCE_TAB || 'true' }}
           # 🆕 First open tab (firstopen.json.gz): FIRSTOPEN_TAB=false turns it off without a code push
           FIRSTOPEN_TAB:        ${{ vars.FIRSTOPEN_TAB || 'true' }}
+          # … a day GA4 sampled takes its first opens / Splash / Home from the country store's exact read of it:
+          # FIRSTOPEN_EXACT=false = every row as before
+          FIRSTOPEN_EXACT:      ${{ vars.FIRSTOPEN_EXACT || 'true' }}
           # 💰 Revenue by source (source.json.gz, Install value tab): SOURCE_TAB=false turns it off without a code push
           SOURCE_TAB:           ${{ vars.SOURCE_TAB || 'true' }}
           # 📈 eCPM · first session vs returning (nvr_<key>.json.gz, the eCPM tab's app page): NVR_TAB=false turns it off

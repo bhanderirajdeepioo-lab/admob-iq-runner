@@ -86,6 +86,9 @@ def settings() -> dict:
         # 🆕 First open tab: first_open → Splash → Home (and Language / Permission / Intro) per app per day, the strict GA4
         # funnel kept for good by fetch.ga4_firstopen (firstopen.json.gz, one lazy file) — off: no file, no pointer
         "firstopen_tab": _env("FIRSTOPEN_TAB", "true").lower() == "true",
+        # … its All countries first opens / Splash / Home of a day GA4 sampled from the country store's exact read of it
+        # (firstopen_build EXACT COUNTS) — off: every row exactly as before
+        "firstopen_exact": _env("FIRSTOPEN_EXACT", "true").lower() == "true",
         # 💰 Revenue by source (Install value tab: Paid / Notification / Organic from GA4's session channel): SOURCE_TAB=false
         # removes its files and pointer without a code push
         "source_tab": _env("SOURCE_TAB", "true").lower() == "true",

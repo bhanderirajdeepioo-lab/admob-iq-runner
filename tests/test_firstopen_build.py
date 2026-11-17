@@ -57,7 +57,8 @@ def test_file_status_pointer_and_header(tmp_path):
     assert a1["steps"]["language"] == [0.5, 0.5] and a1["final_days"] == 58 and abs(a1["fo_day"] - 1020) < 1e-6
     app1 = next(x for x in body["apps"] if x["app"] == "Alpha App")
     assert len(app1["days"]) == 60 and app1["days"][0][0] == "2026-08-15" and app1["final_till"] == "2026-10-11"   # nothing trimmed
-    assert app1["days"][0][1:4] == [1020, 1000, 600] and app1["days"][0][-1] is None and a1["sample"] is None
+    assert app1["days"][0][1:4] == [1020, 1000, 600] and app1["days"][0][fb.SX] is None and a1["sample"] is None
+    assert app1["days"][0][fb.XI] == 0 and len(app1["days"][0]) == fb.XI + 1      # EXACT COUNTS on: x (no country)
     assert dash["firstopen"]["file"] == fb.FILE and dash["firstopen"]["apps"]["Alpha App"]["status"] == "Worse"
     assert dash["firstopen"]["apps"]["Alpha App"]["id"] == "a~1"
     line = fb.pop_line()
@@ -196,7 +197,7 @@ def test_country_part_never_changes_the_app_data(tmp_path, monkeypatch):
     refm = _read(os.path.join(out0, fb.FILE))
     assert "firstopen_cc_" not in json.dumps(refm) and not any(f.startswith("firstopen_cc_") for f in os.listdir(out0))
     line0 = fb.pop_line()
-    assert line0.endswith(", by country: apps 0, countries 0, kb 0, installs: apps 0, kb 0")
+    assert line0.endswith(", by country: apps 0, countries 0, kb 0, installs: apps 0, kb 0, exact days 0")
     # an empty country folder and a store with only "none" days change nothing
     os.makedirs(os.path.join(base, fc.DIR))
     write_json_gz_stable(fc.store_path(base, "a~3"), {"v": fc.STORE_V, "app_id": "a~3", "days": {"2026-10-01": {"none": True}}})
