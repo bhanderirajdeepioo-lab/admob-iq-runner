@@ -13,10 +13,11 @@ Store, kept for good, one file a month (a month GA4 no longer changes is written
     data/ga4_source_cty/<key>/<YYYY-MM>.json.gz   {"v", "days": {YYYY-MM-DD: {country: {channel: [sessions, revenue]}}}}
                                             ({} = GA4 has nothing that day; country as GA4 names it, "" → "(not set)")
 Per app and run (at most MAX_CALLS calls; the property's quota floors as the Audience fetch's; the run's budget):
-  * every REFRESH_HOURS the last RECENT_DAYS days (today included: GA4 still adds to them) — replaced whole; days a
-    longer outage left between the last such read ("upto") and them are read first, oldest first (never a hole);
+  * every REFRESH_HOURS the last RECENT_DAYS days (today … FINAL_LAG days back: GA4 still adds to them; the day turning
+    FINAL_LAG old gets its final read here) — replaced whole; days a longer outage left between the last such read
+    ("upto") and them are read first, oldest first (never a hole);
   * the backfill: CHUNK_DAYS at a time, newest first, from the day before the recent window back to the app's history
-    start (the Uninstall store's). Days older than RECENT_DAYS are final in GA4.
+    start (the Uninstall store's). Days older than RECENT_DAYS are final in GA4 (their last read was FINAL_LAG days on).
 GA4's folded "(other)" row comes with no real day: a range read whose rows hold one is read again one day at a time
 (each day's own "(other)" row then kept on that day), and the app is read day by day from then on ("daily": True).
 Switched by GA4_SOURCE_CTY. Never raises; never prints (log_line: counts only).
@@ -27,6 +28,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from .. import ga4_final
 from .. import ga4_probe
 from ..db import write_json_gz_stable
 from . import ga4
@@ -39,7 +41,9 @@ DIR = "ga4_source_cty"
 STORE_V = 1
 CTY = "countryId"
 METS = ("sessions", "totalRevenue")
-RECENT_DAYS = 5                     # today … 4 days back: refreshed every REFRESH_HOURS (older days are final in GA4)
+FINAL_LAG = ga4_final.lag(4)        # a day's last read is made this many days after it (on day D + FINAL_LAG): final
+#                                     from then on — GA4_FINAL_DAYS, at least 4 (this store's lag before the knob)
+RECENT_DAYS = max(5, FINAL_LAG + 1) # today … FINAL_LAG days back: refreshed every REFRESH_HOURS (older days are final)
 REFRESH_HOURS = 3.0
 CHUNK_DAYS = 30                     # one backfill call: ≤ 30 days × ~230 countries × ~10 channels of rows
 MAX_CALLS = 40                      # per app per run (the backfill goes on next run; a "daily" app: one call a day)

@@ -24,7 +24,9 @@ Store, kept for good (private repo), the ACTIVITY month's file and a head:
                                             "hs", "upto", "oldest", "done", "hot_at", "hot_today", "hot": {D: day
                                             record}, "retry": {D: [reads again so far, last read at]}, "redo": [D, …],
                                             "pk": {D: the most ad events a day not folded yet showed}, "low": {D:
-                                            first seen collapsed}, "chk": the property day the months were checked}
+                                            first seen collapsed}, "chk": the property day the months were checked,
+                                            "mid": {D: last read — a day not folded yet older than HOT_DAYS (only
+                                            while FINAL_LAG is past HOT_DAYS)}}
   data/ga4_cecpm/state.json                {"v": 1, "fetch": {app id: {"last_try", "fail", "fails", "last_ok",
                                             "deferred", "turn", "fturn" (its last history fill), "key"}}}
   day record  {"st": "ok" | "oth" | "thr" | "smp" | "cut" | "low" | "pool", "f": GA4's flag bits (ga4_cube F_*), "at",
@@ -42,16 +44,19 @@ Store, kept for good (private repo), the ACTIVITY month's file and a head:
 
 Per app and run (step_app; at most MAX_CALLS calls; the property's quota floors as the Audience fetch's; the budget):
   1. the hot copies of days folded since are dropped (a copy read while GA4 was filling never stands in for the final
-     read — the cube's rule); edge = the property's today − FINAL_LAG (5: since 14 Nov 2026 GA4 answers the newest
-     "final" day almost empty for hours around D + 2 … D + 3, and the cube, folding at D + 3, kept two such days).
+     read — the cube's rule); edge = the property's today − FINAL_LAG (HOT_DAYS 5 at least: since 14 Nov 2026 GA4
+     answers the newest "final" day almost empty for hours around D + 2 … D + 3, and the cube, folding at D + 3, kept
+     two such days; and at least GA4_FINAL_DAYS: ga4_final).
      Once a property day every month file the walk folded is checked: a missing or damaged one has its days read again;
   2. forward: every final day since the newest folded one, oldest first ("upto"; the first run: the edge only) — an
      outage never leaves a hole. A day GA4 answers with under COLLAPSE × the most ad events it showed in an earlier
      read of the SAME day (GA4's numbers of a day only grow while it fills; judged on the day's own reads, never
      against other days, so a real drop in traffic folds as it is) is not folded: its fuller hot copy stays, it is read
      again every run, up to LOW_WAIT days past the edge, then folded as it is with its state "low";
-  3. hot: every day not folded yet up to today, again every REFRESH_HOURS or when a new property day began — replaced,
-     never folded (an answer collapsed against the day's own earlier reads never replaces its fuller copy);
+  3. hot: every day not folded yet up to today, again every REFRESH_HOURS or when a new property day began — but a day
+     HOT_DAYS … FINAL_LAG − 1 days old (not final yet: GA4_FINAL_DAYS past HOT_DAYS) at most once a UTC day ("mid": its
+     last read) — replaced, never folded (an answer collapsed against the day's own earlier reads never replaces its
+     fuller copy);
   4. retries: a sampled or cut day is read again at most RETRY more times, each ≥ RETRY_GAP_HOURS after the last; an
      answer that is whole replaces it, after the last one it stays as it is;
   5. redo: the days of a month file that could not be read, newest first;
@@ -76,6 +81,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from .. import ga4_final
 from .. import ga4_probe
 from ..db import write_json_gz_stable
 from . import ga4
@@ -91,9 +97,13 @@ AGES = (0, 1, 2, 3, 6, 13)          # install ages read: card days 1, 2, 3, 4, 7
 DIMS = ("date", "firstSessionDate", "countryId")
 DIMS_P = ("date", "firstSessionDate")         # the no-country read: an app whose country split GA4 samples
 METS = gv.EV                        # totalAdRevenue, eventCount (under eventName == ad_impression)
-FINAL_LAG = 5                       # an activity day is folded once ≤ the property's today − 5: since 14 Nov 2026 GA4
-#                                     answers the newest "final" day (D + 2 … D + 3) almost empty for hours, and the
-#                                     cube, folding at D + 3, kept two such days for good (the GA4-hole session)
+HOT_DAYS = 5                        # the newest days read again every REFRESH_HOURS (ages 0 … HOT_DAYS − 1): this
+#                                     store's final lag before GA4_FINAL_DAYS — ga4_final.lag's floor (since 14 Nov
+#                                     2026 GA4 answers the newest "final" day (D + 2 … D + 3) almost empty for hours,
+#                                     and the cube, folding at D + 3, kept two such days for good: the GA4-hole session)
+FINAL_LAG = ga4_final.lag(HOT_DAYS)  # an activity day is folded once ≤ the property's today − FINAL_LAG (HOT_DAYS, and
+#                                     at least GA4_FINAL_DAYS); a day not folded yet HOT_DAYS … FINAL_LAG − 1 days old
+#                                     is read again at most once a UTC day (head "mid")
 REFRESH_HOURS = 6.0                 # the hot days (every day not folded yet up to today) read again
 COLLAPSE = 0.5                      # a day GA4 answers with under this × the most it showed in an earlier read …
 TOT_MIN = 1000                      # (when that was ≥ this many ad events) is not taken: its fuller copy stays, it is read
@@ -354,8 +364,10 @@ class Store:
         mo["days"][k] = rec
         self.touched.add(k[:7])
         self.head["redo"] = [x for x in self.head.get("redo") or [] if x != k]
-        for f in ("hot", "pk", "low"):
+        for f in ("hot", "pk", "low", "mid"):
             (self.head.get(f) or {}).pop(k, None)
+        if self.head.get("mid") == {}:
+            self.head.pop("mid")
         self.folded += 1
         self.count(rec)
 
@@ -418,10 +430,13 @@ def _new(ga, st, today, hs, now, edge):
     one = timedelta(days=1)
     hot, pk = h["hot"], h.setdefault("pk", {})
     up0 = h.get("upto")
-    for m in (hot, pk, h.get("low") or {}):         # 1. folded (or before the history): a hot copy never stands in
-        for k in [k for k in m if (up0 and k <= up0) or k < hs.isoformat()]:
+    for m in (hot, pk, h.get("low") or {}, h.get("mid") or {}):     # 1. folded (or before the history): a hot copy
+        for k in [k for k in m if (up0 and k <= up0) or k < hs.isoformat()]:   # never stands in
             m.pop(k)
             st.dirty = True
+    if h.get("mid") == {}:
+        h.pop("mid")
+        st.dirty = True
     if h.get("hs") != hs.isoformat():
         if h.get("hs") and hs < gu._d(h["hs"]):     # the history start moved back: the backfill goes on
             h.pop("done", None)
@@ -462,7 +477,13 @@ def _new(ga, st, today, hs, now, edge):
             k = D.isoformat()
             if k in fresh:
                 continue
+            mid = HOT_DAYS <= (today - D).days < FINAL_LAG      # older than HOT_DAYS, not final yet: once a UTC day
+            if mid and max(str((h.get("mid") or {}).get(k) or ""), str((hot.get(k) or {}).get("at") or ""))[:10] \
+                    >= now_iso[:10]:                            # (its last read: "mid", or the copy a whole answer
+                continue                                        # left) — read already on this UTC day
             rec = read_day(ga, D, now_iso, pool=bool(h.get("pool")))
+            if mid:
+                h.setdefault("mid", {})[k] = now_iso
             st.hot += 1
             did = True
             if _collapsed(h, D, rec):               # GA4 emptied a day it is filling: the fuller copy stays

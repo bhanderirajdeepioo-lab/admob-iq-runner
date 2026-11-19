@@ -3,8 +3,11 @@ primary channel group "Mobile Push Notifications", exactly as his GA4 screen; a 
 the private stores of fetch.ga4_source, every day of every store, nothing trimmed:
 
   site/source.json.gz  {"v", "at", "groups": [[id, label, [channels]]], "apps": [{"app_id", "key", "app", "tz", "today",
-                        "d0" (the first day with any GA4 session), "rev": [[paid, notification, organic, other], …] (total
-                        revenue USD, one row a day d0 … today; null = not read yet), "ses": the same for sessions,
+                        "final_till" (today − fetch.ga4_source's FINAL_LAG, GA4_FINAL_DAYS: a newer day is still read
+                        again, GA4 still adds to it — not final; none at the rollback, GA4_FINAL_DAYS 3: FINAL_TILL),
+                        "d0" (the first day with any GA4 session), "rev":
+                        [[paid, notification, organic, other], …] (total revenue USD, one row a day d0 … today; null =
+                        not read yet), "ses": the same for sessions,
                         "mk": {row: "s" sampled | "t" thresholded}, "bf": the backfill reached the history start,
                         "file": its channel file, "adm": [[month, AdMob revenue USD], …] the complete months of the
                         app's 📈 ROI file (its AdMob days), absent without one — the page's GA4 vs AdMob check}]}
@@ -14,7 +17,8 @@ and the pointer dashboard["source"] = {"file", "v", "apps": {app id: {"file", "v
 
 The 🌍 Countries / 📱 Devices tabs' 💰 Source view (owner, 3 Nov 2026), per app with a store of fetch.ga4_source_cty /
 fetch.ga4_source_dev — the same four groups, GA4's own numbers:
-  site/source_cc_<key>.json.gz  {"v", "key", "d0", "today", "P": {period: {"lo", "hi", "miss" (days not read yet), "c":
+  site/source_cc_<key>.json.gz  {"v", "key", "d0", "today", "final_till" (today − fetch.ga4_source_cty's FINAL_LAG: a
+                        newer day is not final), "P": {period: {"lo", "hi", "miss" (days not read yet), "c":
                         {country: [paid, notification, organic, other revenue USD, sessions]}}}} for Today · Yesterday · 7 /
                         30 days (to yesterday) · This / Last month · All time on the app's own days ("--" = GA4 "(not set)",
                         "(other)" = GA4's folded row, both kept)
@@ -41,6 +45,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from . import ga4_final
 from .db import write_json_gz_stable
 from .fetch import ga4_source as gs
 from .fetch import ga4_uninstall as gu
@@ -52,6 +57,8 @@ CC_PERS = ("today", "yday", "7", "30", "60", "90", "tm", "lm", "all")
 HEADER_PATHS = ["/source*"]
 V = 1
 MAX_GZ = 8 * 1024 * 1024
+FINAL_TILL = not ga4_final.rollback()   # each file's "final_till" (the page's not-final mark); at the rollback (GA4_FINAL_DAYS
+#                                         3) none, the files as before the knob (no mark)
 GROUPS = (("paid", "Paid"), ("notif", "Notification"), ("org", "Organic"), ("oth", "Other"))
 PAID = ("Cross-network", "Paid Search", "Paid Social", "Paid Video", "Paid Shopping", "Paid Other", "Display", "Audio")
 NOTIF = ("Mobile Push Notifications",)
@@ -132,6 +139,8 @@ def build_app(store, aid, name, now):
     entry = {"app_id": aid, "key": key, "app": name, "tz": store.get("time_zone") or "UTC", "today": today.isoformat(),
              "d0": d0.isoformat(), "rev": rev, "ses": ses, "mk": mk, "bf": bool(bf.get("done")), "ch": chs,
              "file": PREFIX + key + ".json.gz"}
+    if FINAL_TILL:                                       # (newer: not final — the page's ⏳)
+        entry["final_till"] = (today - timedelta(days=gs.FINAL_LAG)).isoformat()
     body = {"v": V, "key": key, "app_id": aid, "d0": d0.isoformat(), "ch": chs, "days": per}
     return entry, body
 
@@ -225,6 +234,8 @@ def cc_files(data_dir, out_dir, aid, now):
     days = {cc: [[i] + [gs._r4(x) for x in f[:4]] + [int(f[4])] for i, f in sorted(by.items())]   # 4 decimals: a Custom
             for cc, by in rows.items()}                                                            # sum = the period's
     body_p = {"v": V, "key": key, "d0": d0.isoformat(), "today": today.isoformat(), "P": P}
+    if FINAL_TILL:
+        body_p["final_till"] = (today - timedelta(days=gsc.FINAL_LAG)).isoformat()
     body_d = {"v": V, "key": key, "d0": d0.isoformat(), "rd": runs, "c": days}
     names = {}
     for nm, body in (("cc", body_p), ("ccd", body_d)):

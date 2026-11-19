@@ -32,8 +32,8 @@ whole for retried on the next runs), "o" (the tie fails: silent loss, coverage k
 tie nothing, GA4's own dataLossFromOtherRow flag), "s" (sampled: GA4's sample share, no rows), "t" (thresholded users).
 Never a sampled or scaled number as data.
 
-GRAIN, per read and shape, decided by FINAL days only (≤ today − 5; today … today − 4 are re-read and never change a
-grain): a multi-day read that is not whole is read again at half the days (31 → 14 → 7 → 3 → 1), two whole reads at a
+GRAIN, per read and shape, decided by FINAL days only (≤ today − FINAL_LAG; the newer ones are re-read and never change
+a grain): a multi-day read that is not whole is read again at half the days (31 → 14 → 7 → 3 → 1), two whole reads at a
 size double it; a day not whole alone tries the next coarser shape — the shapes tried are saved at once, so a stop never
 sends a failed read again; a shape failing 3 final days in a row is dead until 14 more days were read, then tried once;
 a shape is not sent for a day whose events (TE0) are at or above what GA4 sampled at that shape before (the gate).
@@ -49,10 +49,11 @@ whole one stays; what the reads learned by class (grain, dead, gate) starts agai
 
 USERS OF A PERIOD (step_users, owner 8 Nov 2026: Firebase's "Active users" = unique within the period, never a sum
 of days): GA4 activeUsers by class with NO date dimension, and the app's, for every period the Screens page offers
-(pu_wanted: today, yesterday, the last 7 / 30 / 60 / 90 days ending td − 2, every calendar month from the store's first
-day — this month and last month among them — and all time) → <key>/users.json.gz {"v", "w": {"<lo>_<hi>": {"lo", "hi",
-"at", "st" (w whole · p GA4 grouped rows into "(other)": the named rows exact, "fold" its users · s sampled · o cut),
-"r" [[class, users]], "tot" (the app), "thr", "loss", "fin" (ends ≤ today − 5: never read again once whole)}},
+(pu_wanted: today, yesterday, the last 7 / 30 / 60 / 90 days ending td − 2 — the page's latest day, PU_LAG —, every
+calendar month from the store's first day — this month and last month among them — and all time) → <key>/users.json.gz
+{"v", "w": {"<lo>_<hi>": {"lo", "hi", "at", "st" (w whole · p GA4 grouped rows into "(other)": the named rows exact,
+"fold" its users · s sampled · o cut), "r" [[class, users]], "tot" (the app), "thr", "loss", "fin" (ends ≤ today −
+FINAL_LAG: never read again once whole)}},
 "prop": {"currency", "time_zone", "at"} (the Admin API, once a day)}. A period not final is read again after
 PU_HOURS; past months PU_MONTHS per app per run, newest first; a stop keeps every period already read.
 
@@ -66,7 +67,8 @@ Store (private repo, kept for good):
                                                      read], "dim" (a page path read: what its dead / gate were
                                                      learned by)}},
                                                      "events": {"at", "names"}, "months": {grp: ["YYYY-MM", …]}}
-    data/ga4_screens/<key>/recent.json.gz            {"v", "days": {day: {id: record}}} today − 4 … today (rewritten)
+    data/ga4_screens/<key>/recent.json.gz            {"v", "days": {day: {id: record}}} the RECENT_DAYS not final
+                                                     (today − FINAL_LAG + 1 … today; rewritten)
     data/ga4_screens/<key>/<grp>_<YYYY-MM>.json.gz   {"v", "days": {day: {id: record}}} final days; grp core = t v w
                                                      a, small = k e uV uA s x nV nA, ver = rV rA, cc = cV cA
   record {"st", "g" shape, "f" fold share (p), "cov" (o), "smp" (s), "thr", "loss", "tried", "fv", "pp" (read by
@@ -105,6 +107,7 @@ from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from .. import ga4_final
 from .. import ga4_probe
 from ..db import write_json_gz_stable
 from . import ga4
@@ -116,8 +119,10 @@ DIR = "ga4_screens"
 BF_DIR = "ga4_screens_bf"               # the history job's own folder in the private repo (same layout as DIR)
 STORE_V = 1
 MERGE_V = 2                             # merge_staged's rules (a change looks at every staged file once more)
-RECENT_DAYS = 5                         # today … today − 4: re-read on refresh (GA4 still adds to them)
-FINAL_LAG = 5                           # final = today − 5 and older (written once)
+FINAL_LAG = ga4_final.lag(5)            # final = today − FINAL_LAG and older (written once) — GA4_FINAL_DAYS, at least
+#                                         5 (this store's lag before the knob)
+RECENT_DAYS = FINAL_LAG                 # today − (FINAL_LAG − 1) … today: re-read on refresh (GA4 still adds to them;
+#                                         the code reads final_end / recent_start)
 CORE_HOURS = 3.0                        # t v w a: due again after this long …
 LAYER_HOURS = 12.0                      # … every other read after this long
 CHUNK0 = {"t": 31, "v": 31, "w": 31, "a": 14, "m": 31, "nV": 7, "rV": 7, "cV": 7, "nA": 7, "rA": 7, "cA": 7, "k": 31,
@@ -170,7 +175,10 @@ PU_FILE, PU_V = "users.json.gz", 1
 PU_HOURS = {"day": 3.0, "roll": 6.0, "all": 24.0, "month": 6.0}
 PU_MONTHS = 4
 PU_CALLS = 24
-PU_LAG = 2                              # the page's last final day: td − 2 ("GA4 data till ft")
+PU_LAG = 2                              # the page's latest day, where its periods end: td − 2 ("GA4 data till ft";
+#                                         no finality lag — a day newer than td − FINAL_LAG is shown not final: a
+#                                         period that ends there is read again after its PU_HOURS, final once whole
+#                                         and hi ≤ td − FINAL_LAG). screens_build.pwin keeps the same end (a test)
 PU_ROLL = (7, 30, 60, 90)
 PROP_HOURS = 24.0
 
@@ -1249,10 +1257,10 @@ def _month_last(d):
 
 
 def pu_wanted(today, d0):
-    """The periods the Screens page offers (its rng(): the property's calendar, ft = td − 2) → [(key, lo, hi, kind)]:
-    today, yesterday, the last 7 / 30 / 60 / 90 days ending ft, every calendar month from d0's (this month … today; the
-    first one from d0, as the page's sums start there) and all time (d0 … today); key "<lo>_<hi>" (ISO). Days before
-    d0 are never asked."""
+    """The periods the Screens page offers (its rng(): the property's calendar, ft = td − PU_LAG, its latest day — at
+    any GA4_FINAL_DAYS) → [(key, lo, hi, kind)]: today, yesterday, the last 7 / 30 / 60 / 90 days ending ft, every
+    calendar month from d0's (this month … today; the first one from d0, as the page's sums start there) and all time
+    (d0 … today); key "<lo>_<hi>" (ISO). Days before d0 are never asked."""
     d0 = gu._d(d0) if isinstance(d0, str) else d0
     ft = today - timedelta(days=PU_LAG)
     out, seen = [], set()

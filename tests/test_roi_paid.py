@@ -473,9 +473,9 @@ def test_paid_file_newest_day_is_never_before_its_last_all_row(tmp_path, monkeyp
     has ga4_cohort's (its rows final through it − FINAL_LAG, none past it) —, the D0 … D30 read ahead of the paid cube
     or behind it; the paid cube's newest day (its packs': the Organic pass's ages) in "cnew"; the edges ("thru" /
     "fthru": the packs') never move. be_build on the file: no D0 … D30 cell of an All row past its final edge (df)
-    passes asof's gate (X + a + LAG ≤ newest), the anchor's / _holes' limit (newest − CLAG) stays before the rows'
-    newest final cell (3 days old: often still empty), and the Organic ages count from the older of the two cubes'
-    newest days — never from the D0 … D30 read's."""
+    passes asof's gate (X + a + LAG ≤ newest), the anchor's / _holes' limit (newest − CLAG) is never after the rows'
+    newest final cell (CLAG ≥ the final lag; folded at D+3 a day before it: often still empty), and the Organic ages
+    count from the older of the two cubes' newest days — never from the D0 … D30 read's."""
     fn, pf = "roi_%s.json.gz" % KEY, "roi_%s_p.json.gz" % KEY
 
     def be_side(r, body, rt):                                           # (before the next run's start: its folder)
@@ -483,7 +483,8 @@ def test_paid_file_newest_day_is_never_before_its_last_all_row(tmp_path, monkeyp
         nw = rt.toordinal()
         assert newest == rt.isoformat()
         fe = max(x.X + len(x.dd) - 1 for x in app if x.dd)                 # the rows' newest final cell (read_today
-        assert fe == nw - rb.gco.FINAL_LAG and nw - beb.CLAG < fe           # − 3): never the anchor's / _holes'
+        assert fe == nw - rb.gco.FINAL_LAG and nw - beb.CLAG <= fe          # − FINAL_LAG): the anchor's / _holes'
+        #                                                                     limit never after it
         n = 0
         for x in app:
             for j, a in enumerate(beb.GRID):

@@ -4,7 +4,9 @@ FULL history kept by fetch.ga4_firstopen (owner, 13 Oct 2026: every feature on t
 problem, good or normal).
 
 ONE lazy file, site/firstopen.json.gz:
-  {"v", "apps": [{key, app, app_id, steps {step: screen class}, steps_changed, first_day, final_till,
+  {"v", "apps": [{key, app, app_id, steps {step: screen class}, steps_changed, first_day, final_till (the property's
+                  today − FIN_LAG: a newer day is not final), td (the property's today; at GA4_FINAL_DAYS 3, the
+                  rollback, final till is today − 2 and no td: the file as before the knob),
                   days: [[YYYY-MM-DD, first_open, splash, home, splash_any, home_any, language, permission, intro,
                           sample (GA4 read only this share of the events: the numbers are estimates) | null,
                           x (1: first_open / splash / home are the country store's exact ones — EXACT COUNTS below;
@@ -22,7 +24,8 @@ the First open store reads 15 days a call and on the busiest apps GA4 SAMPLES ev
 events and scales them: "sample"; measured: every day of a few big apps, on some of them a small share of the events,
 the day well off either way), while the country store (fetch.ga4_firstopen_cc) reads the SAME funnel one day at a
 time and mostly gets it whole. A day the First open store read sampled whose country store record is whole and
-unsampled — not held ("ho"), read once the day was final here (EX_AGE days after it or later), with the screens that
+unsampled — not held ("ho"), read once the day was final here (EX_AGE days after it or later; or kept as final by the
+country store under the lag in force then, of a day final here: EX_AGE0), with the screens that
 day's First open read had (its last read: _day_sig, from "steps_changed"), with first opens and a Splash, no step much
 in no named country, not collapsed against the First open store's count of the day or the store's own days around it
 (exact_days) — takes first_open / splash /
@@ -66,9 +69,10 @@ site/firstopen_ads_<key>.json.gz:
            (Google Ads' unmapped ids and GA4's "(not set)"). Every day either source has, nothing trimmed.
 and the app's entry gets "ads": {file, v, from, last, ads_from, ga4_from} — only when that file was written.
 
-Status, per app: Splash → Home (Home ÷ Splash of the strict funnel) over the last 7 FINAL days (≤ the property's today − 2)
-vs the 28 final days before: down ≥ 5 points Worse, ≥ 2 Watch, up ≥ 5 Better, else Normal; fewer than 35 final days Too
-early; fewer than 200 Splash users in the 7 days (or 400 in the 28) N/A (too little data to judge).
+Status, per app: Splash → Home (Home ÷ Splash of the strict funnel) over the last 7 FINAL days (≤ final till: the
+property's today − FIN_LAG, GA4_FINAL_DAYS) vs the 28 final days before: down ≥ 5 points Worse, ≥ 2 Watch, up ≥ 5
+Better, else Normal; fewer than 35 final days Too early; fewer than 200 Splash users in the 7 days (or 400 in the 28)
+N/A (too little data to judge).
 
 run(dashboard, data_dir, out_dir, s) → the _headers no-store paths (["/firstopen*"], ONE splat rule) or [] (no store:
 the file removed, no pointer). off(out_dir): the switch (FIRSTOPEN_TAB=false). Failure-isolated; ONE counts-only line.
@@ -82,6 +86,7 @@ import sys
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from . import ga4_final
 from .db import write_json_gz_stable
 from .fetch import ga4_firstopen as gf
 from .fetch import ga4_uninstall as gu
@@ -117,8 +122,15 @@ def _x(r):
     return len(r) > XI and bool(r[XI])
 
 
-EX_AGE = 2                          # a country read counts once made this many property days after its day (the
-#                                     page's final days are today − 2: the First open store's reads of them are no newer)
+FIN_LAG = ga4_final.page_lag(2, gf.FINAL_LAG)    # a day is final from this many days old on (GA4_FINAL_DAYS: the
+#                                     First open store's final lag, == fetch.ga4_firstopen_cc's; at the rollback the
+#                                     page's edge before the knob, 2): final till = today − FIN_LAG
+EX_AGE = FIN_LAG                    # a country read counts once made this many property days after its day (once the
+#                                     day is final: the First open store's reads of the page's final days are no newer)
+EX_AGE0 = 2                         # … or, of a day final here, a read the country store kept as FINAL under the lag
+#                                     in force then (its "fin": the reads made before GA4_FINAL_DAYS, at D+3, are never
+#                                     read again) made this many days after it — EX_AGE before the knob
+EDGES = not ga4_final.rollback()    # the app's "td" in the file; at the rollback the file as before the knob
 EX_NB = 7                           # the country store's own whole days within ± this many of a day judge it …
 EX_NB_MIN = 3                       # … when there are at least this many of them (same screens)
 EX_LOW = 0.2                        # first opens under this × their median: an answer GA4 collapsed
@@ -164,10 +176,12 @@ def _med(v):
     return None if not n else (v[n // 2] if n % 2 else (v[n // 2 - 1] + v[n // 2]) / 2)
 
 
-def exact_days(data_dir, store, counts=None):
+def exact_days(data_dir, store, counts=None, till=None):
     """The days of an app's First open store GA4 read SAMPLED whose country store record holds the same funnel's day
     exact (module doc: EXACT COUNTS) → {D: [first_open, splash, home]}. A record counts when it is whole and unsampled
-    (not "none", "smp" null, not held "ho", "t" three ints), read EX_AGE property days or more after its day, with the
+    (not "none", "smp" null, not held "ho", "t" three ints), read EX_AGE property days or more after its day — or, a day
+    ≤ till (the app's final till), kept by the country store as final ("fin": under the lag in force when it was read)
+    and read EX_AGE0 days or more after it —, with the
     screens that day's First open read had (_day_sig), with first opens and a Splash, no step much in no named country
     (the country store's own NONAME / REF_MIN rule), and not collapsed: first opens under EX_FLOOR × the First open
     store's own count of the day (REF_MIN or more) or EX_LOW × the median of the store's own whole same-screens days
@@ -188,7 +202,9 @@ def exact_days(data_dir, store, counts=None):
                     or c.get("none") or c.get("smp") is not None or c.get("ho"):
                 continue
             rd = _pday(c.get("at"), tz)
-            if rd is not None and (rd - date.fromisoformat(d)).days >= EX_AGE:
+            age = None if rd is None else (rd - date.fromisoformat(d)).days
+            if age is not None and (age >= EX_AGE or (c.get("fin") is True and age >= EX_AGE0 and till is not None
+                                                      and d <= till)):
                 good[d] = c
         out = {}
         for d, rec in (store.get("days") or {}).items():
@@ -309,7 +325,9 @@ def build_data(dashboard, data_dir, now, counts, exact=False):
         aid = str(store.get("app_id") or "")
         app = names.get(aid) or store.get("package") or aid
         key = gu.file_key(aid)
-        rows, sp, ex = [], {}, exact_days(data_dir, store, counts) if exact else {}
+        td = _today(store, now)
+        final_till = (td - timedelta(days=FIN_LAG)).isoformat()
+        rows, sp, ex = [], {}, exact_days(data_dir, store, counts, till=final_till) if exact else {}
         for day in sorted(store["days"]):
             rec = store["days"][day] or {}
             row = [day] + [rec.get(f) if rec.get(f) is not None else (0 if f in ("first_open", "splash", "home")
@@ -322,12 +340,13 @@ def build_data(dashboard, data_dir, now, counts, exact=False):
                 row.append(1 if e is not None else 0)
             rows.append(row)
         counts["exact"] = counts.get("exact", 0) + len(ex)
-        final_till = (_today(store, now) - timedelta(days=2)).isoformat()
         if store.get("package"):
             counts.setdefault("_pkg", {})[key] = str(store["package"])
         apps.append({"key": key, "app": app, "app_id": aid, "steps": store.get("steps"),
                      "steps_changed": store.get("steps_changed") or [], "first_day": rows[0][0], "final_till": final_till,
                      "days": rows})
+        if EDGES:
+            apps[-1]["td"] = td.isoformat()
         summary.append(summarize(app, key, rows, final_till, sp))
     if not apps:
         return None

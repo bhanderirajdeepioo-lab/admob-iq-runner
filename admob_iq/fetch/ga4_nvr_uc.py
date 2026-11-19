@@ -19,10 +19,11 @@ Store, kept for good, one file a month (a month GA4 no longer changes is written
                                             impressions], …]}}   (nvr: "n" new · "r" returning · "x" not set; country: the
                                             ISO code, "--" for anything else — as fetch.ga4_nvr; [] = nothing that day)
 Per app and run (at most MAX_CALLS calls; the property's quota floors as the Audience fetch's; the run's budget):
-  * every REFRESH_HOURS the last RECENT_DAYS days (today included: GA4 still adds to them) — replaced whole; days a
-    longer outage left between the last such read ("upto") and them are read first, oldest first (never a hole);
+  * every REFRESH_HOURS the last RECENT_DAYS days (today … FINAL_LAG days back: GA4 still adds to them; the day turning
+    FINAL_LAG old gets its final read here) — replaced whole; days a longer outage left between the last such read
+    ("upto") and them are read first, oldest first (never a hole);
   * the backfill: CHUNK_DAYS at a time, newest first, from the day before the recent window back to the app's history
-    start (the Uninstall store's). Days older than RECENT_DAYS are final in GA4.
+    start (the Uninstall store's). Days older than RECENT_DAYS are final in GA4 (their last read was FINAL_LAG days on).
 GA4's folded "(other)" row comes with no real day and no country: it is left out (counted in "folded": reads that had
 one) — the page measures, per country and period, what GA4 gave against the country's own whole total. NOT read again
 day by day: measured 3 Nov 2026 (ga4_nvrcc_probe), GA4's one-day reads of this split carry no "(other)" row but only a
@@ -35,6 +36,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from .. import ga4_final
 from .. import ga4_probe
 from ..db import write_json_gz_stable
 from . import ga4
@@ -48,7 +50,9 @@ DIR = "ga4_nvr_uc"
 STORE_V = 3                         # 3: impressions = ad_impression events (3 Nov 2026) — older stores are read again
 DIMS = ("date", gv.NVR, "adFormat", "adUnitName", "countryId")
 METS = gv.EV
-RECENT_DAYS = 5                     # today … 4 days back: refreshed every REFRESH_HOURS (older days are final in GA4)
+FINAL_LAG = ga4_final.lag(4)        # a day's last read is made this many days after it (on day D + FINAL_LAG): final
+#                                     from then on — GA4_FINAL_DAYS, at least 4 (this store's lag before the knob)
+RECENT_DAYS = max(5, FINAL_LAG + 1) # today … FINAL_LAG days back: refreshed every REFRESH_HOURS (older days are final)
 REFRESH_HOURS = 6.0
 CHUNK_DAYS = 14                     # one backfill call: ≤ 14 days × ad units × countries × 3 of rows
 MAX_CALLS = 20                      # per app per run (the backfill goes on next run)

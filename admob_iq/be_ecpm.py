@@ -46,8 +46,9 @@ session's eCPM, "haan pehla session wala lo"). A part of be_build, switched by G
     countries with an index have no benchmark · b (benchmark) < MIN_KEPT past days · h (benchmark) GA4's history
     still being read (the benchmark comes once it is)
   The app line's reason when no country has an index: the one carrying the most spend among the countries with a day-1
-  eCPM (all of them when none has one). A value from a day not final yet is marked ("p": 1 a card day) and from a day
-  GA4 folded / thresholded ("q").
+  eCPM (all of them when none has one). A value from a day not final yet is marked ("p": 1 a card day — day 1 while the
+  install day is younger than fetch.ga4_nvr's FINAL_LAG (P1_AGE; at GA4_FINAL_DAYS 3, the rollback, its RECENT_DAYS as
+  before the knob), a later day while its activity day is a hot copy) and from a day GA4 folded / thresholded ("q").
 
   site/be_<key>.json.gz gains (only with the switches on): days[i] "ec": {"x" [6 × this day's index], "b" [6 × the
   benchmark index], "e" [6 × this day's eCPM USD], "be" [6 × the benchmark eCPM USD], "cv" [6 × the covered share of
@@ -64,6 +65,7 @@ import sys
 from datetime import date, timedelta
 
 from . import be_build as bb
+from . import ga4_final
 from .fetch import ga4_cecpm as gce
 from .fetch import ga4_nvr as gv
 
@@ -79,6 +81,9 @@ FLOOR = 0.01                         # an index never below 1 % of day 1 (a log 
 STALE_DAYS = 3                       # days past the fetch's own slack (its edge + a held day's wait): stale
 OK_ST = ("ok", "oth", "thr")
 WHY = "ywfslotnzxkcbh"               # a tie between reasons: the first of these
+P1_AGE = ga4_final.page_lag(gv.RECENT_DAYS, gv.FINAL_LAG)   # day 1 is not final ("p") while the install day is younger:
+#                                      the first-session store's final lag (GA4_FINAL_DAYS); at the rollback its window
+#                                      (RECENT_DAYS), the rule before the knob
 
 
 def _fail(e):
@@ -354,8 +359,8 @@ def attach(body, pin, fc, m, O=None):
                     eb[j] = ebe[j] = None
                     wx[j], wb[j] = ".", hb
                 cv[j] = None
-        p = ("1" if nw - Xo < gv.RECENT_DAYS else "0") + "".join(      # (day 1: the first-session store still
-            "1" if st_of[j] and st_of[j][1] else "0" for j in range(1, 6))  # re-reads its newest days)
+        p = ("1" if nw - Xo < P1_AGE else "0") + "".join(              # (day 1: younger than the first-session
+            "1" if st_of[j] and st_of[j][1] else "0" for j in range(1, 6))  # store's final lag — the page's not final)
         q = "".join("1" if j and st_of[j] and st_of[j][0] in ("oth", "thr") else "0" for j in range(6))
         out["ec"] = {"x": ex, "b": eb, "e": ee, "be": ebe, "cv": cv, "w": "".join(wx), "wb": "".join(wb), "p": p,
                      "q": q}

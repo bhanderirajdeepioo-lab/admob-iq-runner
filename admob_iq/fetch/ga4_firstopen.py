@@ -13,7 +13,8 @@ private repo, never trimmed). Per app and run (at most MAX_CALLS calls; a proper
   * the screens: first-session users by screen class over the last 28 days (screen_view, newVsReturning == new) →
     pick_steps (generic: no app names or classes are fixed), looked at again every STEPS_DAYS days;
   * a one-time backfill of what GA4 still has (BACKFILL_DAYS back, 15-day chunks broken down by date, resumable);
-  * every REFRESH_HOURS the last 15 days again (the last two still change in GA4).
+  * every REFRESH_HOURS the last RECENT_DAYS (15) days again (a day younger than FINAL_LAG still changes in GA4; the
+    window holds every such day and the one turning final, at any GA4_FINAL_DAYS).
 Switched by the repo variable GA4_FIRSTOPEN (off by default). Never raises; never prints (log_line: counts only).
 """
 import json
@@ -23,6 +24,7 @@ import time
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from .. import ga4_final
 from .. import ga4_probe
 from ..db import write_json_gz_stable
 from . import ga4
@@ -33,7 +35,10 @@ DIR = "ga4_firstopen"
 STORE_V = 1
 ALPHA = "https://analyticsdata.googleapis.com/v1alpha"
 CHUNK = 15                          # the funnel breakdown returns at most 15 values per call
-RECENT_DAYS = 15                    # refreshed every REFRESH_HOURS (today … 14 days back)
+FINAL_LAG = ga4_final.lag(3)        # a day is final from this many days old on — GA4_FINAL_DAYS, at least 3: the First
+#                                     open page's edge (firstopen_build), == ga4_firstopen_cc.FINAL_LAG
+RECENT_DAYS = max(15, FINAL_LAG + 1)    # refreshed every REFRESH_HOURS (today … 14 days back: every not-final day and
+#                                         the one turning final)
 BACKFILL_DAYS = 120                 # asked once, back from today (GA4 has what its retention kept)
 REFRESH_HOURS = 6.0
 STEPS_DAYS = 7

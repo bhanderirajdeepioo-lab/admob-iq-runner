@@ -123,6 +123,11 @@ jobs:
           GA4_REFRESH_TOKEN:    ${{ secrets.GA4_REFRESH_TOKEN }}
           GA4_ENABLED:          ${{ vars.GA4_ENABLED || 'true' }}
           GA4_MIN_HOURS:        ${{ vars.GA4_MIN_HOURS || '20' }}
+          # the GA4 finality knob (admob_iq.ga4_final): a GA4 day is final once this many days old. Every GA4 store
+          # reads a day again until then and the page marks it not final (empty: 7; 3 = every GA4 store's read windows
+          # as before the knob, the rollback without a code push). screens-backfill.yml and devices-backfill.yml take
+          # the same variable
+          GA4_FINAL_DAYS:       ${{ vars.GA4_FINAL_DAYS }}
           # Active users tab (GA4): GA4_ACTIVE=false (repo variable) switches it off without a code push;
           # GA4_RETENTION_CHANGED = the day the GA4 data retention went to 14 months (empty: the config default)
           GA4_ACTIVE:           ${{ vars.GA4_ACTIVE || 'true' }}

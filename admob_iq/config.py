@@ -2,6 +2,8 @@
 
 import os
 
+from . import ga4_final
+
 
 def _env(name, default=""):
     """os.getenv but treats an UNSET *and* an empty-string value the same.
@@ -48,6 +50,9 @@ def settings() -> dict:
                                                                     # ~7 days late, 14 re-reads each day to its end
         "ga4_late_days": int(_env("GA4_LATE_DAYS", "7")),           # the newest 7 days are PROVISIONAL (can still
                                                                     # grow): no "good news" alert from them
+        # the GA4 finality knob (admob_iq.ga4_final: GA4_FINAL_DAYS, read once at import; empty: 7): a GA4 day is final
+        # once this many days old. Every store's own final lag is ga4_final.lag(<its lag before the knob>)
+        "ga4_final_days": ga4_final.FINAL_DAYS,
         "ga4_rebuild_days": int(_env("GA4_REBUILD_DAYS", "28")),    # full self-healing re-pull every ~4 weeks
         "ga4_max_history_days": int(_env("GA4_MAX_HISTORY_DAYS", "1300")),
         "ga4_run_budget_sec": int(_env("GA4_RUN_BUDGET_SEC", "900")),     # stop starting new apps after this
@@ -141,37 +146,40 @@ def settings() -> dict:
         "ga4_firstopen": _env("GA4_FIRSTOPEN", "false").lower() == "true",
         "ga4_firstopen_budget_sec": _int_env(("GA4_FIRSTOPEN_BUDGET_SEC",), 150),
         # 🆕 First open BY COUNTRY: the same strict funnel per country per day, every country (fetch.ga4_firstopen_cc:
-        # the backfill of what GA4 still has, the last 3 days every 6 hours). Off: nothing of it is read, written or
-        # printed; GA4_FIRSTOPEN_CC_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
+        # the backfill of what GA4 still has, the last 3 days every 6 hours, an older day at most once a day until it
+        # is final: ga4_final_days above). Off: nothing of it is read, written or printed; GA4_FIRSTOPEN_CC_BUDGET_SEC =
+        # its own seconds per build (unset: 0 → the module's BUDGET_SEC)
         "ga4_firstopen_cc": _env("GA4_FIRSTOPEN_CC", "false").lower() == "true",
         "ga4_firstopen_cc_budget_sec": _int_env(("GA4_FIRSTOPEN_CC_BUDGET_SEC",), 0),
-        # 💰 Revenue by source: GA4 Traffic acquisition by session channel, per app per day (fetch.ga4_source: the last 5
-        # days every hour, the history newest first). Off: nothing of it is read, written or printed;
-        # GA4_SOURCE_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
+        # 💰 Revenue by source: GA4 Traffic acquisition by session channel, per app per day (fetch.ga4_source: the
+        # newest ga4_final_days + 1 days (at least 5) every hour, the history newest first). Off: nothing of it is read,
+        # written or printed; GA4_SOURCE_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
         "ga4_source": _env("GA4_SOURCE", "false").lower() == "true",
         "ga4_source_budget_sec": _int_env(("GA4_SOURCE_BUDGET_SEC",), 0),
         # 💰 Revenue by source × country / × phone model (the 🌍 Countries and 📱 Devices tabs' Source view):
-        # fetch.ga4_source_cty (date × country × channel, one file a month, the last 5 days every 3 hours, the history
-        # newest first) and fetch.ga4_source_dev (model × channel over whole windows: 30 days, last month, 90 days, all
-        # time). Off: nothing of it is read, written or printed; *_BUDGET_SEC = its own seconds per build (unset: 0 →
-        # the module's BUDGET_SEC)
+        # fetch.ga4_source_cty (date × country × channel, one file a month, the newest ga4_final_days + 1 days (at least
+        # 5) every 3 hours, the history newest first) and fetch.ga4_source_dev (model × channel over whole windows: 30
+        # days, last month, 90 days, all time). Off: nothing of it is read, written or printed; *_BUDGET_SEC = its own
+        # seconds per build (unset: 0 → the module's BUDGET_SEC)
         "ga4_source_cty": _env("GA4_SOURCE_CTY", "false").lower() == "true",
         "ga4_source_cty_budget_sec": _int_env(("GA4_SOURCE_CTY_BUDGET_SEC",), 0),
         "ga4_source_dev": _env("GA4_SOURCE_DEV", "false").lower() == "true",
         "ga4_source_dev_budget_sec": _int_env(("GA4_SOURCE_DEV_BUDGET_SEC",), 0),
-        # 🆕 First open: GA4 first opens by country × day, every user and Google Ads users (fetch.ga4_newusers: the last 5
-        # days every hour, the history newest first). Off: nothing of it is read, written or printed;
-        # GA4_NEWUSERS_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
+        # 🆕 First open: GA4 first opens by country × day, every user and Google Ads users (fetch.ga4_newusers: the
+        # newest ga4_final_days + 1 days (at least 5) every hour, the history newest first). Off: nothing of it is read,
+        # written or printed; GA4_NEWUSERS_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
         "ga4_newusers": _env("GA4_NEWUSERS", "false").lower() == "true",
         "ga4_newusers_budget_sec": _int_env(("GA4_NEWUSERS_BUDGET_SEC",), 0),
         # 📈 eCPM: GA4 ad revenue and impressions by first session vs returning, per day × ad unit / country
-        # (fetch.ga4_nvr: the last 5 days every hour, the history newest first). Off: nothing of it is read, written or
-        # printed; GA4_NVR_BUDGET_SEC = its own seconds per build (unset: 0 → the module's BUDGET_SEC)
+        # (fetch.ga4_nvr: the newest ga4_final_days + 1 days (at least 5) every hour, the history newest first). Off:
+        # nothing of it is read, written or printed; GA4_NVR_BUDGET_SEC = its own seconds per build (unset: 0 → the
+        # module's BUDGET_SEC)
         "ga4_nvr": _env("GA4_NVR", "false").lower() == "true",
         "ga4_nvr_budget_sec": _int_env(("GA4_NVR_BUDGET_SEC",), 0),
         # 📈 eCPM first session vs returning × country: the ad unit × country split per day for the ad unit / format tables
-        # of a picked country (fetch.ga4_nvr_uc: one file a month, the last 5 days every 6 hours, the history newest
-        # first). Off: nothing of it is read, written or printed; GA4_NVR_UC_BUDGET_SEC = its own seconds per build
+        # of a picked country (fetch.ga4_nvr_uc: one file a month, the newest ga4_final_days + 1 days (at least 5) every
+        # 6 hours, the history newest first). Off: nothing of it is read, written or printed; GA4_NVR_UC_BUDGET_SEC =
+        # its own seconds per build
         "ga4_nvr_uc": _env("GA4_NVR_UC", "false").lower() == "true",
         "ga4_nvr_uc_budget_sec": _int_env(("GA4_NVR_UC_BUDGET_SEC",), 0),
         # 📱 Devices: GA4 by phone model × country per install day (fetch.ga4_device: installs, paid, back next day and
@@ -188,15 +196,17 @@ def settings() -> dict:
         "ga4_cohort": _env("GA4_COHORT", "false").lower() == "true",
         "ga4_cohort_budget_sec": _int_env(("GA4_COHORT_BUDGET_SEC",), 150),
         # 🧊 The cohort cube: GA4 ad revenue by activity day × install day × country from the GA4 history start
-        # (fetch.ga4_cube: final days folded once into activity-month files, the last 3 days every 6 hours) — the ROI
+        # (fetch.ga4_cube: a day folded once into its activity-month file when final (ga4_final_days old), the last 3
+        # days every 6 hours, an older day not final yet at most once a day) — the ROI
         # section's 30-day columns past D30 (D60, D90 … up to the app's age). Off: nothing of it is read, written or
         # printed, and the ROI build leaves its store unread (the page's file exactly as without it).
         # GA4_CUBE_BUDGET_SEC = its own seconds per build (no read is started past it)
         "ga4_cube": _env("GA4_CUBE", "false").lower() == "true",
         "ga4_cube_budget_sec": _int_env(("GA4_CUBE_BUDGET_SEC",), 150),
         # ⚖️ Breakeven's returning-session eCPM: GA4 ad revenue + impressions of each install day's users on their days
-        # 1, 2, 3, 6 and 13 by country (fetch.ga4_cecpm: one read an activity day, final days folded once into
-        # activity-month files, the last 3 days every 6 hours, the history newest first). Off: nothing of it is read,
+        # 1, 2, 3, 6 and 13 by country (fetch.ga4_cecpm: one read an activity day, a day folded once into its
+        # activity-month file when final (ga4_final_days old, at least 5), the days not final yet read again (the
+        # newest every 6 hours, the older at most once a day), the history newest first). Off: nothing of it is read,
         # written or printed; GA4_CECPM_BUDGET_SEC = its own seconds per build (unset: 0 → the module's: more while the
         # history is being read, less after)
         "ga4_cecpm": _env("GA4_CECPM", "false").lower() == "true",

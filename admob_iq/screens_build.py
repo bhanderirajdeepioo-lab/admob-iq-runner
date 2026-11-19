@@ -40,7 +40,10 @@ and the pointer dashboard["scr"] = {"v", "file", "fv", "apps": {app id: {"key", 
 shards → scr_l → scr_<key> → scr_all → pointer. A broken app loses its own files and pointer entry ("failed"); a broken
 or too big shard costs only that month (listed in scr_l "failed" / "big"); file 2 and scr_all never depend on a shard.
 
-Calendar: td = the property's today; ft = td − 2 (GA4 still adds to the last two days: "GA4 data till ft"). GA4 days are
+Calendar: td = the property's today; ft = td − FT_LAG, the newest FINAL day ("GA4 data till ft": the store's final lag,
+GA4_FINAL_DAYS — it reads every newer day again, GA4 still adds to them; the page shows them not final; every status,
+window and signal judges final days only; at GA4_FINAL_DAYS 3, the rollback, td − 2 as before the knob); the page's
+periods end at its latest day td − PE_LAG (pwin). GA4 days are
 the property's (UTC on every live property); AdMob days are the report zone's (IST): GA4 day D = the overlapped share of
 AdMob days D and D+1 (0.7708 / 0.2292 for UTC vs IST), only when both are ≤ latest_complete.
 
@@ -92,6 +95,7 @@ import zlib
 from datetime import date, datetime, time as dtime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from . import ga4_final
 from .db import write_json_gz_stable
 from .fetch import ga4_uninstall as gu
 
@@ -105,6 +109,14 @@ V = 4                                  # 4: Firebase's numbers (the users of a p
 MAX_GZ = 8 * 1024 * 1024
 STORE_DIR = "ga4_screens"
 CACHE_DIR = "ga4_screens_cache"
+ST_LAG = ga4_final.lag(5)              # the store's final lag: its month files hold days ≤ td − ST_LAG, newer ones are
+#                                        re-read (GA4_FINAL_DAYS; fetch.ga4_screens' FINAL_LAG — never imported: a test
+#                                        keeps the two equal)
+FT_LAG = ga4_final.page_lag(2, ST_LAG)  # the build's newest final day ft = td − FT_LAG: the store's own edge (every
+#                                        status, window, users and signal judges days ≤ ft); at the rollback the
+#                                        page's edge before the knob (td − 2: the files as they were)
+PE_LAG = 2                             # the page's latest day, where its periods end: td − PE_LAG — a calendar end,
+#                                        never the final edge (fetch.ga4_screens' PU_LAG: pwin ≡ pu_wanted, a test)
 CACHE_V = 4                            # 4: scr_l's small-group records carry _ch's state (a "skip" record "-"); 3: a
                                        # "skip" record (GA4 never asked) is cached as "-"; 2: a "p" day with GA4 grouped
                                        # ≤ FOLD_OK as "w" (older caches re-derived)
@@ -592,10 +604,11 @@ def _bf(r):
 
 def lost_span(meta, i, m, td):
     """The days [first, last] that a store month file `m` which cannot be read may have held for read i, or None: month
-    files hold FINAL days only (≤ the property's today − 5), none before the read's oldest filled day (unknown: the 1st)."""
+    files hold FINAL days only (≤ the property's today − ST_LAG), none before the read's oldest filled day (unknown: the
+    1st)."""
     try:
         a = _iso(date.fromisoformat(m + "-01"))
-        b = min(_month_end(m), _iso(_d(td) - timedelta(days=5)))
+        b = min(_month_end(m), _iso(_d(td) - timedelta(days=ST_LAG)))
     except (TypeError, ValueError):
         return None
     o = _oldest(meta, i)
@@ -991,7 +1004,7 @@ class App:
         dashboard = dashboard or {}
         self.meta, self.aid, self.key = meta, str(meta["app_id"]), gu.file_key(str(meta["app_id"]))
         self.td = _today(meta, now)
-        self.ft = self.td - timedelta(days=2)
+        self.ft = self.td - timedelta(days=FT_LAG)      # the newest final day (the store's own edge)
         # the users beside the ads (set_users): app daily users {day: n} and screen users {day: {class: n}} on final
         # days ≤ ftU, the Uninstall store's why when it gave none, and ftU (every status window ends there); au_end = the
         # daily users' own last day, ug = GA4 withholding the users by screen after ftU (users_ga4: a note, not a failure)
@@ -3470,7 +3483,8 @@ def _pa(v):
 #     (never a sum of days): the fetch reads them for the periods the page offers (pwin), file 2's "pu";
 #   * full-screen rows: every AdMob unit of a full-screen format by its trigger label (trig4), summed on AdMob's OWN days
 #     (the report zone's: never blended onto GA4 days) — file 2's "fs4", the app's AdMob total "adt";
-#   * the signals, judged here for every period of pwin (file 2's "sig", scr_all's "sg" counts):
+#   * the signals, judged here for every period of pwin (file 2's "sig", scr_all's "sg" counts; a 7 / 30 / 60 / 90 days
+#     period ending after ft — GA4_FINAL_DAYS — on as many FINAL days ending ft: sig_win):
 #       💡 b  Ads ki jagah — a screen with ≥ SIG_TIME of the app's screen time whose ads per minute are ≤ SIG_RATE of
 #             the app's (final days whose views and ads by screen are whole; the screens' basis: inline, all formats
 #             when allf);
@@ -3494,12 +3508,13 @@ def _mlast(d):
 
 
 def pwin(td, d0):
-    """The periods the page offers (its rng(): the property's calendar, ft = td − 2) → [(key, lo, hi, kind)]: today,
-    yesterday, the last 7 / 30 / 60 / 90 days ending ft, this month (… today), all time (d0 … today), then every
-    calendar month from d0's, newest first (the first from d0); lo never before d0; key "<lo>_<hi>". The fetch's
-    pu_wanted, our own copy (never imported: a test keeps the two equal)."""
+    """The periods the page offers (its rng(): the property's calendar, its latest day pe = td − PE_LAG) → [(key, lo,
+    hi, kind)]: today, yesterday, the last 7 / 30 / 60 / 90 days ending pe (their days after ft not final yet), this
+    month (… today), all time (d0 … today), then every calendar month from d0's, newest first (the first from d0); lo
+    never before d0; key "<lo>_<hi>". The fetch's pu_wanted, our own copy (never imported: a test keeps the two
+    equal)."""
     td, d0 = _d(td), _d(d0)
-    ft = td - timedelta(days=2)
+    pe = td - timedelta(days=PE_LAG)
     out, seen = [], set()
 
     def add(lo, hi, kd):
@@ -3511,7 +3526,7 @@ def pwin(td, d0):
     add(td, td, "day")
     add(td - timedelta(days=1), td - timedelta(days=1), "day")
     for n in PW_ROLL:
-        add(ft - timedelta(days=n - 1), ft, "roll")
+        add(pe - timedelta(days=n - 1), pe, "roll")
     add(td.replace(day=1), td, "day")
     add(d0, td, "all")
     m = td.replace(day=1)
@@ -3521,6 +3536,16 @@ def pwin(td, d0):
             break
         add(m, _mlast(m), "month")
     return out
+
+
+def sig_win(lo, hi, ft, d0):
+    """The days a rolling period's signals are judged on (the owner's rule, 17 Nov 2026: statuses and signals judge FINAL
+    days only, as First open's status its last 7 final days): a period [lo, hi] (pwin's "roll") ending after ft, the
+    newest final day (GA4_FINAL_DAYS: its newer days are read again), → as many days ending ft, never before d0; one
+    ending ≤ ft (GA4_FINAL_DAYS 3: ft is the period's end) → itself. ISO days; the page's sigWin, the same rule."""
+    if hi <= ft:
+        return lo, hi
+    return max(_iso(_d(ft) - (_d(hi) - _d(lo))), d0 or lo), ft
 
 
 def period_users(data_dir, key):
@@ -3698,6 +3723,8 @@ def signals4(app, allf, wins, fs4, fsd):
     out, cnt = {}, {}
     for key, lo, hi, kd in wins:
         sig = {}
+        if kd == "roll":                         # a rolling period ending after the newest final day (GA4_FINAL_DAYS):
+            lo, hi = sig_win(lo, hi, ft, app.d0)  # judged on as many FINAL days ending ft (the page names them: sigWin)
         hi_f = min(hi, ft)
         E = PE.sum(lo, hi_f) if lo <= hi_f else [0] * len(scr)
         A = PA.sum(lo, hi_f) if lo <= hi_f else [0] * len(scr)

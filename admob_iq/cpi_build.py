@@ -118,6 +118,14 @@ SET_DAYS = (7, 120)       # a level set from days: 7 … 120 named days
 FAM_TXT = {"CPI": "CPI", "ECPM": "eCPM", "GAP": "ads to pay back one install", "IPU": "ads per user",
            "ROAS_G": "D0 ROAS", "ROAS_C0": "install-day ROAS (AdMob)", "ROAS_C1": "D1 ROAS (AdMob)",
            "ROAS_C7": "D7 ROAS (AdMob)", "SPEND": "spend"}
+C_LAG = CA.FAMILIES["ROAS_C0"]["shift"] + 2   # the ROI rows' final lag the alarm's ROAS_C shifts encode (shift = lag −
+#   2 + age: its data day t is today − 2): c_r0 / c_r1 / c_r7 hold install day X's age a once X + a ≤ the ROI file's
+#   newest − C_LAG — the rows' own final ages ("df") follow GA4_FINAL_DAYS (ga4_cohort's FINAL_LAG); the alarm's inputs
+#   move only with its own shifts (and level_agent's LAGS), after the alarm replay (step 2: an alert change is replayed
+#   before it ships)
+NVR_END = 2              # the first session / returning series end at the nvr file's own today ("td") − NVR_END, where
+#   they ended before GA4_FINAL_DAYS (a file without "td": its final till); its days after final till are in them, the
+#   page marks them not final (notes.nvr_till)
 LINE = None
 
 
@@ -353,10 +361,28 @@ def _ptrs(dashboard):
     return act, roi, nvr
 
 
+def _day(x):
+    """A YYYY-MM-DD date, or None."""
+    try:
+        return _d(x) if isinstance(x, str) and DAY_RE.match(x[:10]) else None
+    except ValueError:
+        return None
+
+
+def _c_df(row, newest):
+    """An ROI row's ages the alarm reads (c_r<a> while a < this): those final at C_LAG — X + a ≤ newest − C_LAG, within
+    the ages the row read (its "d") — as the row's own "df" was before GA4_FINAL_DAYS; a file without "newest": its df."""
+    ser, df, x = row[4] or [], row[5] or 0, _day(row[0])
+    if newest is None or x is None:
+        return df
+    return max(df, min(len(ser) - 1, (newest - x).days - C_LAG) + 1)
+
+
 def _ga4(D, s, out_dir, aid, ptrs):
-    """GA4 + ROI series into s (null where GA4 has no final day): dau (active a1), fs_* / rt_* (nvr: first session /
-    returning revenue, impressions, users), c_n / c_sp / c_r0 / c_r1 / c_r7 (ROI install-day rows; an age only when the
-    row holds it as final: df > age). → notes."""
+    """GA4 + ROI series into s (null where GA4 has no number): dau (active a1), fs_* / rt_* (nvr: first session /
+    returning revenue, impressions, users — through the file's today − NVR_END, its days after final till in them, not
+    final), c_n / c_sp / c_r0 / c_r1 / c_r7 (ROI install-day rows; an age only once final at the alarm's C_LAG: _c_df).
+    → notes."""
     act, roi, nvr = ptrs
     notes = {}
     for k in ("dau", "fs_rev", "fs_imp", "fs_u", "rt_rev", "rt_imp", "rt_u", "c_n", "c_sp", "c_r0", "c_r1", "c_r7"):
@@ -379,8 +405,10 @@ def _ga4(D, s, out_dir, aid, ptrs):
     if isinstance(n, dict):
         till = n.get("final_till")
         notes["nvr_till"] = till
+        td = _day(n.get("td"))
+        end = (td - timedelta(days=NVR_END)).isoformat() if td else till
         for row in n.get("days") or []:
-            if not row or (till and row[0] > till):
+            if not row or (end and row[0] > end):
                 continue
             i = D.ix.get(row[0])
             if i is None:
@@ -394,11 +422,12 @@ def _ga4(D, s, out_dir, aid, ptrs):
     notes["roi_rows"] = 0
     if isinstance(r, dict):
         notes["roi_rows"] = len(r.get("rows") or [])
+        nw = _day(r.get("newest"))
         for row in r.get("rows") or []:
             i = D.ix.get(row[0])
             if i is None:
                 continue
-            ser, df = row[4] or [], row[5] or 0
+            ser, df = row[4] or [], _c_df(row, nw)
             s["c_n"][i], s["c_sp"][i] = row[1], row[3]
             for age in (0, 1, 7):
                 if df > age and len(ser) > age:

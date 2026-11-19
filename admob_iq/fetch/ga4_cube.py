@@ -56,7 +56,8 @@ adaptive, per range of activity days:
      counts it). The walk ("cut") and the hot days ("hcut") keep their own cut memory: a hot day's smaller cap never
      follows it into its final read (its memory goes once the day is final).
   A range at least as long as one that needed step 2 goes to step 2 straight away for HEAVY_KEEP activity days ("heavy":
-  its block call would only be dropped again); then the block is tried once more.
+  its block call would only be dropped again; a range starting up to FINAL_LAG − HOT_DAYS days before that one counts as
+  it: the hot rounds' two starts, _skip_block); then the block is tried once more.
 Per row: countryId "(not set)" / empty → cc "--"; a firstSessionDate that is not a date ("(other)", "(not set)"), a
 countryId "(other)" or an install day after the activity day → the day's loss (micros; st "loss" only then). GA4's
 thresholding, sampling, a cut answer, or a flag still on the final answer with no "(other)" row to measure it by → the
@@ -88,9 +89,9 @@ split version):
       read: {"D", "n" calls it had, "k" times}), "rep" (the repair's state, below), "rf" (the refold's), "ck" (the
       settle check's), "d": {D: {the ledger's fields + "b",
       "c", "e" of that one day (+ "hd" / "fu" / "dp": the split's depth when past its first level)}}}
-— the head (progress) and the NON-FINAL days (today − 2 … today), each replaced when read again. The ROI build reads only
-a hot day's ledger and "b"; its "c" / "e" are kept in the same shapes as the months for a per-country / D0 … D30 view
-(nothing reads them yet — the biggest app's ≈ 3 hot days of them are most of this file).
+— the head (progress) and the NON-FINAL days (today − FINAL_LAG + 1 … today), each replaced when read again. The ROI
+build reads only a hot day's ledger and "b"; its "c" / "e" are kept in the same shapes as the months for a per-country /
+D0 … D30 view (nothing reads them yet — the biggest app's ≈ FINAL_LAG hot days of them are most of this file).
 X = install day (firstSessionDate), D = activity day (date), both YYYY-MM-DD in the property's time zone; j, W as text.
 
 Progress — ONE cursor, "next": every activity day before it is folded, from a read made when it was already FINAL
@@ -98,9 +99,12 @@ Progress — ONE cursor, "next": every activity day before it is folded, from a 
 from the history start; a catch-up after a Stop, a pause, failed runs or a new day is the same walk), folding each day
 ONCE (a day already in its month's ledger is skipped, never re-read), the cursor moving after each day; "done" once a
 walk reached the final edge (the build uses the cube only from then on: the columns come in one go). Then, every
-REFRESH_HOURS or on a new property day, today − 2 … today again (hot: never folded; such a day is read once more when
-final and folded then; a hot copy of a day that is final now is dropped at the start of every run — a hole until the
-walk folds it, never a read made while it was filling standing in for the final one). A history start that moves back
+REFRESH_HOURS or on a new property day, the HOT_DAYS newest days (today − HOT_DAYS + 1 … today) again, and each older
+day not final yet (FINAL_LAG past HOT_DAYS: GA4_FINAL_DAYS, ga4_final) at most once a UTC day, in a round after the
+property day's first — never one a walk folded already under a shorter lag (_hot_due) (hot: never folded; such a day
+is read once more when final and folded then; a
+hot copy of a day that is final now is dropped at the start of every run — a hole until the walk folds it, never a
+read made while it was filling standing in for the final one). A history start that moves back
 restarts the walk from it and clears "done" (the build waits for it again). A month file on disk that cannot be read
 (a damaged gzip, a cut copy), is not this format or is another stream's is never written over with only the days after
 the cursor: the cursor goes back to that month's first day and the whole month is read again ("months read again" in
@@ -149,20 +153,20 @@ newest final day almost empty for hours, on one property for more than a day, ar
 at D + 3, kept 11 and 12 Nov so on every app — the country rows lost those days for good, while ga4_cohort, which
 reads its last 35 days again, healed): a final read is folded only when GA4 is not answering it collapsed —
   * against the day's OWN reads: "pk" in the head = the most total an unflagged read of the day showed while it was not
-    folded (the hot reads every 6 hours; GA4's total of a day only grows while it fills): a final read under COLLAPSE
+    folded (its hot reads; GA4's total of a day only grows while it fills): a final read under COLLAPSE
     (0.5) × that peak (≥ PK_MIN, 0.1 USD) is collapsed — a real drop in traffic, low in every read of the day, never
     is (a flagged answer is never judged so);
   * a day with no such peak (never read before: after an outage, a first walk; or a small one): its total under LOW
     (0.2) × the median total of its folded days D − 7 … D − 1 (≥ LOW_DAYS 4 of them, the median ≥ PK_MIN) — measured
     on every app's whole cube history: no day folded at D + 3 … D + 4 before 11 Nov is under it (the nearest normal one
     well above), while every collapsed app day of 11 and 12 Nov is.
-  A collapsed day is HELD while under FINAL_LAG + HOLD_DAYS (4) days old: not folded, the cursor waits at it (ONE
+  A collapsed day is HELD while under FINAL_LAG + HOLD_DAYS days old: not folded, the cursor waits at it (ONE
   cursor: the days after it wait too — the page's columns stop before it, as for a walk on its way, never a collapsed
-  read standing in), read again every run (head "hold": [day, held since, reads]); 4 days old and still collapsed it
-  is folded as it is, marked "lo" (its peak, or 1): a hole GA4 keeps never blocks the walk. A day RF_RIPE (5) days old
-  or more (a backfill, a catch-up after a long pause) is never judged (GA4 settled — q's own rule). A day low against
-  its neighbours but not against its own reads (a real drop) is folded marked "rd". Off: every final read folded as it
-  comes (the walk before 16 Nov 2026).
+  read standing in), read again every run (head "hold": [day, held since, reads]); that old and still collapsed it
+  is folded as it is, marked "lo" (its peak, or 1): a hole GA4 keeps never blocks the walk. A day RF_RIPE (FINAL_LAG +
+  HOLD_DAYS + 1) days old or more (a backfill, a catch-up after a long pause) is never judged (GA4 settled — q's own
+  rule). A day low against its neighbours but not against its own reads (a real drop) is folded marked "rd". Off:
+  every final read folded as it comes (the walk before 16 Nov 2026).
 
 The refold (refold(); GA4_CUBE_RF_CALLS, RF_CALLS 30 a run; 0 = off) — a month holding a day the walk folded collapsed
 is read again and REPLACED whole, the repair's way (a month's cells sum many days: no day of it can be taken out
@@ -175,14 +179,14 @@ day started only with room for it: _room), one month at a time:
     old;
   * every day of the month is read again into its copy <YYYY-MM>.rf.json.gz (kept across runs, its own file: never the
     repair's), the collapsed days first: one still collapsed (against its "lo" peak, else its neighbours; a flagged
-    answer against its neighbours) while under RF_MAX (10) days old is never merged — the month waits ("wait"), that
-    day read again next run; at RF_MAX it is merged as it is (GA4 kept it so); a newer "lo" day of the month (not
-    RF_RIPE days old yet) is merged as it is, still "lo" (a later refold reads it again). Any other day GA4 now answers
-    under COLLAPSE × what the walk folded of it waits too, at any age (GA4 may be emptying a young day right now: a
-    refold never puts a collapsed read where the walk had a whole one; the log counts apps waiting, "refold
-    waiting") — at most RF_WAIT_DAYS (5) from its first such read: then that month's refold is given up (its copy
-    dropped, the month as it was, "refold given up" in the log, head "rf" "log" naming the day) and not started again
-    for RF_SKIP_DAYS (7: "skip");
+    answer against its neighbours) while under RF_MAX (RF_RIPE + 5) days old is never merged — the month waits
+    ("wait"), that day read again next run; at RF_MAX it is merged as it is (GA4 kept it so); a newer "lo" day of the
+    month (not RF_RIPE days old yet) is merged as it is, still "lo" (a later refold reads it again). Any other day GA4
+    now answers under COLLAPSE × what the walk folded of it waits too, at any age (GA4 may be emptying a young day
+    right now: a refold never puts a collapsed read where the walk had a whole one; the log counts apps waiting,
+    "refold waiting") — at most RF_WAIT_DAYS (5) from its first such read: then that month's refold is given up (its
+    copy dropped, the month as it was, "refold given up" in the log, head "rf" "log" naming the day) and not started
+    again for RF_SKIP_DAYS (7: "skip");
   * once the copy holds every day the month holds (a day the walk folds into it meanwhile is read into the copy too),
     the copy becomes the month file ("rf": {"at", "done", "t0" / "t1": the collapsed days' totals before / after}),
     the head is written and only then the copy removed (the repair's order). Only then (kept with the copy until
@@ -206,8 +210,9 @@ reads made once a day settled, against those folds: a whole day's total had move
 few days the fold had kept a day short by more — GA4 still adding to it after D + 3 (it takes an event up to 72 hours
 late) or answering it partly empty —, on one day on most apps; the fold guard, made for a collapse, never sees a day
 partly short, and the walk never reads a folded day again, so the country rows kept it short for good): a folded day
-of the refold's months (RF_MONTHS) CK_AGE (7) property days old or more whose read was made before it settled (under
-CK_AGE days after it: a read made later is as settled as the check) gets GA4's whole total of it once — ONE light call
+of the refold's months (RF_MONTHS) CK_AGE (7, never under FINAL_LAG: a fold made that old is never checked) property
+days old or more whose read was made before it settled (under CK_AGE days after it: a read made later is as settled as
+the check) gets GA4's whole total of it once — ONE light call
 (day_total: dimension date only, no filter — nothing to roll up or drop; the total the split measures hidden "(other)"
 by) —, oldest first, at most CK_CALLS and CK_SEC (5) seconds a run, each only with room for one call (calls and time:
 _room); its queue is made again once a property day (a run with nothing due reads no month file; a day whose read
@@ -359,17 +364,18 @@ hides "(other)") — when GA4 rolls rows up per answer, a day r times over its l
 halves stop as soon as a part comes back whole; synthetic: 5 calls at 1.5×, 9 at 3×, 25 at 8×); when GA4 rolls them
 up before the filters, 3 (the first split names nothing more) + 1; never more than DAY_CAP (24, one run's budget) + 1
 — which of the two GA4 does the log's "futile" / "hidden" counts will show (not measured yet). After the walk, a day:
-the new final day + the hot window (≤ 3 × (HOT_CAP + 1) calls, a round a Stop cut going on with its unread days) every
-6 hours and at the property's midnight. The repair of a month ≈ 30 day reads × the calls a day takes (≈ 30 × 4–10 =
+the new final day + the hot window (≤ HOT_DAYS × (HOT_CAP + 1) calls, a round a Stop cut going on with its unread days)
+every 6 hours and at the property's midnight (the older days not final yet: ≤ (FINAL_LAG − HOT_DAYS) × (HOT_CAP + 1)
+more once a UTC day). The repair of a month ≈ 30 day reads × the calls a day takes (≈ 30 × 4–10 =
 120–300 on the biggest app): ≤ REPAIR_CALLS (env GA4_CUBE_REPAIR_CALLS; 0 = off, the default) started a run, and only with a day's room (calls and time) left →
 about 4–10 runs a month, the biggest loss first. A run never makes more than MAX_CALLS (60) calls an app: the final
-day (≤ 25, on a new day) and the hot days (≤ 39, every 6 h) go first, the repair only with what they left (most
-hourly runs: they read nothing, the repair gets its 30); what does not fit is read next run. q: one light call a day
-(≤ 428 rows) — going forward the day that settled + the hot days of a round (≤ 1 + 3 a run, inside MAX_CALLS), the
-history once (≤ Q_CALLS calls and ≤ Q_SEC seconds a run over every app, only from what the budget left after every
-app's walk and hot days; none once filled) + a stored "fl" read again at most 1 + Q_RETRY times (the measured "fl"
-days: the few days read 2–4 days after them). GA4 tokens stay under the property's quota floors (the App's gate stops
-every read of the property before them).
+day (≤ 25, on a new day) and the hot days (≤ HOT_DAYS × (HOT_CAP + 1) every 6 h; the older ones once a UTC day) go
+first, the repair only with what they left (most hourly runs: they read nothing, the repair gets its 30); what does
+not fit is read next run. q: one light call a day (≤ 428 rows) — going forward the day that settled + the hot days of
+a round (≤ 1 + FINAL_LAG a run, inside MAX_CALLS), the history once (≤ Q_CALLS calls and ≤ Q_SEC seconds a run over
+every app, only from what the budget left after every app's walk and hot days; none once filled) + a stored "fl" read
+again at most 1 + Q_RETRY times (the measured "fl" days: the few days read 2–4 days after them). GA4 tokens stay under
+the property's quota floors (the App's gate stops every read of the property before them).
 """
 import heapq
 import json
@@ -380,6 +386,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from .. import ga4_final
 from .. import ga4_probe
 from ..db import write_json_gz_stable
 from . import ga4
@@ -400,7 +407,7 @@ BLOCK = 30                          # activity days a block call
 SPLIT_V = 2                         # the split's version (ledger "sv"): 1 one country level, 2 recursive (21 Oct 2026)
 DAY_CAP = 24                        # GA4 calls a final day's split may take (then what is still "(other)" is its loss):
                                     # one run's budget (≈ 25 calls of 4–6 s in 150 s) — a day fits the run it starts
-HOT_CAP = 12                        # … a hot day's (read again every 6 hours, never folded: its final read is kept)
+HOT_CAP = 12                        # … a hot day's (read again while not final, never folded: its final read is kept)
 MIN_CAP = 3                         # the smallest cap a day cut again and again gets (the one-level split's 3 calls)
 CUT_TRIES = 2                       # runs a day may be cut by a Stop (after ≥ MIN_CAP calls of it) before its cap
                                     # shrinks
@@ -410,6 +417,12 @@ REPAIR_CALLS = int(os.environ.get("GA4_CUBE_REPAIR_CALLS") or 0)    # calls a ru
                                     # country "(other)" is folded BEFORE filters (a split names no row its root had
                                     # not), so a repair read gets nothing back — measured on its first real run
 RESCAN_DAYS = 7                     # the repair's (and q's) queue made again (while empty) after this many days
+HOT_DAYS = 3                        # the newest activity days read again every REFRESH_HOURS (today − HOT_DAYS + 1 …
+#                                     today): the cube's final lag before GA4_FINAL_DAYS — ga4_final.lag's floor
+FINAL_LAG = ga4_final.lag(HOT_DAYS)  # an activity day is final once ≤ the property's today − FINAL_LAG (GA4_FINAL_DAYS,
+#                                     never under HOT_DAYS; as ga4_cohort): the walk folds it then, once. A day not
+#                                     final yet and older than HOT_DAYS (FINAL_LAG past it) is read again at most once a
+#                                     UTC day (measured: such a day moves little — a read a day catches it)
 # The fold guard and the refold (16 Nov 2026 — measured: since 14 Nov GA4 answers the newest final day almost empty
 # for hours, on one property more than a day, around D + 2 … D + 3; the walk folded 11 and 12 Nov so on every app):
 GUARD = (os.environ.get("GA4_CUBE_GUARD") or "true").strip().lower() != "false"    # false: every final read folded
@@ -420,9 +433,11 @@ LOW_DAYS = 4                        #   D − 7 … D − 1 (at least this many 
 PK_MIN = 100_000                    # … (that peak / median ≥ 0.1 USD in micros) is collapsed
 HOLD_DAYS = 1                       # a collapsed final day is held (read again every run) while under FINAL_LAG +
 #                                     this many days old; then folded as it is, marked "lo" (it never blocks the walk)
+RF_RIPE = FINAL_LAG + HOLD_DAYS + 1  # a collapsed folded day's month is read again once the day is this old (the
+#                                     guard judges only days younger: an older one, GA4 settled — q's own Q_SETTLE)
 RF_CALLS = int(os.environ.get("GA4_CUBE_RF_CALLS") or 30)   # calls a run may start refold days with (0 = no refold)
-RF_MAX = 10                         # a refold's read again still collapsed waits (never merged) until the day is
-#                                     this old (RF_RIPE, below FINAL_LAG: when the refold starts)
+RF_MAX = RF_RIPE + 5                # a refold's read again still collapsed waits (never merged) until the day is
+#                                     this old: 5 days past RF_RIPE (when the refold starts), whatever FINAL_LAG
 RF_WAIT_DAYS = 5                    # a day the walk had whole that GA4 answers collapsed in a refold: waited on this
 #                                     long at most (never merged so); then that month's refold is given up — its copy
 #                                     dropped, the month as it was — and not started again for RF_SKIP_DAYS
@@ -435,8 +450,10 @@ CK_CALLS = int(os.environ.get("GA4_CUBE_CK_CALLS") or 10)   # day totals the set
 #                                     no check: no day found partly short, the refold as before it)
 CK_SEC = 5.0                        # … and seconds it may take a run, an app (its own slice: the walk, the hot days
 #                                     and the refold keep the rest of the budget)
-CK_AGE = 7                          # a folded day is checked once it is this many property days old (GA4 takes an
-#                                     event up to 72 hours late and processes it after that: settled)
+CK_AGE = max(7, FINAL_LAG)          # a folded day is checked once it is this many property days old (GA4 takes an
+#                                     event up to 72 hours late and processes it after that: settled) — never under
+#                                     FINAL_LAG: a fold made that old is as settled as the check (only the folds of a
+#                                     shorter lag are checked then)
 PART = 0.03                         # partly short: GA4's settled day total beyond what the month holds of the day by
 PS_MIN = 1_000_000                  # … this share of that total and at least this many micros (1 USD)
 PS_TRIES = 1                        # refolds that may merge a partly short day; then it stays as GA4 answered it
@@ -504,10 +521,7 @@ U_RECENT = 45                       # days: an app whose fill still has a month 
 LOG_KEEP = 24                       # repaired months kept in the head's "rep" "log"
 REP = ".rep.json.gz"                # a month's copy while the repair builds it
 HEAVY_KEEP = 90                     # activity days a range goes day by day after a block of its length needed it
-FINAL_LAG = 3                       # an activity day is final once ≤ the property's today − 3 (as ga4_cohort)
-RF_RIPE = FINAL_LAG + HOLD_DAYS + 1  # 5: a collapsed folded day's month is read again once the day is this old (the
-#                                     guard judges only days younger: an older one, GA4 settled — q's own Q_SETTLE)
-REFRESH_HOURS = 6.0                 # the hot days (today − 2 … today) read again
+REFRESH_HOURS = 6.0                 # the HOT_DAYS newest days read again (an older day not final yet: once a UTC day)
 MAX_CALLS = 60                      # per app per run (the walk goes on next run)
 BUDGET_SEC = 150
 RETRY_HOURS = 3.0
@@ -959,9 +973,13 @@ def _read_day(ga, D, now_iso, mem, cap, key="cut", hot=False):
 
 
 def _skip_block(head, a, n):
+    """A block of n days from a goes day by day at once: the heavy memory (a block of its length or less needed it,
+    from its day "at") is fresh — a range starting at it or up to FINAL_LAG − HOT_DAYS days before it counts as the
+    same (the hot round's older days a UTC day start there, its other rounds at the HOT_DAYS newest: one memory serves
+    both); none at GA4_FINAL_DAYS 3."""
     hv = head.get("heavy")
     try:
-        return bool(hv) and n >= int(hv["n"]) and 0 <= (a - _d(hv["at"])).days < HEAVY_KEEP
+        return bool(hv) and n >= int(hv["n"]) and -(FINAL_LAG - HOT_DAYS) <= (a - _d(hv["at"])).days < HEAVY_KEEP
     except (KeyError, TypeError, ValueError):
         return False
 
@@ -1717,10 +1735,11 @@ class Cube:
 
 
 def step_app(ga, cube, today, hs, now):
-    """One app's run on its cube → "fetched" or "fresh": the walk, the hot days, their q (q_fwd: the hot days this run
-    read, the days folded without q that have settled — the final day of Q_SETTLE − FINAL_LAG days ago), the repair
-    (when on). Raises Stop (what was folded / read is kept, the cursor where it stopped; the caller saves the months
-    and q files, then the head)."""
+    """One app's run on its cube → "fetched" or "fresh": the walk, the hot days (_hot_due: the HOT_DAYS newest every
+    round, an older one not final yet once a UTC day), their q (q_fwd: the hot days this run read, the days folded
+    without q that have settled — the day folded Q_SETTLE − FINAL_LAG days ago; with FINAL_LAG ≥ Q_SETTLE the day
+    folded this run, settled already), the repair (when on). Raises Stop (what was folded / read is kept, the cursor
+    where it stopped; the caller saves the months and q files, then the head)."""
     h, now_iso, did = cube.head, gu._now_iso(now), False
     edge = today - timedelta(days=FINAL_LAG)
     d = h.setdefault("d", {})
@@ -1791,7 +1810,8 @@ def step_app(ga, cube, today, hs, now):
         cyc = h.get("hot_cyc")                              # this round of the hot days: one a Stop cut goes on with
         if not (isinstance(cyc, list) and len(cyc) == 2 and cyc[1] == today.isoformat()):  # the days it has not read
             cyc = h["hot_cyc"] = [now_iso, today.isoformat()]     # (the same property day); else a new round
-        todo = [D.isoformat() for D in _days(a, today) if str((d.get(D.isoformat()) or {}).get("at") or "") < cyc[0]]
+        todo = [D.isoformat() for D in _days(a, today) if str((d.get(D.isoformat()) or {}).get("at") or "") < cyc[0]
+                and _hot_due(cube, D, today, now_iso)]
         for x, y in _runs(todo):
             for D, rec in read_range(ga, x, y, h, now_iso, cap=HOT_CAP, key="hcut", hot=True):
                 d[D.isoformat()] = cube.u_hot_c(D.isoformat(), rec)     # replaced (never folded: read while not
@@ -1817,6 +1837,21 @@ def step_app(ga, cube, today, hs, now):
     if REPAIR_CALLS > 0 and not (RF_CALLS > 0 and (h.get("rf") or {}).get("k")):
         did = repair(ga, cube, now) or did                  # with what the run has left (never beside a refold)
     return "fetched" if did else "fresh"
+
+
+def _hot_due(cube, D, today, now_iso):
+    """Is hot day D (a date after the final edge) read in this round? One of the HOT_DAYS newest: always. An older one
+    (not final yet: FINAL_LAG past HOT_DAYS) at most once a UTC day — not when its hot copy ("at", UTC) was read on
+    this UTC day —, never in the property day's first round (every app's new day and its fold come then, all at once:
+    the older days wait for the next round, "hot_today" already this day) and never once a walk folded it (under a
+    shorter final lag: GA4_FINAL_DAYS raised — the folded day is final there, a hot copy of it would stand for
+    nothing). With FINAL_LAG = HOT_DAYS there is no such day."""
+    if (today - D).days < HOT_DAYS:
+        return True
+    if cube.head.get("hot_today") != today.isoformat():
+        return False
+    k = D.isoformat()
+    return str(((cube.head.get("d") or {}).get(k) or {}).get("at") or "")[:10] < now_iso[:10] and cube.ledger(k) is None
 
 
 # ── the fold guard and the refold (module doc) ──────────────────────────────────────────────────────────────────────

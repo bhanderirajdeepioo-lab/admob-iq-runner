@@ -32,25 +32,26 @@ Per app and run (at most MAX_CALLS calls; the property's quota floors, the run's
   * a one-time backfill from the GA4 history start, BLOCK activity days a call, resumable (backfill.next, "al");
   * every REFRESH_HOURS the last RECENT_DAYS activity days again (today included: not final, the page marks it) — from
     the first day not yet read alone when final ("fa": such a day's answer never changes; on a heavy app the refresh is
-    its newest ≈ 4 days, not 35); a refresh whose block was dropped reads its days alone straight away for RH_DAYS
-    ("rh"), then tries the block again (whole: blocks again). The refresh floor "rf": a refresh starts no later than
-    it (days before the window first, in blocks), until one completes — set when the backfill completes (its last day
-    + 1: a Stop before the first refresh never leaves a day between them unread), when the history check is made on a
-    store whose backfill is done (the window an older version last read, "chk" covers the days before it), when
-    another version refreshed the window since this one did ("rs" = [the "recent_at" this version wrote, its window's
-    first day]: a different "recent_at" → from that day, "fa" / "rn" dropped — its block may have hidden "(other)")
-    and when the last refresh lies further back than the window reaches (the read switched off, the app failing or
-    deferred that long: from its read_today − FINAL_LAG + 1, the first day it read before that day was final);
+    its newest ≈ FINAL_LAG + 1 days, not RECENT_DAYS); a refresh whose block was dropped reads its days alone
+    straight away for RH_DAYS ("rh"), then tries the block again (whole: blocks again). The refresh floor "rf": a
+    refresh starts no later than it (days before the window first, in blocks), until one completes — set when the
+    backfill completes (its last day + 1: a Stop before the first refresh never leaves a day between them unread),
+    when the history check is made on a store whose backfill is done (the window an older version last read, "chk"
+    covers the days before it), when another version refreshed the window since this one did ("rs" = [the
+    "recent_at" this version wrote, its window's first day]: a different "recent_at" → from that day, "fa" / "rn"
+    dropped — its block may have hidden "(other)") and when the last refresh lies further back than the window
+    reaches (the read switched off, the app failing or deferred that long: from its read_today − FINAL_LAG + 1, the
+    first day it read before that day was final);
   * once per CHK_V, the history an older version read (blocks only: what an in-list hid is missing, nothing said so)
     read again (_recheck: "chk" {"v", "next", "end", "al", "c" / "n" / "m" / "s"} → {"v", "done"}; a store with
     nothing read yet: done at once) — a block (whole: merged, the same final cells), else its days alone; at most
     CHK_CALLS calls started a run, after the backfill and the refresh, each step only with the calls and time left
     for one (the most calls a step took × the app's seconds a call: ga4_cube._room).
 Cost: a light app as before (a block a refresh); a heavy one ≈ 1 call a day alone (+ 2 for a split, + 1 for a hidden
-"(other)"): its first refresh after this version ≤ 35 days alone (≤ MAX_CALLS a run, resumed), then ≈ 4 days a
-refresh; the history check ≈ app age / 30 blocks + the days of the blocks with "(other)" — at most CHK_CALLS calls
-started a run (≤ CHK_CALLS + DAY_CAP + 1 made: a step started at the last allowed call finishes; ≈ 700 day reads on a
-2-year heavy app: about 35 runs, once).
+"(other)"): its first refresh after this version ≤ RECENT_DAYS days alone (≤ MAX_CALLS a run, resumed), then
+≈ FINAL_LAG + 1 days a refresh; the history check ≈ app age / 30 blocks + the days of the blocks with "(other)" — at
+most CHK_CALLS calls started a run (≤ CHK_CALLS + DAY_CAP + 1 made: a step started at the last allowed call finishes;
+≈ 700 day reads on a 2-year heavy app: about 35 runs, once).
 Stored for good in the private repo, two files so the hourly commits stay small:
     data/ga4_cohort/<key>.json.gz      the hot part: install days from the month of (today − HOT_DAYS) on
     data/ga4_cohort/<key>.old.json.gz  the older install days, and the "lo" / "lf" of the older activity days
@@ -69,6 +70,7 @@ import os
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from .. import ga4_final
 from .. import ga4_probe
 from ..db import write_json_gz_stable
 from . import ga4
@@ -84,9 +86,11 @@ NAME = "ga4 cohort"                 # the log line's label (a second instance's 
 STORE_V = 1
 LAGS = 31                           # lag 0 … 30
 BLOCK = 30                          # activity days a call (in-list ≤ 60 install days, ≤ 1,800 rows)
-RECENT_DAYS = 35                    # refreshed every REFRESH_HOURS (today … 34 days back)
 REFRESH_HOURS = 6.0
-FINAL_LAG = 3                       # an activity day is final once ≤ the property's today − 3 (as the iday reads)
+FINAL_LAG = ga4_final.lag(3)        # an activity day is final once ≤ the property's today − FINAL_LAG (GA4_FINAL_DAYS;
+#                                     3, as the iday reads, at least)
+RECENT_DAYS = max(35, FINAL_LAG + 1)    # refreshed every REFRESH_HOURS (today … 34 days back): never fewer than the
+#                                     days not final + the one turning final
 HOT_DAYS = 45                       # the hot file: install days from the month of (today − 45) on
 MAX_CALLS = 60                      # per app per run (the backfill goes on next run)
 DAY_CAP = 16                        # GA4 calls a day read alone may take (the split by install-day halves)

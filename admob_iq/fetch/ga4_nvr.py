@@ -25,13 +25,14 @@ Store, kept for good: data/ga4_nvr/<key>.json.gz (private repo)
            read was sampled, else "t" when any was thresholded — the Breakeven card's day 1 reads only "c"'s own),
      "backfill": {"oldest": the oldest day read, "done": reached the app's history start}}
 Per app and run (at most MAX_CALLS calls; the property's quota floors as the Audience fetch's; the run's budget):
-  * every REFRESH_HOURS the last RECENT_DAYS days (today included: GA4 still adds to them) — replaced whole;
+  * every REFRESH_HOURS the last RECENT_DAYS days (today … FINAL_LAG days back: GA4 still adds to them; the day turning
+    FINAL_LAG old gets its final read here) — replaced whole;
   * a day that left that window still marked "s" (GA4 sampled the still-changing range — a busy app's raw events) is read
     once more ALONE when final, newest first (whole from GA4's daily tables), "rr": {day: 1} keeping it from being asked
     twice (one that stays sampled keeps its mark); a day marked before the store kept each read's own flag ("mp") is
     read alone once more too, to learn them;
   * the backfill: CHUNK_DAYS at a time, newest first, from the day before the recent window back to the app's history
-    start (the Uninstall store's). Days older than RECENT_DAYS are final in GA4.
+    start (the Uninstall store's). Days older than RECENT_DAYS are final in GA4 (their last read was FINAL_LAG days on).
 Switched by GA4_NVR. Never raises; never prints (log_line: counts only). A second instance of this module
 (fetch.ga4_paid.instance: its own globals — APP, NAME, DIR, PARTS and its knobs) runs this same code on a store of its
 own: fetch.ga4_nvr_paid, the "c" read of Google Ads users only.
@@ -42,6 +43,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from .. import ga4_final
 from .. import ga4_probe
 from ..db import write_json_gz_stable
 from . import ga4
@@ -64,7 +66,9 @@ READS = {"u": ((NVR, "adFormat", "adUnitName"), EV, EVENT),     # a part → its
          "s": ((NVR,), ("sessions", "activeUsers"), None)}
 PARTS = ("u", "c", "s")             # the reads made, in this order — a day's record holds exactly these parts (a second
 #                                     instance's own: fetch.ga4_nvr_paid reads "c" only)
-RECENT_DAYS = 5                     # today … 4 days back: refreshed every REFRESH_HOURS (older days are final in GA4)
+FINAL_LAG = ga4_final.lag(4)        # a day's last read is made this many days after it (on day D + FINAL_LAG): final
+#                                     from then on — GA4_FINAL_DAYS, at least 4 (this store's lag before the knob)
+RECENT_DAYS = max(5, FINAL_LAG + 1) # today … FINAL_LAG days back: refreshed every REFRESH_HOURS (older days are final)
 REFRESH_HOURS = 1.0
 CHUNK_DAYS = 90                     # one backfill read (3 calls): ≤ 90 days × 2 × ~230 countries of rows
 MAX_CALLS = 15                      # per app per run (the backfill goes on next run)
@@ -157,10 +161,13 @@ def step_app(ga, store, today, hs, now):
     mp = store.setdefault("mp", {})                     # each read's own flag of a day ({} = whole)
     if gu._hours_since(store.get("recent_at"), now) >= REFRESH_HOURS:
         got, mk, pm = read(ga, max(first, recent), today)
+        lone = store.get("rr")
         for d, rec in got.items():
             days[d] = rec                               # the newest read of a still-changing day wins
             mark.pop(d, None)
             mp[d] = pm[d]
+            if isinstance(lone, dict):                  # a day read alone before — under a shorter window
+                lone.pop(d, None)                       # (GA4_FINAL_DAYS raised): read alone again once it leaves
         mark.update(mk)
         store["recent_at"] = now_iso
         did = True
@@ -169,7 +176,8 @@ def step_app(ga, store, today, hs, now):
     # first (the Breakeven card's day 1 = this store's first session: owner, 16 Nov 2026, "isme bhi milna hi chahiye").
     # "rr" keeps the days read so, so one that stays sampled is never asked again — whichever of its reads was (the
     # ad-unit and sessions rows feed the eCPM tab and the CPI screen; the country rows the Breakeven card). A day whose
-    # reads' own flags are not known yet ("mp": marked by the older all-in-one rule) is read alone once more too.
+    # reads' own flags are not known yet ("mp": marked by the older all-in-one rule) is read alone once more too. A day
+    # the window reads again leaves "rr" (above): its lone read comes again when it leaves the window.
     rr = store.setdefault("rr", {})
     edge = recent - timedelta(days=1)
     for d in sorted((d for d, v in mark.items() if v == "s" and first <= gu._d(d) <= edge

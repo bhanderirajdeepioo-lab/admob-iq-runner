@@ -304,6 +304,13 @@ def test_details_and_every_tab(out):
     assert "1 campaign ka is period me spend nahi" in tb["cp"]["text"]
     assert "Same country mix pe (normal span ke weights) price ka badlaav: −17%" in tb["ek"]["text"]
     assert "Sirf mix badalne se (purane eCPM pe): −4%" in tb["ek"]["text"] and "AdMob Network" in tb["ek"]["text"]
+    # ⏳ the first session / returning days after the nvr file's final till (GA4_FINAL_DAYS 7: today − 7) are in the
+    # sums, said not final (from the normal span's first day when it is not final either); none at the rollback / before
+    nf = out["ek_nf"]
+    assert nf["f7"] == ("⏳ First session / returning (GA4): 24 Mar – 28 Mar 2026 abhi final nahi — GA4 in dino me baad "
+                        "me bhi jodta hai, ye numbers abhi badal sakte hain.")
+    assert nf["early"].startswith("⏳ First session / returning (GA4): 24 Feb – 28 Mar 2026 abhi final nahi")
+    assert nf["old"] == nf["none"] == "" and "⏳" not in tb["ek"]["text"]
     assert "= ₹7.0 L − ₹5.3 L = ≈₹1.8 L" in tb["lm"]["text"] and "= ₹9.5 L − ₹7.1 L = ≈₹2.4 L" in tb["lm"]["text"]
     assert "1.11×" in tb["lm"]["text"]                                                  # Google D0 ÷ AdMob D0 (fixture: 1 ÷ 0.9)
     h = tb["hi"]["text"]

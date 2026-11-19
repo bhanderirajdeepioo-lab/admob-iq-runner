@@ -76,6 +76,9 @@ jobs:
           GA4_REFRESH_TOKEN: ${{ secrets.GA4_REFRESH_TOKEN }}
           GA4_CLIENT_ID: ${{ secrets.GA4_CLIENT_ID }}
           GA4_CLIENT_SECRET: ${{ secrets.GA4_CLIENT_SECRET }}
+          # the hourly build's GA4 finality knob (refresh.yml, admob_iq.ga4_final): this job and the build always
+          # agree on which days are final
+          GA4_FINAL_DAYS: ${{ vars.GA4_FINAL_DAYS }}
           DATA_REPO_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
           DEVICES_DATA_DIR: _private
           PYTHONUNBUFFERED: "1"

@@ -16,8 +16,9 @@ breaks even (the page shows the days of its period).
   ROAS(age) = cumulative revenue ÷ spend (floor 0.001 before a log) on the row's daily cells 0 … 30, its 30-day columns
   60, 90 … and a checkpoint past them; BE = the first observed age whose cumulative revenue ≥ spend (past day 30 only
   its 30-day bucket is known: the day inside it on cumulative revenue). No look-ahead at an origin O: a cell of age a
-  counts once install day + a + 3 ≤ O (LAG), a day trains a model only once install day + 30 ≤ O (SETTLE: Google Ads
-  installs settle). GRID = the ages every curve is read at (the first six = card days 1, 2, 3, 4, 7, 14).
+  counts once install day + a + LAG ≤ O (LAG: the exact store's final lag — GA4_FINAL_DAYS, admob_iq.ga4_final), a day
+  trains a model only once install day + 30 ≤ O (SETTLE: Google Ads installs settle). GRID = the ages every curve is
+  read at (the first six = card days 1, 2, 3, 4, 7, 14).
 
   fit (once a UTC day per app, cached in data/be_tab/fits_<key>.json.gz with its origin; refit when the build's day
   changed): per country its judged days with a CPI and an eCPM_fs — the days whose BE is visible by O are events,
@@ -35,11 +36,13 @@ breaks even (the page shows the days of its period).
   log eCPM_fs), bBE = the Kaplan–Meier median (S(t) = Π (1 − d_i / n_i) over the event times, n_i = days at risk at t_i;
   the first event time with S ≤ 0.5; null = beyond what the data watched, the page: "B > bLim days"), bLim = round(tmax).
   The fits body carries "fv" (FV = 2): a cache without it (or older) is refitted at once, so the triple is there on the
-  first build after the change, not a day later.
+  first build after the change, not a day later. Both caches (the fits, the calibration) carry "lag" (LAG, only when
+  not LAG0 — absent reads as LAG0): one made at another lag (GA4_FINAL_DAYS moved) is made again at once (a
+  calibration's growth bound never lent to another lag's back-test).
   calibration (once a UTC day, data/be_tab/calib.json with its date): the same fits at every month start over the
   history (rolling, no look-ahead), every judged install day of that month answered, the truth = what is known now →
   isotonic maps (PAVA) of K3's P(BE ≤ H) to the real share for H = 30 / 90 / 180 (a day old enough to know: age ≥
-  H + 3), the Kaplan–Meier of K3's PIT values (the levels of a country's median day
+  H + LAG), the Kaplan–Meier of K3's PIT values (the levels of a country's median day
   and 80 % range), the quantiles of the real ÷ predicted app ROAS per age (the unshifted curve's 80 % band); and the
   shift's own back-test (asof, below): every usable install day answered at each as-of age a in ASOF it has lived,
   with the fits of the month start of install day + a + LAG (never later than what was known then) → the quantiles of
@@ -59,9 +62,9 @@ breaks even (the page shows the days of its period).
   spend share (no benchmark, no CPI / eCPM_fs that day, or a row under $5 / 30 new users outside its learned range:
   "x % spend: data kam"; the ones under 0.5 % as one "…"
   rest); the card: ROAS so far at days 1, 2, 3, 4,
-  7, 14 against the countries' own median past ROAS joined by the day's spend (below). A day under 4 days old (age < 4)
-  is provisional: GA4's country and first-session reads are not final yet, and neither are Google Ads' installs (the
-  CPI: installs read at age 0–1 were a median 0.91 of their final count, ≈ 1.00 from age 2; the back-test answers
+  7, 14 against the countries' own median past ROAS joined by the day's spend (below). A day under PROV days old (age <
+  PROV) is provisional: GA4's country and first-session reads are not final yet, and neither are Google Ads' installs
+  (the CPI: installs read at age 0–1 were a median 0.91 of their final count, ≈ 1.00 from age 2; the back-test answers
   with final inputs) — the page marks it. The grid ages a day has lived carry its REAL cumulative ROAS (never the
   model's: an old install day's ROAS at 30 / 90 / 180 is what it made); past them its ROAS so far floors the curve (a
   cumulative ROAS never falls; from its real BE day on it is ≥ 100 %) and caps any unlived age before it; a day that
@@ -76,17 +79,17 @@ breaks even (the page shows the days of its period).
   chk[j] = 1 when a PACK-GAP date lies in [install day, + GRID[j]] (below). No card day with a value: "card" is null and
   "cw" says why ("j" under $5 / 30 new users, "k" no country spend split, "c" no covered country, "r" their ROAS has not
   arrived yet).
-  PACK GAPS (load, pack_gaps): the country packs come from the GA4 cube, which folds an activity date once, at D+3; for
-  a date it can be nearly empty while the app's All rows are whole, and a cumulative ROAS built from the countries is then
-  low. S_all[D] = the All rows' FINAL daily revenue at activity date D, S_cty[D] = the same over EVERY country row in
-  every pack ("--" / "XX" / "ZZ" too: the All row includes them), streamed while load reads (nothing kept per row). D is a
-  gap when D ≤ newest − CLAG, S_all[D] ≥ PACK_MIN (1 USD: a smaller total says nothing) and S_cty[D] < PACK_GAP (0.35) ×
-  S_all[D], and D ≤ the packs' own final edge (cd["fthru"]: a later date is not folded yet); no packs: no gap. The set
-  rides in the pin (pin[4]) to predict.
+  PACK GAPS (load, pack_gaps): the country packs come from the GA4 cube, which folds an activity date once, at D+LAG;
+  for a date it can be nearly empty while the app's All rows are whole, and a cumulative ROAS built from the countries
+  is then low. S_all[D] = the All rows' FINAL daily revenue at activity date D, S_cty[D] = the same over EVERY country
+  row in every pack ("--" / "XX" / "ZZ" too: the All row includes them), streamed while load reads (nothing kept per
+  row). D is a gap when D ≤ newest − CLAG, S_all[D] ≥ PACK_MIN (1 USD: a smaller total says nothing) and S_cty[D] <
+  PACK_GAP (0.35) × S_all[D], and D ≤ the packs' own final edge (cd["fthru"]: a later date is not folded yet); no
+  packs: no gap. The set rides in the pin (pin[4]) to predict.
   the "ROAS ab tak" shift (owner, 15 Nov 2026: "haan, pehle backtest karke dikhao", then "haan live karo"; the
   back-test ranked the days and dated their breakeven far better than the unshifted curve, the country rows too):
-  once a day has a FINAL grid age inside its curve (its latest one: a; a daily one at least CLAG days old — the
-  newest "final" daily cell is often still empty), the curve after a is the model's GROWTH from
+  once a day has a FINAL grid age inside its curve (its latest one: a; a daily one at least CLAG days old — folded at
+  D+3, the newest "final" daily cell was often still empty), the curve after a is the model's GROWTH from
   a times what the day really made at a (ra × M(t) ÷ M(a): a day running ahead of its model
   moves up, one lagging moves down — never the model's own level), bounded as above; the range = the shift's own
   errors at a (bandb); its growth from a never outside what real install days grew there (the 1st / 99th percentile
@@ -130,7 +133,9 @@ breaks even (the page shows the days of its period).
                           / "b" ≤ a column / "s" ≤ its so far), so-far age, ROAS so far] (the ROI row's own) | ["no",
                           so-far age, ROAS so far, final? (1: older than LAG days)]}]} (every install day with
                           spend, oldest first)
-  dashboard["be"]        {"v", "origin", "calib", "apps": {app id: {"key", "file", "v", "n", "cov"}}}
+  dashboard["be"]        {"v", "origin", "calib", "apps": {app id: {"key", "file", "v", "n", "cov"}}[, "pv" (PROV),
+                          "lag" (LAG): only when they are not PROV0 / LAG0 — the page's ages of a provisional / a final
+                          day]}
 
 ⚖️ GOOGLE ADS USERS ONLY (owner, 16 Nov 2026: "haan sirf google ads wale users se karo · google ads and organic dono ka
 alag alag dekh saku esa kar do"; BE_PAID, s["be_paid"]): the ROAS above was EVERY new user's cohort revenue ÷ the Google
@@ -198,13 +203,14 @@ their real countries (roi_build: the "--" row's revenue is inside the named coun
 revenue between two card ages whose days all lie in such months is left out (a step across both kinds is kept whole:
 its split is not measured); a file without the verdicts: the day's named rows decide it (pack row bit 16 off on most of
 their revenue so far: the day's "--" / "ZZ" revenue left out); their users always in n. Per user = revenue ÷ users, fin
-1 where it is final and the date at least CLAG days old (a country cell 3 days old is often still empty — the card's
-rule). Its benchmark (the owner's rule, as the card's, users in place of spend): per country and card age the median of cum_o ÷ n_o over its install days settled at the build's origin (X +
-SETTLE ≤ O; n_o ≥ MIN_N; ≥ MIN_KEPT such days, else none at that age); the day's = Σ w × each country's benchmark, w =
-its organic users share over the day's countries that have one at that age, beside the same countries' own per user
-(both lines from one set), cv = that set's users ÷ the day's — at the card days 1 … 14 whatever the day has lived (the
-page draws it ahead), past them where lived. A day a side's pack has as [X] (or not at all) is roi_build's own row of
-it (_zrow; a Google Ads users' one on a day in their file's "unk": spend null — a file without "unk" as before).
+1 where it is final and the date at least CLAG days old (the card's rule). Its benchmark (the owner's rule, as the
+card's, users in place of spend): per country and card age the median of cum_o ÷ n_o over its install days settled at
+the build's origin (X + SETTLE ≤ O; n_o ≥ MIN_N; ≥ MIN_KEPT such days, else none at that age); the day's = Σ w ×
+each country's benchmark, w = its organic users share over the day's countries that have one at that age, beside the
+same countries' own per user (both lines from one set), cv = that set's users ÷ the day's — at the card days 1 … 14
+whatever the day has lived (the page draws it ahead), past them where lived. A day a side's pack has as [X] (or not
+at all) is roi_build's own row of it (_zrow; a Google Ads users' one on a day in their file's "unk": spend null — a
+file without "unk" as before).
   site/be_<key>_o.json.gz {"v", "key", "origin", "ages" (GRID through 30, then the 30-day columns the oldest day lived),
                            "days": [{"d", "age", "n" (organic users; null: not final yet), "r" (revenue USD at the ages,
                            AdMob-matched as the cells), "pu" (per user), "fin" (1 / 0), "s": {"pu" (the set's per user),
@@ -237,6 +243,7 @@ from operator import add, mul
 
 from . import stage_clock as _sc
 from .db import write_gz_stable
+from .fetch import ga4_cohort as gco
 from .fetch import ga4_nvr as gv
 
 PREFIX = "be_"
@@ -252,11 +259,17 @@ CARD_J = (0, 1, 2, 3, 4, 5)          # GRID indexes of the card days 1, 2, 3, 4,
 T = (0, 1, 3, 7, 14, 30, 60, 90, 180, 365)     # a roi row's t checkpoints
 HS = (30, 90, 180)                   # "breaks even within H days?"
 MIN_SP, MIN_N = 5.0, 30              # a judged day (the dashboard's own rule)
-SETTLE, LAG = 30, 3
+SETTLE = 30                          # a day trains a model once install day + SETTLE ≤ O (Google Ads installs settle)
+LAG = gco.FINAL_LAG                  # no look-ahead: a cell of age a counts once install day + a + LAG ≤ O — the exact
+#                                      store's final lag (fetch.ga4_cohort: ga4_final.lag(3); the cube's the same)
 MIN_KEPT = 20                        # a covered country: ≥ 20 kept real-BE days; a curve age / median: ≥ 20 days
 ZBOT = 3.0                           # the bot: |robust z| > 3 dropped
 ROAS_FLOOR = 1e-3
-PROV = 4                             # a day under 4 days old is provisional (age < 4)
+PROV = max(4, LAG)                   # a day under PROV days old is provisional (age < PROV): 4 before GA4_FINAL_DAYS,
+#                                      never before its GA4 cells are final (LAG) — the page's rule (the pointer's "pv")
+LAG0, PROV0 = 3, 4                   # LAG / PROV before GA4_FINAL_DAYS: the caches and the pointer carry "lag" / "pv"
+#                                      only when they differ from these (absent = these: at GA4_FINAL_DAYS 3 every file
+#                                      byte for byte as before); a cache made at another lag is made again at once
 REST = 0.005                         # uncovered countries under 0.5 % of the day's spend: one "…" entry
 REST_CC = "…"
 MIN_BAND = 50                        # an age of the app band: ≥ 50 back-test days
@@ -273,13 +286,16 @@ CALV = 4                             # calib.json content: 3 = with the shift's 
                                      # country row past its range answered at the edge (_answers / _edge) (older: made again)
 SHIFT_CV = 3                         # … the first content with the shift's parts: a remake that fails keeps one this new
                                      # shifting (an older one, or none, leaves the shift off)
-CLAG = LAG + 1                       # a daily cell 3 days old is often still empty (a country's split lags: most
-                                     # country cells dated 3 days ago carried no revenue yet, and a few small apps' own
-                                     # rows — measured 15 Nov 2026): the shift reads a daily cell at least 4 days old
+CLAG = max(4, LAG)                   # the shift, the card, the pack gaps, the holes and the Organic file take a daily
+                                     # cell as final at least CLAG days old: while the cube folded at D+3 a cell 3 days
+                                     # old was often still empty (a country's split lagged: most country cells dated 3
+                                     # days ago carried no revenue yet, and a few small apps' own rows — measured 15 Nov
+                                     # 2026), so 4; folded at the final lag (GA4_FINAL_DAYS ≥ 4) a cell needs no day
+                                     # more (measured 17 Nov 2026: GA4's day cells settle before it)
 PACK_MIN = 1.0                       # a pack-gap date needs the app's final revenue of that date ≥ 1 USD (a smaller total
                                      # is noise: a ratio of two cents says nothing about a missing pack)
 PACK_GAP = 0.35                      # … and the country packs' sum of it under 0.35 × the All rows' (GA4's cube folds a date
-                                     # once, at D+3: it can be nearly empty while the app's All rows are whole)
+                                     # once, at D+LAG: it can be nearly empty while the app's All rows are whole)
 FV = 2                               # the fits cache content: 2 = with each country's benchmark triple "bm" (older: refit)
 SKIP_CC = frozenset(("--", "XX", "ZZ"))
 # ⚖️ Google Ads users only (BE_PAID; see the module doc) and their complement, the Organic file
@@ -1131,7 +1147,7 @@ def fit(app, cty, O):
                     "cv": [[j, [round(v, 6) for v in b], round(q10, 5), round(q90, 5), n, round(m, 5)]
                            for j, b, q10, q90, n, m in cf],
                     "rng": g, "bm": [round(k3["bm"][0], 4), round(k3["bm"][1], 3), _r(k3["bm"][2], 1), k3["bm"][3]]}
-    return {"v": V, "fv": FV, "origin": _iso(O), "fits": fits}
+    return _stamped({"v": V, "fv": FV, "origin": _iso(O), "fits": fits})
 
 
 # ── calibration (daily, all apps): the rolling back-test, its maps, the skill ───────────────────────────────────────
@@ -1424,8 +1440,9 @@ def skill2(SK, AU, n):
 
 
 def _mature(age, hi, obs, H):
-    """"le" / "gt": whether the day broke even within H days, once it is old enough to know (age ≥ H + 3); else None."""
-    if age < H + 3:
+    """"le" / "gt": whether the day broke even within H days, once it is old enough to know (age ≥ H + LAG); else
+    None."""
+    if age < H + LAG:
         return None
     if hi is not None:
         return "le" if hi <= H else "gt"
@@ -1442,7 +1459,7 @@ def calibrate(A, C, O, RB=None, CB=None, GA=None, GC=None):
     [median, q10, q90, n] of log(real ÷ predicted app ROAS) on the days whose app curve is complete at that age} (the
     unshifted curve: a day not shifted yet — nothing final); the shift's own ranges "bandb" /
     "cbandb" (bands(): from asof()'s errors); "cv" = CALV (a calibration without them is made again)."""
-    out = {"v": V, "cv": CALV, "built": _iso(O), "tried": _iso(O), "cty": {}, "band": {}}
+    out = _stamped({"v": V, "cv": CALV, "built": _iso(O), "tried": _iso(O), "cty": {}, "band": {}})
     out["bandb"], out["cbandb"] = bands(RB or {}, CB or {})
     out["grow"] = growth(GA or {}, GC or {})
     for H in HS:
@@ -1472,7 +1489,7 @@ def calibrate(A, C, O, RB=None, CB=None, GA=None, GC=None):
         res = []
         for x in A:
             P = x.get("a")
-            if not P or a not in P["ages"] or x["tc"][j] is None or x["age"] < a + 3:
+            if not P or a not in P["ages"] or x["tc"][j] is None or x["age"] < a + LAG:
                 continue
             i = P["ages"].index(a)
             if P["full"][i] >= 0.999:
@@ -1637,9 +1654,9 @@ def _card(r, cov, tot, gaps, nw):
     curve entry at every card day (one set for the whole card: a cumulative ROAS must not fall because the set changed).
     roas[j] = Σ cum ÷ Σ spend over S (null where a country of S has no cell at j yet); bench[j] = Σ spend × exp(its stored
     curve median at j) ÷ Σ spend; fin[j] = 1 when every country of S has a FINAL cell at j AND that date is at least CLAG
-    days old (a country's cell 3 days old is often still empty); cv = S's spend ÷ the day's whole country spend; chk[j] =
-    1 when a pack-gap date lies in [X, X + GRID[j]]. → (card | None, why): None when no card day has a value; why: "c" no
-    covered country with a full curve, "r" their ROAS has not arrived."""
+    days old (CLAG: a country's cell folded at D+3 was often still empty); cv = S's spend ÷ the day's whole country
+    spend; chk[j] = 1 when a pack-gap date lies in [X, X + GRID[j]]. → (card | None, why): None when no card day has
+    a value; why: "c" no covered country with a full curve, "r" their ROAS has not arrived."""
     S = []
     for cc, x, f, *_ in cov:
         ms = {e[0]: e[5] for e in f["cv"]}
@@ -2199,6 +2216,22 @@ def cache_dir(data_dir):
     return os.path.join(data_dir, DIR)
 
 
+def _stamped(body):
+    """A cache's body (the fits, the calibration) with the lag it was made at: "lag" only when LAG is not LAG0 (absent
+    reads as LAG0: at GA4_FINAL_DAYS 3 every cache byte for byte as before)."""
+    if LAG != LAG0:
+        body["lag"] = LAG
+    return body
+
+
+def _lagged(c):
+    """A cache made at another lag (GA4_FINAL_DAYS moved: its no-look-ahead ages, its training days and its back-test
+    are another rule's) → made again at once, never a UTC day later, and such a calibration's growth bound is never
+    lent to the new one's back-test (as the other mode's). A calibration kept by a failed remake keeps its own stamp:
+    tried again every build until one is made (as an older CALV)."""
+    return c.get("lag", LAG0) != LAG
+
+
 def _fits_path(data_dir, key, src="a"):
     """An app's fits cache — src "a" (every user's rows): fits_<key>.json.gz; ⚖️ src "p" (Google Ads users'):
     fitsp_<key>.json.gz (the two never mix: an app that changes source refits from its own)."""
@@ -2400,10 +2433,13 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                         back.append((aid, key, fn))
                     return None, False, back
             mine = pa or old is None or bool(old.get("bp")) == paid    # (calib.json made in this mode? "bp": with BE_PAID)
-            need = old is None or old.get("cv") != CALV or (old.get("tried") or old["built"]) != today or not mine
+            need = old is None or old.get("cv") != CALV or _lagged(old) or \
+                (old.get("tried") or old["built"]) != today or not mine
             A, C = [], []                                       # (need: the first build of the UTC day, an older
-            RB, CB, SKL, GA, GC, GK = {}, {}, {}, {}, {}, {}    # calibration's content, or one of the other mode)
-            gq0 = (old or {}).get("grow") if mine else None     # (the other mode's growth bound: never)
+            RB, CB, SKL, GA, GC, GK = {}, {}, {}, {}, {}, {}    # calibration's content or lag, or one of the other
+            #                                                     mode)
+            gq0 = (old or {}).get("grow") if mine and not (old and _lagged(old)) else None   # (the other mode's or
+            #                                                     lag's growth bound: never)
             cal = old
 
             def lose(aid, key, fn, e=None, st="fail", count=True):     # ⚖️ an app's Google Ads source failed (or has no
@@ -2417,7 +2453,8 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             for aid, key, fn in group:
                 try:
                     fc = load_fits(data_dir, key, src)
-                    refit = fc is None or fc["origin"] != today or fc.get("fv") != FV     # (fv: the benchmark triple)
+                    refit = fc is None or fc["origin"] != today or fc.get("fv") != FV or \
+                        _lagged(fc)                             # (fv: the benchmark triple; another lag: at once)
                     oi = None
                     if pa:                                      # (oi: the Organic pass's inputs, collected while its
                         newest, app, cty, adm, gaps, oi = load(out_dir, data_dir, key, fn, True, loc[aid], True)   # packs
@@ -2475,10 +2512,21 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             ran = False
             if need and pa and len(back) == len(group):
                 need = False                             # (⚖️ every Google Ads users' app went on as every user's:
-            if need:                                     # no app of this source this build — none of it made)
+            #                                              no app of this source this build — none of it made)
+            if need and paid and not pa and not held and not A and not C:
+                need = False                             # ⚖️ BE_PAID on: every user's group this build had no app with a
+            #                                              usable history (e.g. the one app GA4 names no Google Ads user
+            #                                              of, with no breakeven days of its own): nothing to calibrate,
+            #                                              nothing failed — never the health banner for it
+            if need:
                 thin = not C or not any(x.get("a") for x in A)
                 try:
-                    if thin and pa:                      # ⚖️ too few Google Ads users' breakeven days for a calibration:
+                    if thin and (pa or (paid and old is not None)):   # ⚖️ too few breakeven days for a calibration
+                        #                                              of this source (with BE_PAID on, every user's
+                        #                                              group is the few apps without Google Ads users'
+                        #                                              data): a state, not a failure — the last one
+                        #                                              stays (below); a first Google Ads users' one: the
+                        #                                              stub
                         if old is None:                  # a state — the stub (tried again tomorrow, or with an app not
                             save_calib(data_dir, {"v": V, "tried": today,    # tried: new, or one that raised), its apps
                                                   "apps": sorted({k for _, k, _ in group} - bad)}, src)   # every user's
@@ -2489,6 +2537,8 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                             cal = dict(old, tried=today)
                             if SKL and _shifts(old):
                                 cal["skill"] = SKL
+                            if paid and not pa:          # (every user's, kept in this mode: stamped as the remake's
+                                cal["bp"] = 1            # failure path stamps it — never re-tried every build for it)
                             save_calib(data_dir, cal, src)
                     else:
                         if thin:
@@ -2594,6 +2644,8 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             return []
         dashboard["be"] = {"v": V, "origin": today, "calib": (cals.get("a") or cals.get("p") or {}).get("built"),
                            "apps": ptr}
+        if (PROV, LAG) != (PROV0, LAG0):                 # the page's ages (absent: PROV0 / LAG0, the page's own)
+            dashboard["be"].update(pv=PROV, lag=LAG)
         return list(HEADER_PATHS)
     except Exception as e:
         dashboard.pop("be", None)

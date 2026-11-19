@@ -19,14 +19,22 @@ data/ga4_firstopen_cc/<key>.json.gz (private repo):
                   "fin": final when read, "sg": the screens' signature, "at"}
                | {"none": true, "why": "ga4", "n": empty answers, "fo": {cc: first_open users}, "at"}   GA4's funnel
                  has nothing left for the day, but its report still names the countries' first opens ("fo")
-               | {"none": true, "at"}}}                                  GA4 named no country that day
+               | {"none": true, "at"}},                                  GA4 named no country that day
+     "mid": {D: the UTC time of its last read}}   only the mid_days (HOT_DAYS … FINAL_LAG − 1 days old); none at
+                                                  GA4_FINAL_DAYS 3
 Per app and run (its screens come from the First open store; at most MAX_CALLS calls — a day is begun only when ALL its
 calls still fit, so the cap never cuts one; the property's quota floors):
   * the backfill days AT_RISK_DAYS or more old FIRST, oldest first: GA4 deletes the oldest days next (2 months'
     retention, in batches) and a deleted day can never be read again;
-  * every REFRESH_HOURS the last RECENT_DAYS days again (not final: GA4 still adds to them) — "recent_at" is set as soon
-    as they are read, so a run cut later in the backfill does not read them again next hour;
-  * a day read while not final is read once more when it is (≥ FINAL_LAG days old);
+  * every REFRESH_HOURS the days not final yet (younger than FINAL_LAG: GA4 still adds to them) — the newest HOT_DAYS
+    every time ("recent_at" is set as soon as they are read, so a run cut later in the backfill does not read them again
+    next hour), an older one at most once a UTC day ("mid": {day: its last read}; GA4 moves a day most in its first
+    days, and a read costs a funnel call per GROUP countries), after the final reads below; such an older day's answer
+    collapsed against its stored read (as below) keeps that read, not final, for the next day's read;
+  * a day read while not final is read once more when it is (≥ FINAL_LAG days old: GA4_FINAL_DAYS, owner 17 Nov 2026
+    "max to max 7 din me to aa hi jaata he"), then the short days below; a day younger than FINAL_LAG the store kept as
+    final (read final under a shorter lag: GA4_FINAL_DAYS raised), held ones aside, is not final again from the first
+    run on ("fin" false, the store written even with no call made), so its final read comes at FINAL_LAG too;
   * the rest of the backfill, from the First open store's own first day (the All countries table's day 1; no store:
     BACKFILL_DAYS back), oldest first.
 A day whose funnel GA4 answers empty: younger than AT_RISK_DAYS GA4 has not deleted it — nothing is stored and it is
@@ -71,6 +79,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from .. import ga4_final
 from .. import ga4_probe
 from ..db import write_json_gz_stable
 from . import ga4
@@ -83,8 +92,12 @@ STORE_V = 1
 GROUP = gf.CHUNK                    # GA4's funnel breakdown returns at most 15 values per call
 DIM = "countryId"
 RT = "RESERVED_TOTAL"               # GA4's own total row in a funnel breakdown
-RECENT_DAYS = 3                     # today … 2 days back: refreshed every REFRESH_HOURS
-FINAL_LAG = 3                       # a day is final from 3 days old on (as the First open status reads it)
+HOT_DAYS = 3                        # today … 2 days back: read again every REFRESH_HOURS (this store's window
+#                                     before the knob)
+FINAL_LAG = ga4_final.lag(3)        # a day is final from this many days old on — GA4_FINAL_DAYS, at least 3: the First
+#                                     open page's edge (== ga4_firstopen.FINAL_LAG)
+RECENT_DAYS = FINAL_LAG             # the days not final yet (today … FINAL_LAG − 1 days back): the newest HOT_DAYS
+#                                     every REFRESH_HOURS, the older ones (mid_days) at most once a UTC day
 BACKFILL_DAYS = 120                 # how far back without a First open store day 1 (with one: from that day)
 AT_RISK_DAYS = 50                   # a day this old may be the next GA4 deletes: read before the recent refresh;
                                     # an empty funnel answer for a younger day is never taken as "gone"
@@ -269,6 +282,23 @@ def _kept(prev):
     return isinstance(prev, dict) and not prev.get("none") and not prev.get("fin") and any(prev.get("t") or [])
 
 
+def mid_days(today):
+    """The days not final yet beyond the newest HOT_DAYS (HOT_DAYS … FINAL_LAG − 1 days old), newest first — read at
+    most once a UTC day; none while FINAL_LAG is HOT_DAYS (GA4_FINAL_DAYS 3: every day not final is a hot one)."""
+    return [today - timedelta(days=i) for i in range(HOT_DAYS, RECENT_DAYS)]
+
+
+def mid_read(store, k, now):
+    """Was day k read this UTC day as one of the mid_days ("mid": {day: the UTC time of its last read})?"""
+    mid = store.get("mid")
+    return isinstance(mid, dict) and str(mid.get(k) or "")[:10] == gu._now_iso(now)[:10]
+
+
+def _funnel(prev):
+    """A stored read of a day with a funnel answer (not "none", some first opens) — whole or not, final or not."""
+    return isinstance(prev, dict) and not prev.get("none") and any(prev.get("t") or [])
+
+
 def rr_wait(rec):
     """Hours a short day waits after its last try ("rat") or answer ("at"): REFRESH_HOURS, doubled with every finished
     try (6, 12, 24, 48 h — RR_MAX tries cover about 4 days of GA4 holding it)."""
@@ -371,14 +401,16 @@ def _answers(ga, groups):
 
 def due(store, today, now, first=None, ref=None):
     """The days to read this run, in order: the backfill days AT_RISK_DAYS or more old (oldest first), the recent ones
-    (when due), the not-final ones now final, the short days read again (short_due against ref, the First open store's
-    counts; oldest first), then the rest of the backfill (oldest first). The backfill = every day from `first` (the
-    First open store's first day; else BACKFILL_DAYS back) to FINAL_LAG days back the store has no record for, and the
-    gone days not yet confirmed (asked again REFRESH_HOURS after their last answer)."""
+    (when due: the newest HOT_DAYS), the not-final ones now final, the short days read again (short_due against ref,
+    the First open store's counts; oldest first), the mid_days not read this UTC day (with the recent ones: when due;
+    after the final reads, kept for good), then the rest of the backfill (oldest first). The backfill = every day from
+    `first` (the First open store's first day; else BACKFILL_DAYS back) to FINAL_LAG days back the store has no record
+    for, and the gone days not yet confirmed (asked again REFRESH_HOURS after their last answer)."""
     days = store.get("days") or {}
-    recent = []
+    recent, mid = [], []
     if gu._hours_since(store.get("recent_at"), now) >= REFRESH_HOURS:
-        recent = [today - timedelta(days=i) for i in range(RECENT_DAYS)]
+        recent = [today - timedelta(days=i) for i in range(HOT_DAYS)]
+        mid = [d for d in mid_days(today) if not mid_read(store, d.isoformat(), now)]
     fin_edge = today - timedelta(days=FINAL_LAG)
     again = sorted(gu._d(k) for k, v in days.items()            # read while not final, or stored as all zeros
                    if not v.get("none") and (not v.get("fin") or not any(v.get("t") or [])) and gu._d(k) <= fin_edge)
@@ -391,7 +423,7 @@ def due(store, today, now, first=None, ref=None):
         d += timedelta(days=1)
     back.sort()
     risk = [d for d in back if (today - d).days >= AT_RISK_DAYS]
-    out = risk + recent + again + short_due(store, today, now, ref) + back[len(risk):]
+    out = risk + recent + again + short_due(store, today, now, ref) + mid + back[len(risk):]
     seen, uniq = set(), []
     for d in out:
         if d not in seen:
@@ -403,19 +435,37 @@ def due(store, today, now, first=None, ref=None):
 def step_app(ga, store, steps, today, now, first=None, ref=None, tally=None):
     """One app's run on its store → "fetched" / "fresh". Raises Stop (the days read so far are kept): the property's
     quota floor, the run's clock, or the app's call cap — checked BEFORE a day is begun (all its calls must fit).
-    ref: the First open store's counts (ref_counts) — the short days; tally: {"held", "reread", "healed"} counted into.
+    ref: the First open store's counts (ref_counts) — the short days; tally: {"held", "reread", "healed", "unfin" (days
+    kept final under a shorter lag made not final again)} counted into.
     A day GA4 answers collapsed never replaces a whole one (module doc): a final answer collapsed against the day's
-    earlier read keeps that read (held); a short day takes GA4's new answer only when it is better."""
+    earlier read keeps that read (held); an answer of a mid_days day collapsed against its stored read keeps that read,
+    not final (read again the next UTC day; its final read follows the held rule); a short day takes GA4's new answer
+    only when it is better. A mid_days day read (whatever GA4 answered) is not read again this UTC day ("mid")."""
     now_iso = gu._now_iso(now)
     tally = {} if tally is None else tally
+    stored = store.get("days")
+    if isinstance(stored, dict):                        # a day not final yet that the store kept as final — read under
+        for k, v in stored.items():                     # a shorter lag (GA4_FINAL_DAYS raised): not final again, so
+            if (isinstance(v, dict) and v.get("fin") and not v.get("ho")    # its final read comes at FINAL_LAG ("again")
+                    and (today - gu._d(k)).days < FINAL_LAG):              # — counted: the store is written (refresh_all)
+                stored[k] = dict(v, fin=False)
+                tally["unfin"] = tally.get("unfin", 0) + 1
     todo = due(store, today, now, first, ref)
     if not todo:
         return "fresh"
     days = store.setdefault("days", {})
     rr = set(short_due(store, today, now, ref))         # the short days read again (each kept only if better)
     cc = countries(ga, min(todo), max(todo))
-    recent = {today - timedelta(days=i) for i in range(RECENT_DAYS)}
-    left = {d for d in todo if d in recent}             # the recent days still to read this run
+    recent = {today - timedelta(days=i) for i in range(RECENT_DAYS)}     # not final yet (never stored as no country)
+    mids = set(mid_days(today))                         # … the older of them: read at most once a UTC day
+    left = {d for d in todo if d in recent and d not in mids}    # the newest (HOT_DAYS) still to read this run
+    if "mid" in store:                                  # a day that left mid_days (final now) leaves "mid"
+        band = {d.isoformat() for d in mids}
+        kept = {k: v for k, v in (store["mid"] if isinstance(store["mid"], dict) else {}).items() if k in band}
+        if kept:
+            store["mid"] = kept
+        else:
+            del store["mid"]
     cap = getattr(ga, "max_calls", None)
     did = False
 
@@ -456,6 +506,9 @@ def step_app(ga, store, steps, today, now, first=None, ref=None, tally=None):
                     and (rec is None or rec.get("none") or collapsed(rec, prev))):   # empty, gone or collapsed —
                 hold(k, prev)                           # the earlier read stays (never read every run till gone)
                 did = True
+            elif d in mids and rec is not None and _funnel(prev) and collapsed(rec, prev):
+                days[k] = dict(prev, fin=False)         # a mid day collapsed against its stored read: that read stays,
+                did = True                              # not final (one kept from an older, shorter lag too)
             elif rec is not None:
                 days[k] = rec
                 did = True
@@ -468,6 +521,8 @@ def step_app(ga, store, steps, today, now, first=None, ref=None, tally=None):
             else:
                 days[k] = dict(prev, n=GONE_CONFIRM, at=now_iso) if is_gone(prev) else {"none": True, "at": now_iso}
             did = True
+        if d in mids:                                   # read this UTC day: not again before the next
+            store.setdefault("mid", {})[k] = now_iso
         if d in left:
             left.discard(d)
             if not left:
@@ -600,8 +655,9 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
                     res, upd = "deferred", {"deferred": True}
                 except Exception as e:
                     res, upd = "failed", dict(last_try=now_iso, fail=gu._fail_kind(e))
-                # (a short day's try is kept even with no call made: never tried again at once)
-                if ga.calls or tally.get("reread") or tally.get("held"):
+                # (a short day's try is kept even with no call made: never tried again at once; so is a day made not
+                # final again)
+                if ga.calls or tally.get("reread") or tally.get("held") or tally.get("unfin"):
                     store.update(v=STORE_V, app_id=aid, package=a["package"], property_id=pid,
                                  stream_id=r["stream_id"], time_zone=tz)
                     os.makedirs(os.path.dirname(path), exist_ok=True)

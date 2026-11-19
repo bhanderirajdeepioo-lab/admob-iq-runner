@@ -1278,3 +1278,36 @@ def test_stale_organic_files_go(tmp_path, monkeypatch):
     assert os.path.exists(org)
     be.off(site)                                                              # the tab off: every file of it
     assert not [f for f in os.listdir(site) if f.startswith("be_")]
+
+
+def test_every_users_group_with_nothing_to_calibrate_is_never_a_failure(tmp_path, monkeypatch):
+    """BE_PAID on, a new UTC day: when every user's group (the apps without Google Ads users' data) has no app with a
+    usable history — or too few breakeven days — nothing fails: no health line, the last calibration stays (kept,
+    stamped "bp", tried that day), the Google Ads users' apps answered as usual. Before: "be skipped: ValueError" on the
+    first build of every UTC day once every other app had gone src "p"."""
+    site, data, dash, scr = paid_world(tmp_path)
+    _state(monkeypatch, scr)
+    _, line, err = _go(copy.deepcopy(dash), data, site, {"be_paid": True})
+    assert err == "" and "calib yes" in line and "calib p yes" in line
+    cal0 = be.load_calib(data, "a")
+    real_load, real_bt = be.load, be.backtest
+
+    def none_load(out_dir, data_dir, key, fn, *a):                 # every user's app: no usable history this build
+        if len(a) > 1 and a[1] is not None:
+            return real_load(out_dir, data_dir, key, fn, *a)
+        return None, None, None, None, None
+    monkeypatch.setattr(be, "load", none_load)
+    _, line, err = _go(copy.deepcopy(dash), data, site, {"be_paid": True}, T.NOW + timedelta(days=1))
+    assert err == "" and "calib no" in line                         # (no "be skipped: ValueError")
+    assert be.load_calib(data, "a") == cal0                         # nothing to calibrate: the last one, untouched
+    assert _be(site, KA)["src"] == "p"
+    monkeypatch.setattr(be, "load", real_load)
+
+    def thin_bt(key, *a, **k):                                       # every user's apps: too few breakeven days
+        return ([], []) if key != KA else real_bt(key, *a, **k)
+    monkeypatch.setattr(be, "backtest", thin_bt)
+    _, line, err = _go(copy.deepcopy(dash), data, site, {"be_paid": True}, T.NOW + timedelta(days=2))
+    assert err == "" and "calib no" in line
+    kept = be.load_calib(data, "a")
+    assert kept["built"] == cal0["built"] and kept["tried"] == (T.TODAY + timedelta(days=2)).isoformat()
+    assert kept.get("bp") == 1                                      # (kept in this mode: not re-tried every build)

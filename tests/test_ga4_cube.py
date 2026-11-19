@@ -98,7 +98,8 @@ def _days(a, b):
 
 class FakeGA:
     """GA4 for the cube. Activity day D, install day X (start … D, lag ≤ max_lag), country cc: revenue
-    (lag + 1) × W[cc] × 100 micros, users 10 × W[cc] at lag 0. A day still filling (today − D < FINAL_LAG) reads
+    (lag + 1) × W[cc] × 100 micros, users 10 × W[cc] at lag 0. A day still filling (today − D < HOT_DAYS: this made-up
+    GA4 fills a day in the cube's final lag before GA4_FINAL_DAYS, whatever F the cube or the session runs at) reads
     `fill` of that. Filters: every expression ANDed (an in-list on any field, or its notExpression); rows grouped by
     the dimensions asked for. cap: an answer with more rows keeps its `cap` biggest and rolls the rest into a per-day
     "(other)" row (dataLossFromOtherRow). extra_day: 40 more countries "Q00" … that day (lags 0 … 30, weight 1).
@@ -111,7 +112,7 @@ class FakeGA:
     "(other)" row, a notExpression keeps it) — no split by a filter names a row more. oth_flag_day: the flag with no
     "(other)" row on that day's answers — not on a day's total read (no filter, no countryId: the cube's date-only
     total, the cohort's every-install-day read) unless oth_flag_total. smp_total / cut_total: such a total read
-    sampled / cut. grow: every call, the revenue of a day not final yet grows by that share (GA4 still adding to it
+    sampled / cut. grow: every call, the revenue of a day still filling grows by that share (GA4 still adding to it
     during the read). smp_day: every answer with countryId holding that day says sampling (each part of a split too)."""
 
     def __init__(self, today=TODAY, cap=None, stop_after=None, fill=0.5, start=HS, max_lag=120, extra_day=None,
@@ -131,7 +132,7 @@ class FakeGA:
             self.max_calls, self.stop_after = max_calls, max_calls
 
     def rows_of(self, D):
-        f = self.fill * (1 + self.grow) ** self.calls if (self.today - D).days < cu.FINAL_LAG else 1.0
+        f = self.fill * (1 + self.grow) ** self.calls if (self.today - D).days < cu.HOT_DAYS else 1.0
         rows = []
         for L in range(self.max_lag + 1):
             X = D - timedelta(days=L)

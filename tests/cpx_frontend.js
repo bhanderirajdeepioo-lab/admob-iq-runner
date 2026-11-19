@@ -213,6 +213,12 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
       out.gap_why = { none: why('AA'), apart: why('BB'), noinst: why('CC'), norev: why('DD'), nosp: why('EE') }; }
     { const F0 = JSON.parse(JSON.stringify(F)); F0.d.rev[F0.d.rev.length - 1] = null; out.gap.no_rev = _.dayRows(rA, F0).find(z => z.x === FX.T).gap;
       out.gap.no_rev_title = _.dayHtml(rA, F0).includes('title="us din spend, installs ya AdMob kamai nahi"'); }
+    { // ❓ eCPM kyun: the first session / returning days after the nvr file's final till (notes.nvr_till, GA4_FINAL_DAYS 7:
+      // today − 7) are in it, said not final; a final till at t (the rollback) or none (a file before it): no such line
+      const T0 = _.get().TAB, nt0 = F.notes.nvr_till, ek = till => { if (till === undefined) delete F.notes.nvr_till; else F.notes.nvr_till = till;
+        _.set({ TAB: 'ek' }); const h = strip(_.tabBody(rA)), i = h.indexOf('⏳ First session'); return i < 0 ? '' : h.slice(i, h.indexOf('hain.', i) + 5); };
+      out.ek_nf = { f7: ek('2026-03-23'), old: ek('2026-03-28'), early: ek('2026-02-01'), none: ek(undefined) };
+      if (nt0 === undefined) delete F.notes.nvr_till; else F.notes.nvr_till = nt0; _.set({ TAB: T0 }); }
     tapTab = 'dw'; tap('[data-cpx-tab]'); const n30 = (det(SCREEN.innerHTML).match(/<tr/g) || []).length;
     SCREEN._on.click[0]({ target: { closest: s => s === '[data-cpx-more]' ? {} : null } }); const n60 = (det(SCREEN.innerHTML).match(/<tr/g) || []).length;
     out.day.rows = [n30, n60, _.get().DN];

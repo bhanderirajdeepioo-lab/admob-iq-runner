@@ -7151,21 +7151,30 @@ function adsArrive(a){ if(!onScreen()) return; const cur=APP&&RAW?appOf(APP):nul
   if(CC){ paint(); return; }
   const slot=document.getElementById('fo-ccbx'), m=document.getElementById('fo-mtw'), dw=document.getElementById('fo-dtw'), d=ccData(a);
   hold(()=>{ if(slot&&d) slot.innerHTML=ccBoard(a,d); if(m) m.innerHTML=monthTable(a); if(dw) dw.innerHTML=dayTable(a); },slot); }
-// the board's period on the app's calendar → [lo, hi] (YYYY-MM-DD): today = the property's today (the file's final till + 2);
-// 7 / 30 / 60 / 90 days = the last 7 / 30 / 60 / 90 FINAL days (≤ final till, as the status: GA4 and Google Ads still
-// add to the last 2; a part that starts later says so: ccBoard's "… se");
+// the board's period on the app's calendar → [lo, hi] (YYYY-MM-DD): today = the property's today (the app's "td"; a file
+// before it: its final till + 2); 7 / 30 / 60 / 90 days = the last 7 / 30 / 60 / 90 days ending today − PE_LAG, where they
+// ended before the GA4 finality knob (owner, 17 Nov 2026: "data jese jese aata jaye ese ese bharte jao" — their days after
+// the file's final till are in them, marked not final: ccBoard's ⏳; the status stays the build's, on final days only); a
+// part that starts later says so: ccBoard's "… se";
 // This month = its 1st … today; Last month = the whole calendar month before;
 // All time = from the oldest day any part has (the funnel, Google Ads, GA4); Custom = the picked from / to (swapped when
 // reversed; All time's ends while one is not picked)
-function perEnds(a,ad){ const T=addD(a.final_till,2); return [[a.first_day,ad&&ad.first_day].filter(Boolean).sort()[0]||T,T]; }
-function perRange(a,ad){ const [first,T]=perEnds(a,ad), Y=addD(T,-1), m0=T.slice(0,8)+'01';
-  if(PER==='today') return [T,T]; if(PER==='yday') return [Y,Y]; if(PER==='30') return [addD(a.final_till,-29),a.final_till];
-  if(PER==='60') return [addD(a.final_till,-59),a.final_till]; if(PER==='90') return [addD(a.final_till,-89),a.final_till];
+const PE_LAG=2;   // the 7 / 30 / 60 / 90 days end today − PE_LAG (a calendar end, never the final edge: that is the file's)
+const isD=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s);
+const foToday=a=>isD(a.td)?a.td:addD(a.final_till,2);           // the property's today
+const foEnd=a=>isD(a.td)?addD(a.td,-PE_LAG):a.final_till;         // the 7 / 30 / 60 / 90 days' last day
+const foNfN=a=>dd(a.final_till,foToday(a));                        // the newest days not final yet: today − final till
+// "not final" said once: the old words while it is Today and Yesterday; else the count, and what Last 7 days / usual are
+const foNfW=(n,ft)=>n===2?'Today aur Yesterday abhi final nahi.':`Pichhle ${n} din abhi final nahi (Last 7 days aur usual: ${fmtDY(ft)} tak ke final din).`;
+function perEnds(a,ad){ const T=foToday(a); return [[a.first_day,ad&&ad.first_day].filter(Boolean).sort()[0]||T,T]; }
+function perRange(a,ad){ const [first,T]=perEnds(a,ad), Y=addD(T,-1), m0=T.slice(0,8)+'01', pe=foEnd(a);
+  if(PER==='today') return [T,T]; if(PER==='yday') return [Y,Y]; if(PER==='30') return [addD(pe,-29),pe];
+  if(PER==='60') return [addD(pe,-59),pe]; if(PER==='90') return [addD(pe,-89),pe];
   const ms=monSpan(PER,T); if(ms) return ms;
   if(PER==='tm') return [m0,T]; if(PER==='lm'){ const l=addD(m0,-1); return [l.slice(0,8)+'01',l]; }
   if(PER==='all') return [first,T];
   if(PER==='cus'){ let f=PF||first, t=PTO||T; if(f>t) [f,t]=[t,f]; return [f,t]; }
-  return [addD(a.final_till,-6),a.final_till]; }
+  return [addD(pe,-6),pe]; }
 // the period's sums: the country file's funnel (first_open, splash, home — per country and the day totals; n = its days in
 // the period) and the ads file per country and the totals (adsAdd); nd = the days with Google Ads / GA4 numbers, of them
 // not final
@@ -7256,11 +7265,11 @@ function tableHtml(){ const cols=[['app','App'],['rank','Status'],['s2h','Splash
     +`<td>${SMP(x.sample_other)}${P(x.s2h_any)}</td><td>${P(x.opened)}</td><td>${N(x.fo_day)}</td><td>${Object.keys(x.steps||{}).length?SMP(x.sample_other):''}${E(stepsText(x))}</td></tr>`; }).join('')||`<tr><td colspan="9" class="faint">Is status me koi app nahi</td></tr>`;
   return `<div class="fo-tw"><table class="fo-t"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`; }
 function allHtml(){ const ok=new Set((RAW.apps||[]).filter(a=>vis(a.app_id)).map(a=>a.key)), S=(RAW.summary||[]).filter(x=>ok.has(x.key)), c=k=>S.filter(x=>x.status===k).length;
-  const till=(RAW.apps||[]).reduce((m,a)=>a.final_till>m?a.final_till:m,'');
+  const till=(RAW.apps||[]).reduce((m,a)=>a.final_till>m?a.final_till:m,''), ta=(RAW.apps||[]).find(a=>a.final_till===till);
   return `<div class="fo-chips" role="group" aria-label="Filter by status">${['Worse','Watch','Better','Normal','Too early','N/A'].map(k=>`<button type="button" class="fo-chip st-${ST_KEY[k]}" data-fo-filt="${k}" aria-pressed="${FILT===k}"><span>${WD.sti[ST_KEY[k]]}</span> <b>${c(k)}</b></button>`).join('')}</div>`
     +`<div class="card fo-card"><div class="ct"><h3>All apps · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">app pe tap = us app ka poora funnel · column pe tap = sort · status chip pe tap = sirf wo apps</span></div>`
     +`<div id="fo-tb">${tableHtml()}</div></div>`
-    +`<p class="fo-note">Final till ${fmtDY(till)} (aakhri 2 din GA4 me abhi badalte hain). Status = Splash → Home pichhle 7 final din vs usse pehle ke 28 din: 5 pts gira Worse, 2 pts Watch, 5 pts badha Better. 200 se kam Splash users (7 din) = N/A, 35 din se kam history = Too early.</p>`; }
+    +`<p class="fo-note">Final till ${fmtDY(till)} (aakhri ${ta?foNfN(ta):2} din GA4 me abhi badalte hain). Status = Splash → Home pichhle 7 final din vs usse pehle ke 28 din: 5 pts gira Worse, 2 pts Watch, 5 pts badha Better. 200 se kam Splash users (7 din) = N/A, 35 din se kam history = Too early.</p>`; }
 // ---- one app ----
 function months(rows){ const m=new Map(); for(const r of rows){ const k=r[0].slice(0,7); if(!m.has(k)) m.set(k,[]); m.get(k).push(r); } return [...m.entries()].reverse(); }
 function stepBars(a,x){ const out=[]; for(const k of ['intro','language','permission','home']){ if(k!=='home'&&!(a.steps||{})[k]) continue;
@@ -7275,12 +7284,12 @@ function appHtml(a,x,top,board,inM,inD){ const rows=a.days||[], fin=rows.filter(
     +`<tr><td>Opened app</td><td>${cell(t,op)}</td><td>${cell(y,op)}</td><td>${P(x.opened)}</td><td>${P(x.opened_usual)}</td></tr>`
     +`<tr><td>Splash → Home</td><td>${cell(t,sh)}</td><td>${cell(y,sh)}</td><td><b>${P(x.s2h)}</b></td><td>${P(x.usual)}</td></tr>`
     +`<tr><td>Incl. late open</td><td>${cell(t,sa)}</td><td>${cell(y,sa)}</td><td>${P(x.s2h_any)}</td><td>—</td></tr></tbody></table></div>`
-    +`<p class="fo-note">Today aur Yesterday abhi final nahi. Screens counted: ${scr}.${smpLow(x)!=null?` <span class="fo-smp">≈</span> = GA4 ne is app ke funnel me sirf ~${Math.max(1,Math.round(smpLow(x)*100))}% data padha (sampling): users ki ginti lagbhag hai, % ka direction sahi.${x.sample==null&&x.sample_other!=null?' First opens · Splash · Home is hafte exact hain (country wale padhne se); ≈ sirf baaki steps par.':''}`:''}</p>`;
+    +`<p class="fo-note">${foNfW(foNfN(a),a.final_till)} Screens counted: ${scr}.${smpLow(x)!=null?` <span class="fo-smp">≈</span> = GA4 ne is app ke funnel me sirf ~${Math.max(1,Math.round(smpLow(x)*100))}% data padha (sampling): users ki ginti lagbhag hai, % ka direction sahi.${x.sample==null&&x.sample_other!=null?' First opens · Splash · Home is hafte exact hain (country wale padhne se); ≈ sirf baaki steps par.':''}`:''}</p>`;
   return `<div class="fo-crumb"><button type="button" class="fo-back" data-fo-all="1">← All apps</button><span>${chip(x.status)}${x.why?` <small>${E(x.why)}</small>`:''} · history ${fmtD(a.first_day)} ${a.first_day.slice(0,4)} se${(a.steps_changed||[]).length?' · screens badle '+(a.steps_changed||[]).map(c=>fmtDY(c.at)).join(', '):''}</span></div>`
     +(top||'')+`<div class="card fo-card"><div class="ct"><h3>Today · Yesterday · last 7 days · usual</h3></div>${mini}</div>`
     +`<div class="fo-grid"><div class="card fo-card"><div class="ct"><h3>Steps · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">Splash dekhne walon me se kitne kram me aage aaye · patli bar = usual</span></div>${stepBars(a,x)}</div>`
     +`<div class="card fo-card"><div class="ct"><h3>Every day · full history</h3><span class="faint" style="font-size:11.5px">hover / tap = us din ke numbers</span></div><div class="fo-chart" id="fo-chart"></div>`
-    +`<div class="fo-lg"><span class="a">Splash → Home</span><span class="b">Opened app</span><span class="c">not final (last 2 days)</span></div></div></div>`
+    +`<div class="fo-lg"><span class="a">Splash → Home</span><span class="b">Opened app</span><span class="c">not final (last ${foNfN(a)} days)</span></div></div></div>`
     +(board||'')+`<div class="card fo-card"><div class="ct"><h3>Every month</h3><span class="faint" style="font-size:11.5px">mahine ke aage = us mahine ke din</span></div>${inM||''}<div id="fo-mtw">${monthTable(a)}</div></div>`
     +`<div class="card fo-card"><div class="ct"><h3>Every day</h3><span class="faint" style="font-size:11.5px">sabse naya din upar</span></div>${inD||''}<div id="fo-dtw">${dayTable(a)}</div></div>`; }
 // the app's Every month / Every day (All countries): the funnel's months / days and — with an ads file — Ads installs ·
@@ -7370,13 +7379,13 @@ function perCtl(a,ad){ const L=[['today','Today'],['yday','Yesterday'],['7','7 d
   const [first,T]=perEnds(a,ad), [lo,hi]=perRange(a,ad);
   return `<div class="fo-per" role="group" aria-label="Period">${L.map(([k,l])=>`<button type="button" class="fo-pb" data-fo-per="${k}" aria-pressed="${PER===k}">${l}</button>`).join('')}${monMover(PER,T,first,(k,l,on,dis,ar)=>`<button type="button" class="fo-pb" data-fo-per="${k}" aria-pressed="${on}"${dis?' disabled':''} aria-label="${ar}">${l}</button>`)}</div>`
     +(PER==='cus'?`<div class="fo-cus"><label>From <input type="date" data-fo-pf="1" value="${lo}" min="${first}" max="${T}"></label><label>To <input type="date" data-fo-pto="1" value="${hi}" min="${first}" max="${T}"></label></div>`:''); }
-function ccBoard(a,d){ const S=d.summary||[], c=k=>S.filter(x=>x.status===k).length, ad=adsData(a), p=adsPtr(a), [lo,hi]=perRange(a,ad), T=addD(a.final_till,2);
+function ccBoard(a,d){ const S=d.summary||[], c=k=>S.filter(x=>x.status===k).length, ad=adsData(a), p=adsPtr(a), [lo,hi]=perRange(a,ad), T=foToday(a);
   const lim=[];   // what the period reaches before a part's first day — said once, with that day
   if(p&&ad&&ad.ads_from&&lo<ad.ads_from) lim.push(`Google Ads installs ${yd(ad.ads_from)} se`);
   if(p&&ad&&ad.ga4_from&&lo<ad.ga4_from) lim.push(`GA4 first opens ${yd(ad.ga4_from)} se`);
   if(lo<d.first_day) lim.push(`Splash → Home / Opened app country-wise ${yd(d.first_day)} se (GA4 sirf ~2 mahine ka funnel rakhta hai)`);
   if(hi>a.final_till){ const s0=lo>a.final_till?lo:addD(a.final_till,1);   // the first day of the period not final yet
-    lim.push(`${yd(s0)}${hi>s0?' – '+yd(hi):''} abhi final nahi (GA4 aur Google Ads dono baad me bhi jodte hain): Not opened ${lo>a.final_till?'final hone ke baad (2 din)':'sirf '+yd(a.final_till)+' tak ke dino ka'}`); }
+    lim.push(`${yd(s0)}${hi>s0?' – '+yd(hi):''} abhi final nahi (GA4 aur Google Ads dono baad me bhi jodte hain): Not opened ${lo>a.final_till?`final hone ke baad (${foNfN(a)} din)`:'sirf '+yd(a.final_till)+' tak ke dino ka'}`); }
   const ads=!p?'<p class="fo-note">Google Ads installs ka data abhi nahi bana — agle robot run me aayega.</p>'
     :adsErr(a)?'<p class="fo-note">⚠️ Google Ads installs load nahi hue. <button type="button" class="fo-lnkb" data-fo-adsretry="1">Try again</button></p>':'';
   return `<div class="card fo-card" id="fo-ccb"><div class="ct"><h3>By country · ${yd(lo)}${lo!==hi?' – '+yd(hi):''}</h3><span class="faint" style="font-size:11.5px">country pe tap = us country ka funnel · column pe tap = sort · status chip pe tap = sirf wo countries</span></div>`
@@ -7422,15 +7431,15 @@ function ccNone(d){ const g=new Set(Array.isArray(d&&d.gone)?d.gone:[]), n=new S
   return {kind:k=>g.has(k)?'gone':n.has(k)?'nobody':'', fo:(k,cc)=>fo[k]&&typeof fo[k]==='object'?(+fo[k][cc]||0):null, any:g.size>0}; }
 const dd=(a,b)=>Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/864e5);   // days from a to b
 function appCrumb(a,x){ return `<div class="fo-crumb"><button type="button" class="fo-back" data-fo-all="1">← All apps</button><span>${chip(x.status)}${x.why?` <small>${E(x.why)}</small>`:''} · history ${fmtD(a.first_day)} ${a.first_day.slice(0,4)} se</span></div>`; }
-function ccAppHtml(a,x,d,c){ const rows=c.days, ft=c.final_till, at=k=>{ const t=new Date(ft+'T00:00:00Z'); t.setUTCDate(t.getUTCDate()+k); return t.toISOString().slice(0,10); };
-  const by={}; for(const r of rows) by[r[0]]=r; const t=by[at(2)], y=by[at(1)];   // final till = the property's today − 2
+function ccAppHtml(a,x,d,c){ const rows=c.days, ft=c.final_till, T=isD(a.td)?a.td:addD(ft,2), nf=dd(ft,T);   // the property's today (the app's "td"; a file before it: final till + 2)
+  const by={}; for(const r of rows) by[r[0]]=r; const t=by[T], y=by[addD(T,-1)];
   const cell=(r,f)=>r?f(r):'—', op=r=>P(rate(+r[IX.splash],+r[IX.first_open])), sh=r=>P(rate(+r[IX.home],+r[IX.splash]));
   const low=rs=>{ const v=rs.map(r=>r[IX.sample]).filter(s=>s!=null); return v.length?Math.min(...v):null; };
   const mini=`<div class="fo-tw"><table class="fo-t fo-mini"><thead><tr><th></th><th>Today</th><th>Yesterday</th><th>Last 7 days</th><th>Usual<span class="fo-wide"> (4 weeks before)</span></th></tr></thead><tbody>`
     +`<tr><td>First opens <small class="faint">/ day</small></td><td>${cell(t,r=>N(r[IX.first_open]))}</td><td>${cell(y,r=>N(r[IX.first_open]))}</td><td>${FD(x.fo_day)}</td><td>${FD(x.fo_day_usual)}</td></tr>`
     +`<tr><td>Opened app</td><td>${cell(t,op)}</td><td>${cell(y,op)}</td><td>${P(x.opened)}</td><td>${P(x.opened_usual)}</td></tr>`
     +`<tr><td>Splash → Home</td><td>${cell(t,sh)}</td><td>${cell(y,sh)}</td><td><b>${P(x.s2h)}</b></td><td>${P(x.usual)}</td></tr></tbody></table></div>`
-    +`<p class="fo-note">Today aur Yesterday abhi final nahi.${x.sample!=null?` <span class="fo-smp">≈</span> = GA4 ne is country ke funnel me sirf ~${Math.max(1,Math.round(x.sample*100))}% data padha (sampling): users ki ginti lagbhag hai, % ka direction sahi.`:''}</p>`;
+    +`<p class="fo-note">${foNfW(nf,ft)}${x.sample!=null?` <span class="fo-smp">≈</span> = GA4 ne is country ke funnel me sirf ~${Math.max(1,Math.round(x.sample*100))}% data padha (sampling): users ki ginti lagbhag hai, % ka direction sahi.`:''}</p>`;
   const home=`<div class="fo-bar"><span class="fo-bl">Home</span><span class="fo-bt"><i style="width:${Math.max(0,Math.min(100,(x.s2h||0)*100))}%" class="h"></i><u style="width:${Math.max(0,Math.min(100,(x.usual||0)*100))}%"></u></span><span class="fo-bv"><b>${P(x.s2h)}</b> <small>usual ${P(x.usual)}</small></span></div>`;
   // EVERY calendar day from the app's day 1 (the All countries table's first day) to the newest country day, each told
   // apart (ccNone): a country row; a day GA4's funnel no longer has (its report's first opens only, the funnel "—"); a
@@ -7472,7 +7481,7 @@ function ccAppHtml(a,x,d,c){ const rows=c.days, ft=c.final_till, at=k=>{ const t
     +`<div class="fo-grid"><div class="card fo-card"><div class="ct"><h3>Steps · last 7 days vs usual</h3><span class="faint" style="font-size:11.5px">Splash dekhne walon me se kitne kram me aage aaye · patli bar = usual</span></div>${home}`
     +`<p class="fo-note">Country ke liye sirf <b>Home</b> ka step — baaki steps kyun nahi, wo neeche <b>Every day</b> card me likha hai.</p></div>`
     +`<div class="card fo-card"><div class="ct"><h3>Every day · full history</h3><span class="faint" style="font-size:11.5px">hover / tap = us din ke numbers</span></div><div class="fo-chart" id="fo-chart"></div>`
-    +`<div class="fo-lg"><span class="a">Splash → Home</span><span class="b">Opened app</span><span class="c">not final (last 2 days)</span></div></div></div>`
+    +`<div class="fo-lg"><span class="a">Splash → Home</span><span class="b">Opened app</span><span class="c">not final (last ${nf} days)</span></div></div></div>`
     +`<div id="fo-ccbx">${ccBoard(a,d)}</div>`
     +`<div class="card fo-card"><div class="ct">${ccTitle('Every month')}<span class="faint" style="font-size:11.5px">mahine ke aage = us mahine ke din</span></div>${ccIn(a,'m')}${mt}</div>`
     +`<div class="card fo-card"><div class="ct">${ccTitle('Every day')}<span class="faint" style="font-size:11.5px">sabse naya din upar</span></div>${ccIn(a,'d')}<p class="fo-note">${CC_COLS}</p>${dt}</div>`; }
@@ -7501,7 +7510,7 @@ function drawChart(a){ const box=document.getElementById('fo-chart'); if(!box) r
   const X=i=>m.l+(W-m.l-m.r)*i/(n-1), Y=v=>m.t+(H-m.t-m.b)*(1-Math.max(0,Math.min(1,v)));
   const ser=k=>rows.map((r,i)=>[i,k==='h'?rate(+r[IX.home],+r[IX.splash]):rate(+r[IX.splash],+r[IX.first_open])]);
   const path=pts=>{ let d='',up=false; for(const [i,v] of pts){ if(v==null){ up=false; continue; } d+=(up?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '; up=true; } return d; };
-  let nf=rows.findIndex(r=>r[0]>a.final_till); if(nf<0) nf=n;   // the first not-final day (the last 2: GA4 still adds to them)
+  let nf=rows.findIndex(r=>r[0]>a.final_till); if(nf<0) nf=n;   // the first not-final day (after the file's final till: GA4 still adds to them)
   const fin=pts=>pts.slice(0,nf), tail=pts=>nf<n?pts.slice(Math.max(0,nf-1)):[];
   const grid=[0,0.25,0.5,0.75,1].map(v=>`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}" class="g"/><text x="${m.l-6}" y="${Y(v)+4}" text-anchor="end">${Math.round(v*100)}%</text>`).join('');
   const ticks=[0,Math.floor((n-1)/2),n-1].map(i=>`<text x="${X(i)}" y="${H-6}" text-anchor="${i===0?'start':i===n-1?'end':'middle'}">${fmtDY(rows[i][0])}</text>`).join('');
@@ -7677,20 +7686,27 @@ function nameOf(id){ const c=((typeof DATA!=='undefined'&&DATA&&DATA.apps_catalo
 // the header's app (a name) → its id in the file (by the catalog's id first, then by name)
 function appIdNow(){ if(!ALL||!APP) return null; let id=''; try{ id=appIdOf(APP); }catch(e){}
   const ids=Object.keys(ALL.apps).filter(vis); return (id&&ids.includes(id))?id:(ids.find(z=>nameOf(z)===APP)||null); }
-// ---- the calendar: GA4 days (UTC); ft = the last final day (td − 2), td = the property's today ----
-// a period → [lo, hi]: Today / Yesterday = td / td − 1 (not final); 7 / 30 / 60 / 90 days = the last N FINAL days ending ft;
-// This month = its 1st … td; Last month = the month before; a month key = that month (the current one … td); All time = d0 …
-// td; Custom = the picked from / to inside [d0, td] (swapped when reversed)
+// ---- the calendar: GA4 days (UTC); td = the property's today, ft = the file's last final day (td − the store's final lag,
+// screens_build; td − 2 before the GA4 finality knob) ----
+// a period → [lo, hi]: Today / Yesterday = td / td − 1 (not final); 7 / 30 / 60 / 90 days = the last N days ending
+// td − PE_LAG, where they ended before the knob (owner, 17 Nov 2026: "data jese jese aata jaye ese ese bharte jao" — their
+// days after ft are in them, said not final; the signals, statuses and normals stay on final days: finals, normWin, the
+// build's); This month = its 1st … td; Last month = the month before; a month key = that month (the current one … td);
+// All time = d0 … td; Custom = the picked from / to inside [d0, td] (swapped when reversed)
+const PE_LAG=2;   // the 7 / 30 / 60 / 90 days end td − PE_LAG (a calendar end, never the final edge: that is the file's ft)
+const tdOf=x=>okD(x.td)?x.td:addD(x.ft,2);                   // the property's today
+const scNf=x=>okD(x.ft)?nD(x.ft,tdOf(x))-1:2;                 // the newest days not final yet: td − ft (2 before the knob)
+const nfMid=(x,d)=>okD(x.ft)&&d>x.ft&&d<addD(tdOf(x),-1);     // a not-final day before Yesterday (none while ft = td − 2)
 function rng(x,per,pf,pto){ per=per==null?PER:per; pf=pf==null?PF:pf; pto=pto==null?PTO:pto;
   if(!x||!okD(x.ft)) return ['',''];
-  const ft=x.ft, T=x.td||addD(ft,2), d0=x.d0||ft, m0=T.slice(0,8)+'01', n={'7':7,'30':30,'60':60,'90':90}[per];
+  const ft=x.ft, T=x.td||addD(ft,2), d0=x.d0||ft, m0=T.slice(0,8)+'01', n={'7':7,'30':30,'60':60,'90':90}[per], pe=okD(x.td)?addD(x.td,-PE_LAG):ft;
   if(per==='today') return [T,T]; if(per==='yday'){ const y=addD(T,-1); return [y,y]; }
-  if(n) return [addD(ft,-(n-1)),ft];
+  if(n) return [addD(pe,-(n-1)),pe];
   const ms=monSpan(per,T); if(ms) return ms;
   if(per==='tm') return [m0,T]; if(per==='lm'){ const l=addD(m0,-1); return [l.slice(0,8)+'01',l]; }
   if(per==='all') return [d0,T];
   if(per==='cus'){ const cl=v=>v<d0?d0:v>T?T:v; let f=cl(okD(pf)?pf:d0), t=cl(okD(pto)?pto:T); if(f>t) [f,t]=[t,f]; return [f,t]; }
-  return [addD(ft,-29),ft]; }
+  return [addD(pe,-29),pe]; }
 // the period's normal: the max(28, period length) FINAL days just before it (a not-final period: ending ft)
 function normWin(x,lo,hi){ const L=Math.max(28,nD(lo,hi)), e0=addD(lo,-1), e=e0<x.ft?e0:x.ft; return [addD(e,-(L-1)),e]; }
 // final days of [lo, hi] inside the app's life
@@ -7724,13 +7740,14 @@ function kindTot(x,i){ const items=x.items||[], it=items[i]; if(!it) return null
 function itemShare(x,i,lo,hi){ const T=kindTot(x,i); if(!T) return null; let a=0,t=0;
   spanK(x,lo,hi,k=>{ const V=itemV(x,i,k), A=itemA(x,i,k); if(V==null||A==null||T[k]==null) return; a+=A; t+=T[k]; });
   return t>0?a/t:null; }
-// the row's period vs its normal: score = 100 × rate ÷ normal rate; muted ("short period") under 7 final days; none for All
-// time; none either ("low") when the row holds under MAT of the app's ads of its kind in the period and in the normal (a
-// ratio of near-zero rates is no finding — the build's "Too few ads")
+// the row's period vs its normal: score = 100 × rate ÷ normal rate — the rate of the period's FINAL days (≤ ft: its days
+// after it, GA4 still adding, are never judged; none: no score), the shown numbers the whole period's; muted ("short
+// period") under 7 final days; none for All time; none either ("low") when the row holds under MAT of the app's ads of its
+// kind in the period and in the normal (a ratio of near-zero rates is no finding — the build's "Too few ads")
 const MAT=0.01;
-function perScore(x,i,lo,hi,all){ const p=sumItem(x,i,lo,hi), nw=all?null:normWin(x,lo,hi), q=nw?sumItem(x,i,nw[0],nw[1]):null, fin=finals(x,lo,hi);
+function perScore(x,i,lo,hi,all){ const p=sumItem(x,i,lo,hi), pf=hi>x.ft?sumItem(x,i,lo,x.ft):p, nw=all?null:normWin(x,lo,hi), q=nw?sumItem(x,i,nw[0],nw[1]):null, fin=finals(x,lo,hi);
   const sh=[itemShare(x,i,lo,hi),nw?itemShare(x,i,nw[0],nw[1]):null].filter(ok), low=sh.length>0&&Math.max(...sh)<MAT;
-  return {p,q,nw,fin,muted:fin<7,low,score:!all&&!low&&p.rate!=null&&q&&q.rate>0?Math.round(100*p.rate/q.rate):null}; }
+  return {p,q,nw,fin,muted:fin<7,low,score:!all&&!low&&pf.rate!=null&&q&&q.rate>0?Math.round(100*pf.rate/q.rate):null}; }
 // the app's own totals from GA4's truth (date × format, whole on every app): views, inline / full-screen / not recorded ads
 // — kept per (the app's data object = its build, the period's dates): a sort / chip tap or the 5-minute refresh on the same
 // build never sums the days again (a new build's file is a new object)
@@ -7740,9 +7757,9 @@ function appSum(x,lo,hi){ const mk=lo+'|'+hi, memo=x&&typeof x==='object'?(ASUM.
   spanK(x,lo,hi,k=>{ nd++; const V=(x.vis||[])[k], t=(x.ta||[])[k]; if(V!=null){ vAll+=+V; nv++; } if(V==null||!t) return; v+=+V; il+=+t[0]||0; fl+=+t[1]||0; ns+=+t[2]||0; n++; });
   const r={v:n?v:null, il:n?il:null, fl:n?fl:null, ns:n?ns:null, n, nd, vAll:nv?vAll:null, nv, ir:n&&v>0?il/v*100:null, fr:n&&v>0?fl/v*100:null};
   if(memo){ memo.set(mk,r); ASUM.set(x,memo); } return r; }
-function appScore(x,lo,hi,all){ const p=appSum(x,lo,hi), nw=all?null:normWin(x,lo,hi), q=nw?appSum(x,nw[0],nw[1]):null, fin=finals(x,lo,hi);
-  const sc=(a,b)=>!all&&a!=null&&b>0?Math.round(100*a/b):null;
-  return {p,q,fin,muted:fin<7,is:sc(p.ir,q&&q.ir),fs:sc(p.fr,q&&q.fr)}; }
+function appScore(x,lo,hi,all){ const p=appSum(x,lo,hi), pf=hi>x.ft?appSum(x,lo,x.ft):p, nw=all?null:normWin(x,lo,hi), q=nw?appSum(x,nw[0],nw[1]):null, fin=finals(x,lo,hi);
+  const sc=(a,b)=>!all&&a!=null&&b>0?Math.round(100*a/b):null;   // (the score on the final days, as perScore's)
+  return {p,q,fin,muted:fin<7,is:sc(pf.ir,q&&q.ir),fs:sc(pf.fr,q&&q.fr)}; }
 // ---- Imp / user / day (owner, 6–7 Nov 2026: "total user ke samne kitna impression mila vo imp hota he"): a SCREEN row =
 // its ads ÷ that screen's own daily users (file 2 "U", per final day ≤ ftU; "Us" their file 2 screen indexes; GA4's users
 // are unique within one day and one screen only: the Σ over days is user-days, never added across screens); a full-screen
@@ -7750,6 +7767,8 @@ function appScore(x,lo,hi,all){ const p=appSum(x,lo,hi), nw=all?null:normWin(x,l
 // final day with both user reads (one end per app). Never Today / Yesterday: no daily users yet, and the screen users are
 // read hours apart from the ads while GA4 still adds to both (NFW) ----
 const NFW='Today / Yesterday: daily users ~2 din baad aate hain — imp / user nahi; ads ⏳ abhi badhenge';
+// a not-final day before Yesterday (nfMid: only once ft < td − 2): its users are read but not final yet
+const nfx=x=>`abhi final nahi (GA4 ~${scNf(x)} din me final hota hai) — imp / user sirf final din pe; ads ⏳ abhi badhenge`;
 const AGGW='screens ke users jode nahi ja sakte (GA4 user sirf ek screen aur ek din ke andar unique)';
 const ftuOf=x=>x&&okD(x.ftu)?x.ftu:x.ft;
 // item i's users column in file 2 (by class name: the two files can be a build apart for a moment) and file 2's day index of
@@ -7809,12 +7828,12 @@ function addUp(t,ps){ const dp=t>=100?0:t>=10?1:t>=1?2:3, s=10**dp, T=Math.round
   for(let d=T-P.reduce((q,v)=>q+v,0);d;){ const g=Math.sign(d); let j=0; for(let q=1;q<P.length;q++) if(g*e[q]>g*e[j]) j=q; P[j]+=g; e[j]-=g; d-=g; }
   const f=v=>dp?(v/s).toFixed(dp):v.toLocaleString('en-US'); return {t:f(T),p:P.map(f)}; }
 // why a row has no per-user number: Today / Yesterday · file 2 has no users column for it · the users read's days
-function puWhy(x,f2,i,lo,hi){ if(lo>ftuOf(x)) return NFW; if(f2&&Array.isArray(f2.U)&&uCol(x,f2,i)<0) return 'users ka data nahi';
+function puWhy(x,f2,i,lo,hi){ if(lo>ftuOf(x)) return nfMid(x,lo)?nfx(x):NFW; if(f2&&Array.isArray(f2.U)&&uCol(x,f2,i)<0) return 'users ka data nahi';
   const fu=ftuOf(x), cu=cover(x,['uV'],lo,hi>fu?fu:hi); return cu.c.w?'ads aur users ek hi din whole nahi aaye':(covWhy(x,['uV'],cu)||'users ka data nahi'); }
 // why the app has none: Today / Yesterday · the build's why (auw) when it shipped no daily users · the period after their
 // last day · none in the period
 const AUW={stream:'app ke daily users doosre GA4 stream ke hain — gine nahi',cut:'GA4 ne daily users ki report kaat di',none:'app ke daily users (Active users) nahi aaye'};
-function auWhy(x,lo){ if(lo>ftuOf(x)) return NFW; const au=x.au; if(!Array.isArray(au)) return AUW[x.auw]||AUW.none;
+function auWhy(x,lo){ if(lo>ftuOf(x)) return nfMid(x,lo)?nfx(x):NFW; const au=x.au; if(!Array.isArray(au)) return AUW[x.auw]||AUW.none;
   let k=au.length-1; while(k>=0&&!(+au[k]>0)) k--; const last=k>=0?addD(x.d0,k):null;
   return last&&lo>last?`daily users ${fdy(last)} tak hi aaye (Active users data)`:'is period ke dinon ke daily users nahi aaye'; }
 // the ads of [lo, hi] after ftU (Today / Yesterday and the days the users have not reached): "ads N ⏳"
@@ -8089,7 +8108,7 @@ function allHtml(){ const L=apps(); if(!L.length) return '<div class="card sc-ca
   return `<div class="card sc-card sc-stk" id="sc-stk">${perCtl(ref)}</div>`+ga4Note(L)
     +`<div class="card sc-card"><div class="ct"><h3>Data coverage</h3><span class="sc-faint">har piece kitne apps pe poora (whole) aaya</span></div>${covHtml(L)}</div>`
     +`<div class="card sc-card"><div class="ct"><h3>All apps</h3><span class="sc-faint">app pe tap = us app ke screens · column pe tap = sort</span></div>${allTable4(rows)}</div>`
-    +`<p class="sc-note">GA4 data till ${fdy(ref.ft)} (aakhri 2 din GA4 me abhi badalte hain). <b>Users</b> = GA4 Active users, is period me unique · <b>Ads</b> = GA4 ad impressions${devV()?'':' · <b>Revenue</b> = AdMob'} · <b>Signals</b> = ${SIGI.b} Ads ki jagah · ${SIGI.w} Ads waste · ${SIGI.d} Gira (is period ke).</p>`; }
+    +`<p class="sc-note">GA4 data till ${fdy(ref.ft)} (aakhri ${scNf(ref)} din GA4 me abhi badalte hain). <b>Users</b> = GA4 Active users, is period me unique · <b>Ads</b> = GA4 ad impressions${devV()?'':' · <b>Revenue</b> = AdMob'} · <b>Signals</b> = ${SIGI.b} Ads ki jagah · ${SIGI.w} Ads waste · ${SIGI.d} Gira (is period ke).</p>`; }
 // ---- one app ----
 function tile(l,v,sub,cls,tt){ return `<div class="sc-k${cls?' '+cls:''}"${tt?` title="${E(tt)}"`:''}><div class="sc-kl">${l}</div><div class="sc-kv">${v}</div><div class="sc-ks">${sub}</div></div>`; }
 // the App total (3 rows, from scr_all alone — no ⏳, no late redraw): Daily users, Views / user / day, Imp / user / day (+ the
@@ -8188,11 +8207,13 @@ function perTime(x,f2,i,lo,hi){ const it=(x.items||[])[i], e={tv:null,am:null,tv
     v0+=v; g0+=g; n0++; const A=itemA(x,i,k); if(A!=null&&itemV(x,i,k)!=null){ a1+=A; g1+=g; n1++; } });
   return Object.assign(e,{nd,tvN:n0,sg:g0,sv:v0,tv:n0&&v0>0?g0/v0:null,amN:n1,sa:a1,sm:g1,am:n1&&g1>0&&v0>0?a1/(g1/60):null}); }
 // ---- Fill and Show rate (file 2: "adm" per unit [req, matched, imp] per GA4 day, null where AdMob is not complete; the
-// period's FINAL days with every unit complete — Today / Yesterday never) ----
-function admDays(f2,x,lo,hi){ const adm=(f2&&f2.adm)||{}, ks=Object.keys(adm), d0=f2&&f2.d0||x.d0, b=hi<x.ft?hi:x.ft, K=[]; if(!ks.length||!d0||lo>b) return K;
+// period's FINAL days with every unit complete — Today / Yesterday never; ae: the AdMob-only pool's own last day, admEnd —
+// AdMob's numbers never wait for GA4's final day; without it the days ≤ ft, the rows whose σ is GA4's) ----
+function admDays(f2,x,lo,hi,ae){ const adm=(f2&&f2.adm)||{}, ks=Object.keys(adm), d0=f2&&f2.d0||x.d0, e=ae||x.ft, b=hi<e?hi:e, K=[]; if(!ks.length||!d0||lo>b) return K;
   const n=Math.max(...ks.map(u=>Array.isArray(adm[u])?adm[u].length:0)), i1=Math.min(n-1,dIx({d0},b));
   for(let k=Math.max(0,dIx({d0},lo));k<=i1;k++) if(ks.every(u=>Array.isArray(adm[u])&&adm[u][k])) K.push(k); return K; }
-const admWhy=(x,lo)=>lo>x.ft?'AdMob ~1–2 din baad pura hota hai':'is period me AdMob ke poore din nahi';
+const admEnd=x=>okD(x.td)?addD(x.td,-PE_LAG):x.ft;   // the page's latest day (td − 2): AdMob's complete days reach it, as before the GA4 knob
+const admWhy=(x,lo,ae)=>lo>(ae||x.ft)?(!ae&&nfMid(x,lo)?'is period ke GA4 din abhi final nahi — Fill / Show rate sirf final din pe':'AdMob ~1–2 din baad pura hota hai'):'is period me AdMob ke poore din nahi';
 // a unit's AdMob format (file 2 "ufmt"; a file without it: GA4's)
 const ufOf=(f2,ui)=>{ const u=Array.isArray(f2.ufmt)?f2.ufmt[ui]:null; return typeof u==='string'&&u?u:fmtOf(((f2.units||[])[ui]||[])[1]); };
 const abSum=(A,K)=>{ const X=[0,0,0]; for(const k of K){ const v=A[k]; X[0]+=+v[0]||0; X[1]+=+v[1]||0; X[2]+=+v[2]||0; } return X; };
@@ -8261,12 +8282,12 @@ function abTrig0(x,f2,i,lo,hi){ const it=(x.items||[])[i], e={fill:null,show:nul
   if(!Object.keys(e.p).length){ e.why=`GA4 unit names AdMob me nahi mile (${P1(e.unm)} of ads)`; return e; }
   if(!K.length){ e.why=admWhy(x,lo); return e; }
   return abFin(e); }
-// whole units pooled (σ = 1): the App total's (every AdMob unit of the app, one per ids tuple); a part's share = its share of
-// the requests
+// whole units pooled (σ = 1): the App total's (every AdMob unit of the app, one per ids tuple), on AdMob's own complete days
+// to the page's latest day (admEnd: nothing of GA4 in it); a part's share = its share of the requests
 function abPool(f2,x,uis,lo,hi){ return f2&&typeof f2==='object'?abMemo(f2,x,'p'+uis.join(',')+'|'+lo+'|'+hi,()=>abPool0(f2,x,uis,lo,hi)):abPool0(f2,x,uis,lo,hi); }
 function abPool0(f2,x,uis,lo,hi){ const e={fill:null,show:null,req:0,mt:0,imp:0,p:{},sig:null,unm:0,sh:[],nK:0,why:''}; if(!f2) return e;
   const adm=f2.adm||{}, U=f2.units||[]; if(!Object.keys(adm).length){ e.why='AdMob data nahi'; return e; }
-  const K=admDays(f2,x,lo,hi), seen=new Set(); e.nK=K.length; if(!K.length){ e.why=admWhy(x,lo); return e; }
+  const ae=admEnd(x), K=admDays(f2,x,lo,hi,ae), seen=new Set(); e.nK=K.length; if(!K.length){ e.why=admWhy(x,lo,ae); return e; }
   for(const ui of uis){ const u=U[ui], ids=u&&Array.isArray(u[2])?u[2]:[], t=ids.slice().sort().join(','); if(!ids.length||!Array.isArray(adm[ui])||seen.has(t)) continue; seen.add(t);
     const X=abSum(adm[ui],K), P=e.p[ufOf(f2,ui)]||(e.p[ufOf(f2,ui)]=[0,0,0,0]); P[1]+=X[0]; P[2]+=X[1]; P[3]+=X[2]; }
   if(!seen.size){ e.why='GA4 unit names AdMob me nahi mile'; return e; }
@@ -8428,7 +8449,7 @@ function userDays(x,f2,i,lo,hi){ const it=x.items[i], fs=it[1]==='fs', out=[], f
   const c=!fs&&f2?tcube(f2,x):null, off=fOff(x,f2), U=(f2&&f2.U)||[], j=fs?-1:uCol(x,f2,i);
   span(x,lo,hi,(k,d)=>{ const A=itemA(x,i,k), V=itemV(x,i,k); let u=null, why='';
     if(A==null){ const c0=String((x.st||{})[fs?'w':'a']||'').charAt(k)||'-'; why=c0==='w'||c0==='p'?(fs?'units ka data nahi':'format not split (GA4 ne sirf screen-wise diya)'):(STW[c0]||'not whole'); }
-    else if(d>fu) why='users abhi nahi (~2 din baad)'; else if(fs){ if(+au[k]>0) u=+au[k]; else why=auWhy(x,d); }
+    else if(d>fu) why=nfMid(x,d)?'abhi final nahi':'users abhi nahi (~2 din baad)'; else if(fs){ if(+au[k]>0) u=+au[k]; else why=auWhy(x,d); }
     else if(!f2) why='aa raha hai…'; else { const r=U[k+off], q=k+off; if(j>=0&&r&&+r[j]>0&&q>=0&&c.has[q]&&V!=null) u=+r[j]; else why=j<0?'users ka data nahi':r&&+r[j]===0?'is din koi user nahi':'users ka read whole nahi'; }
     out.push([d,u,A,why,+au[k]>0?+au[k]:null]); }); return out; }
 function ovSec(x,id,i,lo,hi){ const it=x.items[i], fs=it[1]==='fs', ag=it[1] in AGG, all=PER==='all', f2=f2Of(id), ps=perScoreU(x,f2,i,lo,hi,all), sc=perScore(x,i,lo,hi,all);
@@ -8644,7 +8665,7 @@ function repBody(id){ const x=ALL&&ALL.apps[id]; if(!x||!x.d0) return '<p class=
   return t==null?repWait4(id,'app'):copyBox(t,'app'); }
 function howBody(x){ const g=(typeof DATA!=='undefined'&&DATA&&DATA.generated_at)||''; let ist='';
   try{ if(g){ const t=new Date(Date.parse(g)+19800000); if(isFinite(t)) ist=fd(iso(t))+' '+String(t.getUTCHours()).padStart(2,'0')+':'+String(t.getUTCMinutes()).padStart(2,'0')+' IST'; } }catch(e){}
-  return `<p class="sc-note">GA4 din = <b>5:30 AM IST se agle din 5:30 AM IST tak</b> (UTC din). GA4 data till <b>${fdy(x.ft)}</b>; Today / Yesterday abhi final nahi.${ist?` Build: ${ist}.`:''}</p>`
+  return `<p class="sc-note">GA4 din = <b>5:30 AM IST se agle din 5:30 AM IST tak</b> (UTC din). GA4 data till <b>${fdy(x.ft)}</b>; ${scNf(x)===2?'Today / Yesterday':`pichhle ${scNf(x)} din`} abhi final nahi.${ist?` Build: ${ist}.`:''}</p>`
     +'<p class="sc-note"><b>Table (Firebase jaisa)</b>: <b>Users</b> = GA4 Active users, chune hue period me unique (Firebase ka "Active users" — roz ka jod nahi; dashboard ke periods pe, Custom range pe nahi) · <b>Views</b> = screen views · <b>Time / user</b> = engagement time ÷ Users (Firebase ka "Average engagement time per active user") · <b>Ads</b> = ad impressions (screens: GA4, saare formats)'
     +(devV()?'':' · <b>Revenue</b> = GA4 revenue by screen (Firebase ka "Total revenue") · <b>%</b> = screens: app ke GA4 revenue ka hissa, full-screen: AdMob total ka hissa')   // (a developer's copy: no money)
     +'. <b>Full-screen rows</b> (app open / interstitial / rewarded) = AdMob ke units, trigger ke naam se, AdMob ke apne din (IST) — GA4 inhe "AdActivity" pe dikhata hai; jis app ke AdMob full-screen units nahi, uske ad screens apni rows me (GA4 ke numbers).</p>'
@@ -8668,6 +8689,13 @@ const SIGI={b:'💡',w:'⚠️',d:'🔻'}, SIGN={b:'Ads ki jagah',w:'Ads waste',
 // a period's key: its days on the app's calendar (days before d0 hold nothing: the build's periods start there too)
 const pk=(x,lo,hi)=>(x&&x.d0&&lo<x.d0?x.d0:lo)+'_'+hi;
 const pwOf=(f2,key)=>(Array.isArray(f2&&f2.pw)?f2.pw:[]).find(w=>Array.isArray(w)&&w[0]===key)||null;
+// the days a period's signals are judged on (screens_build.sig_win, the same rule): one of the build's 7 / 30 / 60 / 90
+// days (pw "roll") ending after ft (GA4_FINAL_DAYS: its newer days not final) → as many FINAL days ending ft, never before
+// d0; any other period (and every one while ft is its end, as before the knob) → itself
+function sigWin(x,pw,lo,hi){ if(!(pw&&pw[3]==='roll'&&okD(x.ft)&&okD(pw[1])&&okD(pw[2])&&pw[2]>x.ft)) return [lo,hi];
+  const a=addD(x.ft,-(nD(pw[1],pw[2])-1)); return [x.d0&&a<x.d0?x.d0:a,x.ft]; }
+// said once where the signals are shown (their card's head, the report) when those days are not the period's own
+const sigNote=R=>R&&R.sw?`Signals pichhle ${nD(R.sw[0],R.sw[1])} final din (${rg(R.sw[0],R.sw[1])}) pe judge hue — is period ke naye din abhi final nahi.`:'';
 // revenue micros (USD) → the dashboard's currency (cents under 100: a small screen's few cents never read "$0")
 const MU=v=>!ok(v)?'—':v<0?'−'+MU(-v):(Math.abs(v/1e6*cfx())<100?cm(v/1e6,2):money(v/1e6));
 // a developer's copy of the dashboard (window.__DEV_VIEW__, as the CPI vs eCPM screen's): no money anywhere — no Revenue,
@@ -8702,7 +8730,7 @@ function v4Rows(x,f2,lo,hi){ let m=V4M.get(f2); if(!m||m.x!==x){ m={x,v:new Map(
     const a=d.a; if(a&&Array.isArray(a.r)){ na++; if(a.g==='c') ng++; for(const q of a.r){ if(q[0]<n) A[q[0]]+=a.g==='f'?(+q[1]||0)+(+q[2]||0)+(+q[3]||0):(+q[q.length-1]||0); } }
     else if(a&&a.r==null) nc++; else if(!a&&d.st&&['o','s','t'].includes(d.st.a)) nx++; else if(!a&&d.st&&d.st.a==='x') nb++;
     if(Array.isArray(d.m)){ nm++; for(const q of d.m){ if(q[0]<n){ R[q[0]]+=+q[1]||0; RA[q[0]]+=+q[2]||0; } } } });
-  const key=pk(x,lo,hi), pw=pwOf(f2,key), pu=(f2.pu||{})[key]||null, us={}, fin=finals(x,lo,hi);
+  const key=pk(x,lo,hi), pw=pwOf(f2,key), pu=(f2.pu||{})[key]||null, us={}, sw=sigWin(x,pw,lo,hi), fin=finals(x,sw[0],sw[1]);
   if(pu&&Array.isArray(pu.u)) for(const q of pu.u) us[q[0]]=+q[1]||0;
   // (no final day in the period: no signal anywhere — none sorts a row or keeps it in view either)
   const sig=pw&&fin?((f2.sig||{})[key]||{}):null, items=x.items||[], ix={};
@@ -8756,7 +8784,7 @@ function v4Rows(x,f2,lo,hi){ let m=V4M.get(f2); if(!m||m.x!==x){ m={x,v:new Map(
   const scrWhy=!na?'screen-wise ads ka koi whole din nahi':noF?'GA4 ne screen-wise ads format ke bina diye (inline ads alag nahi hote)':'final dino me screen-wise ads ka koi poora din nahi';
   const scrWhyEn=!na?'No whole day of ads by screen in this period':noF?'GA4 gave the ads by screen without the format in this period':'No final day with whole ads by screen in this period';
   // (v4off: a period inside the app's history whose file has no v 4 periods — the build's v 4 failed for this app this run)
-  const out={rows,tot,nd,nv,na,nm,nc,nx,fsn,key,pw,pu,sig:!!sig,fin,cur,revWhy,adWhy,noFs,scrNo,scrWhy,scrWhyEn,
+  const out={rows,tot,nd,nv,na,nm,nc,nx,fsn,key,pw,pu,sig:!!sig,fin,sw:sw[1]!==hi?sw:null,cur,revWhy,adWhy,noFs,scrNo,scrWhy,scrWhyEn,
     v4off:!(Array.isArray(f2.pw)&&f2.pw.length)&&!(x.d0&&hi<x.d0)}; m.v.set(mk,out); return out; }
 // why a period has no users / signals (never a silent "—"); the build's v 4 failed for this app: said so (health "scr v4")
 const V4OFF='is build me Users / Signals / full-screen (AdMob) rows nahi bane — robot error, health me "scr v4"; agle build me aayenge';
@@ -8828,12 +8856,13 @@ const sgYes=(id,key)=>{ const s=((ALL&&ALL.apps[id]&&ALL.apps[id].sg)||{})[key];
 function sigBody(x,id,lo,hi){ const f2=f2Of(id), a2=apPtr(id); if(!a2) return `<div class="ct"><h3>Signals</h3></div>${fileGate(id,'f2')}`; if(!f2) return `<div class="ct"><h3>Signals</h3></div>${a2&&fErr(f2Name(a2))?waitHtml(f2Name(a2)):'<p class="sc-note">⏳ aa rahe hain…</p>'}`;
   const R=v4Rows(x,f2,lo,hi), L=[];
   if(!R.pw) return `<div class="ct"><h3>Signals</h3></div><p class="sc-note">${E(puWhy4(x,f2,lo,hi,R))}</p>`;
-  if(!R.fin) return `<div class="ct"><h3>Signals · ${E(perName(PER))}</h3></div><p class="sc-note">Is period me abhi koi final din nahi (GA4 ~2 din baad final hota hai) — signals final dino pe hi lagte hain.</p>`;
+  if(!R.fin) return `<div class="ct"><h3>Signals · ${E(perName(PER))}</h3></div><p class="sc-note">Is period me abhi koi final din nahi (GA4 ~${scNf(x)} din baad final hota hai) — signals final dino pe hi lagte hain.</p>`;
   for(const z of sortV4(R.rows)) for(const s of z.sig||[]) L.push({z,s});
   L.sort((a,b)=>'wdb'.indexOf(a.s[0])-'wdb'.indexOf(b.s[0])||(b.z.rev||0)-(a.z.rev||0));
   const c3=[0,0,0]; L.forEach(q=>{ c3['bwd'.indexOf(q.s[0])]++; });
   const sg0=((ALL&&ALL.apps[id]&&ALL.apps[id].sg)||{})[R.key], nul=j=>Array.isArray(sg0)&&sg0[j]==null, cv=j=>nul(j)?'—':c3[j];   // (— = not judged in it)
-  const head=`<div class="ct"><h3>Signals · ${E(perName(PER))}</h3><span class="sc-faint" title="${E(SGW)}">${SIGI.b} ${cv(0)} · ${SIGI.w} ${cv(1)} · ${SIGI.d} ${cv(2)}</span></div>`;
+  const head=`<div class="ct"><h3>Signals · ${E(perName(PER))}</h3><span class="sc-faint" title="${E(SGW)}">${SIGI.b} ${cv(0)} · ${SIGI.w} ${cv(1)} · ${SIGI.d} ${cv(2)}</span></div>`
+    +(R.sw?`<p class="sc-note">⏳ ${E(sigNote(R))}</p>`:'');   // (the days judged, when not the period's own)
   if(!L.length){ const K=j=>SIGI['bwd'[j]];
     // (no screen could be judged: the period's own cause — the kinds the build judged on the full-screen (AdMob) rows, on
     // AdMob's own days, named; none named without such rows)
@@ -8863,6 +8892,7 @@ function v4Report(x,id,lo,hi,i){ const f2=f2Of(id); if(!f2) return null; const R
   if(!R.pw){ o.push(PER==='cus'?'Signals are judged on the dashboard periods only (not a custom range).':R.v4off?'This build could not make the users and signals of this app (a build error, health "scr v4"); the next build brings them.'
     :`No data for this app in this period (its history starts ${fdy(x.d0)}).`); return o.join('\n'); }
   if(!R.fin){ if(i!=null) return null; o.push('No final day in this period yet (GA4 settles ~2 days later): no signals.'); return o.join('\n'); }
+  if(R.sw) o.push(`Signals judged on the last ${nD(R.sw[0],R.sw[1])} final days, ${rg(R.sw[0],R.sw[1],true)} (the period's newer days are not final yet).`);
   const it=i==null?null:(x.items||[])[i], mine=z=>!it||(it[1]==='fs'?z.t==='f'&&z.name===it[0]&&fmtOf(z.fmt)===fmtOf(it[2]):z.t==='s'&&z.c===it[0]);
   let n=0; for(const z of sortV4(R.rows)) for(const s of (mine(z)?z.sig:null)||[]){ n++;
     const what=s[0]==='b'?`${PSH(s[1])} of the app's screen time, ${PSH(s[2])} of its ads`:s[0]==='w'?`${s[1]}: ${N(s[4])} filled, ${N(s[5])} shown (${PI(s[2])}); not shown = ${PSH(s[3])} of all the app's fills${okD(s[6])&&okD(s[7])?`; the units' share on the screen from the split days ${rg(s[6],s[7],true)} (the period had under 3 of its own)`:''}`:`impressions per user per day ${PU(s[1])} → ${PU(s[2])} (${PCH(s[1],s[2])}) vs ${rg(s[3],s[4],true)}`;
@@ -9058,7 +9088,7 @@ function show(){ paint(); }
 function left(){ let has=false; try{ has=typeof HB!=='undefined'&&HB.st.some(z=>z.tag==='scr-dd'); }catch(e){} if(!has) return;
   Promise.resolve().then(()=>{ if(onScreen()) return; OPEN=null; try{ hbDrop('scr-dd'); }catch(e){} }); }
 return {ptr, ensure, render, paint, show, left, ready:()=>!!ALL&&!!ptr(), fold:(k,o)=>{ FOLD[k]=!!o; },
-  _:{v4Rows, v4Report, v4Table, sigCard, sigShort, sigLong, pk, appRow4, allTable4, shortName, rng, normWin, normWinU, finals, sumItem, itemShare, perScore, perScoreU, sumScr, sumTrig, appU, chainOf, ftuOf, perTime, fmtT, endSnap, bannerSec, addUp, appSum, appScore, cover, coverAll, covWhy, dayState, apps, topSplit, tableRows, sortItems, sortApps, appRow, dispName, itemName, fmtOf,
+  _:{v4Rows, v4Report, v4Table, sigCard, sigShort, sigLong, pk, sigWin, sigNote, appRow4, allTable4, shortName, rng, normWin, normWinU, finals, sumItem, itemShare, perScore, perScoreU, sumScr, sumTrig, appU, chainOf, ftuOf, perTime, fmtT, endSnap, bannerSec, addUp, appSum, appScore, cover, coverAll, covWhy, dayState, apps, topSplit, tableRows, sortItems, sortApps, appRow, dispName, itemName, fmtOf,
     chartModel, perLine, tipText, drawChart, rg, fd, copy, perRestore, perLoad, keep, arrive, allHtml, appHtml, secHtml, ddHtml, foldsHtml, totalHtml, attnHtml, tableHtml, userDays, layerPeriod, WDK, RANK, PIECES, SECS, FILES, chip, PU, PQ, abRates, abTrig, abPool, abLow, admDays, absW, achip, arank, stChip, stWhy, czTd, ddSt, absHtml, benchHtml, totTable, PCT, PI, vsP, ABCHK, AWD, ARANK, appAbs, absAppChip, ownLine, appSub, late, roomBelow,
     get:()=>({PER,PF,PTO,OPEN,SEC,SEG,MORE,COVP,SORT,TS,CH,OPENAPP}), set:o=>{ if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o){ OPEN=o.OPEN; OPENAPP=OPEN==null?null:appIdNow(); } if('SEC' in o) SEC=o.SEC;
       if('SEG' in o) SEG=o.SEG; if('MORE' in o) MORE=o.MORE; if('COVP' in o) COVP=o.COVP; if('PREAD' in o) PREAD=o.PREAD; if('TS' in o) TS=o.TS; if('SORT' in o) SORT=o.SORT; if('CH' in o) CH=o.CH; }}};
@@ -9586,6 +9616,11 @@ const num=v=>typeof v==='number'&&isFinite(v)?v:null;                      // a 
 const bePct=v=>Math.round(v*100)+'%';
 const beDash=w=>`<span class="cpx-nv" title="${E(w)}">—</span>`;            // every "—" says why
 function beP(){ if(dev()) return null; const d=DD(), p=d&&d.be; return p&&p.v===1&&p.apps&&typeof p.apps==='object'&&!Array.isArray(p.apps)?p:null; }
+// the build's own lags (be_build, from the GA4 finality knob): "pv" = an install day younger than this many days is not final
+// yet (⏳), "lag" = a ROAS day's data is final this many days after it; a pointer without them: the numbers before the knob
+const beLim=(k,d)=>{ const p=beP(), v=p?num(p[k]):null; return v!=null&&v>=1?Math.round(v):d; };
+const bePv=()=>beLim('pv',4), beLag=()=>beLim('lag',3);
+const beLagT=()=>{ const l=beLag(); return l===3?'2–3':String(l); };   // "… din me final" (at 3 the words before the knob)
 function beA(id){ const p=beP(), a=p&&has(p.apps,id)?p.apps[id]:null; return a&&typeof a.key==='string'&&/^[0-9a-f]{12}$/.test(a.key)&&a.file==='be_'+a.key+'.json.gz'?a:null; }
 function beF(id){ const a=beA(id), st=a&&FILES[a.file]; return st&&st.raw&&st.raw.key===a.key?st.raw:null; }
 function ensureBe(id){ const a=beA(id); if(!a) return; loadF(a.file,a.v,j=>!!j&&j.v===1&&j.key===a.key&&Array.isArray(j.days),()=>arrive(id)); }
@@ -9776,7 +9811,7 @@ const beIns=(h,s)=>{ const m=/<\/(?:b|span)>/.exec(h); if(!m) return h+s; const 
 // the open day: its covered countries, one "data kam" line for the rest (the names on tap), its ROAS card
 function beDet(x,k,pv){ const o=[], C=(Array.isArray(x.cty)?x.cty:[]).filter(c=>Array.isArray(c)&&typeof c[0]==='string'&&c[0]).sort((p,q)=>(num(q[1])||0)-(num(p[1])||0));
   if(x.chk===1) o.push(`<p class="cpx-fn"><b class="cpx-chk">data check</b> — ${E(BECHK)}.</p>`);
-  if(pv) o.push('<p class="cpx-fn">⏳ <b>Abhi final nahi</b> — ye install din 4 din se kam purana hai: GA4 ki country aur first-session report abhi badal sakti hai, aur Google Ads ke installs bhi 1–2 din me poore judte hain (CPI abhi thoda zyada dikh sakta hai) — andaza bhi badlega.</p>');
+  if(pv) o.push('<p class="cpx-fn">⏳ <b>Abhi final nahi</b> — ye install din '+bePv()+' din se kam purana hai: GA4 ki country aur first-session report abhi badal sakti hai, aur Google Ads ke installs bhi 1–2 din me poore judte hain (CPI abhi thoda zyada dikh sakta hai) — andaza bhi badlega.</p>');
   if(C.length) o.push(`<h4 class="cpx-h4">Countries with a benchmark (${C.length})</h4><div class="cpx-x"><table class="cpx-t"><thead><tr><th>Country</th><th class="cpx-ben">Spend share</th><th class="cpx-ben" title="Google Ads spend ÷ installs. Saath me B = benchmark: is country ke purane install dino ka median CPI">CPI</th><th class="cpx-ben" title="is din ke users ka pehle session ka eCPM (upar chuni currency me), jo BE ke formula me lagta hai. Saath me B = benchmark: is country ke purane install dino ka median">eCPM</th><th title="is country ka breakeven: BE ho chuka to asli din, warna is din ke CPI / eCPM pe is country ke purane dino se bana andaza (80% range). Saath me B = benchmark: is country ke purane install dino ka median BE din">Breakeven</th></tr></thead><tbody>`
     +C.map(c=>{ const sh=num(c[1]), cp=num(c[2]), ec=num(c[3]), bm=beBm(c[12]), rk=num(c[11]), bd=num(c[7]);
       return `<tr><td>${E(ctyName(c[0]))}</td><td class="cpx-ben">${sh!=null?E(bePs(sh)):beDash('spend share nahi aaya')}</td><td class="cpx-ben">${cp!=null?beCpi(cp,k):beDash('CPI nahi aaya')}${bm&&bm.c!=null?beB('B '+beCpi(bm.c,k),'benchmark CPI: is country ke purane install dino ka median',beVsB(cp,bm.c,'CPI',pv)):''}</td>`
@@ -9793,7 +9828,7 @@ function beDet(x,k,pv){ const o=[], C=(Array.isArray(x.cty)?x.cty:[]).filter(c=>
   o.push(beCard(x.card,x.ec,x.cw,x.ecs==='a'));   // (ecs "a": a Google Ads users file whose eCPM card is every user's read — its title says so)
   return `<div class="cpx-bed" id="cpx-bed">${o.join('')}</div>`; }
 // one install day's row (+ its details right under it when open)
-function beRow(x,nm,G){ const on=BOPEN===x.d, A=x.app&&typeof x.app==='object'&&!Array.isArray(x.app)?x.app:null, ag=num(x.age), pv=ag!=null&&ag<4, sp=num(x.sp), k=VIN()?beK(nm,x.d):1;
+function beRow(x,nm,G){ const on=BOPEN===x.d, A=x.app&&typeof x.app==='object'&&!Array.isArray(x.app)?x.app:null, ag=num(x.age), pv=ag!=null&&ag<bePv(), sp=num(x.sp), k=VIN()?beK(nm,x.d):1;
   const lim=A?num(A.lim):null, N=Array.isArray(x.now)?x.now:[], no=N[0]==='no', sa=num(N[no?1:3]), so=num(N[no?2:4]);   // its latest so-far read
   const RL=Array.isArray(x.real)?x.real:[], rv=H=>{ const i=G.indexOf(H); return i>=0?num(RL[i]):null; };   // its REAL ROAS (final cells)
   const why=H=>x.jd===0?'is din spend $5 se kam ya 30 se kam naye users — andaza nahi':!A?'kisi country ka benchmark nahi (ya chhoti country ka CPI / eCPM purani range ke bahar) — data kam, andaza nahi':lim!=null&&H>lim?'data itne din aage nahi dekha — ROAS ka andaza sirf '+Math.round(lim)+' din tak bana'
@@ -9804,7 +9839,7 @@ function beRow(x,nm,G){ const on=BOPEN===x.d, A=x.app&&typeof x.app==='object'&&
   const least=H=>bd!=null&&H>=bd?(bfin?beRoC(Math.max(1,rmax(H),sfin&&sa!=null&&sa<=H&&so!=null?so:0),H,'','least',true)
     :beRoC(Math.max(1,rmax(H),so!=null?so:0),H,'','least',sfin&&bk==='s')):null;   // broke even: ≥ 100 % (and ≥ what it showed already)
   const cell=H=>{ const r=rv(H); if(r!=null) return beRoC(r,H,'','real');                             // lived + final: asli
-    const v=A?beRo(A,G,H):null, nfw=ag!=null&&ag-H>3?H+' din ka data GA4 se poora nahi aaya — yahan asli number nahi (ab tak ka ROAS "So far" me)':H+' din ka data abhi final nahi (2–3 din me asli) — ab tak ka ROAS "So far" me';
+    const v=A?beRo(A,G,H):null, nfw=ag!=null&&ag-H>beLag()?H+' din ka data GA4 se poora nahi aaya — yahan asli number nahi (ab tak ka ROAS "So far" me)':H+' din ka data abhi final nahi ('+beLagT()+' din me asli) — ab tak ka ROAS "So far" me';
     if(sa!=null&&H<=sa){ const p=pvv(H); return p!=null?beRoC(p,H,'','nf'):H===sa&&so!=null?beRoC(so,H,'','nf'):least(H)||beDash(nfw); }   // lived, not final: its own number
     if(v!=null) return beRoC(v,H,why(H),so!=null&&Math.abs(v-so)<5e-5?'floor':'model',sfin);   // ahead: the model ("≥" at its so far)
     return least(H)||beDash(why(H)); };
@@ -9813,7 +9848,7 @@ function beRow(x,nm,G){ const on=BOPEN===x.d, A=x.app&&typeof x.app==='object'&&
     :A?beAppBe(A,G):beDash(why(0));
   const chk=x.chk===1?` <small class="cpx-chk" title="${E(BECHK)}">data check</small>`:'';
   return `<tr class="cpx-ber${on?' cpx-beon':''}" data-cpx-bed="${E(x.d)}"><td><button type="button" class="cpx-bedb" data-cpx-bed="${E(x.d)}" aria-expanded="${on}">${E(fd(x.d))}</button>`
-      +`${pv?' <span class="cpx-wat" title="abhi final nahi — 4 din se kam purana (GA4 country / first-session data aur Google Ads installs abhi badal sakte hain)">⏳</span>':''}</td>`
+      +`${pv?` <span class="cpx-wat" title="abhi final nahi — ${bePv()} din se kam purana (GA4 country / first-session data aur Google Ads installs abhi badal sakte hain)">⏳</span>`:''}</td>`
     +`<td>${beCell}${chk}</td><td>${beNow(x.now)}</td>`            // the answer first: in view on a phone too
     +[30,90,180].map(H=>`<td class="cpx-ben">${cell(H)}</td>`).join('')
     +`<td class="cpx-ben">${sp==null?beDash('spend nahi aaya'):beSp(sp,k)}</td><td class="cpx-ben">${num(x.inst)!=null?fN(x.inst):beDash('Google Ads installs nahi aaye')}</td></tr>`
@@ -9829,13 +9864,13 @@ function beAds(r,F,P){ const G=Array.isArray(F.grid)&&F.grid.length&&F.grid.ever
   const seen=new Set(), D=F.days.filter(x=>x&&typeof x==='object'&&okD(x.d)&&!seen.has(x.d)&&!!seen.add(x.d)).sort((p,q)=>p.d<q.d?1:-1);   // every day, newest first
   if(!D.length) return beSure(F,P)+'<p class="cpx-note">Is app ka koi judge layak install din nahi (spend $5+ aur 30+ naye users) — Breakeven ka andaza nahi.</p>';
   const show=D.slice(0,DN);   // (30 at a time, as Day-wise: "Show 30 more")
-  const hd='<tr><th>Date</th><th title="spend wapas kis din — real: BE ho chuka (final data) · not final: BE ho gaya, number abhi badal sakta hai · ≤ day N: us din ya pehle · not by day N: utne din tak wapas nahi aaya · warna curve se ROAS 100% ka din (80% range) ya beyond data · data check: us din ke pehle hafte me GA4 data me gap — number asal se kam dikh sakte hain">Breakeven</th><th title="aaj tak ka hisaab (pichhle 2–3 din ka abhi badal sakta hai)">So far</th>'
+  const hd='<tr><th>Date</th><th title="spend wapas kis din — real: BE ho chuka (final data) · not final: BE ho gaya, number abhi badal sakta hai · ≤ day N: us din ya pehle · not by day N: utne din tak wapas nahi aaya · warna curve se ROAS 100% ka din (80% range) ya beyond data · data check: us din ke pehle hafte me GA4 data me gap — number asal se kam dikh sakte hain">Breakeven</th><th title="aaj tak ka hisaab (pichhle '+beLagT()+' din ka abhi badal sakta hai)">So far</th>'
     +[30,90,180].map(H=>`<th class="cpx-ben" title="${H} din tak kamai ÷ spend (100% = breakeven) — din guzar chuke to asli, warna andaza">ROAS ${H} days</th>`).join('')
     +'<th class="cpx-ben">Spend</th><th class="cpx-ben" title="Google Ads installs">Installs</th></tr>';
   return beSure(F,P)+`<div class="cpx-x cpx-bex" id="cpx-bex"><table class="cpx-t cpx-bet"><thead>${hd}</thead><tbody>${show.map(x=>beRow(x,r.name,G)).join('')}</tbody></table></div>`
     +(D.length>DN?`<button type="button" class="cpx-more" data-cpx-more="1">Show 30 more</button>`:'')
     +'<p class="cpx-fn">Upar ka date picker is tab pe lagu nahi — yahan saare spend wale install din.</p>'
-    +'<p class="cpx-fn"><b>ROAS 30 / 90 / 180 din</b> = utne din tak kamai ÷ spend — jo din guzar chuke (final) unka asli, aage ka andaza (✓ = 100% ya zyada = breakeven; ≥ = itna to ho chuka) · Breakeven: real = BE ho chuka (final), not final = BE ho gaya par number badal sakta hai, not by day N = utne din tak wapas nahi aaya, warna isi curve se · <b>App ka answer</b> = benchmark wali countries ke ROAS curves unke spend share se jod ke (countries ke BE din ka average nahi), phir din ke asli ROAS pe shift — uske pichhle pakke grid din pe (day 0 / 1 / 2 / 3 / 6 / 13 / 30 / 60 / 90 …), ab tak ka asli ROAS neeche ki had: jo din model se aage chal raha hai uska aage ka curve bhi upar, peeche wala neeche (har country ka bhi apne asli ROAS pe) · data check = us din ke pehle hafte me GA4 data me gap (AdMob me kamai normal thi) — uske number asal se kam dikh sakte hain · saare Google Ads spend wale install din, naya upar (30-30 karke; bina spend wale din yahan nahi) · spend $5 se kam / 30 se kam naye users wale din: sirf asli numbers, andaza nahi · ⏳ = abhi final nahi (4 din se kam purana) · day N = install ke N din baad (day 0 = install ka din). Din pe tap = countries + ROAS card.</p>'; }
+    +'<p class="cpx-fn"><b>ROAS 30 / 90 / 180 din</b> = utne din tak kamai ÷ spend — jo din guzar chuke (final) unka asli, aage ka andaza (✓ = 100% ya zyada = breakeven; ≥ = itna to ho chuka) · Breakeven: real = BE ho chuka (final), not final = BE ho gaya par number badal sakta hai, not by day N = utne din tak wapas nahi aaya, warna isi curve se · <b>App ka answer</b> = benchmark wali countries ke ROAS curves unke spend share se jod ke (countries ke BE din ka average nahi), phir din ke asli ROAS pe shift — uske pichhle pakke grid din pe (day 0 / 1 / 2 / 3 / 6 / 13 / 30 / 60 / 90 …), ab tak ka asli ROAS neeche ki had: jo din model se aage chal raha hai uska aage ka curve bhi upar, peeche wala neeche (har country ka bhi apne asli ROAS pe) · data check = us din ke pehle hafte me GA4 data me gap (AdMob me kamai normal thi) — uske number asal se kam dikh sakte hain · saare Google Ads spend wale install din, naya upar (30-30 karke; bina spend wale din yahan nahi) · spend $5 se kam / 30 se kam naye users wale din: sirf asli numbers, andaza nahi · ⏳ = abhi final nahi ('+bePv()+' din se kam purana) · day N = install ke N din baad (day 0 = install ka din). Din pe tap = countries + ROAS card.</p>'; }
 // ---- the users switch (owner, 16 Nov 2026: "haan sirf google ads wale users se karo · google ads and organic dono ka alag alag
 // dekh saku esa kar do"): a file with "src" (the build's be_paid on) has it on top of the tab. "p": the Google Ads view is today's
 // tab built from Google Ads users only (GA4's first-user channel: the build's paid cube — never a split of totals); "a": this app's
@@ -9866,7 +9901,7 @@ function ensureBeO(id){ const a=beA(id), n=beO(id); if(!n) return;
   loadF(n,a.v,j=>!!j&&j.v===1&&j.key===a.key&&Array.isArray(j.days)&&Array.isArray(j.ages)&&j.ages.length>0&&j.ages.every((g,i)=>Number.isInteger(g)&&(i?g>j.ages[i-1]:g===0)),()=>arrive(id)); }
 const BEON='<p class="cpx-fn">Organic = jo users Google Ads se nahi aaye (Play search, direct, baaki) — inka koi spend nahi, isliye ROAS / breakeven nahi; sirf ginti aur kamai, unke apne purane dino ke median se</p>';
 const BEODR='kuch din GA4 ke do reads me farak — un countries ko chhoda', BEOGF='GA4 farak';   // a drift day (the build's "dr": a Google Ads users cell above its all-users one — two reads made apart): its own word ("data check" is a GA4 hole on this tab)
-const BEONF='abhi final nahi — GA4 ka data 2–3 din me final hota hai', BEONB='benchmark nahi bana — inki countries ke purane din kam (30+ organic users wale 20 se kam din)';
+const beOnf=()=>'abhi final nahi — GA4 ka data '+beLagT()+' din me final hota hai', BEONB='benchmark nahi bana — inki countries ke purane din kam (30+ organic users wale 20 se kam din)';
 const beOL=g=>g<30?g+1:g;                                                    // a card age → its day (day k = age k − 1; the 30-day columns by their age, as the Google Ads table's)
 // what those days are (one footnote under the Organic table; a row says its own as "day N tak")
 const BEODAY='<p class="cpx-fn">Day 1, 2, 3, 4, 7, 14 = install ke din se utne din (Day 1 = sirf install ka din) · Day 30, 60, 90 … = install ke 30, 60, 90 din baad tak</p>';
@@ -9903,14 +9938,14 @@ function beOSvg(P,B,FN,CV,k,D){ const W=320, H=168, Lm=26, Rm=26, Tp=26, Bm=34, 
 function beODet(x,k,AG){ const {R,FN,SP,SB,CV,lv}=beOD(x,AG), dr=beODr(x), o=[], nf=i=>FN[i]!==1, nu=x.n===null;
   if(dr) o.push(`<p class="cpx-fn"><b class="cpx-chk">${BEOGF}</b> — ${E(BEODR)}.</p>`);
   const J=AG.map((g,i)=>i).filter(lv);                                       // the card days it has lived
-  const nv=(v,i,f)=>v!=null?f(v)+(nf(i)?' <small>not final</small>':''):beDash(nf(i)?BEONF:'is din ka number nahi aaya');
-  const nb=i=>SB[i]==null?(nu?BEONF:BEONB):nf(i)?BEONF:'benchmark wali countries ka per user nahi aaya';   // why no % / no per user of the set
+  const nv=(v,i,f)=>v!=null?f(v)+(nf(i)?' <small>not final</small>':''):beDash(nf(i)?beOnf():'is din ka number nahi aaya');
+  const nb=i=>SB[i]==null?(nu?beOnf():BEONB):nf(i)?beOnf():'benchmark wali countries ka per user nahi aaya';   // why no % / no per user of the set
   o.push(J.length?'<h4 class="cpx-h4">Revenue by day</h4><div class="cpx-x"><table class="cpx-t cpx-beot"><thead><tr><th>Day</th><th class="cpx-ben" title="benchmark wali countries ke users ka per user ÷ benchmark − 1">%</th>'
       +'<th class="cpx-ben" title="benchmark wali countries ke users ka per user (poore din ka per user upar row me)">Per user</th>'
       +'<th class="cpx-ben" title="har country ka apna median per user (uske purane install din, usi din tak), is din ke organic users ke share se joda">Benchmark per user</th><th class="cpx-ben">Revenue (total)</th></tr></thead><tbody>'
       +J.map(i=>`<tr><td>Day ${beOL(AG[i])}</td><td class="cpx-ben">${SB[i]!=null&&SB[i]>0&&SP[i]!=null&&SP[i]>=0?beOVs(SP[i],SB[i],nf(i),k):beDash(nb(i))}</td>`
         +`<td class="cpx-ben">${SP[i]!=null?beCpi(SP[i],k)+(nf(i)?' <small>not final</small>':'')+beOUs(CV[i]):beDash(nb(i))}</td>`
-        +`<td class="cpx-ben">${SB[i]!=null?beCpi(SB[i],k):beDash(nu?BEONF:BEONB)}</td><td class="cpx-ben">${nv(R[i],i,v=>beSp(v,k))}</td></tr>`).join('')+'</tbody></table></div>'
+        +`<td class="cpx-ben">${SB[i]!=null?beCpi(SB[i],k):beDash(nu?beOnf():BEONB)}</td><td class="cpx-ben">${nv(R[i],i,v=>beSp(v,k))}</td></tr>`).join('')+'</tbody></table></div>'
     :'<p class="cpx-note">Is din ka koi number nahi aaya.</p>');
   const C=AG.map((g,i)=>i).filter(i=>AG[i]<=13), P=C.map(i=>lv(i)?SP[i]:null), B=C.map(i=>SB[i]);   // (days 1 … 14; the benchmark ahead of a young day too, as the ROAS card's)
   if(P.some(v=>v!=null)||B.some(v=>v!=null)) o.push(`<div class="cpx-becd"><div class="cpx-chw">${beOSvg(P,B,C.map(i=>FN[i]),C.map(i=>CV[i]),k,C.map(i=>beOL(AG[i])))}</div></div>`);
@@ -9922,11 +9957,11 @@ function beODet(x,k,AG){ const {R,FN,SP,SB,CV,lv}=beOD(x,AG), dr=beODr(x), o=[],
 // number, "day N tak") and its users (null while not final: "—" with why, never divided by)
 function beORow(x,nm,AG){ const on=BOPEN===x.d, n=num(x.n), k=VIN()?beK(nm,x.d):1, dr=beODr(x), {R,PU,FN,SP,SB,CV,lv}=beOD(x,AG), fin=FN.some((v,i)=>v===1&&lv(i));
   const j=R.reduce((q,v,i)=>v!=null&&lv(i)?i:q,-1), jf=SB.reduce((q,v,i)=>lv(i)&&FN[i]===1&&v!=null&&v>0&&SP[i]!=null&&SP[i]>=0?i:q,-1), bf=SB.some((v,i)=>lv(i)&&FN[i]===1&&v!=null&&v>0);
-  const sf=j<0?beDash(fin?'is din ki kamai ka number nahi aaya':BEONF):`<b>${beSp(R[j],k)}</b> · ${PU[j]!=null?beCpi(PU[j],k)+'/user':beDash('per user nahi aaya')}<small>day ${beOL(AG[j])} tak${FN[j]!==1?' (not final)':''}</small>`;
-  const vs=jf>=0?`${beOVs(SP[jf],SB[jf],false,k)} vs B on day ${beOL(AG[jf])}${beOUs(CV[jf])}`:beDash(!fin?BEONF:!bf?BEONB:'benchmark wali countries ka per user nahi aaya');
+  const sf=j<0?beDash(fin?'is din ki kamai ka number nahi aaya':beOnf()):`<b>${beSp(R[j],k)}</b> · ${PU[j]!=null?beCpi(PU[j],k)+'/user':beDash('per user nahi aaya')}<small>day ${beOL(AG[j])} tak${FN[j]!==1?' (not final)':''}</small>`;
+  const vs=jf>=0?`${beOVs(SP[jf],SB[jf],false,k)} vs B on day ${beOL(AG[jf])}${beOUs(CV[jf])}`:beDash(!fin?beOnf():!bf?BEONB:'benchmark wali countries ka per user nahi aaya');
   return `<tr class="cpx-ber${on?' cpx-beon':''}" data-cpx-bed="${E(x.d)}"><td><button type="button" class="cpx-bedb" data-cpx-bed="${E(x.d)}" aria-expanded="${on}">${E(fd(x.d))}</button></td>`
     +`<td>${vs}${dr?`<small class="cpx-chk" title="${E(BEODR)}">${BEOGF}</small>`:''}</td><td class="cpx-ben">${sf}</td>`
-    +`<td class="cpx-ben">${n!=null&&n>=0?fN(n):beDash(x.n===null?BEONF:'organic users ki ginti nahi aayi')}</td></tr>`
+    +`<td class="cpx-ben">${n!=null&&n>=0?fN(n):beDash(x.n===null?beOnf():'organic users ki ginti nahi aayi')}</td></tr>`
     +(on?`<tr class="cpx-bedr"><td class="cpx-bedc" colspan="4">${beODet(x,k,AG)}</td></tr>`:''); }
 // ---- 🌱 Organic (owner, 16 Nov 2026: "google ads and organic dono ka alag alag dekh saku"): every install day with organic users,
 // newest on top, 30 at a time as the Google Ads view — the newest FINAL card day against its own benchmark ("+12% vs B on day 7"),
@@ -9977,6 +10012,9 @@ function whyHtml(r,F){ const [lo,hi]=span(r); if(lo>hi) return '<p class="cpx-no
       +`<tr><td>First session</td><td>${fR(sh0)} → <b>${fR(sh)}</b></td><td>${fE(fs0.e)} → <b>${fE(fs.e)}</b></td></tr><tr><td>Returning</td><td>${fR(1-sh0)} → <b>${fR(1-sh)}</b></td><td>${fE(rt0.e)} → <b>${fE(rt.e)}</b></td></tr></tbody></table></div>`
       +`<p class="cpx-fn">Sirf mix badalne se (purane eCPM pe): <b>${fP(mix/base-1)}</b> · har group ka eCPM badalne se: <b>${fP(all/mix-1)}</b> — ${Math.abs(mix/base-1)>Math.abs(all/mix-1)?'zyada asar naye vs purane users ke mix ka hai':'zyada asar har group ke apne eCPM ka hai'} (GA4 ke numbers, AdMob se thoda alag).</p>`); }
   else o.push('<p class="cpx-fn">User mix: first session / returning ka GA4 data is period ya normal span me nahi.</p>');
+  // (their days after the nvr file's final till — notes.nvr_till, GA4_FINAL_DAYS: in the sums, said not final)
+  const nvt=okD((F.notes||{}).nvr_till)?F.notes.nvr_till:null;
+  if(nvt&&hi>nvt) o.push(`<p class="cpx-fn">⏳ First session / returning (GA4): ${E(perDates(N[0]>nvt?N[0]:addD(nvt,1),hi))} abhi final nahi — GA4 in dino me baad me bhi jodta hai, ye numbers abhi badal sakte hain.</p>`);
   // country mix vs price (Laspeyres)
   const C=(Array.isArray(F.ctys)?F.ctys:[]).filter(c=>c&&c.d&&okD(c.from)).map(c=>{ const a=fsum(c.d,c.from,['rev','imp'],lo,hi), b=fsum(c.d,c.from,['rev','imp'],N[0],N[1]);
     return {cc:c.cc,a,b,ea:a.imp>0?a.rev/a.imp*1000:null,eb:b.imp>0?b.rev/b.imp*1000:null}; }).filter(z=>z.ea!=null&&z.eb!=null);
@@ -12368,6 +12406,18 @@ function sum(a,i0,i1){ const s=[0,0,0,0], ss=[0,0,0,0]; let miss=0, smp=0, n=0;
 // (measured 31 Oct 2026: 50–100 % on the two newest days, ≤ 1 % from the third)
 function freshIn(a,i0,i1){ const n=a.rev.length; for(let i=Math.max(i0,n-2);i<=i1;i++){ const r=a.rev[i]; if(!r) continue; const t=r[0]+r[1]+r[2]+r[3]; if(t>0&&r[3]/t>=0.2) return true; } return false; }
 const FRESH='<p class="roi-note">⏳ Aaj / kal ke din GA4 abhi channels process kar raha hai — unka bada hissa abhi <b>Other</b> ("(other)") me hai, 1–2 din me asli channels (Paid / Notification / Organic) me chala jata hai.</p>';
+// not final yet (owner, 17 Nov 2026 — his yes to marking the days GA4 still changes): a file's "final_till" (source_build:
+// the app's today − the store's final lag; the 🌍 file's its own) — a day after it is said "not final" on its row, its month,
+// the period; the GA4 vs AdMob check judges whole final months only. A file without it: no mark, as before
+const isD=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s);
+const ftOf=a=>a&&isD(a.final_till)?a.final_till:null;
+// [lo, hi] (dates) → its days after ft as [first, last], or null (none, or no ft)
+function nfSpan(ft,lo,hi){ if(!ft||!lo||!hi||hi<=ft) return null; return [lo>ft?lo:iso(t0(ft)+DAY),hi]; }
+const nfNote=w=>w?`<p class="roi-note">⏳ ${fdy(w[0])}${w[1]>w[0]?' – '+fdy(w[1]):''} abhi final nahi — GA4 in dino me baad me bhi jodta hai, inke amounts abhi badal sakte hain.</p>`:'';
+// the app's period [i0, i1] (its row indexes) → its not-final days, or null
+const nfOf=(a,i0,i1)=>i1<i0?null:nfSpan(ftOf(a),iso(t0(a.d0)+i0*DAY),iso(t0(a.d0)+i1*DAY));
+// the app's not-final days per month {YYYY-MM: n} (its newest rows back to its final till)
+function nfMonths(a){ const ft=ftOf(a), m={}; if(!ft) return m; for(let i=(a.rev||[]).length-1;i>=0;i--){ const d=iso(t0(a.d0)+i*DAY); if(d<=ft) break; const k=d.slice(0,7); m[k]=(m[k]||0)+1; } return m; }
 function perLabel(a,per){ const [i0,i1]=rng(a,per); if(i1<i0) return ''; const d=i=>iso(t0(a.d0)+i*DAY);
   return i0===i1?fdy(d(i0)):fdy(d(i0))+' – '+fdy(d(i1)); }
 const cell=(v,t,b)=>`<td>${b?'<b>':''}${MV(v)}${b?'</b>':''}<small> ${P(v,t)}</small></td>`, tcell=v=>`<td><b>${MV(v)}</b></td>`;   // the Total column: no "100%"
@@ -12397,6 +12447,7 @@ function allView(){ const apps=(ALL.apps||[]).map(a=>{ const [i0,i1]=rng(a,PER);
     +`<div class="roi-tw"><table class="roi-t"><thead><tr><th>App</th><th>Total</th>${G.map(g=>`<th>${g[0]}</th>`).join('')}</tr></thead><tbody>`
     +`<tr class="src-tot"><td class="roi-nm"><b>All apps</b></td>${tcell(tt)}${T.map(v=>cell(v,tt,1)).join('')}</tr>`
     +body+`</tbody></table></div>`
+    +nfNote(apps.map(o=>{ const [i0,i1]=rng(o.a,PER); return nfOf(o.a,i0,i1); }).find(Boolean))
     +(apps.some(o=>{ const [i0,i1]=rng(o.a,PER); return freshIn(o.a,i0,i1); })?FRESH:'')
     +(off?`<p class="roi-note">⚠️ <b>GA4 n× AdMob</b> = us app ki GA4 kamai pichhle poore mahino me AdMob se ${Math.round(ADM_OFF*100)}% se zyada alag hai. Yahan har amount GA4 ka hai (aapki GA4 screen jaisa); asli kamai AdMob wali hai. App pe tap = poora milaan.</p>`:'')
     +(pend?`<p class="roi-note">⏳ ${pend} app ki purani history abhi aa rahi hai (har build me thodi aur).</p>`:'')
@@ -12418,9 +12469,9 @@ function monthRows(a){ const m=new Map();
 // says when they are not AdMob's money.
 const ADM_N=3, ADM_OFF=0.10;
 const prevMon=k=>{ const y=+k.slice(0,4), m=+k.slice(5,7); return m===1?(y-1)+'-12':y+'-'+String(m-1).padStart(2,'0'); };
-function admChk(a){ const adm=new Map((a&&a.adm)||[]); if(!adm.size) return null; const ms=new Map(monthRows(a)), used=[];
+function admChk(a){ const adm=new Map((a&&a.adm)||[]); if(!adm.size) return null; const ms=new Map(monthRows(a)), used=[], nfm=nfMonths(a);
   let g=0, m=0, k=a.today.slice(0,7);
-  for(let i=0;i<ADM_N;i++){ k=prevMon(k); const usd=+adm.get(k)||0, e=ms.get(k); if(!(usd>0)||!e||e.miss||e.n<28) continue;
+  for(let i=0;i<ADM_N;i++){ k=prevMon(k); const usd=+adm.get(k)||0, e=ms.get(k); if(!(usd>0)||!e||e.miss||e.n<28||nfm[k]) continue;
     g+=e.s[0]+e.s[1]+e.s[2]+e.s[3]; m+=usd; used.unshift(k); }
   return used.length&&m>=100?{r:g/m, g, m, from:used[0], to:used[used.length-1], n:used.length}:null; }
 function admOff(a){ const c=admChk(a); return c&&Math.abs(c.r-1)>=ADM_OFF?c:null; }
@@ -12430,20 +12481,21 @@ function appView(a){ const [i0,i1]=rng(a,PER), x=sum(a,i0,i1), cur=a.today.slice
     +(x.n&&x.t>0?tiles(x)+bar(x.s,x.t):`<p class="roi-note">Is period me revenue nahi.</p>`)
     +(c?`<p class="roi-note src-adm">⚠️ <b>AdMob se milaan:</b> ${E(admTxt(c))} — is app ki GA4 kamai AdMob ki <b>${c.r.toFixed(2)}×</b> hai. Yahan har amount GA4 ka hai (aapki GA4 screen jaisa), isliye AdMob se ${c.r>1?'zyada':'kam'} dikhta hai; asli kamai AdMob wali hai.</p>`:'')
     +(x.miss?`<p class="roi-note">⏳ Is period ke ${x.miss} din ka data abhi aa raha hai.</p>`:'')
+    +nfNote(nfOf(a,i0,i1))
     +(freshIn(a,i0,i1)?FRESH:'')
     +(a.bf?'':`<p class="roi-note">⏳ Purani history abhi aa rahi hai — abhi ${fdy(a.d0)} se.</p>`)
     +groupsNote()+`</div>`;
   // the first months GA4 read whole with $0 (before the app earned): one line, not a row each
   const ms=monthRows(a); let z=ms.length; while(z>0&&!ms[z-1][1].miss&&!(ms[z-1][1].s.some(v=>v>0))) z--;
-  const zl=z>0&&ms.length-z>=2;
+  const zl=z>0&&ms.length-z>=2, nfm=nfMonths(a), ft=ftOf(a);
   const mr=(zl?ms.slice(0,z):ms).map(([k,e])=>{ const t=e.s[0]+e.s[1]+e.s[2]+e.s[3];
-    return `<tr><td class="roi-nm">${E(fmtMon(k))}${k===cur?' <small>so far</small>':''}${e.miss?` <small title="${e.miss} din ka data abhi nahi">· ${e.miss} din baaki</small>`:''}</td>${tcell(t)}${e.s.map(v=>cell(v,t)).join('')}</tr>`; }).join('')
+    return `<tr><td class="roi-nm">${E(fmtMon(k))}${k===cur?' <small>so far</small>':''}${e.miss?` <small title="${e.miss} din ka data abhi nahi">· ${e.miss} din baaki</small>`:''}${nfm[k]?` <small>· ${nfm[k]} din abhi final nahi</small>`:''}</td>${tcell(t)}${e.s.map(v=>cell(v,t)).join('')}</tr>`; }).join('')
     +(zl?`<tr class="src-z"><td class="roi-nm" colspan="6">${E(fmtMon(ms[ms.length-1][0]))} – ${E(fmtMon(ms[z][0]))} · ${ms.length-z} mahine GA4 me kamai ${MV(0)} (kamai ${E(fmtMon(ms[z-1][0]))} se shuru)</td></tr>`:'');
   const months=`<div class="roi-card"><div class="roi-ct"><h3>Month by month</h3><span class="roi-note">poori history, naya mahina upar</span></div><div class="roi-tw"><table class="roi-t"><thead><tr><th>Month</th><th>Total</th>${G.map(g=>`<th>${g[0]}</th>`).join('')}</tr></thead><tbody>${mr}</tbody></table></div></div>`;
   const ti=a.rev.length-1, rows=[];
   for(let i=ti;i>=0&&rows.length<SHOWD;i--){ const d=iso(t0(a.d0)+i*DAY), r=a.rev[i], lab=i===ti?'Today <small>so far</small>':i===ti-1?'Yesterday':fdy(d);
     if(!r){ rows.push(`<tr><td class="roi-nm">${lab}</td><td colspan="5" class="roi-note" style="text-align:left">⏳ abhi nahi aaya</td></tr>`); continue; }
-    const t=r[0]+r[1]+r[2]+r[3]; rows.push(`<tr><td class="roi-nm">${lab}${a.mk&&a.mk[i]?' <small title="GA4 sampled">≈</small>':''}${i>=ti-1&&t>0&&r[3]/t>=0.2?' <small title="GA4 abhi is din ke channels process kar raha hai">⏳ processing</small>':''}</td>${tcell(t)}${r.map(v=>cell(v,t)).join('')}</tr>`); }
+    const t=r[0]+r[1]+r[2]+r[3]; rows.push(`<tr><td class="roi-nm">${lab}${ft&&d>ft?' <small>· not final</small>':''}${a.mk&&a.mk[i]?' <small title="GA4 sampled">≈</small>':''}${i>=ti-1&&t>0&&r[3]/t>=0.2?' <small title="GA4 abhi is din ke channels process kar raha hai">⏳ processing</small>':''}</td>${tcell(t)}${r.map(v=>cell(v,t)).join('')}</tr>`); }
   const more=ti+1>SHOWD?`<p class="roi-note"><button type="button" class="roi-lnk" data-src-more="1">Aur ${Math.min(60,ti+1-SHOWD)} din dikhao</button> · ${ti+1} din me se ${Math.min(SHOWD,ti+1)}</p>`:'';
   const days=`<div class="roi-card"><div class="roi-ct"><h3>Day by day</h3><span class="roi-note">Today / Yesterday upar · ${E(a.tz)}</span></div><div class="roi-tw"><table class="roi-t"><thead><tr><th>Day</th><th>Total</th>${G.map(g=>`<th>${g[0]}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>${more}</div>`;
   return top+chCard(a,i0,i1)+months+days; }
@@ -12511,6 +12563,7 @@ function xCtyIn(aid){
     +(tb.tot>0?tb.html:`<p class="roi-note">Is period me revenue nahi.</p>`)
     +(tb.tot>0&&tb.oth/tb.tot>=0.005?`<p class="roi-note">⚠️ Is period ki <b>${P(tb.oth,tb.tot)}</b> kamai GA4 ne "(other)" / bina country ke di — wo upar ki countries me nahi, apni alag row me hai (GA4 ki limit; bade app pe hoti hai).</p>`:'')
     +(miss?`<p class="roi-note">⏳ Is period ke ${miss} din ka data abhi aa raha hai.</p>`:'')
+    +nfNote(nfSpan(ftOf(PZ),lo,hi))
     +(cc.bf?'':`<p class="roi-note">⏳ Purani history abhi aa rahi hai — har build me thodi aur.</p>`)
     +(XPER==='today'||XPER==='yday'?FRESH:'')
     +`<p class="roi-note">Har country me <b>us period me hui</b> GA4 kamai (Total revenue), session ke channel ke hisaab se — Revenue by source jaisa. 🎯 Decision wale table me us period ke <i>installs</i> ki kamai thi; ye usse alag hai.</p>`; }
@@ -12606,14 +12659,20 @@ function ensure(aid,cb){ const a=apOf(aid); if(!a||ABUSY[a.file]||dataOf(aid)) r
   fetchGzJson(f+'?v='+encodeURIComponent(a.v||'')).then(j=>{ if(!j||j.v!==1||!Array.isArray(j.days)||!Array.isArray(j.units)) throw new Error('format');
       j._v=a.v; AF[f]=j; AERR[f]=false; })
     .catch(()=>{ AERR[f]=true; }).then(()=>{ ABUSY[f]=false; cb&&cb(); }); }
-// the period → [lo, hi] on the file's calendar: today = its final till + 2 (the property's today); 7 / 30 / 60 / 90 days =
-// the last 7 / 30 / 60 / 90 FINAL days (GA4 still adds to the newest 2; a file younger than that: "data … se" says where it
-// starts); This month = its 1st … today; Last month = the whole month before; All time = the file's first day … today;
-// Custom = the picked from / to (swapped when reversed)
-function rng(d){ const ft=d.final_till, T=addD(ft,2), m0=T.slice(0,8)+'01';
+// the period → [lo, hi] on the file's calendar: today = the property's today (the file's "td"; a file before it: its final
+// till + 2); 7 / 30 / 60 / 90 days = the last 7 / 30 / 60 / 90 days ending today − PE_LAG, where they ended before the GA4
+// finality knob (owner, 17 Nov 2026: "data jese jese aata jaye ese ese bharte jao" — their days after final till are in
+// them, said not final: view's ⏳ line; a file younger than that: "data … se" says where it starts); This month = its 1st …
+// today; Last month = the whole month before; All time = the file's first day … today; Custom = the picked from / to
+// (swapped when reversed)
+const PE_LAG=2;   // the 7 / 30 / 60 / 90 days end today − PE_LAG (a calendar end, never the final edge: that is the file's)
+const isD=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s);
+const tdOf=d=>isD(d.td)?d.td:addD(d.final_till,2);
+const nfN=d=>Math.round((t0(tdOf(d))-t0(d.final_till))/DAY);   // the newest days not final yet: today − final till
+function rng(d){ const pe=isD(d.td)?addD(d.td,-PE_LAG):d.final_till, T=tdOf(d), m0=T.slice(0,8)+'01';   // (pe: the 7 / 30 / 60 / 90 days' end)
   if(PER==='today') return [T,T]; if(PER==='yday') return [addD(T,-1),addD(T,-1)];
-  if(PER==='7') return [addD(ft,-6),ft]; if(PER==='30') return [addD(ft,-29),ft];
-  if(PER==='60') return [addD(ft,-59),ft]; if(PER==='90') return [addD(ft,-89),ft];
+  if(PER==='7') return [addD(pe,-6),pe]; if(PER==='30') return [addD(pe,-29),pe];
+  if(PER==='60') return [addD(pe,-59),pe]; if(PER==='90') return [addD(pe,-89),pe];
   const ms=monSpan(PER,T); if(ms) return ms;
   if(PER==='tm') return [m0,T]; if(PER==='lm'){ const l=addD(m0,-1); return [l.slice(0,8)+'01',l]; }
   if(PER==='all') return [d.first_day,T];
@@ -12628,7 +12687,7 @@ function sums(d,lo,hi){ const t=[0,0,0,0,0,0], s=[0,0,0,0], u={}, c={}; let n=0,
     for(const k in r[3]){ const e=u[k]||(u[k]=[0,0,0,0]); for(let j=0;j<4;j++) e[j]+=+r[3][k][j]||0; }
     for(const k in r[4]){ const e=c[k]||(c[k]=[0,0,0,0]); for(let j=0;j<4;j++) e[j]+=+r[4][k][j]||0; } }
   return {t,s,u,c,n,miss,nf}; }
-function perCtl(d){ const [lo,hi]=rng(d), T=addD(d.final_till,2);
+function perCtl(d){ const [lo,hi]=rng(d), T=tdOf(d);
   return `<div class="roi-ctl"><span class="roi-mini nvr-per" role="group" aria-label="Period">${PERS.map(([k,l])=>`<button type="button" data-nvr-per="${k}" aria-pressed="${PER===k}">${l}</button>`).join('')}${monMover(PER,T,d.first_day,(k,l,on,dis,ar)=>`<button type="button" data-nvr-per="${k}" aria-pressed="${on}"${dis?' disabled':''} aria-label="${ar}">${l}</button>`)}</span></div>`
     +(PER==='cus'?`<div class="nvr-cus"><label>From <input type="date" data-nvr-pf="1" value="${lo}" min="${d.first_day}" max="${T}"></label><label>To <input type="date" data-nvr-pto="1" value="${hi}" min="${d.first_day}" max="${T}"></label></div>`:''); }
 function tiles(x){ const c=CC?x.c[CC]:null, t=c?[c[0],c[1],c[2],c[3],0,0]:x.t, en=EC(t[0],t[1]), er=EC(t[2],t[3]), rv=t[0]+t[2];
@@ -12694,7 +12753,9 @@ function ucShard(aid,cc){ const u=ucOf(aid), fv=u&&!u.big&&u.files[shardOf(cc,u.
 // gave = kept vs truth (this file's own country total, a whole read) over the MEASURED days only — read by the country
 // store, present in this file and final in both (older than the recent days both still re-read, at different hours)
 function ucView(d,j,cc,lo,hi,rd){ const off=Math.round((t0(j.d0)-t0(d.first_day))/DAY), at=s=>Math.round((t0(s)-t0(j.d0))/DAY);
-  const i0=Math.max(at(lo),0,-off), i1=Math.min(at(hi),at(d.last_day)), lastFinal=at(addD(d.final_till,-3));
+  // (lastFinal: the newest day neither store re-reads any more — today − rw, the file's "rw" = their recent window; a file
+  // before it: final till − 3 = today − 5, the window then)
+  const i0=Math.max(at(lo),0,-off), i1=Math.min(at(hi),at(d.last_day)), lastFinal=at(addD(tdOf(d),-(+d.rw>0?Math.round(+d.rw):5)));
   const inRd=i=>(rd||[]).some(([a,b])=>i>=a&&i<=b), meas=new Set(), u={}, kept=[0,0,0,0], truth=[0,0,0,0]; let nRead=0;
   for(let i=i0;i<=i1;i++){ if(!inRd(i)) continue; nRead++; const r=d.days[i+off]; if(i>lastFinal||!r) continue; meas.add(i);
     const v=r[4]&&r[4][cc]; if(v) for(let k=0;k<4;k++) truth[k]+=+v[k]||0; }
@@ -12706,7 +12767,8 @@ function view(aid,d){ const [lo,hi]=rng(d), x=sums(d,lo,hi), t=x.t, nt=t[0]+t[2]
   const lim=[];
   if(lo<d.first_day) lim.push(`data ${fdy(d.first_day)} se`);
   if(x.miss) lim.push(`${x.miss} din ka data abhi aa raha hai (purani history har build me thodi aur)`);
-  if(x.nf) lim.push('aakhri 2 din GA4 me abhi badal rahe hain (final nahi)');
+  if(x.nf){ const n=nfN(d), s0=lo>d.final_till?lo:addD(d.final_till,1);   // the period's own days after final till (the last 2 before the knob: its old words)
+    lim.push(n===2?`aakhri ${n} din GA4 me abhi badal rahe hain (final nahi)`:`${fdy(s0)}${hi>s0?' – '+fdy(hi):''} abhi final nahi (GA4 me abhi badal rahe hain)`); }
   let units=d.units.map((u,i)=>({key:String(i),label:E(u[0]),sub:u[1],v:x.u[String(i)]||[0,0,0,0]})).filter(r=>r.v[1]||r.v[3]), uNote='', uCty=false;   // uCty: the tables are the country's
   const cn=CC?E(CN(CC)):'';
   if(CC){ const uc=ucOf(aid), sh=uc&&!uc.big?ucShard(aid,CC):null;

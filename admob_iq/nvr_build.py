@@ -2,8 +2,12 @@
 dono ka difference … ad unit wise"; a section of the eCPM tab's app page). From the private stores of fetch.ga4_nvr, every
 day of every store, nothing trimmed — per app ONE lazy file:
 
-  site/nvr_<key>.json.gz  {"v", "key", "app_id", "first_day", "last_day", "final_till" (the property's today − 2: GA4 still
-                           adds to the last 2 days),
+  site/nvr_<key>.json.gz  {"v", "key", "app_id", "first_day", "last_day", "final_till" (the property's today −
+                           FIN_LAG, fetch.ga4_nvr's FINAL_LAG: a newer day is read again, GA4 still adds to it — not
+                           final; at GA4_FINAL_DAYS 3, the rollback, today − 2 and no "td" / "rw": the file as before
+                           the knob), "td" (the property's today), "rw" (the days the store and its ad unit × country
+                           split read again on every refresh, today included: the newest day neither reads again is
+                           td − rw),
                            "units": [[ad unit, format], …]   (every ad unit GA4 named, most revenue first),
                            "days": [[YYYY-MM-DD,
                                      [new revenue, new impressions, returning revenue, returning impressions, not set
@@ -37,6 +41,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from . import ga4_final
 from .db import write_json_gz_stable
 from .fetch import ga4_nvr as gv
 from .fetch import ga4_uninstall as gu
@@ -49,6 +54,10 @@ HEADER_PATHS = ["/nvr*"]
 V = 1
 MAX_GZ = 8 * 1024 * 1024
 LINE = None
+FIN_LAG = ga4_final.page_lag(2, gv.FINAL_LAG)   # final till = the property's today − this: fetch.ga4_nvr's FINAL_LAG
+#                                                  (GA4_FINAL_DAYS); at the rollback the page's edge before the knob
+EDGES = not ga4_final.rollback()                # the page's own edges in the file ("td", "rw"); at the rollback the file
+#                                                  as before the knob (the page's fallbacks are those old edges)
 
 
 def enabled(s):
@@ -180,6 +189,14 @@ def uc_files(data_dir, out_dir, aid, d0):
     return out
 
 
+def _rw():
+    """The days fetch.ga4_nvr and fetch.ga4_nvr_uc read again on every refresh (today … rw − 1 days back, the longer of
+    the two windows): a day older than that is read by neither again — the page's measured days of a country's ad
+    units (ucView)."""
+    from .fetch import ga4_nvr_uc as gnc
+    return max(gv.RECENT_DAYS, gnc.RECENT_DAYS)
+
+
 def _stores(data_dir):
     folder = os.path.join(data_dir, gv.DIR)
     try:
@@ -218,12 +235,16 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
     try:
         now = now or datetime.now(timezone.utc)
         apps, keep, big, days_n, units_n, uc_n, uc_big = {}, set(), 0, 0, 0, 0, 0
+        rw = _rw()
         for st in _stores(data_dir):
             aid = str(st["app_id"])
             body = build_app(st, aid)
             if not body:
                 continue
-            body["final_till"] = (_today(st, now) - timedelta(days=2)).isoformat()
+            td = _today(st, now)                            # the page's edges (the store's final lag: GA4_FINAL_DAYS)
+            body["final_till"] = (td - timedelta(days=FIN_LAG)).isoformat()
+            if EDGES:
+                body.update(td=td.isoformat(), rw=rw)
             raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
             if len(gzip.compress(raw, 9, mtime=0)) > MAX_GZ:
                 big += 1

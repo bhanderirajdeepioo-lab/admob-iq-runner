@@ -14,9 +14,11 @@ Store, kept for good: data/ga4_source/<key>.json.gz (private repo)
      "mark": {YYYY-MM-DD: "s" (read from a GA4 sample) | "t" (subject to thresholding)},
      "backfill": {"oldest": the oldest day read, "done": reached the app's history start}}
 Per app and run (at most MAX_CALLS calls; the property's quota floors as the Audience fetch's; the run's budget):
-  * every REFRESH_HOURS the last RECENT_DAYS days (today included: GA4 still adds to them) — replaced whole;
+  * every REFRESH_HOURS the last RECENT_DAYS days (today … FINAL_LAG days back: GA4 still adds to them; the day turning
+    FINAL_LAG old gets its final read here) — replaced whole;
   * the backfill: CHUNK_DAYS at a time, newest first, from the day before the recent window back to the app's history
-    start (the Uninstall store's), so the newest history comes first. Days older than RECENT_DAYS are final in GA4.
+    start (the Uninstall store's), so the newest history comes first. Days older than RECENT_DAYS are final in GA4
+    (their last read was FINAL_LAG days on).
 Switched by GA4_SOURCE. Never raises; never prints (log_line: counts only).
 """
 import json
@@ -25,6 +27,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from .. import ga4_final
 from .. import ga4_probe
 from ..db import write_json_gz_stable
 from . import ga4
@@ -36,7 +39,9 @@ DIR = "ga4_source"
 STORE_V = 1
 DIM = "sessionDefaultChannelGroup"
 METS = ("sessions", "activeUsers", "totalAdRevenue", "totalRevenue")
-RECENT_DAYS = 5                     # today … 4 days back: refreshed every REFRESH_HOURS (older days are final in GA4)
+FINAL_LAG = ga4_final.lag(4)        # a day's last read is made this many days after it (on day D + FINAL_LAG): final
+#                                     from then on — GA4_FINAL_DAYS, at least 4 (this store's lag before the knob)
+RECENT_DAYS = max(5, FINAL_LAG + 1) # today … FINAL_LAG days back: refreshed every REFRESH_HOURS (older days are final)
 REFRESH_HOURS = 1.0
 CHUNK_DAYS = 180                    # one backfill call: ≤ 180 days × ~10 channels of rows
 MAX_CALLS = 12                      # per app per run (the backfill goes on next run)
