@@ -94,7 +94,7 @@ from admob_iq.fetch import ga4_uninstall as gu
 from admob_iq.fetch.ga4_d1d7_probe import Stop, _safely, write_private
 from admob_iq.fetch.ga4_diagnose import _private_json
 
-LATE = 3                            # the design's newest readable day: F = E − IDAY_LATE (E = today − 2)
+LATE = gu.IDAY_LATE                 # the design's newest readable day: F = E − IDAY_LATE (E = today − 2)
 SLOTS = (("recent", None), ("d100", 100), ("d400", 400))   # activity days: F, today − 100, today − 400
 METS = ("activeUsers", "newUsers", "totalAdRevenue", "totalRevenue")
 METS_NO_TOTAL = METS[:3]            # the design's no_total fallback

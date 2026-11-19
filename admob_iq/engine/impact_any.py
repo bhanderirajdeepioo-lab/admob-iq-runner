@@ -749,8 +749,8 @@ def index_entry(body, file):
 # ── CONTRACT (the page reads these two files; decode() above is the reference reader) ────────────────────────────
 #
 # impact_any_<key>.json.gz — one per app (key = the app's 12-hex file key, as uninstall_c_ / active_ / value_<key>):
-#   v 1 · app_id · key · sig (input signature, opaque) · data_till (E: the GA4 data's last day) · settled_till (E − 3:
-#   activity / revenue judged up to it) · un_settled_till (E − late: install-day uninstalls) · currency
+#   v 1 · app_id · key · sig (input signature, opaque) · data_till (E: the GA4 data's last day) · settled_till (E −
+#   impact.ACT_LATE_DAYS: activity / revenue judged up to it) · un_settled_till (E − late: install-day uninstalls) · currency
 #   first / last / n — the DATE AXIS: day i = first + i, 0 ≤ i < n (n = 0, first = last = null: no date yet)
 #   windows [7, 14, 30, 60] · rows (the 8 row keys; 7 / 14 use the first 7, 30 / 60 all 8 — + new_d30)
 #   status / levels / states / notes / basis — the code tables (an index into them is a code)

@@ -120,9 +120,8 @@ FAM_TXT = {"CPI": "CPI", "ECPM": "eCPM", "GAP": "ads to pay back one install", "
            "ROAS_C7": "D7 ROAS (AdMob)", "SPEND": "spend"}
 C_LAG = CA.FAMILIES["ROAS_C0"]["shift"] + 2   # the ROI rows' final lag the alarm's ROAS_C shifts encode (shift = lag −
 #   2 + age: its data day t is today − 2): c_r0 / c_r1 / c_r7 hold install day X's age a once X + a ≤ the ROI file's
-#   newest − C_LAG — the rows' own final ages ("df") follow GA4_FINAL_DAYS (ga4_cohort's FINAL_LAG); the alarm's inputs
-#   move only with its own shifts (and level_agent's LAGS), after the alarm replay (step 2: an alert change is replayed
-#   before it ships)
+#   newest − C_LAG. The shifts (cpi_alarm.c_shift) and level_agent's LAGS follow GA4_FINAL_DAYS as ga4_cohort's
+#   FINAL_LAG does, so C_LAG is that lag: the rows' own final ages ("df") at any F (the rollback's 3 included)
 NVR_END = 2              # the first session / returning series end at the nvr file's own today ("td") − NVR_END, where
 #   they ended before GA4_FINAL_DAYS (a file without "td": its final till); its days after final till are in them, the
 #   page marks them not final (notes.nvr_till)

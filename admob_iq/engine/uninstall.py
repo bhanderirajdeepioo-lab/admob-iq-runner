@@ -2418,7 +2418,7 @@ def revision_sums(store, into=None):
 
 def lateness(sums):
     """How much of a day's final uninstalls (un) / installs (new) / active users (a1: the update-impact card's activity —
-    days ≤ E − 3 final) GA4 already shows at each age (days from
+    days ≤ E − impact.ACT_LATE_DAYS final) GA4 already shows at each age (days from
     the day to the fetch): chained back from the oldest age measured, share[a] = share[a+1] × Σbefore ÷
     Σafter of the re-reads at age a (what arrived between age a and a+1). An age with under LATE_MIN_USERS
     re-read users ends the chain (None from there down). → {"ages", "un", "new", "a1", "final_age", "fetches"},

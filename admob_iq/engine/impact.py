@@ -25,7 +25,7 @@ one BLOCK, newest first, with the owner's four must-haves as Before (7 days) | A
 FAIR: before = the 7 days before the release (every weekday once); after = 7 days from when the new version runs on half
 the day's users (at most 3 days after the release: a slower rollout is judged diluted); each after-day is compared with
 the SAME WEEKDAY before; a hotfix ≤ CHAIN_DAYS after an update is the same update; the next update cuts the window. Only
-SETTLED days are judged (activity ≤ E − ACT_LATE_DAYS: past GA4's 72h late-event cutoff; uninstalls as the tab's
+SETTLED days are judged (activity ≤ E − ACT_LATE_DAYS: final, GA4_FINAL_DAYS — admob_iq.ga4_final; uninstalls as the tab's
 LATE_DAYS); newer days are shown faded (after_prov), never judged. The normal weekly change comes from the 3 weeks
 before the before-week (NOISE_LAG: the before-week itself is the baseline). NOISE = how much the SAME week comparison
 moved when there was no update to judge: it is redone at every day of the NULL_WEEKS weeks before the release
@@ -46,7 +46,8 @@ a0+N−1] (the same a0), NEVER cut by the next update (the updates inside are li
 the same weekday nearest its mirrored position (pair_day). Returning DAU extrapolates the normal weekly change ≤3 weeks;
 per-user rows are plain (no trend); every row's noise = the same N-day comparison at pseudo-updates over 8N days (≥3N
 of them, widened by t when few are independent; the rate rows use nothing else), read through prefix sums (O(1) a
-shift). A long window is judged only once complete (end_a + 10; final with D30 at end_a + 33). The 30-day window's HOLD /
+shift). A long window is judged only once complete (end_a + JUDGE_D + ACT_LATE_DAYS; final with D30 at end_a + 30 +
+ACT_LATE_DAYS). The 30-day window's HOLD /
 HALT on rows no 7-day verdict or alert already told (this update's or one released inside the window) is the late
 family "impact_late": one episode per app, after 2 daily evaluations, seeded on rollout.
 """
@@ -54,13 +55,16 @@ family "impact_late": one episode per app, after 2 daily evaluations, seeded on 
 import math
 from datetime import date, datetime, timedelta, timezone
 
+from .. import ga4_final
 from ..alerting.rules import fingerprint
 from . import attrib
 from . import uninstall as U
 
 # ── constants (each with its one-line why) ──
 IMPACT_V = 1              # impact data format (a store without it is backfilled; alerts never reset)
-ACT_LATE_DAYS = 3         # activity/revenue days ≤ E−3 are ≥5 days old at fetch: past GA4's 72h late-event cutoff
+ACT_LATE_DAYS = ga4_final.lag(5) - 2   # activity/revenue days ≤ E − ACT_LATE_DAYS are final (E is today − 2 from
+#                           noon: final at age ≥ lag(5), GA4_FINAL_DAYS); == fetch.ga4_uninstall.ACT_LATE_DAYS (the
+#                           engine never imports that requests-based module; a test keeps the two equal)
 COHORT_DAYS = 30          # returns kept for day 0..30: D1/D7 rows + the recent-install returners the expected DAU needs
 WIN_DAYS = 7              # before and after = 7 days: every weekday once
 PRE_DAYS = 35             # 5 weeks: 21 week-over-week changes (noise + normal drift) and 28 install days for baselines
@@ -123,11 +127,13 @@ PU_TREND_MAX_N = 7             # per-user rows: net of the trend at 7 only; 14/3
 NULL_SPAN_X = 8                # pseudo-updates over 8×N days (=56 at 7: NULL_WEEKS)
 NULL_MIN_X = 3                 # ≥3×N of them (=21 at 7: NULL_MIN) — ~3 independent N-day stretches
 NULL_DF_FULL = 8               # N≥14: spread widened by T975[df]/T975[8], df = valid // N, below 8
-JUDGE_D = 7                    # a long window is judged once D7 of its last install day is settled (end_a+10)
+JUDGE_D = 7                    # a long window is judged once D7 of its last install day is settled
+#                                (end_a + JUDGE_D + ACT_LATE_DAYS)
 RET30_MIN_PP = 1.0             # D30 (base ~5%): ≥1 point AND …
 RET30_MIN_REL = 0.10           # … ≥10% of before
 LATE_WINDOW = 30               # the late-effect check's window
-LATE_ALERT_DAYS = 75           # judged ≈R+41, D30 ≈R+64, +persistence: older updates never raise a late alert
+LATE_ALERT_DAYS = 75           # judged ≈R+38+ACT_LATE_DAYS, D30 ≈R+61+ACT_LATE_DAYS, +persistence: older updates
+#                                never raise a late alert
 LATE_PERSIST = 2               # a late condition holds on 2 daily evaluations before it is sent
 LATE_V = 1                     # state marker: the first evaluation without it seeds every late condition
 
@@ -1040,7 +1046,8 @@ def ret_row(cx, blk, N):
     wd = {c.weekday() for c in Ca}
     Cb = [c for c in _days(R - timedelta(days=W + N), R - timedelta(days=1 + N)) if c.weekday() in wd]
     ready = win["a0"] + timedelta(days=2 + N + ACT_LATE_DAYS)
-    if lng and len(Ca) < len(win["days_a"]):         # (D30 in a judged window: its day 30 comes at end_a + 33)
+    if lng and len(Ca) < len(win["days_a"]):         # (D30 in a judged window: its day 30 comes at end_a + 30 +
+    #                                                   ACT_LATE_DAYS)
         return _pending(row, win, win["end_a"] + timedelta(days=N + ACT_LATE_DAYS))
     if len(Ca) < 3:
         return _pending(row, win, ready if len(win["days_a"]) >= 3 else None)
@@ -2286,8 +2293,8 @@ def impact_app(store, ds, cd, whole, i0, rels, revenue, state, app_id, E, late, 
 # ── the 14 / 30 / 60-day windows (spec SPEC_WINDOWS §2–§4) ──────────────────────────────────────────
 
 def _state(win, N, E):
-    """A long window's (state, judged_on, final_on): judged once D7 of its last install day is settled (end_a + 10),
-    final once D30 is too at 30 / 60 (end_a + 33) — data days."""
+    """A long window's (state, judged_on, final_on): judged once D7 of its last install day is settled (end_a + JUDGE_D
+    + ACT_LATE_DAYS), final once D30 is too at 30 / 60 (end_a + 30 + ACT_LATE_DAYS) — data days."""
     judged_on = win["end_a"] + timedelta(days=ACT_LATE_DAYS + JUDGE_D)
     final_on = judged_on if N < LATE_WINDOW else win["end_a"] + timedelta(days=30 + ACT_LATE_DAYS)
     return ("running" if E < judged_on else "judged" if E < final_on else "final"), judged_on, final_on

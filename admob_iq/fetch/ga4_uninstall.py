@@ -73,9 +73,9 @@ when their content changes, so the private repo's history grows about once a day
 
 INSTALL VALUE (engine.value; only with the setting GA4_IDAY): a separate private file per app,
 data/ga4_uninstall/iday/<key>.json.gz (+ <key>.old.json.gz, the frozen old parts), read after the return cohorts in
-every full / incremental fetch (fetch_iday, never failing it). Per ACTIVITY day D, once it is final (D ≤ E − 3): Q-B
-[firstSessionDate] (all countries, install ages 0..427, exact: the truth), Q-C [countryId, firstSessionDate] with
-firstSessionDate inList D−90..D (countries, tied to Q-B: whatever GA4 did not give to a country stays visible as
+every full / incremental fetch (fetch_iday, never failing it). Per ACTIVITY day D, once it is final
+(D ≤ E − IDAY_LATE): Q-B [firstSessionDate] (all countries, install ages 0..427, exact: the truth), Q-C [countryId,
+firstSessionDate] with firstSessionDate inList D−90..D (countries, tied to Q-B: whatever GA4 did not give to a country stays visible as
 "unassigned", never spread, never dropped), and Q-T [date] day totals per block of days. Each day is folded ONCE into
 aggregates (install day × lag; install week × country × lag) + a per-day ledger; a newest → oldest cursor backfills
 the history ≤ IDAY_MAX_CALLS calls a fetch. The main store is never touched by it.
@@ -102,6 +102,7 @@ import zlib
 from datetime import date, datetime, timedelta, timezone
 
 from . import ga4
+from .. import ga4_final
 from .. import ga4_probe
 from .. import stage_clock as _sc
 from ..db import _read_json_any, write_json_gz_stable
@@ -160,7 +161,9 @@ EVENTS = ["app_remove", "app_update"]
 IMPACT_V = 1                # the impact data format: a store without it gets usage / vuse backfilled at its next fetch
                             # (no STORE_V bump, its alert history stays)
 COHORT_DAYS = 30            # new-user return cohorts are kept for day 0..30 after install
-ACT_LATE_DAYS = 3           # activity days ≤ E−3 are final: the maturing cohorts re-read every fetch reach back that far
+ACT_LATE_DAYS = ga4_final.lag(5) - 2   # activity days ≤ E − ACT_LATE_DAYS are final (E is today − 2 from noon: a day
+#                             final at age ≥ lag(5), GA4_FINAL_DAYS): the maturing cohorts re-read every fetch reach back
+#                             that far
 VUSE_MIN_SHARE = 0.01       # a version under 1% of the day's active users is pooled into "_rest" (~55 versions a day live)
 COH_BATCH = 14              # cohorts per cohort request (the size ga4.cohort_body / probe_t3 ran live)
 COH_MIN_USERS = 200         # a cohort with fewer installs is judged pooled with the batch's other small ones
@@ -1268,8 +1271,9 @@ def fetch_ret(ga, store, end, stop=None, full=False, at=None):
     COH_MAX_CALLS cohort requests of COH_BATCH install days each, in this order:
       (a) the maturing cohorts — [E − COHORT_DAYS − ACT_LATE_DAYS − 1, E] (from ret_from / history_start at the
           earliest), ~3 requests: each one re-read until its day 30 is final;
-      (b) repair: held cohorts in [ret_from, E − 35] that read short or stopped short of day 30, not asked in the last
-          COH_REPAIR_DAYS, and install days there never read at all, the newest COH_BATCH;
+      (b) repair: held cohorts in [ret_from, E − COHORT_DAYS − ACT_LATE_DAYS − 2] (the days before (a)) that read
+          short or stopped short of day 30, not asked in the last COH_REPAIR_DAYS, and install days there never read
+          at all, the newest COH_BATCH;
       (c) backfill while GA4's user-data edge is unknown (ret_from None): newest → oldest from the oldest cohort asked so
           far (ret_to, the cursor: the oldest day really asked — a cut fetch leaves the rest to it) down to history_start; COH_EDGE_RUN short batches in a row (≥ half of ≥3 judged
           cohorts short) = the edge: ret_from = the day after the newest short cohort of the first of them (the history's
@@ -1341,7 +1345,7 @@ def fetch_ret(ga, store, end, stop=None, full=False, at=None):
         if not store.get("ret_to") or _d(store["ret_to"]) > oldest:
             store["ret_to"] = oldest.isoformat()
     if rf is not None:                                  # (b) repair
-        top = end - timedelta(days=COHORT_DAYS + 5)
+        top = end - timedelta(days=COHORT_DAYS + ACT_LATE_DAYS + 2)     # the day before (a)'s window
         # … held cohorts that read short / stopped short of day 30, and install days never read at all (a hole a
         # cut fetch left before the cursor rule above), newest first
         want = [d for d in sorted(set(ret) | {x.isoformat() for x in _days(rf, top)}, reverse=True)
@@ -2064,13 +2068,14 @@ IDAY_V = 1                  # the iday file format: a file of another one starts
 IDAY_DIR = "iday"           # data/ga4_uninstall/iday/<key>.json.gz (+ <key>.old.json.gz: the frozen old parts)
 IDAY_MAX_CALLS = 120        # GA4 calls per app-fetch at most (shape probe: tokens p90 ≤ 12 a call → 120)
 IDAY_CTY_DAYS = 400         # countries (Q-C) are read only for activity days D ≥ F − 400
-IDAY_LATE = 3               # a day is read once it is final: D ≤ F = E − 3 (≥ 5 days old: whole on 28/28 apps)
+IDAY_LATE = ga4_final.lag(5) - 2   # a day is read once it is final: D ≤ F = E − IDAY_LATE (at age ≥ lag(5),
+#                                    GA4_FINAL_DAYS: whole on every app measured at the old lag's age)
 IDAY_TRIES = 3              # a read that comes back short is asked at most 3 times in all, then kept (≈ / unassigned)
 IDAY_HOUR_FLOOR = 0.5       # the BACKFILL stops for a property once an hourly token bucket is under 50%: the build's
                             # other reports always keep half
 IDAY_RETRY_DAYS = 5         # step 2: at most 5 days asked again per fetch, each at most once a day
 IDAY_CHECK_DAYS = 28        # step 3, the late check: in a file's first 28 days …
-IDAY_CHECK_AGE = 7          # … day F − 7 (~12 days old, read fresh at ~5) is read again, only measured (chk)
+IDAY_CHECK_AGE = 7          # … day F − 7 (read fresh at age 2 + IDAY_LATE) is read again, only measured (chk)
 IDAY_EDGE_RUN = 7           # 7 days in a row whose Q-B has no install-day-D row while the day had installs = the edge
 IDAY_TOT_DAYS = 120         # a Q-T block holds at most 120 days
 IDAY_TOT_RESERVE = 2        # calls the day reads leave for the Q-T blocks (new days + backfill: 2 blocks)
@@ -2742,7 +2747,7 @@ class _Iday:
                 self.qc(d, q["t91"], q["n"], res[0])
 
     def late(self):
-        """Step 3 (a file's first IDAY_CHECK_DAYS days): day F − IDAY_CHECK_AGE, read fresh at ~5 days, read again —
+        """Step 3 (a file's first IDAY_CHECK_DAYS days): day F − IDAY_CHECK_AGE, read fresh at age 2 + IDAY_LATE, read again —
         only measured (days[D].chk = {a, n, rev, closs, tie_rev, tie_new, at}), never folded again: how late GA4 is,
         and at what age country loss starts."""
         born = self.ida.get("born")

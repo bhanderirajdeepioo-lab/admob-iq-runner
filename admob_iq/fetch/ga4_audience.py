@@ -5,13 +5,14 @@ active in each trailing window of 1, 2, 3 … months — straight from GA4, no a
 THE REQUEST — the owner's method on the Data API: metric activeUsers, dimension firstSessionDate, pinned to the app's
 Android stream (ga4.Ga4App), over trailing date ranges that all END on E, the latest FINAL activity day:
     E        = ga4_uninstall.settled_end − FINAL_LAG_DAYS (today − 2 in the property's timezone from noon, else − 3; GA4
-               activity is final 3 days later — the Active users tab's settled_till, the install-value reads' F);
+               activity is final FINAL_LAG_DAYS days later, GA4_FINAL_DAYS — the Active users tab's settled_till, the
+               install-value reads' F);
     windows  = TIERED months (engine.audience.tier_months): 1, 2 … 12, then 15, 18, 21, 24, then every 6 months (30,
                36 …) up to the first window that holds the app's whole history (the Uninstall store's history_start);
                window N months = [E − w + 1, E], w = floor(N × 30.4375) days. Past a year a coarser step costs far fewer
                tokens (a 1,300-day app: 20 windows, ~9,500 range-days, instead of 43 monthly ones, ~28,800);
-    "dau"    = E alone: actives on E by install day ("today's DAU by install month" — on the latest FINAL day, ~5 days
-               back: the days after it are still filling in. FINAL_LAG_DAYS = 0 would read the robot's settled day
+    "dau"    = E alone: actives on E by install day ("today's DAU by install month" — on the latest FINAL day,
+               ga4_final.lag(5) days back: the days after it are still filling in. FINAL_LAG_DAYS = 0 would read the robot's settled day
                itself, ~2 days back, with its newest days a little low).
 Named date ranges, up to RANGES_PER_CALL (4, the Data API's limit) per request while the call's token estimate stays
 under CALL_EST_CAP (a big app's long windows go one or two a call: smaller steps fit an hourly bucket and resume
@@ -77,7 +78,8 @@ from ..engine.audience import tier_months, window_days
 
 DIR = "ga4_audience"
 HIST_DIR = "ga4_audience_hist"
-FINAL_LAG_DAYS = gu.ACT_LATE_DAYS   # E = the robot's settled day − 3: GA4 activity is final then (the Active users tab)
+FINAL_LAG_DAYS = gu.ACT_LATE_DAYS   # E = the robot's settled day − ACT_LATE_DAYS: GA4 activity is final then (the
+#                                     Active users tab; GA4_FINAL_DAYS)
 STORE_V = 2                 # 2: tiered windows + the resumable partial read (another format: read again)
 RANGES_PER_CALL = 4         # date ranges per runReport (the Data API's limit)
 PAGE_ROWS = 100000          # rows per page (≤ 4 ranges × one row per install day: one page, even at 1,300 days)

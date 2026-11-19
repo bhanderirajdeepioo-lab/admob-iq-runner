@@ -35,6 +35,7 @@ import math
 import re
 from datetime import timedelta
 
+from .. import ga4_final
 from ..alerting.rules import fingerprint
 from . import active as act
 from . import attrib
@@ -218,6 +219,9 @@ DEDUP = {"pay": (("pay_slow", "pay_loss"), PAY_DEDUP_DAYS), "ver": (("ver_ret",)
 DEDUP_OF = {f: g for g, (fams, _) in DEDUP.items() for f in fams}
 
 ONE = timedelta(days=1)
+FOLD_AGE = ga4_final.lag(5)   # an install day's reads are folded at this age (fetch.ga4_uninstall: F = E − IDAY_LATE, E
+#                               = today − 2; GA4_FINAL_DAYS) — the words only (never in CONSTS: at the rollback the
+#                               page's constants stay exactly as before the knob)
 
 
 # ── small helpers ───────────────────────────────────────────────────────────────────────────────
@@ -2616,7 +2620,7 @@ def _tiles(P, weeks, pays, alerts, E, cty, H, have_spend=True):
         note = ("Google Ads spend %s se abhi nahi aaya — naye hafton ka money back uske baad" %
                 U.fmt_day(tl + ONE, S)) if tl else "Google Ads spend abhi nahi aaya"
     elif state == "new":
-        note = "Ads shuru hue — andaza hafte ke installs ke 7 din pure hone ke ~5 din baad"
+        note = "Ads shuru hue — andaza hafte ke installs ke 7 din pure hone ke ~%d din baad" % FOLD_AGE
     elif state == "none":
         note = "Google Ads spend nahi mila"
     elif state == "noads":

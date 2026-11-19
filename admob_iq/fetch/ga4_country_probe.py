@@ -88,7 +88,7 @@ T3_DAYS = 120                       # one CT / QT block (ga4_uninstall.IDAY_TOT_
 T4_DAYS = 30
 T5_DAYS = 30
 TOP = 10                            # countries compared one by one (T2 ties, T3 old shares)
-LATE = gu.IDAY_LATE                 # F = E − 3: the newest final day
+LATE = gu.IDAY_LATE                 # F = E − LATE: the newest final day
 BANDS = (("0_90", 0, 90), ("91_180", 91, 180), ("181_365", 181, 365), ("366_427", 366, 427))
 BAND_KEYS = tuple(b for b, _, _ in BANDS)
 LATE_BANDS = BAND_KEYS[1:]

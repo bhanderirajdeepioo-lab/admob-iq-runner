@@ -24,6 +24,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from .. import ga4_final
 from .. import ga4_probe
 from ..db import write_json_gz_stable
 from . import ga4
@@ -38,7 +39,9 @@ MODEL = "mobileDeviceModel"
 METS = ("sessions", "totalRevenue")
 WINDOWS = ("30", "lm", "60", "90", "all")
 MONTHS_MAX = 12                     # the month mover's whole calendar months (newest first; each read once — final)
-LATE = gu.IDAY_LATE                 # F = today − LATE: the newest day GA4 no longer changes
+LATE = ga4_final.lag(3)             # F = today − LATE: the newest day GA4 no longer changes (GA4_FINAL_DAYS; counted
+#                                     from the property's today, so not gu.IDAY_LATE, which counts from E = today − 2:
+#                                     both 3 at the rollback)
 MAX_CALLS = 10                      # per app per run (5 windows + their pages)
 BUDGET_SEC = 120
 RETRY_HOURS = 3.0

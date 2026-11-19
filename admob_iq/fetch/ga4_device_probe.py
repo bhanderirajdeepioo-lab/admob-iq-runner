@@ -56,7 +56,7 @@ from admob_iq.fetch import ga4_uninstall as gu
 from admob_iq.fetch.ga4_d1d7_probe import Stop
 
 WIN = 90                            # days of installs read (input "win")
-LATE = gu.IDAY_LATE                 # F = E − 3: the newest final day
+LATE = gu.IDAY_LATE                 # F = E − LATE: the newest final day
 CD_DAYS = 7                         # the day-cell reads (CD0 / CD)
 COH_AGE = 30                        # the cohort reads: install day X = F − 30, ages 0 .. 30
 COH7_N = 7                          # COH7: this many single-day cohorts in one request

@@ -6663,7 +6663,7 @@ function secPhone(a){ const today=a.a1, month=Math.max(0,a.a28k-a.a1), sleep=a.s
       <li><span class="au-sw" style="background:var(--au-sleep)"></span><span>Sleeping (28+ days)<span class="au-why">phone me hai, 28+ din se nahi khola</span></span><span class="au-v">${N(sleep)}<small>${P(sleep,tot)}</small></span></li></ul>`; }
   const since=a.all?'har app ke GA4 start se':DT(a.hs)+' se (GA4 start)';
   return `<section class="au-card" id="au-s-phone"><h3>How many people have the app? <span class="au-tag au-est">andaza</span></h3>
-    <div class="au-h2s">Aaj = ${DT(a.E)} (aakhri poora din — GA4 activity 3 din me final hoti hai)</div>
+    <div class="au-h2s">Aaj = ${DT(a.E)} (aakhri poora din — GA4 activity ${actLate()} din me final hoti hai)</div>
     <div class="au-hero"><span class="au-big">${N(tot)}</span><span class="au-lbl">Installed now</span></div>${bar}${leg}
     <div class="au-kv"><div class="au-kvb"><div class="au-l">Total installs</div><div class="au-n">${N(a.ins)}</div><div class="au-s">${since}</div></div>
       <div class="au-kvb"><div class="au-l">Removed</div><div class="au-n">${N(a.rem)}<small>${P(a.rem,a.ins)}</small></div><div class="au-s">shuru se ab tak hataya</div></div></div>
@@ -20658,8 +20658,12 @@ function actOldLbl(K){ return 'Installed '+((!actOk(K)||+K>=30)?'30+':(+K+1)+'+'
 // a zone as a short label from the data itself (never a hard-coded one): "Etc/GMT-5" → "UTC+5", "America/Los_Angeles" → "Los Angeles"
 function actTz(z){ if(!z) return ''; const s=String(z), m=s.match(/^Etc\/GMT([+-])(\d+)$/); if(m) return 'UTC'+(m[1]==='+'?'−':'+')+m[2];
   if(/^(Etc\/)?(GMT|UTC|UCT|Zulu|Universal|Greenwich)(0|\+0|-0)?$/.test(s)) return 'UTC'; return s.split('/').pop().replace(/_/g,' '); }
-const ACT_PROV_TIP='GA4 ~3 din tak late data jodta hai — ye number abhi badh sakta hai.';
-const ACT_PROV_PILL=`<span class="pill p-b" title="${ACT_PROV_TIP}">⏳ Not final</span>`;
+// the Active file's own activity lag (consts.act_late_days: GA4_FINAL_DAYS — a day is final act_late_days after E, E =
+// today − lag_days); a file without it: 3, the lag before the knob. actFinalAt(n) = when a number about day + n is final.
+function actLate(){ return actConst('act_late_days',3); }
+function actFinalAt(n){ return n+uniLag()+actLate(); }
+function actProvTip(){ return `GA4 ~${actLate()} din tak late data jodta hai — ye number abhi badh sakta hai.`; }
+function actProvPill(){ return `<span class="pill p-b" title="${actProvTip()}">⏳ Not final</span>`; }
 // ---- the chip vocabulary (tiles, All-apps strips and table; ONE set) ----
 const ACT_ML={ret_dau:'Old users/day',d1:'Back next day',d7:'Back after 7 days',sess:'Sessions per user',time:'Time per user',arpdau:'Revenue per user/day',ads:'Ads per user',ecpm:'Ad rate'};
 // SPEC_SIMPLIFY §1.8 / §6.4: exactly six status words (the metric is already named by its tile / strip / column)
@@ -20824,7 +20828,7 @@ function actSumCard(d,r){
   const tiles=`<div class="uni-tiles act-tiles" style="--n:3">${ACT_TILES.map(([k,l,t])=>actTile(d,k,l,t,als,win)).join('')}</div>`+actNoteBlock(d);
   const ctx=`<div class="uni-meta" id="act-ctx"><span>Active users <b style="color:var(--ink2)">${actNum(C.a1)}</b>/day</span><span>Installs <b style="color:var(--ink2)">${actNum(C.new)}</b>/day</span>`
     +(actOk(C.old)?`<span>${actOldLbl(d.daily&&d.daily.old_k)} ${C.old_est?'≈ ':''}<b style="color:var(--ink2)">${actNum(C.old)}</b>/day</span>`:'')+'</div>';
-  const lt=''&&L.day?`<div class="faint" id="act-latest" style="font-size:11.5px;margin-top:6px">Aakhri GA4 din ${uniD(L.day)}: ab tak ${actNum(L.ret_dau)} old users ${L.prov!==false?ACT_PROV_PILL:''}</div>`:'';
+  const lt=''&&L.day?`<div class="faint" id="act-latest" style="font-size:11.5px;margin-top:6px">Aakhri GA4 din ${uniD(L.day)}: ab tak ${actNum(L.ret_dau)} old users ${L.prov!==false?actProvPill():''}</div>`:'';
   const ed=((d.edges&&d.edges.text)||[]).filter(Boolean).map(t=>`<div class="act-edge">${hAttr(smpInfoTxt(t))}</div>`).join('');
   return `<div class="card" id="act-sum" style="margin-bottom:14px"><div class="ct"><h3>📌 At a glance</h3><span class="faint" style="font-size:11.5px">Only this app · last 7 final days${d.tiles&&d.tiles.ret_dau&&d.tiles.ret_dau.from?' ('+smpSpan(d.tiles.ret_dau.from,d.tiles.ret_dau.to)+')':''} vs the 4 weeks before</span></div>
     ${S.text?`<div class="act-line" data-kind="${hAttr(S.kind||'')}">${hAttr(smpInfoTxt(S.text))}</div>`:''}${tiles}${ctx}${lt}${ed?`<div class="act-edges">${ed}</div>`:''}${actUniLink(d.app_id)}${actProvNote(d.settled_till,d.data_till)}</div>`; }
@@ -20886,7 +20890,7 @@ function actKpis(d){
   const bar=kwBar('act',hs,till);
   if(w.empty) return bar+`<div class="row c6" id="act-kpis" style="margin-bottom:14px">${kpi('👥 Old users/day','—','Is range ka GA4 data abhi nahi')}</div>`+foot('Only this app · upar ke 6 number is chune hue period ke');
   const S1=actWinSums(d,w), cmpW=kwCmpWin(w,hs,till), S2=cmpW.empty?null:actWinSums(d,cmpW);
-  const prov=S1.prov, to=S1.to, pv=prov?' '+ACT_PROV_PILL:'';
+  const prov=S1.prov, to=S1.to, pv=prov?' '+actProvPill():'';
   const lab=`${w.days} days (${uniSpan(w.from,w.to)})`+(to!==w.to?` · final days ${uniSpan(w.from,to)}`:'');
   // the comparison window, with its EFFECTIVE day count (settled days only — like the main one above)
   const cmpEff=S2?Object.assign({},cmpW,{days:S2.days}):cmpW;
@@ -21018,7 +21022,7 @@ function actTriCard(d){
   const head=`<tr><th>Install week</th>${cols.map(N=>`<th style="text-align:center">Day ${N}</th>`).join('')}</tr>`;
   const ref=T.ref||[], thin=T.ref_thin||[], A=T.avg4||{}, av=A.v||[], ap=A.prov||[];
   const refRow=`<tr><td class="nm faint" style="font-size:11.5px;font-weight:600">${actLbl(T.label)}</td>${cols.map(N=>`<td class="h" style="color:var(--muted)${thin[N]?';opacity:.55':''}"${thin[N]?' title="Low data — kam installs itne din tak pahunche"':''}>${pc(ref[N])}</td>`).join('')}</tr>`;
-  const avRow=`<tr><td class="nm faint" style="font-size:11.5px;font-weight:600">4-week average<div class="faint" style="font-size:10.5px;font-weight:400;white-space:normal;max-width:170px">${A.from?uniSpan(A.from,A.to)+' ke installs':'Abhi 4 pakke hafte nahi'}</div></td>${cols.map(N=>`<td class="h"${ap[N]?` style="opacity:.55" title="${ACT_PROV_TIP}"`:''}>${pc(av[N])}</td>`).join('')}</tr>`;
+  const avRow=`<tr><td class="nm faint" style="font-size:11.5px;font-weight:600">4-week average<div class="faint" style="font-size:10.5px;font-weight:400;white-space:normal;max-width:170px">${A.from?uniSpan(A.from,A.to)+' ke installs':'Abhi 4 pakke hafte nahi'}</div></td>${cols.map(N=>`<td class="h"${ap[N]?` style="opacity:.55" title="${actProvTip()}"`:''}>${pc(av[N])}</td>`).join('')}</tr>`;
   const sep=t=>`<tr class="uni-yr"><td class="nm" style="font-size:11px;font-weight:700;color:var(--muted);white-space:normal;max-width:170px;padding:6px 9px">${t}</td><td colspan="${cols.length}" style="padding:6px 0"></td></tr>`;
   const rels=(d.releases||[]).filter(x=>x&&x.date).sort((p,q)=>p.date<q.date?-1:(p.date>q.date?1:0));
   let yr='', pre=false, nRel=0;
@@ -21103,11 +21107,11 @@ function actTimingNote(){ const la=uniLateTxt(UNI&&UNI.lateness,'a1');
   const th=`<div class="th" onclick="actTNX()"><span class="cv${ACTTIMEXP?' on':''}">▸</span><span>⏱️ <b>When will I know?</b></span><span class="lnk" style="margin-left:auto;font-size:12px">${ACTTIMEXP?'Hide':'Show'}</span></div>`;
   if(!ACTTIMEXP) return `<div class="note uni-tn" id="act-timing">${th}</div>`;
   return `<div class="note uni-tn" id="act-timing">${th}<ul class="tb">
-    <li>GA4 din ~2 din baad aata hai, activity 3 din me pakki (Uninstall 7 din me).${la?` Sab apps me naapa hua: ${la} active users aa chuke hote hain.`:''}</li>
-    <li>Old users ka badlaav ~6 din baad dikhta, alert ~9 din baad (2 baar pakka hone par).</li>
-    <li>Back next day ~6 din, back after 7 days ~12 din, 30 din baad wapas ~35 din baad.</li>
-    <li>Kamai har user ~6 din baad (AdMob ka ≈ andaza).</li>
-    <li>Update impact: release + 7 din + 3 pakke din.</li></ul></div>`; }
+    <li>GA4 din ~2 din baad aata hai, activity ${actLate()} din me pakki (Uninstall 7 din me).${la?` Sab apps me naapa hua: ${la} active users aa chuke hote hain.`:''}</li>
+    <li>Old users ka badlaav ~${actFinalAt(1)} din baad dikhta, alert ~${actFinalAt(4)} din baad (2 baar pakka hone par).</li>
+    <li>Back next day ~${actFinalAt(1)} din, back after 7 days ~${actFinalAt(7)} din, 30 din baad wapas ~${actFinalAt(30)} din baad.</li>
+    <li>Kamai har user ~${actFinalAt(1)} din baad (AdMob ka ≈ andaza).</li>
+    <li>Update impact: release + 7 din + ${actLate()} pakke din.</li></ul></div>`; }
 // ---- All apps ----
 function actStatus(r){ let best='wait'; ['ret_dau','d1','d7','sess','time','arpdau'].forEach(k=>{ const s=actSt((r.m||{})[k]); if(ACT_RANK[s]<ACT_RANK[best]) best=s; }); return best; }
 function actStatusCell(r){ let bk='ret_dau', best='wait'; ['ret_dau','d1','d7','sess','time','arpdau'].forEach(k=>{ const s=actSt((r.m||{})[k]); if(ACT_RANK[s]<ACT_RANK[best]){ best=s; bk=k; } });
@@ -21245,7 +21249,7 @@ function actPortfolio(parts){
   const byId={}; rows.forEach(r=>{ byId[r.app_id]=r; });
   (Array.isArray(A.info)?A.info:[]).filter(o=>o&&byId[o.app_id]&&(!APP||byId[o.app_id].app===APP)).forEach(o=>{ const r=byId[o.app_id]; L.push(o.src==='older'?smpActOldRow(o,r.app,r.app_id):smpActInfoRow(Object.assign({settled_till:r.settled_till},o),r.app,r.app_id)); });
   const head=smpHead('Active users',[`<b style="color:var(--ink2)">ACTIVE USERS</b>`,`Har app alag (${n} apps)`,tMax?`Users ka data ${smpD(tMax)} tak`:'abhi tak koi GA4 data nahi aaya',sMax?`Pakka ${smpD(sMax)} tak`:'',`Aaj ${smpD(smpToday())}`,`🆕 ${smpNaye(L)} naye alert (aaj/kal)`])
-    +`<p class="faint" style="font-size:12px;margin:-6px 0 12px">Old users = roz ke active users − us din ke naye installs. GA4 ka data ~3 din me pakka hota hai — naye din ⏳ not final (kam dikhte, unpe faisla nahi).</p>`;
+    +`<p class="faint" style="font-size:12px;margin:-6px 0 12px">Old users = roz ke active users − us din ke naye installs. GA4 ka data ~${actLate()} din me pakka hota hai — naye din ⏳ not final (kam dikhte, unpe faisla nahi).</p>`;
   const nBad=rows.filter(r=>r.stale||r.status==='error').length;
   const note=A.status==='error'?'<div class="note">⚠️ GA4 se abhi Active users data nahi ban paya — agle robot run me phir try hoga.</div>'
     :((A.status&&A.status!=='ok'&&nBad)?`<div class="note">⚠️ ${nBad} ${nBad===1?'app ka':'apps ka'} data purana ya is baar nahi bana — agle robot run me phir try hoga.</div>`:'');
@@ -21476,13 +21480,13 @@ function actPfRow(S,i,E){ const d=uniAdd(S.from,i), pv=!!S.pv[i], cur=S.cur||und
   const has=S.ap[i]>0, pct=v=>(v*100).toFixed(1)+'%', inc=has&&!!S.inc[i];
   // a big app's data missing that day: the counts read low — faded, and said on the cell (never a sure drop)
   const it=inc?`≈${actPfPc(S,i)}% of DAU missing — ${actPfNames(M.gap.concat(M.late),3)} ka data is din nahi; total kam dikhta hai, ye girawat nahi`:'', ic=inc?'act-pfi':'';
-  const dn=(N)=>{ const c=S['d'+N+'c'][i]; if(c) return td(pct(S['d'+N+'n'][i]/S['d'+N+'d'][i]),`${c} of ${S.ap[i]} apps · ${actNum(S['d'+N+'d'][i])} new users that day`+(S['d'+N+'p'][i]?' · ⏳ Not final — '+ACT_PROV_TIP:''),S['d'+N+'p'][i]?'act-pfv':'');
+  const dn=(N)=>{ const c=S['d'+N+'c'][i]; if(c) return td(pct(S['d'+N+'n'][i]/S['d'+N+'d'][i]),`${c} of ${S.ap[i]} apps · ${actNum(S['d'+N+'d'][i])} new users that day`+(S['d'+N+'p'][i]?' · ⏳ Not final — '+actProvTip():''),S['d'+N+'p'][i]?'act-pfv':'');
     return i+N>E?td('—',`Abhi pata nahi — ${uniD(uniAdd(d,N))} ka GA4 data aane par`,'faint'):td('—','Is din ka wapsi data nahi','faint'); };
   const rt=S.rtn[i]?actPfN(S.rt[i])+(S.rtn[i]<S.ap[i]?`<sup class="act-pfs" title="${hAttr(`${S.ap[i]-S.rtn[i]} ${S.ap[i]-S.rtn[i]===1?'app ka':'apps ka'} is din old users ka number nahi (active ≤ new installs, ya pata nahi) — unhe chhod ke jod`)}">†</sup>`:''):'—';
   const rk=S.rvc[i]&&S.ra[i]>0?(S.bl[i]?'≈ ':'')+actMoneyU(S.rv[i]*1000/S.ra[i],cur):'—';
   const wsp=(S.wow[i]!=null&&actSplitLive())?splitWow(S,i):'';
-  const wk=S.wow[i]!=null?uniChg(S.wow[i]):'—', wkt=S.wow[i]!=null?`vs ${actWd(d)} ${uniD(uniAdd(d,-7))} — sirf wo ${S.wowc[i]} apps jinka dono din data hai (same apps)`+(wsp?' · '+wsp:'')+(pv?' · ⏳ Not final — '+ACT_PROV_TIP:''):'Pichhle hafte ka isi din nahi';
-  return `<tr data-day="${d}"${pv?' class="act-pfp"':''}><td class="nm"><b>${uniD(d)}</b><div class="act-pfwd">${actWd(d)}${pv?` <span class="pill p-b act-pfpill" title="${ACT_PROV_TIP}">⏳ Not final</span>`:''}</div></td>`
+  const wk=S.wow[i]!=null?uniChg(S.wow[i]):'—', wkt=S.wow[i]!=null?`vs ${actWd(d)} ${uniD(uniAdd(d,-7))} — sirf wo ${S.wowc[i]} apps jinka dono din data hai (same apps)`+(wsp?' · '+wsp:'')+(pv?' · ⏳ Not final — '+actProvTip():''):'Pichhle hafte ka isi din nahi';
+  return `<tr data-day="${d}"${pv?' class="act-pfp"':''}><td class="nm"><b>${uniD(d)}</b><div class="act-pfwd">${actWd(d)}${pv?` <span class="pill p-b act-pfpill" title="${actProvTip()}">⏳ Not final</span>`:''}</div></td>`
     +td(`${S.ap[i]} of ${S.nn[i]}`+(inc?' <sup class="act-pfg">⏸️</sup>':''),mt||'Data for all apps')+td(has?actPfN(S.dau[i]):'—',it,ic)+td(rt,it,ic)+td(S.nwn[i]?actPfN(S.nw[i]):'—',it,ic)+dn(1)+dn(7)
     +td(S.sU[i]>0?actDec(S.sS[i]/S.sU[i]):'—')+td(S.tU[i]>0?uniDur(S.tT[i]/S.tU[i]):'—')
     +td(rk,S.rvc[i]?`${S.rvc[i]} of ${S.ap[i]} apps with ad data · AdMob Network only`+(S.bl[i]?' · ≈ AdMob aur GA4 ka din alag timezone me — andaza':''):'In din ka AdMob data nahi')+td(wk,wkt,'faint')+'</tr>'; }
@@ -21633,6 +21637,10 @@ function valLG(v){ VALLONG=v==='all'?'all':'18'; valRerender(); }               
 const valOk=v=>v!=null&&v!==''&&isFinite(+v);
 const valM=o=>(o&&typeof o==='object')?o:{};
 function valConst(k,d){ const c=DATA&&DATA.value&&DATA.value.consts; if(c&&typeof c==='object'){ if(valOk(c[k])) return +c[k]; const l=String(k).toLowerCase(); if(valOk(c[l])) return +c[l]; } return d; }
+// the install-day reads' lag (consts.iday_late, GA4_FINAL_DAYS: a day is read once final, iday_late after E = today −
+// lag_days); a file without it: 3, the lag before the knob. valFinalAt(n) = when a number about install day + n is final.
+function valLate(){ return valConst('iday_late',3); }
+function valFinalAt(n){ return n+uniLag()+valLate(); }
 function valH(d){ return (d&&valOk(d.horizon))?+d.horizon:((DATA&&DATA.value&&valOk(DATA.value.horizon))?+DATA.value.horizon:valConst('H',90)); }
 const VAL_T=[0,1,3,7,14,30,60,90,180,365];
 function valT(){ const c=DATA&&DATA.value&&DATA.value.consts, t=c&&(c.T||c.t); return (Array.isArray(t)&&t.length===10&&t.every(valOk))?t.map(Number):VAL_T; }
@@ -22995,7 +23003,7 @@ function valSumCard(d,r){
   if(P.never&&valOk(P.pct365)) pS.push(`saal bhar me ≈${Math.round(P.pct365)}% wapas`); else if(valOk(P.p)&&!P.obs&&valBandTxt(P)) pS.push(valBandTxt(P));
   if(valOk(P.p0)) pS.push(`pehle ~${Math.round(P.p0)} din`);
   if(P.note) pS.push(valTxt(P.note)); else if(P.st==='nospend') pS.push('Google Ads kharcha nahi — sirf kamai per install'); else if(P.st==='thin') pS.push('thoda kharcha — faisla nahi');
-  else if(P.st==='wait') pS.push('andaza hafte ke installs ke 7 din pure hone ke ~5 din baad');
+  else if(P.st==='wait') pS.push(`andaza hafte ke installs ke 7 din pure hone ke ~${valFinalAt(0)} din baad`);
   // on a phone the sub-line folds away: a projected number keeps its range right under it
   const pBig=valPayBig(P)+(valOk(P.p)&&!P.obs&&!P.never&&valBandTxt(P)?`<small class="val-rgb">${hAttr(valBandTxt(P))}</small>`:'');
   const t1=valTileBox('pay','Ads money back in','Google Ads ka jitna paisa laga, utni AdMob kamai in installs se kitne din me wapas aati hai. ≈ = andaza (purane hafton ke hisaab se).',
@@ -23422,7 +23430,7 @@ function valVerCard(d){
   if(valOk(LO.days)&&+LO.days>0) f.push(`Rollout ke ${valNum(LO.days)} din (jab koi ek version ${dm}%+ naye users pe nahi tha) gine nahi — ${valNum(LO.n)} installs.`);
   const NV=valM(B.no_vuse); if(valOk(NV.days)&&+NV.days>0) f.push(`${valNum(NV.days)} din ka version data GA4 ne nahi diya — un dino ke ${valNum(NV.n)} installs gine nahi.`);
   f.push(`Tulna: naye version ke pehle ${wd} din ke installs vs pichhle version ke aakhri ${wd} din — dono same umar pe.`);
-  f.push('Agle din wala number ~5 din baad pakka, hafte wala ~12 din baad, 30 din wala ~35 din baad.');
+  f.push(`Agle din wala number ~${valFinalAt(0)} din baad pakka, hafte wala ~${valFinalAt(7)} din baad, 30 din wala ~${valFinalAt(30)} din baad.`);
   f.push('"N din me" = itne din purane installs abhi nahi — chhota number nahi dikhate · ⏳ = sirf kuch din ke installs itne purane · ≈ = Andaza.');
   const lead=st==='single'?box(say):(B.text?`<div class="val-lead" id="val-vlead">${valTxt(smpInfoTxt(B.text))}</div>`:'');
   // a 🧬 link from Update impact to a version with no row of its own (never 80%+ of a day's new users — a rollout — or
@@ -23516,7 +23524,7 @@ function valLongCard(d){
   const base=bs.length?`<div class="val-lbase" id="val-lbase">Normal${one&&keys[0]?` (${keys[0]})`:''}: ${bs.map(([o,t],i)=>t+(!one&&keys[i]?` (${keys[i]})`:'')).join(' · ')}</div>`:'';
   const f=['Day 60 = install ke 60ve din app kholne wale, 100 naye users me se (Firebase jaisa base).',
     `Kamai = ${d.scale&&d.scale.src==='network'?'AdMob ki kamai (sirf AdMob network)':'AdMob ki kamai (sab networks)'}, install ke din se, ek install pe.`,
-    'Mahine ka 90 din wala number mahina khatam hone ke ~95 din baad; 1 saal wala ~370 din baad.',
+    `Mahine ka 90 din wala number mahina khatam hone ke ~${valFinalAt(90)} din baad; 1 saal wala ~${valFinalAt(365)} din baad.`,
     '"N din me" = abhi itne din pure nahi hue — chhota number nahi dikhate · ≈ grey = Andaza · ⏳ = mahina poora data me nahi.'].map(hAttr);
   if(L.edge) f.push(hAttr(`Install-wise data ${uniD(L.edge)} se — usse pehle ka "No data".`));
   if(L.note) f.push(valTxt(L.note)); else if(q) f.push(`Is app me mahine ke install ${valNum(valConst('LONG_MIN_N',1000))} se kam — isliye 3-3 mahine milake.`);
@@ -23562,8 +23570,8 @@ function valTimingNote(){
   const th=`<div class="th" onclick="valTNX()"><span class="cv${VALTIMEXP?' on':''}">▸</span><span>⏱️ <b>When will I know?</b></span><span class="lnk" style="margin-left:auto;font-size:12px">${VALTIMEXP?'Hide':'Show'}</span></div>`;
   if(!VALTIMEXP) return `<div class="note uni-tn" id="val-timing">${th}</div>`;
   return `<div class="note uni-tn" id="val-timing">${th}<ul class="tb">
-    <li>Pehle din ki kamai ~5 din baad pakki, 1 hafte wali ~12 din baad, 30 din wali ~35 din baad.</li>
-    <li>Paisa-wapas ka andaza hafte ke installs ke 7 din pure hone ke ~5 din baad.</li>
+    <li>Pehle din ki kamai ~${valFinalAt(0)} din baad pakki, 1 hafte wali ~${valFinalAt(7)} din baad, 30 din wali ~${valFinalAt(30)} din baad.</li>
+    <li>Paisa-wapas ka andaza hafte ke installs ke 7 din pure hone ke ~${valFinalAt(0)} din baad.</li>
     <li>Country ka faisla ${valConst('WIN_WEEKS',4)} hafte ke installs pe (chhote apps: ${valConst('WIN_WEEKS_SMALL',12)} hafte).</li>
     <li>Alert tabhi jab 2 hafte lagatar ho.</li></ul></div>`; }
 // ---- All apps ----

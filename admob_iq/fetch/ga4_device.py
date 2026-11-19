@@ -62,7 +62,7 @@ KEY_RE = re.compile(r"[0-9a-f]{12}")
 MONTH_RE = re.compile(r"(\d{4}-\d{2})\.json\.gz")
 MODEL, CC, CAMP = "mobileDeviceModel", "countryId", "firstUserGoogleAdsCampaignId"
 PAID_RE = r"[^(].*"                 # a real Google Ads campaign id (not "(not set)" / "(organic)" …)
-LATE = gu.IDAY_LATE                 # F = E − 3: the newest final day
+LATE = gu.IDAY_LATE                 # F = E − LATE: the newest final day (GA4_FINAL_DAYS, the install-value reads')
 WIN = 28                            # install days a window
 AGES = (7, 30, 90)
 KEEP_DAYS = 130                     # install days in the recent file (the 90-day window ends F − 89, starts F − 116);

@@ -1,4 +1,5 @@
-"""📉 CPI vs eCPM alarm (pure: no I/O, no clock, no globals, no caches between calls; standard library only).
+"""📉 CPI vs eCPM alarm (pure: no I/O, no clock, no globals, no caches between calls; standard library only, plus the
+package's pure admob_iq.ga4_final, read once at import for the ROAS_C shifts).
 
 Every app, campaign and country is replayed day by day from its first spend to the data day t, so the alarm of any
 past day is exactly what the alarm said on that day. One alarm (episode) per entity per family at a time.
@@ -9,8 +10,8 @@ past day is exactly what the alarm said on that day. One alarm (episode) per ent
   families (bad direction, shift): CPI cost ÷ biddable installs (up, 0) · ECPM AdMob earnings ÷ impressions × 1000
     (down, 0) · GAP ads needed to pay back one install = cost ÷ installs × impressions ÷ earnings (up, 0) · IPU
     impressions ÷ GA4 active users (down, 1) · ROAS_G Google D0 value ÷ cost, INR ÷ INR (down, 0) · ROAS_C0/C1/C7
-    AdMob-matched install-day revenue at age 0/1/7 ÷ the spend of those install days (down, 1/2/8) · SPEND cost per
-    day (down, 0).
+    AdMob-matched install-day revenue at age 0/1/7 ÷ the spend of those install days (down, c_shift(age): the ROI
+    rows' final lag − 2 + age, GA4_FINAL_DAYS — 1/2/8 at the rollback) · SPEND cost per day (down, 0).
   openers (k consecutive data days; threshold = max(family minimum, z × noise)):
     SUDDEN   L7 vs P14                      noise = the daily swing × √(1/7 + 1/14)
     DRIFT    L14 vs H = median of the 14-day windows ending b−14, b−21 … b−84 that touch no alarm span (≥ 4)
@@ -51,7 +52,17 @@ import math
 from dataclasses import dataclass
 from datetime import date, timedelta
 
+from .. import ga4_final
+
 EPOCH = "2000-01-04"      # the weekly noise refresh runs on days with (day − EPOCH) % 7 == 0
+
+
+def c_shift(age):
+    """ROAS_C<age>'s day shift: install day X's age-`age` revenue is final in the ROI rows once X + age ≤ the cohort
+    read's today − its final lag (fetch.ga4_cohort: ga4_final.lag(3)), and the data day t is that today − 2, so the
+    family reads b = t − (lag − 2 + age), its newest final cohort day."""
+    return ga4_final.lag(3) - 2 + age
+
 
 # num / den series, scale, bad direction (+1 = up is bad), day shift (matured cohort / GA4 lag)
 FAMILIES = {
@@ -60,9 +71,9 @@ FAMILIES = {
     "GAP":     {"num": "sp_usd", "den": "inst", "bad": +1, "shift": 0},
     "IPU":     {"num": "imp", "den": "dau", "bad": -1, "shift": 1},
     "ROAS_G":  {"num": "d0_inr", "den": "sp_inr", "bad": -1, "shift": 0},
-    "ROAS_C0": {"num": "c_r0", "den": "c_sp", "bad": -1, "shift": 1},
-    "ROAS_C1": {"num": "c_r1", "den": "c_sp", "bad": -1, "shift": 2},
-    "ROAS_C7": {"num": "c_r7", "den": "c_sp", "bad": -1, "shift": 8},
+    "ROAS_C0": {"num": "c_r0", "den": "c_sp", "bad": -1, "shift": c_shift(0)},
+    "ROAS_C1": {"num": "c_r1", "den": "c_sp", "bad": -1, "shift": c_shift(1)},
+    "ROAS_C7": {"num": "c_r7", "den": "c_sp", "bad": -1, "shift": c_shift(7)},
     "SPEND":   {"num": "sp_usd", "den": None, "bad": -1, "shift": 0},
 }
 FAMS_BY_KIND = {"app": ["CPI", "ECPM", "GAP", "IPU", "ROAS_G", "ROAS_C0", "ROAS_C1", "ROAS_C7", "SPEND"],

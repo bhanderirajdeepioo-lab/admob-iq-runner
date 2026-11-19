@@ -52,7 +52,9 @@ TH = {"k_back": 1.0, "k_slide": 1.0, "steady": 0.15, "scale": math.log(2.0), "tu
 PERSIST = {"keep_return_bands": 2.0, "n_fn_full": 6, "min_move_bands": 4.0, "steady_days": 56, "steady_dev": 0.10,
            "n_fn_hold": 4, "hold_bands": 1.0, "ret_bands": 1.0, "noise_frac": 0.5,
            "min_days_since_change": 84}
-LAGS = {"dau": 1, "c_r0": 1, "c_r1": 2, "c_r7": 8}     # as of day d a cell later than d − lag is unknown (others: 0)
+LAGS = {"dau": 1, **{CA.FAMILIES[f]["num"]: CA.FAMILIES[f]["shift"] for f in ("ROAS_C0", "ROAS_C1", "ROAS_C7")}}
+#      as of day d a cell later than d − lag is unknown (others: 0); c_r0 / c_r1 / c_r7 = the alarm's own ROAS_C
+#      shifts (cpi_alarm.c_shift: GA4_FINAL_DAYS), dau = IPU's shift
 SEASON = (364, 728)
 CHECKS = (28, 56, 84)
 FORBIDDEN = ("follows", "because", "caused", "due to", "driven")    # never in a cause or a short (wording rule)

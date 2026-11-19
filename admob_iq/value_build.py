@@ -27,6 +27,7 @@ import sys
 import time
 from datetime import date, datetime, timedelta, timezone
 
+from . import ga4_final
 from .db import write_json_gz_stable
 from .engine import value as val
 from .fetch import ga4_uninstall as gu
@@ -535,7 +536,8 @@ def error_row(a, key):
 
 def consts(cfg):
     """The page's constants. With GADS_GEO and VALUE_CD off they are exactly as before (asset_v too): the geo gate's
-    own only with GADS_GEO on; `cd` (and C / D's own table) only with VALUE_CD on."""
+    own only with GADS_GEO on; `cd` (and C / D's own table) only with VALUE_CD on; `iday_late` only off the rollback
+    of GA4_FINAL_DAYS (admob_iq.ga4_final)."""
     out = dict(val.CONSTS)
     out.update(horizon=cfg["payback_days"], iap_in_payback=cfg["iap"], cpi_main=cfg["cpi"], deduct=cfg["deduct"],
                geo=cfg["geo"])
@@ -549,6 +551,8 @@ def consts(cfg):
         from .engine import value_cd
         out.update(value_cd.CONSTS)
         out["cd"] = True
+    if not ga4_final.rollback():     # the install-day reads' lag (GA4_FINAL_DAYS) for the page's "~N din baad" words;
+        out["iday_late"] = gu.IDAY_LATE   # at the rollback none: the page's fallback is the old lag, the file as before
     return out
 
 

@@ -49,7 +49,7 @@ from . import uninstall as U
 
 # ── constants (§2.2; every one is exported in consts) ──
 ACT_V = 1
-ACT_LATE_DAYS = imp.ACT_LATE_DAYS       # activity settles in 3 days (GA4's 72h); measured lateness later, not now
+ACT_LATE_DAYS = imp.ACT_LATE_DAYS       # activity settles ACT_LATE_DAYS days before E (GA4_FINAL_DAYS: impact's)
 TILE_DAYS = 7
 BASE_DAYS = 28
 NULL_WEEKS_ACT = 13                     # the tile's null: the same statistic at every end of the 13 weeks before
@@ -2956,8 +2956,8 @@ def evaluate(store, app_id, app, state, now_iso, udet, key, revenue, mkt, *, sta
     for d, kind, exp_ in P["early"]:
         info.append({"kind": "early", "metric": "ret_dau", "dir": "down", "from": iso[d], "to": iso[d],
                      "rel": _m4((P["R"][d] or 0) / exp_ - 1) if exp_ else None, "tags": [], "prov": True, "sp": None,
-                     "text": "⏳ %s (abhi aa raha): active users normal ke aadhe se bhi kam — 3 din me pakka hoga"
-                             % U.fmt_day(P["days"][d], E)})
+                     "text": "⏳ %s (abhi aa raha): active users normal ke aadhe se bhi kam — %d din me pakka hoga"
+                             % (U.fmt_day(P["days"][d], E), ACT_LATE_DAYS)})
     eps_all = open_eps + [e for e in state.get("closed") or [] if e["app_id"] == app_id]
     older = history(P, eps_all, udet)
     for r in info + older:                            # "Shuru" (SPEC_SIMPLIFY, shown only): its since, else from

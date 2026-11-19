@@ -50,7 +50,7 @@ from admob_iq.fetch import ga4_shape_probe as sp
 from admob_iq.fetch import ga4_uninstall as gu
 from admob_iq.fetch.ga4_d1d7_probe import Stop
 
-LATE = gu.IDAY_LATE                 # F = E − 3 = today − 5: the newest final day
+LATE = gu.IDAY_LATE                 # F = E − LATE (E = today − 2): the newest final day
 DAYS = 28                           # W
 W7_DAYS = 7                         # W7: the country reads
 HIST_DAYS = 730                     # H without a history start: this many days to F (with one: no cap)
