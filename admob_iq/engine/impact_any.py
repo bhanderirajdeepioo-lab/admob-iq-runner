@@ -42,6 +42,8 @@ from . import impact as I
 from . import uninstall as U
 
 V = 1                     # file format (a reader checks it)
+ACT_LATE0 = 3             # impact.ACT_LATE_DAYS at GA4_FINAL_DAYS' rollback: the input signature names the lag only off
+#                           it (input_sig), so a key there is the key before the knob
 HISTORY_DAYS = 365        # candidate dates: the last year (or the app's history when shorter)
 KIND, LABEL = "custom", "Custom date"
 WINDOWS = I.WINDOWS       # 7 / 14 / 30 / 60 — the update card's
@@ -714,7 +716,8 @@ def rev_reach(E, tz_ga4, tz_rev):
 def input_sig(store_sig, revenue, E, late, code, tz_ga4=None):
     """Everything an app's results read: the store file (store_sig — its time zone, days, cohorts …), the AdMob revenue
     a GA4 day ≤ E can touch (the days ≤ rev_reach, `till` capped there, tz, currency, the first revenue day), late
-    days and the code — the same signature, the same file."""
+    days, the code and the activity lag (impact.ACT_LATE_DAYS: GA4_FINAL_DAYS moves it without a code change; named
+    only off ACT_LATE0) — the same signature, the same file."""
     rv = None
     if revenue:
         days = {k: v for k, v in (revenue.get("days") or {}).items() if v is not None}
@@ -722,8 +725,10 @@ def input_sig(store_sig, revenue, E, late, code, tz_ga4=None):
         till = revenue.get("till") or (max(days) if days else None)
         rv = [revenue.get("tz"), revenue.get("currency"), min(till, cap) if till else None,
               min(days) if days else None, sorted((k, v) for k, v in days.items() if k <= cap)]
-    raw = json.dumps([store_sig, rv, E.isoformat(), int(late or 0), code], separators=(",", ":"), sort_keys=True,
-                     default=str)
+    parts = [store_sig, rv, E.isoformat(), int(late or 0), code]
+    if I.ACT_LATE_DAYS != ACT_LATE0:
+        parts.append({"act_late": I.ACT_LATE_DAYS})
+    raw = json.dumps(parts, separators=(",", ":"), sort_keys=True, default=str)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
 

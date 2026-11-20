@@ -132,8 +132,9 @@ JUDGE_D = 7                    # a long window is judged once D7 of its last ins
 RET30_MIN_PP = 1.0             # D30 (base ~5%): ≥1 point AND …
 RET30_MIN_REL = 0.10           # … ≥10% of before
 LATE_WINDOW = 30               # the late-effect check's window
-LATE_ALERT_DAYS = 75           # judged ≈R+38+ACT_LATE_DAYS, D30 ≈R+61+ACT_LATE_DAYS, +persistence: older updates
-#                                never raise a late alert
+LATE_ALERT_DAYS = 72 + ACT_LATE_DAYS   # judged ≈R+38+ACT_LATE_DAYS, D30 ≈R+61+ACT_LATE_DAYS, +persistence: older
+#                                updates never raise a late alert (75 at the rollback; the lag moves the D30 day, so
+#                                the alert keeps the same days to be sent in at every GA4_FINAL_DAYS)
 LATE_PERSIST = 2               # a late condition holds on 2 daily evaluations before it is sent
 LATE_V = 1                     # state marker: the first evaluation without it seeds every late condition
 

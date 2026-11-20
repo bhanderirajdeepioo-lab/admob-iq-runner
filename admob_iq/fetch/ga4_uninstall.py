@@ -2075,7 +2075,10 @@ IDAY_HOUR_FLOOR = 0.5       # the BACKFILL stops for a property once an hourly t
                             # other reports always keep half
 IDAY_RETRY_DAYS = 5         # step 2: at most 5 days asked again per fetch, each at most once a day
 IDAY_CHECK_DAYS = 28        # step 3, the late check: in a file's first 28 days …
-IDAY_CHECK_AGE = 7          # … day F − 7 (read fresh at age 2 + IDAY_LATE) is read again, only measured (chk)
+IDAY_CHECK_AGE = 7          # … day F − 7 (read fresh at age 2 + IDAY_LATE, 7 days before) is read again, only
+#                             measured (chk) …
+IDAY_FRESH_AGE = 2 + IDAY_LATE + 2   # … when its kept read was made by this age (fresh: on time at 2 + IDAY_LATE, or
+#                             up to 2 fetch-days late; 7 at the rollback) — an older one was backfilled
 IDAY_EDGE_RUN = 7           # 7 days in a row whose Q-B has no install-day-D row while the day had installs = the edge
 IDAY_TOT_DAYS = 120         # a Q-T block holds at most 120 days
 IDAY_TOT_RESERVE = 2        # calls the day reads leave for the Q-T blocks (new days + backfill: 2 blocks)
@@ -2747,9 +2750,9 @@ class _Iday:
                 self.qc(d, q["t91"], q["n"], res[0])
 
     def late(self):
-        """Step 3 (a file's first IDAY_CHECK_DAYS days): day F − IDAY_CHECK_AGE, read fresh at age 2 + IDAY_LATE, read again —
-        only measured (days[D].chk = {a, n, rev, closs, tie_rev, tie_new, at}), never folded again: how late GA4 is,
-        and at what age country loss starts."""
+        """Step 3 (a file's first IDAY_CHECK_DAYS days): day F − IDAY_CHECK_AGE, read fresh (by IDAY_FRESH_AGE: on
+        time at age 2 + IDAY_LATE), read again — only measured (days[D].chk = {a, n, rev, closs, tie_rev, tie_new,
+        at}), never folded again: how late GA4 is, and at what age country loss starts."""
         born = self.ida.get("born")
         if not born or _age_days(born, self.at) >= IDAY_CHECK_DAYS:
             return
@@ -2758,7 +2761,7 @@ class _Iday:
         r = self.days.get(k)
         if not r or r.get("st") not in ("ok", "q") or r.get("chk") is not None:
             return
-        if _age_days(k, r.get("at")) > IDAY_CHECK_AGE:
+        if _age_days(k, r.get("at")) > IDAY_FRESH_AGE:
             return                                      # a backfilled day: not read fresh, nothing to compare
         cty = d >= self.cty_lo and r.get("cst") in QC_FOLDED
         if not self.can(2 if cty else 1):

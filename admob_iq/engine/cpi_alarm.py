@@ -11,7 +11,9 @@ past day is exactly what the alarm said on that day. One alarm (episode) per ent
     (down, 0) · GAP ads needed to pay back one install = cost ÷ installs × impressions ÷ earnings (up, 0) · IPU
     impressions ÷ GA4 active users (down, 1) · ROAS_G Google D0 value ÷ cost, INR ÷ INR (down, 0) · ROAS_C0/C1/C7
     AdMob-matched install-day revenue at age 0/1/7 ÷ the spend of those install days (down, c_shift(age): the ROI
-    rows' final lag − 2 + age, GA4_FINAL_DAYS — 1/2/8 at the rollback) · SPEND cost per day (down, 0).
+    rows' final lag − 2 + age, GA4_FINAL_DAYS — 5/6/12 at 7, 1/2/8 at the rollback; the series hold cells final at
+    C_LAG0 = 3 days at every F, so the cells after b are there, never read by these families) · SPEND cost per day
+    (down, 0).
   openers (k consecutive data days; threshold = max(family minimum, z × noise)):
     SUDDEN   L7 vs P14                      noise = the daily swing × √(1/7 + 1/14)
     DRIFT    L14 vs H = median of the 14-day windows ending b−14, b−21 … b−84 that touch no alarm span (≥ 4)
@@ -22,7 +24,9 @@ past day is exactly what the alarm said on that day. One alarm (episode) per ent
     (1 − ROAS ÷ base), GAP an estimate — a gate only, never shown as a loss).
     guards: a 14-day warm-up after every (re)start is never inside a window; ECPM / IPU only while the app buys
     users; no CPI / ECPM / IPU / GAP opening while buying > 2× the baseline's daily spend; ROAS_G is confirmed by the
-    AdMob-matched D0 line (≥ half the threshold) when that line has data.
+    AdMob-matched D0 line (≥ half the threshold) when that line has data — read at the confirm's own shift
+    (P["confirm"]: C_LAG0 − 2 = 1, its newest cell, at every GA4_FINAL_DAYS: owner, 20 Nov 2026, the D0 ROAS confirm
+    stays as it was), not at ROAS_C0's.
   an open episode: change start c, a FROZEN baseline B (the 14 days before c, or H when those were themselves > 25 %
     off the 14 before them; DRIFT H; ABSOLUTE U); re-notices on a new step or a slide vs the best L14 since the last
     notice, ≥ 15 days apart; closes when L7 is within the recovery band of B on 5 consecutive days ('recovered'),
@@ -57,11 +61,16 @@ from .. import ga4_final
 EPOCH = "2000-01-04"      # the weekly noise refresh runs on days with (day − EPOCH) % 7 == 0
 
 
+C_LAG0 = 3                # the lag the build fills c_r0 / c_r1 / c_r7 at, at every GA4_FINAL_DAYS (cpi_build.C_LAG):
+#                           install day X's age-a cell is there once X + a ≤ the cohort read's today − 3 — the D0
+#                           confirm reads that newest cell (shift C_LAG0 − 2), level_agent's LAGS are its availability
+
+
 def c_shift(age):
-    """ROAS_C<age>'s day shift: install day X's age-`age` revenue is final in the ROI rows once X + age ≤ the cohort
-    read's today − its final lag (fetch.ga4_cohort: ga4_final.lag(3)), and the data day t is that today − 2, so the
-    family reads b = t − (lag − 2 + age), its newest final cohort day."""
-    return ga4_final.lag(3) - 2 + age
+    """ROAS_C<age>'s day shift: install day X's age-`age` revenue is final once X + age ≤ the cohort read's today − its
+    final lag (fetch.ga4_cohort: ga4_final.lag(C_LAG0)), and the data day t is that today − 2, so the family reads
+    b = t − (lag − 2 + age), its newest final cohort day (the series' newer cells, final at C_LAG0 only, are not read)."""
+    return ga4_final.lag(C_LAG0) - 2 + age
 
 
 # num / den series, scale, bad direction (+1 = up is bad), day shift (matured cohort / GA4 lag)
@@ -106,7 +115,8 @@ P_PARITY = {
     "warmup": True, "warmup_days": 14, "restart_gap": 28,
     "young_mult": 1.5,
     "scale_max": {"CPI": 2.0, "ECPM": 2.0, "IPU": 2.0, "GAP": 2.0},
-    "confirm": {"ROAS_G": ("ROAS_C0", 0.5)},
+    "confirm": {"ROAS_G": ("ROAS_C0", 0.5, C_LAG0 - 2)},   # (family, share of the threshold, its own shift: the
+    #                              line's newest cell at every GA4_FINAL_DAYS; a 2-tuple reads the family's shift)
     # legacy behaviour (the parity run); P_PROD switches each one
     "thr_r_mode": "fixed",       # "adaptive": the band = min(thr_r, max(5 %, thr_open ÷ 2))
     "esc_from": 1,               # the step re-notice counts from opened + esc_from (1: it repeats the opening step)
@@ -787,10 +797,10 @@ def _run_family(e, ser, fam, P, t0, t1, own=()):
             cf = (P.get("confirm") or {}).get(fam)
             conf = None
             if cf:
-                of, frac = cf
+                of, frac = cf[0], cf[1]
                 if ser.applicable(of):
                     oV7, oV14, _ = ser.series(of)
-                    osh = FAMILIES[of]["shift"]
+                    osh = cf[2] if len(cf) > 2 else FAMILIES[of]["shift"]
                     if fired == "SUDDEN":
                         olw = lworse(of, oV7[t - osh], oV14[t - 7 - osh]) if t - 7 - osh >= 13 else None
                     else:
