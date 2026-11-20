@@ -280,6 +280,15 @@ was. Each app has one SOURCE a build:
       same age (_bench_at: the curve's rmed — the country's median past ROAS — at a curve age, linear between two, null
       past the curve's limit), both ROAS to 3 places (_r3: the page shows 0.1 %); the page's "ROAS so far" column
       between eCPM and Breakeven. No number of the model moves.
+    INTENDED, as reviewed (20 Nov 2026): (b) "more than every user's" runs only on days ≤ the paid newest − FSQ_YOUNG
+      (a newer day's two reads are hot reads of different hours); the doubt exception (_fs_doubt) is (b)'s only — (a)
+      follows GA4's own sampled mark; both need every user's own cell (none or no impressions: no decision, (a)'s
+      counted "ref skip"); round 4's final per-country rule decides a row before either (a final broken read keeps the
+      re-read list, the counts and the banner); "g" and "u" only on forecast rows ≥ SAN_SHARE of their day's spend,
+      "u" only from UPI_AGE days old (installs settle); "g" from every pack-gap date — round 4's 0.35 rule's too, not
+      only the new 0.6 / ledger ones; the relative rule's baseline needs ≥ 3 of the GAP_N non-gap dates before (as
+      pack_gaps_p's own). The ledger is kept per month file (_ledger). The lived anchor never anchors on a cell whose
+      cumulative ROAS is under the final anchor's (_anchor_at: the final one answers, counted "lived fallback").
 🌱 ORGANIC (src "p" apps only; the page's Google Ads | Organic switch): every new user who is NOT a Google Ads user = the
 all-users cells − the Google Ads users' cells per country × install day, from the two cubes' own reads (the probe measured
 the paid read + its complement = the whole read) — the all-users packs (out_dir, one at a time) and the paid packs
@@ -487,6 +496,7 @@ GAP_ON = True                        # PACK GAPS also (1) by a fall of the packs
 #                                      check" "g", counted
 GAP_REL = 0.6
 GAP_LOSS = 0.4
+LEDGER_V = 1                         # (data/be_tab/ledger[p]_<key>.json.gz: each month file's ledger, by size + SHA-1)
 UPI_ON = True                        # a FORECAST country row whose GA4 Google Ads users per Google Ads install sit off its
 #                                      benchmark's basis: ≥ UPI_HI × or ≤ UPI_LO × the median of B's own training days
 #                                      (usable, settled by the origin) AND outside their q10 … q90 → "data check" "u"
@@ -494,6 +504,8 @@ UPI_ON = True                        # a FORECAST country row whose GA4 Google A
 #                                      the spend bought or not — no store can tell)
 UPI_HI, UPI_LO = 1.25, 0.8
 UPI_MIN = MIN_KEPT                   # … B needs ≥ 20 such days
+UPI_AGE = 2                          # … and a row only from 2 days old: Google Ads installs of a 0–1-day-old day are about
+#                                      0.91 of their final count (the module's own PROV measurement) — no flickering mark
 RSF_ON = True                        # ⚖️ the countries table's "ROAS so far" (owner, 20 Nov 2026: "haan ROAS ab tak
 #                                      dikhao"): each covered country row's real ROAS at its latest lived age (its own
 #                                      so-far read, as the app line's "ROAS … by day N") and B's median ROAS at that
@@ -752,7 +764,10 @@ def _led_gaps(ls, lim):
 def _ledger(data_dir, key, paid):
     """⚖️ GAP_ON: the cube's own ledger of every FOLDED activity day (its month files; the hot days are not final) →
     {ordinal: (its measured loss ÷ its every-row total "t", that total in USD)} — the Google Ads users' cube for src "p",
-    every user's for src "a"; a month of another stream (the head's) or another format is left out; no cube: {}."""
+    every user's for src "a"; a month of another stream (the head's) or another format is left out; no cube: {}.
+    A folded month file never changes, so each one's ledger is kept in data/be_tab/ledger[p]_<key>.json.gz under its
+    size and its bytes' SHA-1 (exact, also on a fresh checkout whose files all carry a new mtime): a build reads every
+    month's bytes but parses only a month it has not seen — never the whole cube again."""
     from .fetch import ga4_cube as cub
     folder = os.path.join(data_dir, _cbp().DIR if paid else cub.DIR, key)
     try:
@@ -760,19 +775,46 @@ def _ledger(data_dir, key, paid):
                        if len(f) == 15 and f.endswith(".json.gz") and f[4] == "-" and f[:4].isdigit())
     except OSError:
         return {}
+    if not names:
+        return {}
     head = _read(os.path.join(folder, cub.HOT)) if os.path.exists(os.path.join(folder, cub.HOT)) else None
     sid = str((head or {}).get("stream_id") or "")
-    out = {}
+    head = None
+    cp = os.path.join(cache_dir(data_dir), "ledger%s_%s.json.gz" % ("p" if paid else "", key))
+    try:
+        old = _read(cp)
+        old = old.get("m") if isinstance(old, dict) and old.get("v") == LEDGER_V else {}
+    except Exception:                        # (no cache yet / damaged: every month parsed once, the cache made again)
+        old = {}
+    old = old if isinstance(old, dict) else {}
+    keep, out = {}, {}
     for f in names:
-        m = _read(os.path.join(folder, f))
-        if not isinstance(m, dict) or m.get("v") != cub.V or (sid and str(m.get("stream_id") or "") != sid):
+        with open(os.path.join(folder, f), "rb") as fh:
+            raw = fh.read()
+        h = hashlib.sha1(raw).hexdigest()
+        e = old.get(f)
+        if not (isinstance(e, list) and len(e) == 5 and e[0] == len(raw) and e[1] == h and isinstance(e[4], dict)):
+            m = json.loads(gzip.decompress(raw))
+            d = {}
+            if isinstance(m, dict):
+                for D, led in (m.get("days") or {}).items():
+                    t = int((led or {}).get("t") or 0) if isinstance(led, dict) else 0
+                    if t > 0:
+                        d[D] = [int(led.get("loss") or 0), t]
+            e = [len(raw), h, m.get("v") if isinstance(m, dict) else None,
+                 str(m.get("stream_id") or "") if isinstance(m, dict) else "", d]
+            del m
+        del raw
+        keep[f] = e
+        if e[2] != cub.V or (sid and e[3] != sid):
             continue
-        for D, led in (m.get("days") or {}).items():
-            t = int((led or {}).get("t") or 0) if isinstance(led, dict) else 0
+        for D, (loss, t) in e[4].items():
             o = _od(D)
-            if t > 0 and o is not None:
-                out[o] = (int(led.get("loss") or 0) / t, t / 1e6)
-        del m
+            if o is not None:
+                out[o] = (loss / t, t / 1e6)
+    if keep != old:
+        os.makedirs(os.path.dirname(cp), exist_ok=True)
+        write_gz_stable(cp, _raw({"v": LEDGER_V, "m": keep}))
     return out
 
 
@@ -1008,23 +1050,42 @@ def _guard_in(data_dir, key, body, days, a_d0, a_pk, out_dir, rq, a_nw, a_ft, S_
 
 def _cell_bad(G, cc, r, v):
     """⚖️ One Google Ads users' country row (r; v: its first-session [revenue, impressions] or None): is its
-    first-session read broken — its whole day's (G["app"]) or its own (fs_bad at the country floor FSQ_EC; final in
-    both files, the reference agreeing with itself, not a pack-gap date of every user's packs)? → True; or, FSC on, on
-    any day every user's store has read: that day's read GA4-sampled (G["smp"]) or the cell more than every user's
-    (fs_over, on a day ≤ G["ylim"]) → "a" (replaced like a country's own, but never re-read nor the banner)."""
+    first-session read broken — its whole day's (G["app"]) or its own (_cell_final: fs_bad at the country floor
+    FSQ_EC; final in both files, the reference agreeing with itself, not a pack-gap date of every user's packs)? → True
+    (round 4's path: the re-read list, the counts, the final-only banner — decided FIRST, so a final day FSC would also
+    take keeps it); or, FSC on, on any day every user's store has read, with every user's OWN cell there (impressions
+    > 0 — a country GA4 folded into "(other)" on the bigger read has none: nothing to take, no decision): that day's
+    read GA4-sampled (G["smp"]; no cell: counted "ref skip") or the cell more than every user's (fs_over, only on a day
+    ≤ G["ylim"] = the paid file's newest − FSQ_YOUNG, and never on a day whose every-user whole-day read is in doubt,
+    G["dbt"]: counted "ref skip") → "a" (replaced like a country's own, but never re-read nor the banner)."""
     day = r[0]
     if day in G["app"]:
         return True
+    if _cell_final(G, cc, r, v):             # (round 4's final rule first: its path for every final broken read)
+        return True
     if FSC_ON and day in G["fa"]:            # ⚖️ FSC, ANY day (young too): GA4-sampled, or more than every user's
+        a = (G["fc"].get(cc) or {}).get(day)
+        ok = bool(a) and (a[1] or 0) > 0     # (every user's own cell, read: the replacement exists)
         if day in G["smp"]:
+            if not ok:                       # no cell of every user's (folded into "(other)") / no impressions: no
+                G["skip"] += 1               # decision, as the over rule — counted "ref skip"
+                return False
             G["c1"]["s"] += 1
             return "a"
-        if G["ylim"] is not None and day <= G["ylim"] and fs_over(v, (G["fc"].get(cc) or {}).get(day)):
+        if ok and G["ylim"] is not None and day <= G["ylim"] and fs_over(v, a):
             if day in G["dbt"]:              # every user's own whole-day read in doubt that day: no decision (ref_ok's
                 G["skip"] += 1               # principle — counted "ref skip")
             else:
                 G["c1"]["o"] += 1
                 return "a"
+    return False
+
+
+def _cell_final(G, cc, r, v):
+    """Round 4's own per-country rule of _cell_bad: a FINAL day's first-session read broken against its day-0 cohort
+    (fs_bad at FSQ_EC), the reference agreeing with itself (ref_ok) and the date no pack gap of every user's packs
+    (else counted "ref skip") → True."""
+    day = r[0]
     if G["limc"] is None or day > G["limc"] or day not in G["pd"] or len(r) < 6 or not (r[5] or 0) >= 1:
         return False
     ad = (G["ad"].get(cc) or {}).get(day)
@@ -2273,23 +2334,32 @@ def _lived_cells(x, nw):
     return out
 
 
-def _anchor_at(x, last, nw):
+def _anchor_at(x, last, nw, st=None, k="lfb"):
     """The shift's anchor of a row (the app line or a country): its latest FINAL grid age (a daily one ≥ CLAG days old);
     with LIVE_ON, once such a final anchor exists, its latest LIVED one (≥ LIVED days old) — a younger day keeps no
-    anchor (unshifted), as without it."""
+    anchor (unshifted), as without it. ⚖️ A lived cell whose cumulative ROAS is UNDER the final anchor's (a cumulative
+    never falls: that not-final read is short — GA4 answers a day near-empty around D+2 … 3) is never the anchor: the
+    final one answers, counted in st[k] (st None: not counted — the sanity check reads the same anchor again)."""
     fin = _anchor(x.fin, x.sp, last, nw - x.X - CLAG)
     if not LIVE_ON or fin is None:
         return fin
-    return _anchor(_lived_cells(x, nw), x.sp, last, nw - x.X - LIVED) or fin
+    liv = _anchor(_lived_cells(x, nw), x.sp, last, nw - x.X - LIVED)
+    if liv is None:
+        return fin
+    if liv[1] < fin[1]:                      # (under the final cell's cumulative: a short read, not the anchor)
+        if st is not None:
+            st[k] = st.get(k, 0) + 1
+        return fin
+    return liv
 
 
-def _cty_shift(ages, mid, x, cb, upto=None, gq=None):
+def _cty_shift(ages, mid, x, cb, upto=None, gq=None, st=None):
     """A country's [median, low, high] day off its own curve SHIFTED to its real ROAS at its latest final grid age (as
     the app line), its 80 % range from the shift's back-test errors for its size (cbandb: its size bucket, else every
     size pooled; past the band's reach: no end) — then _cty_days' own bounds (its so-far read pinned, capped before,
     floored after; never a day at or before it). None (its unshifted curve answers) with nothing final inside its curve."""
     anc = _anchor(x.fin, x.sp, ages[-1], upto) if not LIVE_ON or upto is None else \
-        _anchor_at(x, ages[-1], upto + x.X + CLAG)    # (upto = nw − X − CLAG gives back nw)
+        _anchor_at(x, ages[-1], upto + x.X + CLAG, st, "lfbc")    # (upto = nw − X − CLAG gives back nw)
     if anc is None:
         return None
     af, rc = anc
@@ -2446,7 +2516,7 @@ def predict(key, fc, cal, pin, sk=None, stats=None):
                 unc.append([REST_CC, round(rest, 4)])
             csp = sum(c[1].sp for c in cov)
             M = combine([(c[1].sp, c[3], c[4]) for c in cov]) if cov and csp > 0 else None
-            anc = _anchor_at(r, M[0][-1], nw) if M else None    # (a daily anchor ≥ CLAG days old; LIVE_ON: lived)
+            anc = _anchor_at(r, M[0][-1], nw, stats) if M else None    # (a daily anchor ≥ CLAG days old; LIVE_ON: lived)
             # "data check": a GA4 hole date in its first HOLE_W days — its real ROAS, and so its shifted curve, are low by
             # what GA4 lost (the forecast stays the shift: falling back cost accuracy against the recorded data)
             chk = anc is not None and any(r.X + k in holes for k in range(HOLE_W))
@@ -2468,7 +2538,7 @@ def predict(key, fc, cal, pin, sk=None, stats=None):
             elif x.sfa is not None and x.sfa >= clim:    # it lived past its curve without breaking even: that real fact
                 days_ = [x.sfa, None, None, clim, 5 if x.sfa <= nw - x.X - LAG else 6]
             else:                                # its OWN curve, shifted to its own ROAS so far (the app line adds up the
-                dd = _cty_shift(ages, mid, x, cbandb, nw - x.X - CLAG, cgr) if shift else None   # same countries:
+                dd = _cty_shift(ages, mid, x, cbandb, nw - x.X - CLAG, cgr, stats) if shift else None   # same countries:
                 days_ = (dd if dd is not None else _cty_days(ages, mid, clo, chi, x)) + [clim, 0]   # one curve, one
                 # answer) — its daily anchor at least CLAG days old
                 if SAN_ON and dd is not None and dd[0] is not None and x.sp / tot >= SAN_SHARE:   # the sanity
@@ -2479,7 +2549,8 @@ def predict(key, fc, cal, pin, sk=None, stats=None):
                 if x.sp / tot >= SAN_SHARE:          # ⚖️ round 5's marks on a forecast row (≥ SAN_SHARE of the day)
                     if gsl and _gap_in(x, gsl):      # its cells (install day … so far) hold a pack-gap date
                         gpc[cc] = 1
-                    u = _upi(x, ub.get(cc)) if ub else None    # its users per install off B's basis
+                    u = _upi(x, ub.get(cc)) if ub and nw - x.X >= UPI_AGE else None    # its users per install off B's
+                    #                                                     basis (from UPI_AGE days old: installs settle)
                     if u is not None:
                         upc[cc] = u
                     e_ = eb.get(cc)                  # (FSC's output check, counted only: measured on every app's
@@ -3184,7 +3255,8 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
         n = {"refit": 0, "fail": 0, "ec": 0, "ec_fail": 0, "ec_stale": 0, "pfail": 0, "org_fail": 0,
              "fs": 0, "fsl": 0, "coh": 0, "cohw": 0, "sus": 0, "susw": 0, "rskip": 0, "gfail": 0, "sapp": 0,
              "young": 0, "c1s": 0, "c1o": 0, "gap": 0, "gapw": 0, "gapr": 0, "gapl": 0, "lfail": 0, "upi": 0,
-             "upiw": 0, "eco": 0, "ecow": 0}      # (⚖️ round 5's counts: FSC, the pack gaps' marks / dates, UPI)
+             "upiw": 0, "eco": 0, "ecow": 0, "lfb": 0, "lfbc": 0}   # (⚖️ round 5's counts: FSC, the pack gaps' marks /
+        #                                         dates, UPI; the lived anchors that fell back to the final one)
         fsq = {}                                  # ⚖️ the input guard's broken first-session days per src "p" app key
         if paid:
             from . import roi_build as rbm       # (its PAID / PAID_DIR: run_uninstall ran its pass earlier, this process)
@@ -3252,7 +3324,7 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
             unc = {cc for cs in pin[2].values() for cc in cs} - set(fc["fits"])      # (the folded ones too)
             bodies[aid] = (key, fc, body, len(unc))
             n["sapp"] += st.get("app", 0)
-            for k_ in ("gap", "gapw", "upi", "upiw", "eco", "ecow"):   # ⚖️ round 5 (predict's own counts)
+            for k_ in ("gap", "gapw", "upi", "upiw", "eco", "ecow", "lfb", "lfbc"):   # ⚖️ round 5 (predict's own counts)
                 n[k_] += st.get(k_, 0)
 
         def _org(aid, key, fn, oi):
@@ -3577,6 +3649,8 @@ def _line5(n):
         out += ", users/install %d (recent %d)" % (n["upi"], n["upiw"])
     if n["lfail"]:
         out += ", gap fail %d" % n["lfail"]
+    if n["lfb"] or n["lfbc"]:                # (the lived anchors under their final one: the final answered)
+        out += ", lived fallback %d (app %d)" % (n["lfb"] + n["lfbc"], n["lfb"])
     return out
 
 

@@ -14,6 +14,7 @@ At the thresholds (each boundary on and off), end to end in the step, each switc
 output byte for byte as the build before them (digests worked out once with 60cd202's admob_iq on these same worlds).
 SYNTHETIC values only (apps "app~synth-…", countries AA … DH, the calendar 2030–2031)."""
 import gzip
+import io
 import json
 import math
 import os
@@ -23,6 +24,7 @@ import pytest
 
 from admob_iq import be_build as be
 from tests import test_be_build as T
+from tests import test_be_fsguard as FG
 from tests import test_be_paid as P
 
 KA = P.KA
@@ -125,6 +127,63 @@ def test_the_ledger_reads_every_folded_day_of_its_own_stream_only(tmp_path):
     assert be._ledger(data, KA, False) == {date(2031, 5, 2).toordinal(): (0.25, 4.0)}   # src "a": every user's cube
 
 
+def test_the_ledger_is_kept_per_month_file_and_a_month_is_parsed_once(tmp_path, monkeypatch):
+    data = str(tmp_path)
+    _cube(data, KA, [("2031-05", {"2031-05-02": {"t": 4_000_000, "loss": 2_000_000}}, None),
+                     ("2031-04", {"2031-04-02": {"t": 2_000_000, "loss": 1_000_000}}, None)])
+    first = be._ledger(data, KA, True)
+    cp = os.path.join(data, be.DIR, "ledgerp_%s.json.gz" % KA)
+    assert os.path.exists(cp) and first == {date(2031, 5, 2).toordinal(): (0.5, 4.0), date(2031, 4, 2).toordinal(): (0.5, 2.0)}
+    seen, real = [], be.json.loads
+
+    def spy(b, *a, **k):                                             # (a month file's bytes: a parse; the cache's
+        if isinstance(b, (bytes, bytearray)):                        # own read comes as text)
+            seen.append(1)
+        return real(b, *a, **k)
+    monkeypatch.setattr(be.json, "loads", spy)
+    assert be._ledger(data, KA, True) == first and seen == []        # every month known: none parsed again
+    for f in os.listdir(os.path.join(data, "ga4_cube_paid", KA)):    # (a fresh checkout: every mtime new, the bytes
+        os.utime(os.path.join(data, "ga4_cube_paid", KA, f), (1, 1))  # the same — still none)
+    assert be._ledger(data, KA, True) == first and seen == []
+    _cube(data, KA, [("2031-05", {"2031-05-02": {"t": 4_000_000, "loss": 1_000_000}}, None)], hot=False)   # re-folded
+    got = be._ledger(data, KA, True)
+    assert got[date(2031, 5, 2).toordinal()] == (0.25, 4.0) and got[date(2031, 4, 2).toordinal()] == (0.5, 2.0)
+    assert len(seen) == 1                                            # only that month parsed
+    month = os.path.join(data, "ga4_cube_paid", KA, "2031-04.json.gz")   # (a re-fold the SAME size: only its bytes
+    assert _same_size(month, {"v": 1, "stream_id": "s1", "days": {"2031-04-02": {"t": 2_000_000, "loss": 2_000_000}},
+                              "b": {}, "c": {}, "e": {}, "t": {}, "loss": {}})        # tell — the size alone never)
+    seen.clear()
+    assert be._ledger(data, KA, True)[date(2031, 4, 2).toordinal()] == (1.0, 2.0) and len(seen) == 1
+    got = be._ledger(data, KA, True)
+    with open(cp, "wb") as f:                                        # a damaged cache: every month parsed once more,
+        f.write(b"junk")                                             # the same answer, the cache made again
+    seen.clear()
+    assert be._ledger(data, KA, True) == got and len(seen) == 2 and be._read(cp)["v"] == be.LEDGER_V
+    monkeypatch.setattr(be, "LEDGER_V", be.LEDGER_V + 1)             # (another format: made again)
+    seen.clear()
+    assert be._ledger(data, KA, True) == got and len(seen) == 2
+    _cube(data, KA, [("2031-03", {"2031-03-02": {"t": 2_000_000, "loss": 2_000_000}}, "other-stream")], hot=False)
+    assert date(2031, 3, 2).toordinal() not in be._ledger(data, KA, True)   # (another stream's month: still left out)
+
+
+def _same_size(path, obj):
+    """Writes obj as a gzip month file of exactly the byte size the file has now (a compression level, a pad key and a
+    gzip name field bring it there) → True, or False when no such form is found."""
+    old = os.path.getsize(path)
+    for lv in range(9, 0, -1):
+        for k in range(0, 24):
+            raw = P._raw(dict(obj, pad="x" * (k - 1)) if k else obj)
+            for n in range(0, 24):
+                buf = io.BytesIO()
+                with gzip.GzipFile(filename="n" * n, mode="wb", fileobj=buf, mtime=0, compresslevel=lv) as g:
+                    g.write(raw)
+                if len(buf.getvalue()) == old:
+                    with open(path, "wb") as f:
+                        f.write(buf.getvalue())
+                    return True
+    return False
+
+
 def test_upi_at_its_thresholds():
     b = (1.0, 0.9, 1.1)                                              # B: median 1.0, q10 0.9, q90 1.1
     x = T.R(n=125, na=100.0)
@@ -223,9 +282,12 @@ def test_a_sampled_c_read_on_a_young_or_final_day_answers_with_every_users_ecpm(
         assert all(abs(c[3] - _all_ecpm(data, day, c[0]) * 1.2) < 0.01 for c in w[day]["cty"]), day   # (was 1.2 ×)
         assert days[day]["ckw"] == "f" and set(got) <= set(days[day]["ckc"]), day       # each row tagged …
         assert set(days[day]["ckc"].values()) == {"f"}, day                              # … with "f" only
-    n = sum(1 for cc, rows in pk.items() if cc not in be.SKIP_CC for q in rows
-            if q[0] in (YNG, FIN) and len(q) >= 14 and q[3] and q[3] > 0)            # (every replaced pack row)
-    assert ", guard cty %d (sampled %d, over 0)" % (n, n) in line and "guard fs" not in line and err == ""
+    fa = P._rd(_store(data, "all"))["days"]                          # (a pack row every user's read has a cell of:
+    rows = [(q[0], cc) for cc, rows in pk.items() if cc not in be.SKIP_CC for q in rows   # replaced; none: no
+            if q[0] in (YNG, FIN) and len(q) >= 14 and q[3] and q[3] > 0]               # decision, a ref skip)
+    n = sum(1 for d, cc in rows if sum(r[3] for r in fa[d]["c"] if r[0] == "n" and r[1] == cc) > 0)
+    assert 0 < n < len(rows) and ", ref skip %d, guard cty %d (sampled %d, over 0)" % (len(rows) - n, n, n) in line
+    assert "guard fs" not in line and err == ""
     with open(os.path.join(data, "be_tab", be.FSQ_FILE), encoding="utf-8") as f:
         assert json.load(f)["days"] == {}                          # never on the re-read list (young or final)
     assert not any(x.get("ckw") for d, x in days.items() if d not in (YNG, FIN))
@@ -271,6 +333,40 @@ def test_fs_doubt_is_a_whole_day_ratio_off_its_own_median():
     assert be._fs_doubt(fp, fc) == {"2030-01-08"}
     del fc["AA"]["2030-01-08"]                                                  # (BB alone that day: its normal ratio)
     assert be._fs_doubt(fp, fc) == set()
+
+
+def test_a_sampled_day_never_replaces_a_country_every_user_has_no_cell_of(tmp_path, monkeypatch, base):
+    def prep(site, data, scr):                                      # every user's read without AA that day (folded
+        p = _store(data, "all")                                     # into "(other)" on the bigger read), the paid
+        st = P._rd(p)                                               # read of the day sampled
+        st["days"][YNG]["c"] = [r for r in st["days"][YNG]["c"] if r[1] != "AA"]
+        P._wr(p, st)
+        _mark(data, "paid", YNG)
+    b, line, err, *_ = _go(tmp_path, monkeypatch, prep)
+    day, w = _days(b)[YNG], _days(base[0])[YNG]
+    assert "AA" not in day["ckc"] and {c[0]: c[3] for c in day["cty"]}["AA"] == {c[0]: c[3] for c in w["cty"]}["AA"]
+    assert set(day["ckc"].values()) == {"f"} and ", ref skip 1" in line   # (its own read kept; the others: every
+    assert "(sampled %d, over 0)" % len(day["ckc"]) in line and err == ""  # user's — no decision only for AA)
+
+
+def test_a_final_share_broken_read_keeps_round_4s_path_on_a_sampled_day(tmp_path, monkeypatch):
+    def prep(site, data, scr):
+        FG._scale_nvr(data, FG.D, 0.45, "AA")                       # AA's final read broken against its day-0 cohort …
+        _mark(data, "paid", FG.D)                                   # … on a day GA4 also sampled
+    b, line, err, data, _ = _go(tmp_path, monkeypatch, prep)
+    day = _days(b)[FG.D]
+    assert day["ckc"]["AA"] == "f" and ", guard fs 1 (left 0)" in line   # round 4's path: a final break, counted …
+    assert FG._fsq_list(data) == {KA: [FG.D]}                       # … and on the re-read list
+    assert "(sampled %d, over 0)" % (len(day["ckc"]) - 1) in line and err == ""   # (the day's others: the sampled rule)
+
+
+def test_users_per_install_is_judged_on_rows_from_2_days_old(tmp_path, monkeypatch):
+    D1, D2 = ((T.TODAY - timedelta(days=k)).isoformat() for k in (1, 2))
+    b, line, err, *_ = _go(tmp_path, monkeypatch, lambda s, d, scr: (_users(scr, D1, "AA", 1.6), _users(scr, D2, "AA", 1.6)))
+    days = _days(b)
+    assert {c[0]: c for c in days[D1]["cty"]}["AA"][11] == 0         # (a forecast row: its installs
+    assert "u" not in (days[D1].get("ckc") or {}).get("AA", "")     # still settling — no mark yet)
+    assert "u" in days[D2]["ckc"]["AA"] and err == ""
 
 
 def _short_all(data, day, k=0.8):

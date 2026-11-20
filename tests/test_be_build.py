@@ -132,7 +132,8 @@ def built(tmp_path_factory):
 
 
 R5_LINE = re.compile(r", (?:guard cty \d+ \(sampled \d+, over \d+\)|ecpm off band \d+ \(recent \d+\)|gap rows \d+ \(recent \d+\), "
-                     r"gap dates rel \d+ ledger \d+|users/install \d+ \(recent \d+\)|gap fail \d+)")
+                     r"gap dates rel \d+ ledger \d+|users/install \d+ \(recent \d+\)|gap fail \d+|"
+                     r"lived fallback \d+ \(app \d+\))")
 
 
 def _l4(line):

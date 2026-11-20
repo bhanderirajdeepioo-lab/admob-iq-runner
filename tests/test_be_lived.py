@@ -6,6 +6,8 @@ import copy
 import gzip
 import json
 import os
+import subprocess
+import sys
 from datetime import timedelta
 
 import pytest
@@ -64,9 +66,10 @@ def test_a_lived_cell_needs_lived_days_not_final_days(monkeypatch):
 D9 = (T.TODAY - timedelta(days=be.CLAG + 5)).isoformat()
 
 
-def lived_world(tmp):
+def lived_world(tmp, k=1.3):
     """tests/test_be_build.py's world with one install day whose cells after age 1 are not final yet (df 2) in its All
-    row and every country row, and earn 1.3 × from age 2 on: its final anchor is age 1, its lived one later (higher)."""
+    row and every country row, and earn k × (1.3) from age 2 on: its final anchor is age 1, its lived one later (higher;
+    a small k: a short read, under the final cell's cumulative)."""
     site, data, dash = T.make(tmp)
     for fn in [f for f in os.listdir(site) if f.startswith("roi_%s" % T.KEYS["a"])]:
         p = os.path.join(site, fn)
@@ -77,7 +80,7 @@ def lived_world(tmp):
             for r in rs:
                 if r[0] == D9 and len(r) > 5:
                     r[5] = 2
-                    r[4] = [v * (1.3 if a >= 2 else 1.0) for a, v in enumerate(r[4])]   # (its lived days earn more)
+                    r[4] = [v * (k if a >= 2 else 1.0) for a, v in enumerate(r[4])]   # (its lived days earn more)
         with gzip.open(p, "wt", encoding="utf-8") as f:
             json.dump(b, f)
     return site, data, dash
@@ -147,3 +150,71 @@ def test_a_flip_takes_effect_on_the_next_build_with_the_same_caches(tmp_path):
     on1, off2, d1 = twice(tmp_path / "on_off", {})
     _, _, d2 = twice(tmp_path / "off_off", {"be_lived": False})
     assert (on1, off2) == (a_lived, 1) and d1 == d2
+
+
+# ── ⚖️ the lived anchor's guard (review, 20 Nov 2026): a cumulative never falls ─────────────────────────────────────
+
+def test_a_lived_cell_under_the_final_anchors_cumulative_is_never_the_anchor():
+    nw = T.TODAY.toordinal()
+    cum = [10.0 * (j + 1) for j in range(len(be.GRID))]
+    short = cum[:2] + [v * 0.1 for v in cum[2:]]                              # its not-final cells read short
+    x = R(day=(T.TODAY - timedelta(days=be.CLAG + 5)).isoformat(), sp=100.0, cum=short,
+          fin=[10.0, 20.0] + [None] * (len(be.GRID) - 2), obs=be.CLAG + 5)
+    st = {}
+    assert be._anchor_at(x, 360, nw, st) == (1, 0.2) and st == {"lfb": 1}   # the final anchor answers, counted
+    assert be._anchor_at(x, 360, nw) == (1, 0.2)                             # (no st: the same, not counted)
+    st = {}
+    assert be._anchor_at(x, 360, nw, st, "lfbc") == (1, 0.2) and st == {"lfbc": 1}
+    a_lived = max(a for a in be.GRID if a + be.LIVED <= be.CLAG + 5)
+    x.cum = cum[:be.GRID.index(a_lived)] + [20.0] + cum[be.GRID.index(a_lived) + 1:]   # equal to it: a flat cumulative
+    st = {}
+    assert be._anchor_at(x, 360, nw, st) == (a_lived, 0.2) and st == {}      # is no fall — the lived cell anchors
+    x.cum = cum
+    assert be._anchor_at(x, 360, nw, st) == (a_lived, cum[be.GRID.index(a_lived)] / 100.0) and st == {}
+
+
+def test_a_short_lived_read_falls_back_to_the_final_anchor_end_to_end(tmp_path):
+    site, data, dash = lived_world(tmp_path, k=0.3)
+    paths, line, err = P._go(copy.deepcopy(dash), data, site, {})
+    assert _day(site)["app"]["anc"] == 1 and ", lived fallback " in line and err == ""   # (app line and countries:
+    site2, data2, dash2 = lived_world(tmp_path / "up")
+    assert ", lived fallback " not in P._go(dash2, data2, site2, {})[1]                  # a lived read above: none)
+
+
+# ── ⚖️ all FIVE new switches off where the lived rule acts: every output as before them all ────────────────────────
+
+OFF5 = {"be_fsc": False, "be_gap": False, "be_upi": False, "be_rsf": False, "be_lived": False}
+# sha256 (tests/test_be_paid._digest) of lived_world through the step — worked out once with 60cd202's admob_iq (the
+# commit before round 5: loaded in place of this tree's, the same world and helpers), at GA4_FINAL_DAYS 3 and 7
+OFF5_BEFORE = {"3": "077e49d3c2da2d3c189d0c8019f31aaa8b6f0d49a16f73d84302829a4327ce4e",
+               "7": "9666d69ad3d5a7fae01fff16fd50172c5a87b3afdf9fdc39cf8a40040f57e124"}
+
+
+def off5_digest(tmp):
+    site, data, dash = lived_world(tmp)
+    paths, line, err = P._go(dash, data, site, OFF5)
+    return P._digest(site, data, dash, paths, line, err)
+
+
+def test_all_five_off_is_every_output_as_before_them_where_the_lived_rule_acts(tmp_path):
+    if be.LAG != be.LAG0:
+        pytest.skip("pinned at the tests' GA4_FINAL_DAYS (3); the build's 7 has its own test below")
+    site, data, dash = lived_world(tmp_path / "on")
+    P._go(copy.deepcopy(dash), data, site, {})
+    assert _day(site)["app"]["anc"] != 1                                     # (the world: the lived rule acts in it)
+    assert off5_digest(tmp_path / "off") == OFF5_BEFORE["3"]
+
+
+def test_all_five_off_at_the_builds_ga4_final_days_7(tmp_path):
+    """The same digest at the build's own GA4_FINAL_DAYS (7), in a fresh interpreter (every module reads the knob at
+    import)."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    code = ("import os, sys, pathlib; sys.path.insert(0, %r)\n"
+            "from admob_iq.engine import active, uninstall, value\n"
+            "for m in (active, uninstall, value): m.ALERT_POLICY = False\n"
+            "from tests import test_be_lived as L\n"
+            "print(L.off5_digest(pathlib.Path(%r)))\n" % (root, str(tmp_path)))
+    env = dict(os.environ, GA4_FINAL_DAYS="7", IMPACT_ANY="false", IMPACT_ANY_WORKERS="0")
+    r = subprocess.run([sys.executable, "-c", code], env=env, cwd=root, capture_output=True, text=True, timeout=600)
+    assert r.returncode == 0, r.stderr[-2000:]
+    assert r.stdout.strip().splitlines()[-1] == OFF5_BEFORE["7"]
