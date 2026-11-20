@@ -14,6 +14,8 @@ import re
 import sys
 
 FAULTS = {}          # this build's failed steps: {step name: error TYPE, or "error" when the line has no type}
+CHECK = "DataWarning"   # a step that reports a DATA CHECK (a guard doubts some inputs or answers; nothing stopped):
+#                         the page's amber line and the public log's plain "data check" line, never a failure
 # "<step> skipped: <ErrorType or message>" at a line's start or after a "; " / " | " / " · " separator (a combined
 # counts line). Only the step's label and an exception TYPE are kept — a message (it can carry ids) never is. Counts
 # lines say "skipped 3" (no colon): never a failure.
@@ -63,7 +65,10 @@ def watch():
 def fault(name, exc):
     """Record a failed step (exc: the exception, or a short reason)."""
     try:
-        FAULTS[str(name)] = type(exc).__name__ if isinstance(exc, BaseException) else str(exc)
+        e = type(exc).__name__ if isinstance(exc, BaseException) else str(exc)
+        if e == CHECK and FAULTS.get(str(name), CHECK) != CHECK:
+            return                      # (a data check never hides a real failure of the same step)
+        FAULTS[str(name)] = e
     except Exception:
         pass
 
@@ -83,20 +88,26 @@ def attach(dashboard):
 
 
 def write_public(path):
-    """The failed steps of the whole build (the ones after the dashboard was written too) for the public log's line."""
+    """The failed steps of the whole build (the ones after the dashboard was written too) for the public log's line:
+    "steps" the real failures, "checks" the steps that reported a data check (error CHECK)."""
     try:
         if path:
             with open(path, "w", encoding="utf-8") as f:
-                json.dump({"steps": sorted(FAULTS)}, f)
+                json.dump({"steps": sorted(n for n, e in FAULTS.items() if e != CHECK),
+                           "checks": sorted(n for n, e in FAULTS.items() if e == CHECK)}, f)
     except Exception:
         pass
 
 
 def public(path):
-    """The public log's line: the failed steps' names (code labels) and their count — never data."""
+    """The public log's line: the failed steps' names (code labels) and their count — never data; then, when any step
+    reported a data check, its own plain line (no annotation: every step still ran). A result file from before
+    "checks" existed reads as no checks."""
     try:
         with open(path, encoding="utf-8") as f:
-            steps = [str(s) for s in (json.load(f) or {}).get("steps") or []]
+            res = json.load(f) or {}
+        steps = [str(s) for s in res.get("steps") or []]
+        checks = [str(s) for s in res.get("checks") or []]
     except Exception:
         print("health: no result (the build did not reach it)")
         return
@@ -105,6 +116,8 @@ def public(path):
               "banner on the page)" % (len(steps), ", ".join(steps)))
     else:
         print("health: every build step ran")
+    if checks:
+        print("health: data check — %s (amber line on the page)" % ", ".join(checks))
 
 
 if __name__ == "__main__":

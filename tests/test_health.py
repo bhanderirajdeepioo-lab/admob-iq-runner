@@ -98,3 +98,60 @@ def test_every_step_failure_line_in_the_code_is_one_the_reader_counts():
                 if not health.NAME.fullmatch(label):
                     bad.append("%s:%d %r" % (os.path.relpath(path, ROOT), i, m.group(1)))
     assert n >= 60 and bad == []
+
+
+# ── a data check ("DataWarning": a guard doubts some inputs; nothing stopped) is not a failure ───────────────────────
+
+def _public(tmp_path, capsys):
+    out = tmp_path / "h.json"
+    health.write_public(str(out))
+    with open(out, encoding="utf-8") as f:
+        body = json.load(f)
+    health.public(str(out))
+    return body, capsys.readouterr().out.splitlines()
+
+
+FAIL = ("::warning::health: 1 build step(s) failed — synth step — their part of the dashboard is not updating (red"
+        " banner on the page)")
+
+
+def test_public_failures_only_as_before(tmp_path, capsys):
+    health.fault("synth step", ValueError("x"))
+    body, lines = _public(tmp_path, capsys)
+    assert body == {"steps": ["synth step"], "checks": []} and lines == [FAIL]
+
+
+def test_public_checks_only_is_a_healthy_build_plus_a_plain_line(tmp_path, capsys):
+    health.scan("synth guard skipped: DataWarning")
+    health.scan("other guard skipped: DataWarning")
+    body, lines = _public(tmp_path, capsys)
+    assert body == {"steps": [], "checks": ["other guard", "synth guard"]}
+    assert lines == ["health: every build step ran",
+                     "health: data check — other guard, synth guard (amber line on the page)"]
+    assert not any("::warning::" in x for x in lines)
+
+
+def test_public_both_and_a_check_never_hides_a_failure_of_the_same_step(tmp_path, capsys):
+    health.fault("synth step", ValueError("x"))
+    health.scan("synth guard skipped: KeyError")
+    health.scan("synth guard skipped: DataWarning")              # (the same step failed earlier: the failure stays)
+    health.scan("other guard skipped: DataWarning")
+    body, lines = _public(tmp_path, capsys)
+    assert body == {"steps": ["synth guard", "synth step"], "checks": ["other guard"]}
+    assert lines == ["::warning::health: 2 build step(s) failed — synth guard, synth step — their part of the dashboard"
+                     " is not updating (red banner on the page)",
+                     "health: data check — other guard (amber line on the page)"]
+    health.FAULTS.clear()
+    health.scan("synth guard skipped: DataWarning")
+    health.scan("synth guard skipped: KeyError")                 # (a failure after a check: the failure)
+    assert health.FAULTS == {"synth guard": "KeyError"}
+
+
+def test_an_old_result_file_without_checks_reads_as_before(tmp_path, capsys):
+    out = tmp_path / "old.json"
+    out.write_text(json.dumps({"steps": ["synth step"]}))
+    health.public(str(out))
+    assert capsys.readouterr().out.splitlines() == [FAIL]
+    out.write_text(json.dumps({"steps": []}))
+    health.public(str(out))
+    assert capsys.readouterr().out.splitlines() == ["health: every build step ran"]
