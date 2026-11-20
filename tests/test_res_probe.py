@@ -85,6 +85,19 @@ TREE = (                                                 # (pid, ppid, comm, VmR
     (201, 200, "node", 100, 0),
 )
 B_RSS, B_SWAP = 3072 + 512 + 256, 256 + 64               # the build's figures in TREE: 3840 and 320 MB
+# A probe run whole (main(), or the module as a process) skips its REAL pid, os.getpid(), and everything under it, so a
+# fake pid equal to it drops part of the build (at 103: the worker and its child, 3328 / 3072 MB, not 4160 / 3840).
+# macOS hands out pids in order and starts again at 100 after 99999: on a busy machine a real pid can be one of TREE's.
+# Those tests run on far_tree(): TREE at pids no real process can have (macOS / BSD stop at 99999, Linux at 4194304).
+FAR = 1 << 22                                            # 4194304: Linux's pid_max limit
+F_SHELL, F_BUILD = SHELL + FAR, BUILD + FAR
+
+
+def far_tree():
+    """TREE without the probe (run whole, it is a real process), every pid but 1 (init: never the probe) moved up by
+    FAR: the same build, 3840 + 320 MB."""
+    return [(pid + FAR if pid > 1 else pid, ppid + FAR if ppid > 1 else ppid, comm, rss, swap)
+            for pid, ppid, comm, rss, swap in TREE if pid != ME]
 
 
 def _write(path, text):
@@ -442,12 +455,23 @@ def test_the_interval_never_drifts(tmp_path, monkeypatch):
     assert [ln.split()[1] for ln in out] == ["t=7", "t=37", "t=67", "t=97"]     # on the 30 s grid, not 37 s apart
 
 
+def test_the_tree_a_probe_run_whole_sees_holds_no_real_pid():
+    """main() and the module as a process skip their own real pid and everything under it: far_tree() sits above every
+    pid a real process can have, so the pid this run or its probe gets never drops part of the build."""
+    limit = 100000                                       # macOS / BSD: pids up to 99999
+    if os.path.isfile("/proc/sys/kernel/pid_max"):       # Linux: pids below pid_max, at most 4194304
+        with open("/proc/sys/kernel/pid_max", encoding="ascii") as f:
+            limit = int(f.read())
+    pids = {x for row in far_tree() for x in row[:2]} - {0, 1}
+    assert os.getpid() < limit <= FAR <= min(pids) and {F_SHELL, F_BUILD} <= pids
+
+
 def _main(tmp_path, monkeypatch, stop_at=None, shell_dies_at=None, sigterm_too=False, change_at=None):
-    """main() on the fake /proc with a fake clock and a 30 s interval: a stop signal at stop_at seconds, or at
-    shell_dies_at the build step's shell dies first, as in a runner kill (the kernel re-parents the build to pid 1 and
-    it runs on; sigterm_too: the probe gets the same SIGTERM at that moment); change_at = (seconds, fn(proc, stage)):
-    one change of the machine before that."""
-    proc = fake_proc(tmp_path / "proc", procs=[x for x in TREE if x[0] != ME])
+    """main() on the fake /proc (far_tree: main() skips this process's real pid) with a fake clock and a 30 s interval:
+    a stop signal at stop_at seconds, or at shell_dies_at the build step's shell dies first, as in a runner kill (the
+    kernel re-parents the build to pid 1 and it runs on; sigterm_too: the probe gets the same SIGTERM at that moment);
+    change_at = (seconds, fn(proc, stage)): one change of the machine before that."""
+    proc = fake_proc(tmp_path / "proc", procs=far_tree())
     stage = tmp_path / "stage_now"
     stage.write_text("ga4/roi_apps")
     _disk(monkeypatch)
@@ -462,13 +486,13 @@ def _main(tmp_path, monkeypatch, stop_at=None, shell_dies_at=None, sigterm_too=F
             rp._STOP.append(signal.SIGTERM)
         if shell_dies_at is not None and t[0] >= shell_dies_at and "shell" not in done:
             done.add("shell")
-            shutil.rmtree(str(proc / str(SHELL)))
-            reparent(proc, BUILD, 1)
+            shutil.rmtree(str(proc / str(F_SHELL)))
+            reparent(proc, F_BUILD, 1)
             if sigterm_too:
                 rp._STOP.append(signal.SIGTERM)
 
     buf = io.StringIO()
-    assert rp.main(["--proc", str(proc), "--parent", str(SHELL), "--stage-file", str(stage), "--disk", str(tmp_path),
+    assert rp.main(["--proc", str(proc), "--parent", str(F_SHELL), "--stage-file", str(stage), "--disk", str(tmp_path),
                     "--interval", "30"], out=buf, sleep=sleep, clock=lambda: t[0]) == 0
     return buf.getvalue().splitlines()
 
@@ -503,7 +527,7 @@ def test_a_runner_kill_leaves_the_state_at_the_kill_not_the_last_interval_sample
     build lives on. The log must end on that state, not on the 28 s old sample (which reads as plenty of headroom)."""
     def low(proc, stage):
         set_mem(proc, avail=400, swap_free=0)
-        set_proc(proc, BUILD, SHELL, "python", 15000, 900)
+        set_proc(proc, F_BUILD, F_SHELL, "python", 15000, 900)
         set_pressure(proc, 48.3, 31.7)
         stage.write_text("ga4/roi_apps/roi_country")
 
@@ -521,10 +545,10 @@ def test_a_runner_kill_leaves_the_state_at_the_kill_not_the_last_interval_sample
 
 @pytest.mark.parametrize("sig", [signal.SIGTERM, signal.SIGINT])
 def test_a_real_signal_stops_it_with_a_last_sample_the_peak_and_exit_0(tmp_path, sig):
-    proc = fake_proc(tmp_path / "proc", procs=[x for x in TREE if x[0] != ME])
+    proc = fake_proc(tmp_path / "proc", procs=far_tree())   # (the probe's pid is whatever the OS hands it)
     env = dict(os.environ, PYTHONPATH=ROOT)
     env.pop(rp.STAGE_ENV, None)
-    p = subprocess.Popen([sys.executable, "-m", "admob_iq.res_probe", "--proc", str(proc), "--parent", str(SHELL),
+    p = subprocess.Popen([sys.executable, "-m", "admob_iq.res_probe", "--proc", str(proc), "--parent", str(F_SHELL),
                           "--interval", "0.2", "--disk", str(tmp_path)], cwd=str(tmp_path), env=env,
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     guard = threading.Timer(60, p.kill)                  # (a hang fails the test, never the session)
@@ -542,7 +566,7 @@ def test_a_real_signal_stops_it_with_a_last_sample_the_peak_and_exit_0(tmp_path,
     assert len(samples) >= 3 and lines[-2] == samples[-1]                # the last sample, then the peak
     assert re.fullmatch(r"res peak used_mb=10240 min_avail_mb=6144 max_swap_mb=1024 max_some10=2 max_full10=1 "
                         r"max_build_mb=4160 at_stage=- max_build_rss_mb=3840 min_disk_free_mb=\d+ samples=%d"
-                        % len(samples), lines[-1]), lines[-1]            # (this disk's real free space)
+                        % len(samples), lines[-1]), (lines, p.pid)       # (this disk's real free space)
     _public(lines, str(tmp_path))
 
 
