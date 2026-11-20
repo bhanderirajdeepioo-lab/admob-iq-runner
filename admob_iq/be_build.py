@@ -121,9 +121,14 @@ breaks even (the page shows the days of its period).
                           with "ckw": the reasons, one letter each — "h" that hole, "f" the input guard put every
                           user's eCPM_fs in (src "p"), "c" its day-0 cohort read broke (src "p"), "s" the sanity check:
                           a country row far earlier than its benchmark's growth while its real ROAS sits at the
-                          benchmark — absent: the hole alone), "unc": [[cc, share], …,
+                          benchmark, "g" a forecast country row holding a pack-gap date, "u" one whose users per
+                          install sit off its benchmark's basis — absent: the hole alone), "cku" {cc: [users per
+                          install, B's(, 1: src "p" — Google Ads users)]} (only with a "u"), "unc": [[cc, share], …,
                           ["…", rest]], "cty":
-                          [[cc, share, CPI, eCPM_fs, P30, P90, P180, median, low, high, lim, rk, bm], …] (P30 / P90 /
+                          [[cc, share, CPI, eCPM_fs, P30, P90, P180, median, low, high, lim, rk, bm(, rs)], …] (rs,
+                          BE_RSF on: the "ROAS so far" = [its so-far age, its real ROAS there, B's median ROAS at that
+                          same age (the curve's rmed, linear between its ages; null past its limit)] or null without a
+                          so-far read; P30 / P90 /
                           P180 null outside the country's learned range; bm = [bCPI (USD, 4 dp), beCPM_fs
                           (USD, 3 dp), bBE (days, 1 dp, or null: beyond bLim), bLim] — the country's benchmark, or null
                           for an old fits cache; rk 1 / 2 / 3:
@@ -233,6 +238,40 @@ was. Each app has one SOURCE a build:
     countries a letter comes from (a country's own replaced eCPM_fs "f", the sanity check's "s"; the whole day's "f"
     names none): the page says "US: …" and tags those rows. SAN_ON False or BE_SAN false: none of it — with the guard
     off too, every file exactly as before both.
+  ROUND 5 (owner, 20 Nov 2026: "agar galat he to thik karte jao jab tak thik na ho jaye"; each check its own switch —
+    BE_FSC / BE_GAP / BE_UPI, settings "be_fsc" / "be_gap" / "be_upi", FSC_ON / GAP_ON / UPI_ON — and the countries
+    table's "ROAS so far" (owner, 20 Nov 2026: "haan ROAS ab tak dikhao"; BE_RSF, "be_rsf", RSF_ON); all off: every file
+    exactly as before them):
+    FSC (src "p", with the guard): a COUNTRY row's Google Ads users' first-session read is broken on ANY day — young
+      too — every user's store has read, when GA4 sampled that day's "c" read (_smp: the paid store's own "mp" mark;
+      a day marked before the store kept each read's flag: its day mark) while every user's "c" read of the day was
+      whole, or when the cell holds MORE than every user's own cell (fs_over: impressions > FSO_K × theirs + FSO_IM,
+      revenue > FSO_K × theirs + FSO_USD — a subset never does; no cell of theirs decides nothing: GA4 folds a small
+      country into "(other)" sooner on the bigger read; on a day ≤ the paid file's newest − FSQ_YOUNG: newer days' two
+      reads are hot reads of different hours) → every user's eCPM_fs of that country and day, its row tagged ("ckc"
+      "f", the day's "ckw" "f"); never on the re-read list, never the banner (round 4's re-reads and banner stay
+      final-only); counted ("guard cty N (sampled N, over N)"). Training reads the same rows: the Google Ads users'
+      caches' stamp "fq" is _fqv() — FSQ_V, "FSQ_V+fscFSC_V" while FSC is on (a flip: made again at once). Its output
+      check counts (never marks) the forecast country rows ≥ SAN_SHARE whose eCPM_fs lies outside the 1st … 99th
+      percentile of B's own training days ("ecpm off band N (recent N)"): measured on every app's history (20 Nov
+      2026) such a mark would fall on real eCPM lows and highs at about the band's own base rate — no mark.
+    GAP: a date is a PACK GAP also when the packs' share of the All rows' final revenue falls under GAP_REL × its own
+      median of the GAP_N non-gap dates before (_rel_gaps — pack_gaps_p's own rule, at GAP_REL there too) or the cube
+      ledger measured ≥ GAP_LOSS of that folded date "(other)" (_ledger: loss ÷ t of every month file's day, the
+      Google Ads users' cube for src "p", every user's for src "a"; _led_gaps). Besides the card's marks, a FORECAST
+      country row (not broken even, ≥ SAN_SHARE of its day's spend) whose cells hold a gap date — install day … its
+      so-far day: the anchor's own ROAS adds up every one of them — gets "data check" "g" (named in "ckc"), counted
+      ("gap rows N (recent N), gap dates rel N ledger N"); the input guard's own reference rule (_gap_rule) unchanged.
+      The ledger's read failing costs only it ("gap fail N", its own health line "be gap skipped: <Type>").
+    UPI: a FORECAST country row (≥ SAN_SHARE of its day's spend) whose GA4 new users ÷ Google Ads installs sit ≥ UPI_HI
+      × or ≤ UPI_LO × the median of its benchmark's own training days (usable, settled by the origin — K3's set; ≥
+      UPI_MIN of them) AND outside their q10 … q90 → "data check" "u" (named in "ckc"), both numbers in "cku" {cc:
+      [the row's, B's]}; no number moves (users the spend bought or not: no store can tell); counted ("users/install
+      N (recent N)").
+    RSF: every covered country row gets its "ROAS so far" (the row's 14th element, _rsf): its so-far age, its real
+      ROAS there (the same so-far read the app line's "ROAS … by day N" is of its own row) and B's median ROAS at that
+      same age (_bench_at: the curve's rmed — the country's median past ROAS — at a curve age, linear between two, null
+      past the curve's limit); the page's "ROAS so far" column between eCPM and Breakeven. No number of the model moves.
 🌱 ORGANIC (src "p" apps only; the page's Google Ads | Organic switch): every new user who is NOT a Google Ads user = the
 all-users cells − the Google Ads users' cells per country × install day, from the two cubes' own reads (the probe measured
 the paid read + its complement = the whole read) — the all-users packs (out_dir, one at a time) and the paid packs
@@ -398,6 +437,7 @@ FSQ_ON = True                        # (the guard itself; False: the step exactl
 #                                      the build's switch: BE_FSQ, settings "be_fsq" — both must be on)
 FSQ_V = 2                            # the guard's version: the Google Ads users' caches carry it ("fq") while it is on —
 #                                      a cache made without it (or with another version) is made again at once
+FQ_ANY = 32                          # (a country row's mark: replaced by the any-day rule, FSC — never re-read nor the banner)
 FQ_FS, FQ_LEFT, FQ_COH, FQ_CC, FQ_YNG = 1, 2, 4, 8, 16   # a row's marks (_R.fq): its eCPM_fs is every user's (the app row: the
 #                                      whole day's first-session read broke) · still broken after the re-reads · the
 #                                      day-0 cohort read is the broken side (no fallback: its cells are what GA4 has) ·
@@ -406,6 +446,39 @@ FQ_FS, FQ_LEFT, FQ_COH, FQ_CC, FQ_YNG = 1, 2, 4, 8, 16   # a row's marks (_R.fq)
 FSQ_YOUNG = 2                        # a young day: the app line's whole-day first-session rule from 2 days before the
 #                                      paid file's newest (both day-0 reads mostly in) until it is final — the cohort
 #                                      side, the countries, the re-reads and the banner stay final-only
+# ⚖️ round 5 (owner, 20 Nov 2026: "agar galat he to thik karte jao jab tak thik na ho jaye") — three more checks and the
+# countries table's "ROAS so far", each its own switch (the build's BE_FSC / BE_GAP / BE_UPI / BE_RSF, settings "be_fsc" /
+# "be_gap" / "be_upi" / "be_rsf"; all off: every file exactly as before them — pinned by digests). Thresholds measured on
+# every app's real stores (20 Nov 2026).
+FSC_ON = True                        # a COUNTRY's Google Ads users' first-session read on ANY day (young too): broken when
+#                                      GA4 sampled that day's "c" read (the paid store's own "mp" mark, from its
+#                                      samplingMetadatas) while every user's "c" read of the day is not, or when it holds
+#                                      MORE than every user's own cell (a subset never does) → every user's eCPM_fs, "ckc" "f";
+#                                      never re-read, never the banner (counted "guard cty"); needs the guard (FSQ_ON)
+FSC_V = 1                            # (its version beside FSQ_V in the Google Ads users' caches' stamp "fq")
+FSO_K, FSO_IM, FSO_USD = 1.05, 5, 1.0    # "more than every user's": impressions > 1.05 × theirs + 5, or revenue > 1.05 ×
+#                                      theirs + $1 (ref_ok's own subset margin) — on a day ≤ the paid file's newest −
+#                                      FSQ_YOUNG (a newer day's two reads are hot reads of different hours)
+GAP_ON = True                        # PACK GAPS also (1) by a fall of the packs' share of the All rows' final revenue
+#                                      from its OWN level — under GAP_REL × the median of the GAP_N non-gap dates before
+#                                      (pack_gaps_p's relative rule; now the "cohort" case and src "a" too) — and (2) by
+#                                      the cube ledger's own measured "(other)" loss of a folded date (loss ÷ t ≥
+#                                      GAP_LOSS); a forecast country row whose cells hold such a date (install day …
+#                                      its so-far day: the anchor's own ROAS adds up every one of them) gets "data
+#                                      check" "g", counted
+GAP_REL = 0.6
+GAP_LOSS = 0.4
+UPI_ON = True                        # a FORECAST country row whose GA4 Google Ads users per Google Ads install sit off its
+#                                      benchmark's basis: ≥ UPI_HI × or ≤ UPI_LO × the median of B's own training days
+#                                      (usable, settled by the origin) AND outside their q10 … q90 → "data check" "u"
+#                                      with both numbers ("cku"), counted; no number moves (which side is right — users
+#                                      the spend bought or not — no store can tell)
+UPI_HI, UPI_LO = 1.25, 0.8
+UPI_MIN = MIN_KEPT                   # … B needs ≥ 20 such days
+RSF_ON = True                        # ⚖️ the countries table's "ROAS so far" (owner, 20 Nov 2026: "haan ROAS ab tak
+#                                      dikhao"): each covered country row's real ROAS at its latest lived age (its own
+#                                      so-far read, as the app line's "ROAS … by day N") and B's median ROAS at that
+#                                      same age — the row's 14th element (_rsf); no number of the model moves
 LINE = None
 
 
@@ -613,12 +686,81 @@ def _fday(S, r):
         prev = v
 
 
-def pack_gaps(S_all, S_cty, newest, fthru=None):
+def pack_gaps(S_all, S_cty, newest, fthru=None, ls=None, st=None):
     """The activity dates (ordinals) on which the country packs lost revenue the All rows have: D ≤ newest − CLAG (the
     date's cells are final), the All rows' final revenue of it ≥ PACK_MIN, the packs' (every country row, "--" / "XX" /
     "ZZ" too — the All row includes them) under PACK_GAP × it. newest: ordinal. fthru (ordinal): the packs' own final edge
-    (the cube folded through it): a later date is not folded yet, not a gap."""
-    return _gap_rule(S_all, S_cty, newest, fthru)
+    (the cube folded through it): a later date is not folded yet, not a gap. ⚖️ GAP_ON also: the packs' share under
+    GAP_REL × its own median of the GAP_N non-gap dates before (_rel_gaps), and a folded date whose cube ledger measured
+    ≥ GAP_LOSS of the day "(other)" (ls: _ledger's; _led_gaps); st: their counts ("gap_rel" / "gap_led": the dates they
+    add)."""
+    out = _gap_rule(S_all, S_cty, newest, fthru)
+    if not GAP_ON:
+        return out
+    lim = newest - CLAG if fthru is None else min(newest - CLAG, fthru)
+    rel = _rel_gaps(S_all, S_cty, lim, GAP_REL, out) - out
+    led = _led_gaps(ls, lim) - out - rel
+    if st is not None:
+        st["gap_rel"], st["gap_led"] = len(rel), len(led)
+    return out | rel | led
+
+
+def _rel_gaps(S_ref, S_cty, lim, k, skip=()):
+    """The dates D ≤ lim (S_ref[D] ≥ PACK_MIN) whose share ρ = S_cty ÷ S_ref falls under k × the median ρ of the GAP_N
+    dates before that were not gaps (within 3 × GAP_N days, ≥ 3 of them: a long gap never sets its own baseline; skip:
+    dates already gaps, never in it) where the packs usually carry ≥ PACK_MIN of the date (median ρ × S_ref[D])."""
+    out, ok = set(), []
+    for D in sorted(D for D, v in S_ref.items() if D <= lim and v >= PACK_MIN):
+        if D in skip:
+            continue
+        rho = S_cty.get(D, 0.0) / S_ref[D]
+        prev = [q for x, q in ok[-GAP_N:] if x >= D - 3 * GAP_N]
+        if len(prev) >= 3:
+            m = _median(prev)
+            if m > 0 and rho < k * m and m * S_ref[D] >= PACK_MIN:
+                out.add(D)
+                continue
+        ok.append((D, rho))
+    return out
+
+
+def _led_gaps(ls, lim):
+    """⚖️ GAP_ON: the folded dates D ≤ lim whose cube ledger measured ≥ GAP_LOSS of the day "(other)" (ls {D: (loss
+    share, the day's USD)}; a day under PACK_MIN in all says nothing)."""
+    return {D for D, (sh, usd) in (ls or {}).items() if D <= lim and usd >= PACK_MIN and sh >= GAP_LOSS}
+
+
+def _ledger(data_dir, key, paid):
+    """⚖️ GAP_ON: the cube's own ledger of every FOLDED activity day (its month files; the hot days are not final) →
+    {ordinal: (its measured loss ÷ its every-row total "t", that total in USD)} — the Google Ads users' cube for src "p",
+    every user's for src "a"; a month of another stream (the head's) or another format is left out; no cube: {}."""
+    from .fetch import ga4_cube as cub
+    folder = os.path.join(data_dir, _cbp().DIR if paid else cub.DIR, key)
+    try:
+        names = sorted(f for f in os.listdir(folder)
+                       if len(f) == 15 and f.endswith(".json.gz") and f[4] == "-" and f[:4].isdigit())
+    except OSError:
+        return {}
+    head = _read(os.path.join(folder, cub.HOT)) if os.path.exists(os.path.join(folder, cub.HOT)) else None
+    sid = str((head or {}).get("stream_id") or "")
+    out = {}
+    for f in names:
+        m = _read(os.path.join(folder, f))
+        if not isinstance(m, dict) or m.get("v") != cub.V or (sid and str(m.get("stream_id") or "") != sid):
+            continue
+        for D, led in (m.get("days") or {}).items():
+            t = int((led or {}).get("t") or 0) if isinstance(led, dict) else 0
+            o = _od(D)
+            if t > 0 and o is not None:
+                out[o] = (int(led.get("loss") or 0) / t, t / 1e6)
+        del m
+    return out
+
+
+def _cbp():
+    """⚖️ fetch.ga4_cube_paid's instance of ga4_cube (the Google Ads users' cube: its DIR)."""
+    from .fetch import ga4_cube_paid
+    return ga4_cube_paid.MOD
 
 
 def _gap_rule(S_all, S_cty, newest, fthru=None):
@@ -627,7 +769,7 @@ def _gap_rule(S_all, S_cty, newest, fthru=None):
     return {D for D, v in S_all.items() if D <= lim and v >= PACK_MIN and S_cty.get(D, 0.0) < PACK_GAP * v}
 
 
-def pack_gaps_p(S_ref, S_cty, newest, fthru=None, ref_newest=None):
+def pack_gaps_p(S_ref, S_cty, newest, fthru=None, ref_newest=None, ls=None, st=None):
     """⚖️ src "p" whose All rows are the paid cube's cells summed (the paid file's "all": "cube" — or no "all"; with
     "cohort", their own D0 … D30 read, pack_gaps applies): the activity dates (ordinals) on which the Google Ads users'
     packs lost revenue. Their All row is the same read as their packs (the paid cube's cells: a date folded near-empty
@@ -638,21 +780,19 @@ def pack_gaps_p(S_ref, S_cty, newest, fthru=None, ref_newest=None):
     PACK_MIN. D is a gap when ρ[D] < PACK_GAP × the median ρ of the GAP_N dates before it that were not gaps (within 3 ×
     GAP_N days, ≥ 3 of them — _holes' rule: a long gap never sets its own baseline) and the packs usually carry ≥
     PACK_MIN of that date (median ρ × S_ref[D]: a share of a few cents says nothing). The share is the app's own (Google
-    Ads users are 5 % of one app's revenue and 90 % of another's): only a fall from its own level is a gap."""
+    Ads users are 5 % of one app's revenue and 90 % of another's): only a fall from its own level is a gap. ⚖️ GAP_ON:
+    the fall at GAP_REL (not PACK_GAP) × that median, and the ledger's dates (_led_gaps); st: the dates they add."""
     lim = newest - CLAG if fthru is None else min(newest - CLAG, fthru)
     if ref_newest is not None:
         lim = min(lim, ref_newest - CLAG)
-    out, ok = set(), []
-    for D in sorted(D for D, v in S_ref.items() if D <= lim and v >= PACK_MIN):
-        rho = S_cty.get(D, 0.0) / S_ref[D]
-        prev = [q for x, q in ok[-GAP_N:] if x >= D - 3 * GAP_N]
-        if len(prev) >= 3:
-            m = _median(prev)
-            if m > 0 and rho < PACK_GAP * m and m * S_ref[D] >= PACK_MIN:
-                out.add(D)
-                continue
-        ok.append((D, rho))
-    return out
+    out = _rel_gaps(S_ref, S_cty, lim, PACK_GAP)
+    if not GAP_ON:
+        return out
+    rel = _rel_gaps(S_ref, S_cty, lim, max(PACK_GAP, GAP_REL)) - out
+    led = _led_gaps(ls, lim) - out - rel
+    if st is not None:
+        st["gap_rel"], st["gap_led"] = len(rel), len(led)
+    return out | rel | led
 
 
 def _nvp():
@@ -680,6 +820,34 @@ def coh_bad(p_fs, a_fs, p_d0, a_d0):
         return False
     sf = min(p_fs / a_fs, 1.0)
     return sf * a_d0 >= FSQ_EA and p_d0 / a_d0 < FSQ * sf
+
+
+def fs_over(p, a):
+    """⚖️ FSC: a Google Ads users' first-session cell holding MORE than every user's of the same cell (p, a: [revenue,
+    impressions]) — a subset never does: impressions > FSO_K × theirs + FSO_IM, or revenue > FSO_K × theirs + FSO_USD.
+    No cell of every user's (a: None) decides nothing: GA4 folds a small country into "(other)" sooner on every user's
+    read (more rows) than on the subset's, so the subset's cell may be the good one — and there is nothing to take."""
+    if not p or not a:
+        return False
+    ar, ai = a[0] or 0.0, a[1] or 0
+    return (p[1] or 0) > FSO_K * ai + FSO_IM or (p[0] or 0.0) > FSO_K * ar + FSO_USD
+
+
+def _smp(st, day):
+    """⚖️ FSC: was a first-session store's "c" read of `day` a GA4 sample? Its own per-read mark ("mp"); a day the store
+    marked before it kept each read's own flag: its day mark ("mark") — True / False / None (no read of the day)."""
+    if not isinstance(st, dict) or day not in (st.get("days") or {}):
+        return None
+    mp = (st.get("mp") or {}).get(day)
+    if isinstance(mp, dict):
+        return mp.get("c") == "s"
+    return (st.get("mark") or {}).get(day) == "s"
+
+
+def _fqv():
+    """⚖️ The input guard's stamp on the Google Ads users' caches ("fq"): FSQ_V, with FSC's own version beside it while
+    that rule is on (training and predict read the same rows: a cache made in the other state is made again at once)."""
+    return FSQ_V if not FSC_ON else "%d+fsc%d" % (FSQ_V, FSC_V)
 
 
 def _fs_sums(st):
@@ -728,7 +896,7 @@ def _store_edge(st_at):
         return None
 
 
-def _guard_in(data_dir, key, body, days, a_d0, a_pk, out_dir, rq, a_nw, a_ft, S_a, a_d0r=None, p_at=None):
+def _guard_in(data_dir, key, body, days, a_d0, a_pk, out_dir, rq, a_nw, a_ft, S_a, a_d0r=None, p_at=None, p_st=None):
     """⚖️ The input guard's reads for one src "p" app (load): every user's first-session store (fetch.ga4_nvr) and the
     day-0 cells of every user's packs against the Google Ads users' store days and their file's All rows. Judged on
     days FINAL in both files and both first-session stores (≤ both newest − max(LAG, the stores' own final lag), ≤ each
@@ -742,7 +910,9 @@ def _guard_in(data_dir, key, body, days, a_d0, a_pk, out_dir, rq, a_nw, a_ft, S_
     pack-gap dates (ISO), "pd": the store's days, "rq": its re-reads, "cd": (filled by load) the days a country's
     eCPM_fs was replaced, "skip": the decisions the reference stopped}. a_d0: every user's FINAL All-row day-0 cells
     (a_d0r: all of them, final or not); a_nw / a_ft: every user's newest and pack edge (ordinals or None); S_a: every
-    user's All rows' final daily revenue (the pack gaps); p_at: the paid store's last window read ("recent_at")."""
+    user's All rows' final daily revenue (the pack gaps); p_at: the paid store's last window read ("recent_at"); p_st:
+    the paid store itself (FSC: its own sampled marks) → also "smp": the days whose Google Ads users' "c" read GA4
+    sampled while every user's was whole (FSC on), "ylim": the newest day FSC's subset rule judges, "c1": its counts."""
     nw = _od(body.get("newest"))
     sta = gv.load_store(os.path.join(data_dir, gv.DIR, key + ".json.gz"))
     edge = None if nw is None or a_nw is None else min(nw, a_nw) - max(LAG, gv.FINAL_LAG)
@@ -754,6 +924,7 @@ def _guard_in(data_dir, key, body, days, a_d0, a_pk, out_dir, rq, a_nw, a_ft, S_
     limc = None if lim is None or pft is None or a_ft is None else \
         min(lim, _iso(min(pft, a_ft)), _iso(a_nw - CLAG))
     fa, fc = _fs_sums(sta)
+    smp = {d for d in days if _smp(p_st, d) and _smp(sta, d) is False} if FSC_ON else set()   # (FSC: GA4-sampled)
     sta = None
     fp, _ = _fs_sums({"days": days})
     p_d0 = _final_d0(body.get("rows"))
@@ -784,16 +955,26 @@ def _guard_in(data_dir, key, body, days, a_d0, a_pk, out_dir, rq, a_nw, a_ft, S_
     ad, S_c = (_d0s(out_dir, a_pk, PACK_RE) if limc else ({}, {}))
     gap = {_iso(D) for D in _gap_rule(S_a, S_c, a_nw, a_ft)} if limc and a_nw is not None else set()
     return {"app": bad | yng, "yng": yng, "coh": coh, "fa": fa, "fc": fc, "ad": ad, "lim": lim, "limc": limc,
-            "gap": gap, "pd": frozenset(days), "rq": rq if isinstance(rq, dict) else {}, "cd": set(), "skip": skip}
+            "gap": gap, "pd": frozenset(days), "rq": rq if isinstance(rq, dict) else {}, "cd": set(), "skip": skip,
+            "smp": smp, "ylim": ylim, "c1": {"s": 0, "o": 0}}
 
 
 def _cell_bad(G, cc, r, v):
     """⚖️ One Google Ads users' country row (r; v: its first-session [revenue, impressions] or None): is its
     first-session read broken — its whole day's (G["app"]) or its own (fs_bad at the country floor FSQ_EC; final in
-    both files, the reference agreeing with itself, not a pack-gap date of every user's packs)?"""
+    both files, the reference agreeing with itself, not a pack-gap date of every user's packs)? → True; or, FSC on, on
+    any day every user's store has read: that day's read GA4-sampled (G["smp"]) or the cell more than every user's
+    (fs_over, on a day ≤ G["ylim"]) → "a" (replaced like a country's own, but never re-read nor the banner)."""
     day = r[0]
     if day in G["app"]:
         return True
+    if FSC_ON and day in G["fa"]:            # ⚖️ FSC, ANY day (young too): GA4-sampled, or more than every user's
+        if day in G["smp"]:
+            G["c1"]["s"] += 1
+            return "a"
+        if G["ylim"] is not None and day <= G["ylim"] and fs_over(v, (G["fc"].get(cc) or {}).get(day)):
+            G["c1"]["o"] += 1
+            return "a"
     if G["limc"] is None or day > G["limc"] or day not in G["pd"] or len(r) < 6 or not (r[5] or 0) >= 1:
         return False
     ad = (G["ad"].get(cc) or {}).get(day)
@@ -890,7 +1071,7 @@ def load(out_dir, data_dir, key, fn, want_adm=False, paid=None, org=False, gst=N
     if ga is not None:                           # the days whose first-session read broke (fs_bad) or whose cohort did —
         try:                                     # an unreadable every-user store or pack: the app answered without the
             G = _guard_in(data_dir, key, body, days, ga[0], ga[1], out_dir, (st or {}).get("rq") or {}, *ga[2:],
-                          (st or {}).get("recent_at"))
+                          (st or {}).get("recent_at"), st)
         except Exception as e:                   # guard, exactly as before it (counted, its own health line)
             G = None
             if gst is not None:
@@ -936,8 +1117,9 @@ def load(out_dir, data_dir, key, fn, want_adm=False, paid=None, org=False, gst=N
                 e = v[0] / v[1] * 1000 if v and v[1] > 0 else None
                 x = _row(r, e, r[3] >= MIN_SP and (r[1] or 0) >= MIN_N)
                 if bad:
-                    x.fq = FQ_FS
-                    G["cd"].add(r[0])
+                    x.fq = FQ_FS | (FQ_ANY if bad == "a" else 0)
+                    if bad is True:              # (FSC's own: never on the re-read list, never the banner)
+                        G["cd"].add(r[0])
                 cty.setdefault(cc, []).append(x)
         del pk
     for v in cty.values():
@@ -947,6 +1129,7 @@ def load(out_dir, data_dir, key, fn, want_adm=False, paid=None, org=False, gst=N
         if gst is not None:
             gst["skip"] = gst.get("skip", 0) + G["skip"]
             gst["ran"] = True                    # (the guard ran for this app: its caches may carry the stamp)
+            gst["c1s"], gst["c1o"] = G["c1"]["s"], G["c1"]["o"]     # (FSC's counts: sampled / over the whole)
         G = None
     newest = body.get("newest") or (app[-1].day if app else None)
     tail = (oi,) if paid is not None and org else ()
@@ -968,11 +1151,19 @@ def load(out_dir, data_dir, key, fn, want_adm=False, paid=None, org=False, gst=N
     except (KeyError, TypeError, ValueError):
         ft = None
     nw = date.fromisoformat(newest).toordinal()
+    ls = None                                 # ⚖️ GAP_ON: the cube ledger's own measured loss of each folded date
+    if GAP_ON:                                # (its own read failing costs only it: no ledger date, counted)
+        try:
+            ls = _ledger(data_dir, key, paid is not None)
+        except Exception as e:
+            ls = None
+            if gst is not None:
+                gst["lfail"] = e
     if paid is None:
-        return newest, app, cty, adm, pack_gaps(S_all, S_cty, nw, ft)
+        return newest, app, cty, adm, pack_gaps(S_all, S_cty, nw, ft, ls, gst)
     if own:
-        return (newest, app, cty, adm, pack_gaps(S_all, S_cty, nw, ft)) + tail
-    return (newest, app, cty, adm, pack_gaps_p(S_all, S_cty, nw, ft, ref_nw)) + tail
+        return (newest, app, cty, adm, pack_gaps(S_all, S_cty, nw, ft, ls, gst)) + tail
+    return (newest, app, cty, adm, pack_gaps_p(S_all, S_cty, nw, ft, ref_nw, ls, gst)) + tail
 
 
 # ── the maths (pure Python: the runner has no numpy) ───────────────────────────────────────────────────────────────
@@ -1926,6 +2117,32 @@ def _bench_of(cf):
     return [math.exp(e[5]) if len(e) > 5 else None for e in cf]
 
 
+def _bench_at(ages, bench, a):
+    """The benchmark ROAS at age a (ages / bench: a curve's ages and _bench_of's values): at a curve age its own, between
+    two of them linear (as _bench_growth reads it); None past the curve's last age (the longest age B's data watched),
+    before its first, or next to an entry with no median."""
+    if a is None or not ages or not bench or a < ages[0] or a > ages[-1]:
+        return None
+    for i, t in enumerate(ages):
+        if t == a:
+            return bench[i]
+        if t > a:
+            v0, v1 = bench[i - 1], bench[i]
+            if v0 is None or v1 is None:
+                return None
+            return v0 + (v1 - v0) * (a - ages[i - 1]) / (t - ages[i - 1])
+    return None
+
+
+def _rsf(x, ages, cf):
+    """⚖️ A country row's "ROAS so far" (RSF_ON) → [its so-far age, its real ROAS there (the so-far read: cumulative
+    revenue ÷ spend), B's median ROAS at that same age (_bench_at on the curve's rmed; None: past B's watched ages or no
+    median)], ROAS as _rr rounds them; None without a so-far read."""
+    if x.sfa is None or x.sfv is None or not x.sp or x.sp <= 0:
+        return None
+    return [int(x.sfa), _rr(x.sfv / x.sp), _rr(_bench_at(ages, _bench_of(cf), x.sfa))]
+
+
 def _bench_curve(ages, cov):
     """The app line's benchmark ROAS at its ages: each covered country's median past ROAS (its last entry ≤ the age),
     joined by the day's spend (the card's rule); None with no spend."""
@@ -2067,6 +2284,52 @@ def _card(r, cov, tot, gaps, nw):
     return {"roas": roas, "bench": bench, "fin": fin, "cv": [None if v is None else cvs for v in roas], "chk": chk}, None
 
 
+def _gap_in(x, gsl):
+    """⚖️ GAP_ON: does a row's every cell so far — install day … its so-far day (the anchor's own ROAS adds up each one)
+    — hold a pack-gap date (gsl: sorted ordinals)?"""
+    if x.sfa is None:
+        return False
+    i = bisect.bisect_left(gsl, x.X)
+    return i < len(gsl) and gsl[i] <= x.X + x.sfa
+
+
+def _upi_bench(byday, O):
+    """⚖️ UPI_ON: per country, B's own training days (usable, settled by the origin O: install day + SETTLE ≤ O — K3's
+    set) → (median, q10, q90) of their GA4 new users ÷ Google Ads installs; ≥ UPI_MIN days, else none."""
+    if O is None:
+        return {}
+    v = {}
+    for cs in byday.values():
+        for cc, x in cs.items():
+            if x.X + SETTLE <= O and _usable(x) and x.na and x.na > 0:
+                v.setdefault(cc, []).append(x.n / x.na)
+    return {cc: (_median(u), _q(u, 0.1), _q(u, 0.9)) for cc, u in v.items() if len(u) >= UPI_MIN}
+
+
+def _eco_bench(byday, O):
+    """⚖️ FSC's output check: per country, the 1st … 99th percentile of log eCPM_fs over B's own training days (usable,
+    settled by the origin O; ≥ UPI_MIN of them)."""
+    if O is None:
+        return {}
+    v = {}
+    for cs in byday.values():
+        for cc, x in cs.items():
+            if x.X + SETTLE <= O and _usable(x):
+                v.setdefault(cc, []).append(x.e)
+    return {cc: (_q(e, 0.01), _q(e, 0.99)) for cc, e in v.items() if len(e) >= UPI_MIN}
+
+
+def _upi(x, b):
+    """⚖️ UPI_ON: a forecast row's users per install off its benchmark's basis — ≥ UPI_HI × or ≤ UPI_LO × B's median
+    AND outside B's q10 … q90 → [the row's, B's median] (2 decimals), else None (b: _upi_bench's, or None)."""
+    if not b or not x.na or x.na <= 0 or not b[0] or b[0] <= 0:
+        return None
+    u = x.n / x.na
+    if (u >= UPI_HI * b[0] or u <= UPI_LO * b[0]) and not b[1] <= u <= b[2]:
+        return [round(u, 2), round(b[0], 2)]
+    return None
+
+
 def predict(key, fc, cal, pin, sk=None, stats=None):
     """One app's judged install days from its fits + the calibration → its be_<key>.json.gz body (see the module doc)."""
     newest, rows, byday = pin[:3]
@@ -2079,6 +2342,9 @@ def predict(key, fc, cal, pin, sk=None, stats=None):
     gaps = pin[4] if len(pin) > 4 else ()   # (pack-gap dates: the card's "data check")
     holes = _holes(rows, nw, adm)         # the calendar dates GA4 lost on every cohort while AdMob did not
     gr, cgr = _gq(cal.get("grow"), key, "app"), _gq(cal.get("grow"), key, "cty")
+    gsl = sorted(gaps) if GAP_ON else []  # ⚖️ GAP_ON: the gap dates a forecast row's cells may hold ("g")
+    ub = _upi_bench(byday, _od(fc.get("origin"))) if UPI_ON else {}    # ⚖️ UPI_ON: B's users per install ("u")
+    eb = _eco_bench(byday, _od(fc.get("origin"))) if FSC_ON else {}    # ⚖️ FSC's output check: B's eCPM_fs band
     ok = _shifts(cal)                     # the shift only with a calibration that has its ranges and bound (a failed first
     #                                       one after the shift shipped: the unshifted curve and its band, as before)
 
@@ -2109,6 +2375,7 @@ def predict(key, fc, cal, pin, sk=None, stats=None):
     for r, tot, cov, unc, csp, M, anc, chk in each():
         shift = ok and anc is not None            # the "ROAS ab tak" shift (nothing final yet: unshifted)
         ctys, sus = [], {}                        # (sus: the countries the sanity check found)
+        gpc, upc = {}, {}                         # (⚖️ the forecast rows holding a gap date / off B's users per install)
         for cc, x, f, ages, mid, clo, chi in cov:
             b0, b1, b2, s_, tmax = f["k3"][:5]
             mu = b0 + b1 * x.c + b2 * x.e if _seen(f["rng"], x) else None     # (K3: only inside its range)
@@ -2129,8 +2396,18 @@ def predict(key, fc, cal, pin, sk=None, stats=None):
                     if ca and _sus(dd[0], ages, _bench_of(f["cv"]), ca[0], ca[1], (key, r.day, cc),   # real ROAS
                                    (_bm(f.get("bm")) or [None] * 4)[2]):                            # did not make
                         sus[cc] = 1
+                if x.sp / tot >= SAN_SHARE:          # ⚖️ round 5's marks on a forecast row (≥ SAN_SHARE of the day)
+                    if gsl and _gap_in(x, gsl):      # its cells (install day … so far) hold a pack-gap date
+                        gpc[cc] = 1
+                    u = _upi(x, ub.get(cc)) if ub else None    # its users per install off B's basis
+                    if u is not None:
+                        upc[cc] = u
+                    e_ = eb.get(cc)                  # (FSC's output check, counted only: measured on every app's
+                    if e_ and stats is not None and x.e is not None and not e_[0] <= x.e <= e_[1]:   # history it
+                        stats["eco"] = stats.get("eco", 0) + 1               # marks real eCPM lows / highs at the
+                        stats["ecow"] = stats.get("ecow", 0) + (r.X >= nw - FSQ_WIN)   # band's own rate — no mark)
             ctys.append([cc, round(x.sp / tot, 4), round(x.cpi, 4), round(math.exp(x.e), 3), *[_r(v, 3) for v in pk],
-                         *days_, _bm(f.get("bm"))])
+                         *days_, _bm(f.get("bm"))] + ([_rsf(x, ages, f["cv"])] if RSF_ON else []))   # (⚖️ "ROAS so far")
         out = {"d": r.day, "age": nw - r.X, "sp": round(r.sp, 2), "inst": r.na, "cov": round(csp / tot, 4),
                "unc": unc, "cty": ctys}
         rl = [None if not r.fin or v is None else _rr(v / r.sp) for v in (r.fin or [])]
@@ -2206,7 +2483,8 @@ def predict(key, fc, cal, pin, sk=None, stats=None):
                         stats["app"] = stats.get("app", 0) + 1    # (counted only: on the app line the rule did not
                         #                       tell a late day — the outcome back-test, 20 Nov 2026 — so no mark)
         fq = (r.fq or 0) | (FQ_CC if any((x.fq or 0) & FQ_FS for x in byday.get(r.day, {}).values()) else 0)
-        ck = ("f" if fq & (FQ_FS | FQ_CC) else "") + ("c" if fq & FQ_COH else "") + ("s" if sus else "")
+        ck = ("f" if fq & (FQ_FS | FQ_CC) else "") + ("c" if fq & FQ_COH else "") + ("s" if sus else "") + \
+            ("g" if gpc else "") + ("u" if upc else "")
         if chk or ck:
             out["chk"] = 1                            # a GA4 hole in its first week: "data check" on the page (still shifted)
         if ck:                                        # ⚖️ … or the input guard / the sanity check: why, for the page's
@@ -2219,8 +2497,20 @@ def predict(key, fc, cal, pin, sk=None, stats=None):
                     ckc[cc] = "f"
         for cc in sus:                                # … and the sanity check's countries
             ckc[cc] = ckc.get(cc, "") + "s"
+        for cc in gpc:                                # ⚖️ … a forecast row holding a pack-gap date ("g") …
+            ckc[cc] = ckc.get(cc, "") + "g"
+        for cc in upc:                                # ⚖️ … one off B's users per install ("u", its numbers in "cku")
+            ckc[cc] = ckc.get(cc, "") + "u"
         if ckc:
             out["ckc"] = ckc
+        if upc:
+            out["cku"] = upc
+        if stats is not None and (gpc or upc):        # (counted: rows, and those of the last FSQ_WIN days)
+            stats["gap"] = stats.get("gap", 0) + len(gpc)
+            stats["upi"] = stats.get("upi", 0) + len(upc)
+            if r.X >= nw - FSQ_WIN:
+                stats["gapw"] = stats.get("gapw", 0) + len(gpc)
+                stats["upiw"] = stats.get("upiw", 0) + len(upc)
         out["card"], cw = _card(r, cov, tot, gaps, nw)
         if cw:
             out["cw"] = "j" if not r.jd else "k" if not ctys and not unc else cw   # why there is none (the page says it)
@@ -2770,16 +3060,22 @@ def _tried_p(data_dir):
 
 
 def run(dashboard, data_dir, out_dir, s=None, now=None):
-    """The step (_run) with the build's switches of its two checks: BE_FSQ (settings "be_fsq") and BE_SAN ("be_san"),
-    each on unless set false, AND the module's FSQ_ON / SAN_ON — both off: every file exactly as before them."""
-    global FSQ_ON, SAN_ON
-    keep = FSQ_ON, SAN_ON
+    """The step (_run) with the build's switches of its checks: BE_FSQ (settings "be_fsq") and BE_SAN ("be_san"), and
+    round 5's BE_FSC ("be_fsc"), BE_GAP ("be_gap"), BE_UPI ("be_upi") and the countries table's "ROAS so far" BE_RSF
+    ("be_rsf"), each on unless set false, AND the module's own FSQ_ON / SAN_ON / FSC_ON / GAP_ON / UPI_ON / RSF_ON — all
+    off: every file exactly as before them (FSC needs the guard on)."""
+    global FSQ_ON, SAN_ON, FSC_ON, GAP_ON, UPI_ON, RSF_ON
+    keep = FSQ_ON, SAN_ON, FSC_ON, GAP_ON, UPI_ON, RSF_ON
     FSQ_ON = keep[0] and bool((s or {}).get("be_fsq", True))
     SAN_ON = keep[1] and bool((s or {}).get("be_san", True))
+    FSC_ON = keep[2] and bool((s or {}).get("be_fsc", True))
+    GAP_ON = keep[3] and bool((s or {}).get("be_gap", True))
+    UPI_ON = keep[4] and bool((s or {}).get("be_upi", True))
+    RSF_ON = keep[5] and bool((s or {}).get("be_rsf", True))
     try:
         return _run(dashboard, data_dir, out_dir, s, now)
     finally:
-        FSQ_ON, SAN_ON = keep
+        FSQ_ON, SAN_ON, FSC_ON, GAP_ON, UPI_ON, RSF_ON = keep
 
 
 def _run(dashboard, data_dir, out_dir, s=None, now=None):
@@ -2806,7 +3102,8 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
         loc, pw, orgs, bodies = {}, {}, {}, {}
         n = {"refit": 0, "fail": 0, "ec": 0, "ec_fail": 0, "ec_stale": 0, "pfail": 0, "org_fail": 0,
              "fs": 0, "fsl": 0, "coh": 0, "cohw": 0, "sus": 0, "susw": 0, "rskip": 0, "gfail": 0, "sapp": 0,
-             "young": 0}
+             "young": 0, "c1s": 0, "c1o": 0, "gap": 0, "gapw": 0, "gapr": 0, "gapl": 0, "lfail": 0, "upi": 0,
+             "upiw": 0, "eco": 0, "ecow": 0}      # (⚖️ round 5's counts: FSC, the pack gaps' marks / dates, UPI)
         fsq = {}                                  # ⚖️ the input guard's broken first-session days per src "p" app key
         if paid:
             from . import roi_build as rbm       # (its PAID / PAID_DIR: run_uninstall ran its pass earlier, this process)
@@ -2854,6 +3151,8 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
                 for d in body["days"]:
                     if "ec" in d:
                         d["ecs"] = "a"
+                    for v in (d.get("cku") or {}).values():     # ⚖️ "u": these users are Google Ads users (the
+                        v.append(1)                             # page's words; without it: every new user)
                 fqd = []                                        # ⚖️ the input guard's days: counted, and the broken
                 for r in pin[1]:                                # first-session days handed to their store's re-read
                     if (r.fq or 0) & FQ_YNG:                    # (a young day: replaced and marked, counted on its
@@ -2872,6 +3171,8 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
             unc = {cc for cs in pin[2].values() for cc in cs} - set(fc["fits"])      # (the folded ones too)
             bodies[aid] = (key, fc, body, len(unc))
             n["sapp"] += st.get("app", 0)
+            for k_ in ("gap", "gapw", "upi", "upiw", "eco", "ecow"):   # ⚖️ round 5 (predict's own counts)
+                n[k_] += st.get(k_, 0)
 
         def _org(aid, key, fn, oi):
             """⚖️ A src "p" app's Organic file — only once its src "p" body exists (held as bytes: written with it); oi:
@@ -2893,7 +3194,7 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
             source failed, or no calibration of them yet]). src "a" with be_paid off: the step exactly as it was before
             the switch."""
             pa = src == "p"
-            fqv = FSQ_V if pa and FSQ_ON else None              # ⚖️ the input guard's stamp on this source's caches
+            fqv = _fqv() if pa and FSQ_ON else None             # ⚖️ the input guard's stamp on this source's caches
             old = load_calib(data_dir, src)
             held, back, bad = [], [], set()
             if pa and old is None:                              # ⚖️ no Google Ads users' calibration yet: tried today
@@ -2938,7 +3239,14 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
                             n["gfail"] += 1                     # its own health line
                             _fail(gst["fail"], "be guard")
                     else:
-                        newest, app, cty, adm, gaps = load(out_dir, data_dir, key, fn, True)
+                        newest, app, cty, adm, gaps = load(out_dir, data_dir, key, fn, True, None, False, gst)
+                    n["c1s"] += gst.get("c1s", 0)               # ⚖️ round 5: FSC's replaced country rows, the pack
+                    n["c1o"] += gst.get("c1o", 0)               # gaps' new dates (the share's own fall / the ledger)
+                    n["gapr"] += gst.get("gap_rel", 0)
+                    n["gapl"] += gst.get("gap_led", 0)
+                    if gst.get("lfail") is not None:            # (the ledger's own read failed: no ledger date for
+                        n["lfail"] += 1                         # that app, counted, its own health line)
+                        _fail(gst["lfail"], "be gap")
                     fqa = fqv if gst.get("ran") else None       # (its fits stamped only when the guard ran for it)
                     if fqv is not None and fqa is None and newest:
                         unguarded.append(key)
@@ -3139,7 +3447,7 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
             cov += len(fc["fits"])
             unc += nu
         _clean(out_dir, keep)
-        LINE = "be: apps %d, days %d, covered %d, uncovered %d, refit %s, calib %s%s%s%s%s%s%s%s%s%s" % (
+        LINE = "be: apps %d, days %d, covered %d, uncovered %d, refit %s, calib %s%s%s%s%s%s%s%s%s%s%s" % (
             len(ptr), nd, cov, unc, "yes" if n["refit"] else "no", "yes" if ran.get("a") else "no",
             (", failed %d" % n["fail"]) if n["fail"] else "",
             (", check %d (recent %d)" % (n["sus"], n["susw"])) if n["sus"] else "",
@@ -3149,6 +3457,7 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
             (", young %d" % n["young"]) if n["young"] else "",
             (", ref skip %d" % n["rskip"]) if n["rskip"] else "",
             (", guard fail %d" % n["gfail"]) if n["gfail"] else "",
+            _line5(n),
             (", ecpm apps %d, ecpm failed %d, ecpm stale %d" % (n["ec"], n["ec_fail"], n["ec_stale"]))
             if bec is not None else "",
             (", src p %d a %d, calib p %s, org %d, org fail %d%s" % (
@@ -3168,6 +3477,26 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
         if not isinstance(e, NoCalib):                   # (its cause printed its own line)
             _fail(e)
         return []
+
+
+def _line5(n):
+    """⚖️ Round 5's part of the counts line (counts only; absent while all are 0): FSC's replaced country rows (sampled /
+    more than every user's) and its output check (forecast rows ≥ SAN_SHARE whose eCPM_fs lies outside B's own 1st …
+    99th percentile — counted, never marked: on every app's history it found real lows / highs at the band's own
+    rate), the forecast rows holding a pack-gap date and the gap dates the new rules added (the share's own fall /
+    the ledger), the forecast rows off B's users per install, the ledger reads that failed."""
+    out = ""
+    if n["c1s"] or n["c1o"]:
+        out += ", guard cty %d (sampled %d, over %d)" % (n["c1s"] + n["c1o"], n["c1s"], n["c1o"])
+    if n["eco"]:
+        out += ", ecpm off band %d (recent %d)" % (n["eco"], n["ecow"])
+    if n["gap"] or n["gapr"] or n["gapl"]:
+        out += ", gap rows %d (recent %d), gap dates rel %d ledger %d" % (n["gap"], n["gapw"], n["gapr"], n["gapl"])
+    if n["upi"]:
+        out += ", users/install %d (recent %d)" % (n["upi"], n["upiw"])
+    if n["lfail"]:
+        out += ", gap fail %d" % n["lfail"]
+    return out
 
 
 def off(out_dir):

@@ -124,8 +124,16 @@ BEFORE = {
 }
 
 
+R5_OFF = {"be_fsc": False, "be_gap": False, "be_upi": False, "be_rsf": False}   # (round 5's switches: off wherever a
+#                                          test pins an output from before them — "as before it" is before every one)
+
+
+_l4 = T._l4                            # (the counts line without round 5's own counts)
+
+
 def scenario(mod, tmp, name):
-    """One SCENARIOS entry through module `mod` (be_build, or the build before the switch) → its steps' digests."""
+    """One SCENARIOS entry through module `mod` (be_build, or the build before the switch) → its steps' digests (round
+    5's switches off: these digests are from before them too)."""
     extra, steps = SCENARIOS[name]
     site, data, dash = T.make(tmp)
     if extra == "ecpm":
@@ -137,7 +145,7 @@ def scenario(mod, tmp, name):
         undo = patch(mod) if patch else None
         try:
             with contextlib.redirect_stderr(err):
-                paths = mod.run(d, data, site, s, now)
+                paths = mod.run(d, data, site, dict(R5_OFF, **s), now)
         finally:
             if undo:
                 undo()
@@ -411,9 +419,9 @@ def test_load_takes_admob_and_the_gaps_reference_from_the_all_users_file(tmp_pat
     seen = {}
     real = be.pack_gaps_p
 
-    def spy(S_ref, S_cty, newest, fthru=None, ref_newest=None):
+    def spy(S_ref, S_cty, newest, fthru=None, ref_newest=None, *r5):          # (r5: round 5's ledger and counts)
         seen.update(S_ref=dict(S_ref), S_cty=dict(S_cty), newest=newest, fthru=fthru, ref=ref_newest)
-        return real(S_ref, S_cty, newest, fthru, ref_newest)
+        return real(S_ref, S_cty, newest, fthru, ref_newest, *r5)
     monkeypatch.setattr(be, "pack_gaps_p", spy)
     monkeypatch.setattr(be, "pack_gaps", lambda *a, **k: 1 / 0)             # (never every user's rule on src "p")
     pf = (scr, "roi_%s_p.json.gz" % KA)
@@ -503,7 +511,8 @@ def test_their_own_d0_d30_all_rows_are_an_independent_read_of_their_packs_again(
         m.setattr(be, "pack_gaps_p", lambda *a: seen.append(("ref", a)) or real_p(*a))
         got = be.load(site, data, KA, "roi_%s.json.gz" % KA, True, pf)
         (kind, args), = seen
-        assert kind == "own" and args == (S_own, S_cty, T.TODAY.toordinal(), T.TODAY.toordinal())
+        assert kind == "own" and args[:4] == (S_own, S_cty, T.TODAY.toordinal(), T.TODAY.toordinal())   # (+ round 5's
+        #                                                                         ledger and counts)
         assert got[4] == {D.toordinal()}
         seen.clear()
         _wr(os.path.join(scr, pf[1]), dict(pb, all="cube"))               # "cube": the reference rule, as before
@@ -525,14 +534,17 @@ def test_their_own_d0_d30_all_rows_are_an_independent_read_of_their_packs_again(
     assert n > 20
 
 
-def test_the_paid_pack_gaps_follow_the_apps_own_share(tmp_path):
+def test_the_paid_pack_gaps_follow_the_apps_own_share(tmp_path, monkeypatch):
     """pack_gaps_p by hand: the Google Ads users' packs carry 20 % of every user's revenue a date (an app's own level) —
     a date at 5 % is a gap, one at 10 % is not (≥ 0.35 × 20 %); a gap never sets the baseline after it (three in a row
     stay gaps); under 3 dates before: no claim; a date the packs usually carry < 1 USD of: no claim; past the edges
-    (newest − CLAG, the packs' fthru, every user's newest − CLAG): no claim."""
+    (newest − CLAG, the packs' fthru, every user's newest − CLAG): no claim. ⚖️ GAP_ON (round 5): the fall at GAP_REL
+    (0.6) × its median — the 10 % date (< 12 %) a gap too; off: exactly the rule above."""
     S_ref = {D: 100.0 for D in range(1, 41)}
     S_cty = {D: 20.0 for D in S_ref}
     S_cty.update({2: 1.0, 20: 5.0, 21: 10.0, 30: 1.0, 31: 1.0, 32: 1.0})
+    assert be.GAP_ON and be.pack_gaps_p(S_ref, S_cty, 50) == {20, 21, 30, 31, 32}   # (round 5: 10 % < 0.6 × 20 %)
+    monkeypatch.setattr(be, "GAP_ON", False)
     assert be.pack_gaps_p(S_ref, S_cty, 50) == {20, 30, 31, 32}               # (2: only one date before it)
     assert be.pack_gaps_p(S_ref, S_cty, 50, 31) == {20, 30, 31}               # (the packs folded through 31)
     assert be.pack_gaps_p(S_ref, S_cty, 50, None, 35) == {20, 30, 31}         # (every user's read final through 31)
@@ -661,8 +673,8 @@ def test_the_counts_line_names_nothing(paid):
     on, off = paid["on"], paid["off"]
     nd = sum(len(_be(on["site"], k)["days"]) for k in (KA, KB, KC, KD))
     assert on["line"].startswith("be: apps 4, days %d, covered " % nd)
-    assert on["line"].endswith(", refit yes, calib yes, src p 1 a 3, calib p yes, org 1, org fail 0"), on["line"]
-    assert ", src" not in off["line"] and off["line"].endswith(", refit yes, calib yes")
+    assert _l4(on["line"]).endswith(", refit yes, calib yes, src p 1 a 3, calib p yes, org 1, org fail 0"), on["line"]
+    assert ", src" not in off["line"] and _l4(off["line"]).endswith(", refit yes, calib yes")
     for bad in [AD, KD, "2030", "2031", "$", "AA", "EE"] + list(T.APPS.values()) + list(T.KEYS.values()):
         assert bad not in on["line"]
 
@@ -1126,7 +1138,7 @@ def test_a_failing_google_ads_source_goes_on_as_every_users(tmp_path, monkeypatc
     assert _be(site, KA)["pw"] == {"st": "cal"} and not os.path.exists(os.path.join(data, "be_tab", "calib_p.json"))
     with open(os.path.join(data, "be_tab", "calib.json"), encoding="utf-8") as f:
         assert set(json.load(f)["skill"]) == {KA, KB, KC, KD}
-    assert line.endswith(", calib yes, src p 0 a 4, calib p no, org 0, org fail 0, paid failed 1")
+    assert _l4(line).endswith(", calib yes, src p 0 a 4, calib p no, org 0, org fail 0, paid failed 1")
     assert "org" not in dash["be"]["apps"][T.APPS["a"]] and not os.path.exists(os.path.join(site, "be_%s_o.json.gz" % KA))
     # … and with be_paid on, no every-user calibration yet and its first one failing costs only its apps
     site, data, dash, scr = paid_world(tmp_path / "acal")
@@ -1143,7 +1155,7 @@ def test_a_failing_google_ads_source_goes_on_as_every_users(tmp_path, monkeypatc
     assert paths == ["/be_*"] and set(dash["be"]["apps"]) == {T.APPS["a"]} and err == "be skipped: KeyError\n"
     assert dash["be"]["apps"][T.APPS["a"]]["org"] == "be_%s_o.json.gz" % KA
     assert sorted(f for f in os.listdir(site) if f.startswith("be_")) == ["be_%s.json.gz" % KA, "be_%s_o.json.gz" % KA]
-    assert line.startswith("be: apps 1, ") and ", failed 3, src p 1 a 0, calib p yes, org 1, org fail 0" in line
+    assert line.startswith("be: apps 1, ") and ", failed 3, src p 1 a 0, calib p yes, org 1, org fail 0" in _l4(line)
 
 
 def test_too_few_google_ads_users_days_for_a_first_calibration_is_a_state_not_a_failure(tmp_path, monkeypatch):

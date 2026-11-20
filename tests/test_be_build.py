@@ -131,6 +131,17 @@ def built(tmp_path_factory):
     return {"site": site, "data": data, "dash": dash, "paths": paths, "line": be.pop_line(), "tmp": tmp}
 
 
+R5_LINE = re.compile(r", (?:guard cty \d+ \(sampled \d+, over \d+\)|ecpm off band \d+ \(recent \d+\)|gap rows \d+ \(recent \d+\), "
+                     r"gap dates rel \d+ ledger \d+|users/install \d+ \(recent \d+\)|gap fail \d+)")
+
+
+def _l4(line):
+    """⚖️ The counts line without round 5's own counts (their shape: tests/test_be_datafix.py) — FSC's output check
+    counts the forecast rows outside B's 1st … 99th eCPM_fs percentile in almost any world; the parts these tests pin
+    sit next to each other again."""
+    return R5_LINE.sub("", line or "")
+
+
 def R(**kw):
     """A hand-made row (the models' view of one install day)."""
     x = be._R()
@@ -348,8 +359,9 @@ def test_the_shapes_the_page_reads(built):
         assert all(v is None or isinstance(v, int) for v in a["be"])
         assert a["roas"] == sorted(a["roas"])                    # the app curve never goes down with age
         ccs = [x[0] for x in d["cty"]]
-        assert sorted(ccs) == ["AA", "BB", "CC"] and all(len(x) == 13 and isinstance(x[10], int) and x[11] in range(7) for x in d["cty"])
+        assert sorted(ccs) == ["AA", "BB", "CC"] and all(len(x) == 14 and isinstance(x[10], int) and x[11] in range(7) for x in d["cty"])
         assert all(isinstance(x[12], list) and len(x[12]) == 4 for x in d["cty"])      # bm: the country's benchmark
+        assert all(x[13] is None or (len(x[13]) == 3 and x[13][0] <= d["age"]) for x in d["cty"])   # its "ROAS so far"
         assert [x[1] for x in d["cty"]] == sorted((x[1] for x in d["cty"]), reverse=True)
         named = [x for x in d["unc"] if x[0] != "…"]
         rest = [x for x in d["unc"] if x[0] == "…"]
@@ -402,8 +414,9 @@ def test_headers_one_splat_rule_covers_the_files(built):
 def test_the_log_line_names_nothing(built):
     line = built["line"]
     assert re.fullmatch(r"be: apps \d+, days \d+, covered \d+, uncovered \d+, refit (yes|no), calib (yes|no)",
-                        line), line
-    assert line == "be: apps 3, days 660, covered 3, uncovered 11, refit yes, calib yes"   # every day with spend
+                        _l4(line)), line
+    assert _l4(line) == "be: apps 3, days 660, covered 3, uncovered 11, refit yes, calib yes"   # every day with spend
+    assert line == _l4(line) or re.fullmatch(r".*, calib yes, ecpm off band \d+ \(recent \d+\)", line)   # (round 5: counts)
     for bad in list(APPS.values()) + list(KEYS.values()) + ["2030", "2031", "$", "AA", "EE"]:
         assert bad not in line
 
@@ -428,18 +441,18 @@ def _snap(site, data):
 
 def test_a_second_build_the_same_day_neither_refits_nor_recalibrates_a_new_day_does(tmp_path, monkeypatch):
     site, data, dash = make(tmp_path)
-    assert be.run(dash, data, site, {}, NOW) == ["/be_*"] and be.pop_line().endswith("refit yes, calib yes")
+    assert be.run(dash, data, site, {}, NOW) == ["/be_*"] and _l4(be.pop_line()).endswith("refit yes, calib yes")
     first, p1 = _snap(site, data), copy.deepcopy(dash["be"])
     calls = {}
     for nm in ("fit", "backtest", "asof", "calibrate", "skill2"):
         _spy(monkeypatch, nm, calls)
     d2 = copy.deepcopy(dash)
     assert be.run(d2, data, site, {}, NOW + timedelta(hours=5)) == ["/be_*"]
-    assert be.pop_line().endswith("refit no, calib no") and calls == {}
+    assert _l4(be.pop_line()).endswith("refit no, calib no") and calls == {}
     assert _snap(site, data) == first and d2["be"] == p1              # byte for byte, from the caches
     d3 = copy.deepcopy(dash)
     be.run(d3, data, site, {}, NOW + timedelta(days=1))
-    assert be.pop_line().endswith("refit yes, calib yes")
+    assert _l4(be.pop_line()).endswith("refit yes, calib yes")
     assert calls == {"fit": 3, "backtest": 3, "asof": 3, "calibrate": 1, "skill2": 3}   # (app c too: real numbers only)
     with open(os.path.join(data, "be_tab", "calib.json"), encoding="utf-8") as f:
         cal = json.load(f)
@@ -456,7 +469,7 @@ def test_a_damaged_fits_cache_is_refitted_not_a_failure(tmp_path, capsys):
     with open(be._fits_path(data, KEYS["a"]), "wb") as f:
         f.write(b"\x1f\x8b broken")
     d2 = copy.deepcopy(dash)
-    assert be.run(d2, data, site, {}, NOW) == ["/be_*"] and be.pop_line().endswith("refit yes, calib no")
+    assert be.run(d2, data, site, {}, NOW) == ["/be_*"] and _l4(be.pop_line()).endswith("refit yes, calib no")
     assert "skipped" not in capsys.readouterr().err and d2["be"] == dash["be"]
 
 
@@ -475,7 +488,7 @@ def test_a_failing_calibration_keeps_the_last_good_one_and_tries_again_the_next_
     capsys.readouterr()
     d2 = copy.deepcopy(dash)
     assert be.run(d2, data, site, {}, NOW + timedelta(days=1)) == ["/be_*"]
-    assert be.pop_line().endswith("refit yes, calib no") and calls["n"] == 1
+    assert _l4(be.pop_line()).endswith("refit yes, calib no") and calls["n"] == 1
     assert capsys.readouterr().err.count("be skipped: ZeroDivisionError") == 1
     with open(os.path.join(data, "be_tab", "calib.json"), encoding="utf-8") as f:
         kept = json.load(f)
@@ -486,7 +499,7 @@ def test_a_failing_calibration_keeps_the_last_good_one_and_tries_again_the_next_
     assert kept["tried"] == nxt and d2["be"]["calib"] == TODAY.isoformat() and d2["be"]["origin"] == nxt   # (this build's)
     assert body_of(site, "a")["calib"] == TODAY.isoformat()
     be.run(copy.deepcopy(dash), data, site, {}, NOW + timedelta(days=1, hours=3))          # same day: not again
-    assert calls["n"] == 1 and "skipped" not in capsys.readouterr().err and be.pop_line().endswith("calib no")
+    assert calls["n"] == 1 and "skipped" not in capsys.readouterr().err and _l4(be.pop_line()).endswith("calib no")
     be.run(copy.deepcopy(dash), data, site, {}, NOW + timedelta(days=2))                   # the next day: again
     assert calls["n"] == 2
 
@@ -520,7 +533,7 @@ def test_one_apps_failure_costs_that_app_only_and_reaches_the_health_banner(tmp_
     monkeypatch.setattr(be, "load", bad)
     assert be.run(dash, data, site, {}, NOW) == ["/be_*"]
     line = be.pop_line()
-    assert line.startswith("be: apps 2, ") and line.endswith(", failed 1")
+    assert line.startswith("be: apps 2, ") and _l4(line).endswith(", failed 1")
     assert set(dash["be"]["apps"]) == {APPS["a"], APPS["c"]}
     assert sorted(f for f in os.listdir(site) if f.startswith("be_")) == sorted("be_%s.json.gz" % KEYS[k] for k in "ac")
     err = capsys.readouterr().err
@@ -846,7 +859,7 @@ def test_an_empty_back_test_is_no_calibration_the_last_good_one_stays(tmp_path, 
     capsys.readouterr()
     d2 = copy.deepcopy(dash)
     assert be.run(d2, data, site, {}, NOW + timedelta(days=1)) == ["/be_*"]
-    assert capsys.readouterr().err.count("be skipped: ValueError") == 1 and be.pop_line().endswith("calib no")
+    assert capsys.readouterr().err.count("be skipped: ValueError") == 1 and _l4(be.pop_line()).endswith("calib no")
     with open(os.path.join(data, "be_tab", "calib.json"), encoding="utf-8") as f:
         kept = json.load(f)
     same = lambda c: {k: v for k, v in c.items() if k not in ("tried", "skill")}    # noqa: E731
@@ -1170,7 +1183,7 @@ def test_a_calibration_without_the_shifts_ranges_is_made_again_the_same_day(tmp_
         json.dump(old, f)
     d2 = copy.deepcopy(dash)
     be.run(d2, data, site, {}, NOW + timedelta(hours=2))
-    assert be.pop_line().endswith("refit no, calib yes")
+    assert _l4(be.pop_line()).endswith("refit no, calib yes")
     with open(p, encoding="utf-8") as f:
         assert json.load(f)["cv"] == be.CALV
 
@@ -1197,7 +1210,7 @@ def test_a_failed_remake_after_calv_moved_keeps_the_last_good_one_shifting_and_t
     monkeypatch.setattr(be, "calibrate", boom)
     capsys.readouterr()
     assert be.run(copy.deepcopy(dash), data, site, {}, NOW + timedelta(hours=3)) == ["/be_*"]
-    assert be.pop_line().endswith("calib no") and "be skipped: ZeroDivisionError" in capsys.readouterr().err
+    assert _l4(be.pop_line()).endswith("calib no") and "be skipped: ZeroDivisionError" in capsys.readouterr().err
     assert shifted and sum("anc" in (d.get("app") or {}) for d in body_of(site, "a")["days"]) == shifted
     b_skill = body_of(site, "a")["skill"]
     assert b_skill != sentinel[KEYS["a"]] and b_skill["n"] > 1                    # this build's own skill, not the kept
@@ -1249,7 +1262,7 @@ def test_a_failing_first_calibration_after_the_shift_keeps_the_unshifted_curve_a
     capsys.readouterr()
     d2 = copy.deepcopy(dash)
     assert be.run(d2, data, site, {}, NOW + timedelta(hours=3)) == ["/be_*"]
-    assert be.pop_line().endswith("calib no") and "be skipped: ZeroDivisionError" in capsys.readouterr().err
+    assert _l4(be.pop_line()).endswith("calib no") and "be skipped: ZeroDivisionError" in capsys.readouterr().err
     b = body_of(site, "a")
     assert b["skill"] == {"auc": [80.0, 60.0, 45.0], "c": 55.0, "n": 600}
     assert not any("anc" in (d.get("app") or {}) for d in b["days"])            # nothing shifted without its parts
@@ -1526,13 +1539,13 @@ def test_a_fits_cache_without_fv_or_an_older_one_is_refitted_the_same_day(tmp_pa
         assert be.load_fits(data, KEYS["a"]) is not None                  # (older caches stay readable …)
         d2 = copy.deepcopy(dash)
         assert be.run(d2, data, site, {}, NOW) == ["/be_*"]
-        assert be.pop_line().endswith("refit yes, calib no")               # … they just refit, with the triple
+        assert _l4(be.pop_line()).endswith("refit yes, calib no")          # … they just refit, with the triple
         with gzip.open(path, "rt") as f:
             fc = json.load(f)
         assert fc["fv"] == 2 and all(len(v["bm"]) == 4 for v in fc["fits"].values())
     d3 = copy.deepcopy(dash)
     be.run(d3, data, site, {}, NOW)
-    assert be.pop_line().endswith("refit no, calib no")
+    assert _l4(be.pop_line()).endswith("refit no, calib no")
 
 
 def _card_world(specs, day="2030-12-14", gaps=(), whole=False, jd=True):

@@ -245,6 +245,16 @@ def settings() -> dict:
         # its answers (BE_SAN) — on unless set false; both off: the tab's files exactly as without them
         "be_fsq": switch_on(os.getenv("BE_FSQ")),
         "be_san": switch_on(os.getenv("BE_SAN")),
+        # … and round 5's three (be_build, on unless set false; all off: the tab's files exactly as without them): a
+        # country's Google Ads users' first-session read on any day — GA4-sampled or more than every user's (BE_FSC,
+        # needs BE_FSQ), pack gaps by the share's own fall and the cube ledger's measured loss (BE_GAP), a forecast row's
+        # users per install off its benchmark's basis (BE_UPI)
+        "be_fsc": switch_on(os.getenv("BE_FSC")),
+        "be_gap": switch_on(os.getenv("BE_GAP")),
+        "be_upi": switch_on(os.getenv("BE_UPI")),
+        # … and the countries table's "ROAS so far" (BE_RSF: each covered country row's real ROAS at its latest lived
+        # age against its benchmark's at the same age; off: the rows without it, the page's column "—")
+        "be_rsf": switch_on(os.getenv("BE_RSF")),
         # 🖼️ Screens: GA4 views and ad impressions per screen class per day, every layer (fetch.ga4_screens: the recent
         # days every 3 / 12 hours, the history newest first; runs after every live GA4 step, stricter quota floors —
         # only the Google Ads users' reads above run after it, under the same floors).

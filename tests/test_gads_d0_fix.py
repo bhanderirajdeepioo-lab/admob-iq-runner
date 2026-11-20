@@ -919,6 +919,8 @@ def ov(tmp_path_factory):
     fx["dcfail2"] = json.loads(json.dumps(fx["daymiss"]))                 # … beside another step's
     fx["dcfail2"]["build_faults"] = [{"kind": "step", "steps": [{"name": "be guard", "error": "ValueError"},
                                                                {"name": "roi", "error": "KeyError"}]}]
+    fx["dcgap"] = json.loads(json.dumps(fx["daymiss"]))                   # (round 5: the Breakeven ledger check's
+    fx["dcgap"]["build_faults"] = [{"kind": "step", "steps": [{"name": "be gap", "error": "BadGzipFile"}]}]   # own read)
     fx["dcboth"] = json.loads(json.dumps(fx["daymiss"]))
     fx["dcboth"]["build_faults"] = [{"kind": "step", "steps": [{"name": "be guard", "error": "DataWarning"},
                                                               {"name": "roi", "error": "ValueError"},
@@ -1937,6 +1939,7 @@ def test_day_a_morning_lost_to_the_build_machines_time_zone_says_so(ov):
     assert ov["_bh"]["dcfail|USD"].startswith('<div class="banner fault">')
     assert ov["_fb"]["dcfail2|USD"] == ("⚠️ Build problem: ye hisse update nahi ho rahe: roi (robot me error). Fix hone"
                                         " tak ye numbers update nahi honge. " + CF)
+    assert ov["_fb"]["dcgap|USD"] == "⚠️ Build problem: " + CF and ov["_dc"]["dcgap|USD"] == ""   # (the ledger's own)
     with open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8") as f:
         p = f.read()
     css = p[p.index("<style>"):p.index("</style>")]

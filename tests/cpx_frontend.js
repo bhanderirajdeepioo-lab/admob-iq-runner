@@ -881,7 +881,34 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
       BER.push(hy, dy);
       const tags = [...dy.matchAll(/<tr><td>([^<]*) <small class="cpx-chk" title="([^"]*)">data check<\/small><\/td>/g)].map(m => [m[1], dec(m[2])]);
       const whole = _.beDet(Object.assign({}, X, { chk: 1, ckw: 'f', cty }), 1, false);
-      BO.ckc = { title: rowsOf(hy)[0].titles[0], tags, whole_tags: (whole.match(/<small class="cpx-chk"/g) || []).length }; }
+      BO.ckc = { title: rowsOf(hy)[0].titles[0], tags, whole_tags: (whole.match(/<small class="cpx-chk"/g) || []).length };
+      // 20 Nov (round 5): "g" (a pack-gap date in the row's own days) and "u" (users per install off B's basis, its
+      // numbers in "cku" — each country its own; a malformed entry: the words without numbers)
+      const Z = Object.assign({}, X, { chk: 1, ckw: 'gu', ckc: { AA: 'g', BB: 'gu', CC: 'u' }, cku: { BB: [1.64, 1.12, 1], CC: [0.7, 1.05, 1] }, cty });
+      const hz = _.beRow(Z, 'Alpha', G), dz = _.beDet(Z, 1, false);
+      const jz = _.beDet(Object.assign({}, X, { chk: 1, ckw: 'u', ckc: { AA: 'u' }, cku: { AA: [null, 1, 1] }, cty }), 1, false);
+      const ez = _.beDet(Object.assign({}, X, { chk: 1, ckw: 'u', ckc: { AA: 'u' }, cku: { AA: [1.4, 1.0] }, cty }), 1, false);   // (no 1: every new user)
+      BER.push(ez);
+      BER.push(hz, dz, jz);
+      const gtags = [...dz.matchAll(/<tr><td>([^<]*) <small class="cpx-chk" title="([^"]*)">data check<\/small><\/td>/g)].map(m => [m[1], dec(m[2])]);
+      BO.ckgu = { title: rowsOf(hz)[0].titles[0], tags: gtags,
+        junk: txt((jz.match(/<p class="cpx-fn"><b class="cpx-chk">([\s\S]*?)<\/p>/) || [])[1] || ''),
+        every: txt((ez.match(/<p class="cpx-fn"><b class="cpx-chk">([\s\S]*?)<\/p>/) || [])[1] || '') }; }
+    // ⚖️ 20 Nov 2026 ("haan ROAS ab tak dikhao"): the countries table's "ROAS so far" — c[13] = [so-far age, ROAS, B's ROAS at that
+    // age] (all SYNTHETIC): its format, its % coloured up = good, "B —" (none / past B's watched ages), "(not final)" (the age within
+    // the lag of the day's), a day not final yet (plain), an old row (no c[13]) and junk ("—", nothing raw)
+    { const CR = s => ['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, 30, null, null, 360, 0, null].concat(s === undefined ? [] : [s]);
+      const RS = (s, o) => { const x = Object.assign({ d: '2026-02-10', age: 20, cty: [CR(s)], unc: [], now: ['no', 19, 0.5] }, o || {}), h = _.beDet(x, 1, !!x.pv);
+        BER.push(h); const t = tblOf(h, '<h4 class="cpx-h4">Countries with a benchmark'), cell = ([...ctyT(h).matchAll(/<td class="cpx-ben">([\s\S]*?)<\/td>/g)][3] || [])[1] || '';
+        return { text: t.rows[0][4], next: t.rows[0][5], n: t.rows[0].length, titles: [...cell.matchAll(/title="([^"]*)"/g)].map(m => dec(m[1])), dl: dlOf(h), html: cell }; };
+      const h0 = _.beDet({ d: '2026-02-10', age: 20, cty: [CR([9, 0.736, 0.512])], unc: [], now: ['no', 19, 0.5] }, 1, false);
+      BO.rsf = { head: tblOf(h0, '<h4 class="cpx-h4">Countries with a benchmark').head, th: dec((h0.match(/<th class="cpx-ben" title="([^"]*)">ROAS so far<\/th>/) || [])[1] || ''),
+        fmt: RS([9, 0.736, 0.512], { age: 11 }), fin: RS([9, 0.736, 0.512]), edge: RS([9, 0.736, 0.512], { age: 12 }),
+        low: RS([9, 0.33, 0.512]), flat: RS([9, 0.54, 0.512]), pv: RS([9, 0.736, 0.512], { age: 3, pv: true }),
+        nob: RS([9, 0.736, null]), past: RS([400, 0.9, null]), over: RS([45, 1.56, 1.2], { age: 60 }), under: RS([6, 0.99996, 0.5]), zero: RS([6, 0.3, 0]),
+        noage: RS([9, 0.736, 0.512], { age: null }), old: RS(), nul: RS(null),
+        junk: ['x', {}, [], [null, 0.5, 0.4], [10, null, 0.4], [-1, 0.5, 0.4], [10, -0.1, 0.4], ['10', '0.5', '0.4'],
+          ['<img src=x onerror=alert(1)>', '"><b>', '</td>']].map(s => RS(s)), hostile_b: RS([9, 0.5, '<script>alert(1)</script>']) }; }
     // 15 Nov: the countries table's B lines (a null / short / junk "bm" = none; per cell) and the new card fields (all SYNTHETIC)
     { const row = bm => { const h = _.beDet({ d: '2026-02-10', age: 50, cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, 30, null, null, 400, 0].concat(bm === undefined ? [] : [bm])], unc: [], now: ['no', 20, 0.5] }, 1, false); BER.push(h); return tblOf(h, '<h4 class="cpx-h4">Countries with a benchmark').rows[0]; };
       BO.bm_bad = [undefined, null, [0.35], 'x', {}, [null, null, null, null]].map(row);
@@ -891,7 +918,7 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
       // every lived point a data check, with an "ec" too (16 Nov): no ROAS chart, only the note — the eCPM chart still in its box
       const oe = _.beCard(Object.assign({ chk: [1, 1, 1, 1, 1, 1], cv: [1, 1, 1, 1, 1, 1] }, cd), { x: [100, 40, 36, 33, 30, 28], b: [100, 42, 38, 35, 32, 30], e: [6, 2, 2, 2, 2, 2], be: [6, 2, 2, 2, 2, 2], cv: [1, 1, 1, 1, 1, 1], w: '......', wb: '......', p: '000000', q: '000000' });
       BER.push(o, p, oe); BO.cardchk = { none: o, ec: oe };
-      const rk = (k, m, lim, lo, hi, med) => { const h = _.beDet({ d: '2026-02-10', age: 50, cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, med, lo, hi, lim, k, m]], unc: [], now: ['no', 20, 0.5] }, 1, false); BER.push(h); return tblOf(h, '<h4 class="cpx-h4">Countries with a benchmark').rows[0][4]; };
+      const rk = (k, m, lim, lo, hi, med) => { const h = _.beDet({ d: '2026-02-10', age: 50, cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, med, lo, hi, lim, k, m]], unc: [], now: ['no', 20, 0.5] }, 1, false); BER.push(h); return tblOf(h, '<h4 class="cpx-h4">Countries with a benchmark').rows[0][5]; };   // (5: after "ROAS so far")
       BO.bm_rk = [rk(1, [0.3, 3, 60, 360], 360, null, null, 33), rk(3, [0.3, 3, 60, 360], 360, null, null, 33), rk(5, [0.3, 3, null, 120], 120, null, null, 120), rk(0, [0.3, 3, 60, 360], 90, 70, null, -90), rk(0, [0.3, 3, 60, 360], 360, null, null, null)];
       { const h = _.beCard({ roas: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7], bench: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6] }, { x: [100, 40, 36, 33, 30, 28], b: [100, 42, 38, 35, 32, 30], e: [6, 2, 2, 2, 2, 2], be: [6, 2, 2, 2, 2, 2], cv: [1, 1, 1, 1, 1, 1], w: '......', wb: '......', p: '000001', q: '000000' });
         BO.ec_hollow = { roas_filled: (h.match(/class="cpx-bep" data-f="1"/g) || []).length, ec_plain: (h.match(/class="cpx-bep"\/>/g) || []).length, ec_data_f: (h.match(/cpx-bep"[^>]*data-f/g) || []).length }; }
@@ -1030,7 +1057,13 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
           await g({ OPEN: ID.z, BOPEN: '2026-03-25', BUNC: true, BSRC: sw }); await g({ OPEN: ID.z, BOPEN: '2026-03-26', BSRC: sw }); } }
       CURV = 'INR'; delete FX.DATA.be.apps[ID.a].org;
       BO.guard = { sha: require('crypto').createHash('sha256').update(OR.join('\u0000')).digest('hex'), n: OR.length, org: LOADS.filter(f => /_o\.json\.gz$/.test(f)),
-        sw: OR.filter(h => /data-cpx-besrc|cpx-besw|Organic/.test(h)).length }; }
+        sw: OR.filter(h => /data-cpx-besrc|cpx-besw|Organic/.test(h)).length };
+      // ⚖️ 20 Nov 2026 ("haan ROAS ab tak dikhao"): the countries table's "ROAS so far" is the only change — an old file's rows
+      // have no c[13], so each of its cells is "—"; that column taken out, every render is the 16 Nov page's byte for byte
+      const RSFH = '<th class="cpx-ben" title="ab tak ki asli kamai ÷ spend; B = benchmark usi din par">ROAS so far</th>',
+        RSFD = '<td class="cpx-ben"><span class="cpx-nv" title="is country ka ab tak ka ROAS nahi aaya">—</span></td>';
+      BO.guard.strip = require('crypto').createHash('sha256').update(OR.map(h => h.split(RSFH).join('').split(RSFD).join('')).join('\u0000')).digest('hex');
+      BO.guard.rsf = OR.reduce((n, h) => n + h.split(RSFD).length - 1, 0); BO.guard.rsfh = OR.reduce((n, h) => n + h.split(RSFH).length - 1, 0); }
     // ── ⚖️ the users switch (owner, 16 Nov 2026: "google ads and organic dono ka alag alag dekh saku esa kar do"; cpx_fixture.js
     // paid(): the build's be_paid on) — Google Ads | Organic on top of the tab, the viewer's state, a tap never moves the page; the
     // Google Ads view = today's tab from the Google Ads users' file + its one line; src "a" says the data is every user's (with the

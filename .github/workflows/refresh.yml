@@ -292,6 +292,15 @@ jobs:
           # answers) — on unless set false; both false: the tab's files exactly as without them
           BE_FSQ:               ${{ vars.BE_FSQ || 'true' }}
           BE_SAN:               ${{ vars.BE_SAN || 'true' }}
+          # … and three more (on unless set false; all false: the tab's files exactly as without them): BE_FSC (a
+          # country's Google Ads users' first-session read on any day — GA4-sampled or more than every user's; needs
+          # BE_FSQ), BE_GAP (pack gaps by the share's own fall and the cube ledger's measured loss, the rows marked),
+          # BE_UPI (a forecast row's users per install off its benchmark's basis, marked)
+          BE_FSC:               ${{ vars.BE_FSC || 'true' }}
+          BE_GAP:               ${{ vars.BE_GAP || 'true' }}
+          BE_UPI:               ${{ vars.BE_UPI || 'true' }}
+          # … and the countries table's "ROAS so far" column's data (BE_RSF, on unless set false; false: the column "—")
+          BE_RSF:               ${{ vars.BE_RSF || 'true' }}
           # 🖼️ Screens (admob_iq/fetch/ga4_screens.py; data/ga4_screens/ in the private repo, kept for good): GA4 views and
           # ad impressions per screen class per day with every layer, read AFTER every live GA4 step under stricter
           # quota floors (only the Google Ads users' reads above run after it). GA4_SCREENS=false stops the reads without a code push; GA4_SCREENS_BUDGET_SEC = its seconds per

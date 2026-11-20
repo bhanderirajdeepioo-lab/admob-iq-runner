@@ -9802,15 +9802,25 @@ const BECHK='is install din ke pehle hafte me ek tareekh pe GA4 me app ki kamai 
 const BECKW={h:BECHK,
   f:'Google Ads users ka first-session data is din adhura aaya — sab users ka eCPM liya',
   c:'Google Ads users ka install-din (day 0) data is din adhura aaya — is din ke number asal se kam dikh sakte hain',
-  s:'breakeven benchmark se bahut pehle dikh raha hai jabki ab tak ka asli ROAS benchmark jaisa hi hai — ye jaldi wala din sirf model ke andaze se hai, isse pakka na maanein'};
+  s:'breakeven benchmark se bahut pehle dikh raha hai jabki ab tak ka asli ROAS benchmark jaisa hi hai — ye jaldi wala din sirf model ke andaze se hai, isse pakka na maanein',
+  g:'is install din ke baad ek tareekh pe GA4 ki country report adhoori aayi (kamai ka bada hissa "(other)" me gaya, app ka total poora hai) — is country ka ab tak ka ROAS aur breakeven ka andaza asal se kam / late dikh sakta hai'};
+// "u" (the build's "cku" {cc: [this day's users per install, B's(, 1 = Google Ads users: a src "p" file)]}): its words carry
+// both numbers — one text per country (no 1: every new user)
+const beCkuE=(x,cc)=>{ const u=x.cku&&typeof x.cku==='object'&&!Array.isArray(x.cku)?x.cku[cc]:null; return Array.isArray(u)?u:null; };
+const beCku=(x,cc)=>{ const u=beCkuE(x,cc);
+  return u&&u.length>=2&&num(u[0])!=null&&num(u[1])!=null&&num(u[0])>=0&&num(u[1])>0?[num(u[0]),num(u[1])]:null; };
+const beUt=(x,cc)=>{ const e=beCkuE(x,cc), w=e&&e[2]===1?'Google Ads users':'GA4 new users', u=beCku(x,cc);
+  if(!u) return `${w} per install benchmark (B) se bahut alag — is din ka ROAS B jaise users pe nahi bana`;
+  return `${w} per install ${u[0].toFixed(2)}, B ${u[1].toFixed(2)} — `+(u[0]>u[1]?'breakeven in extra users ki kamai par tika hai (ye users isi spend se aaye ya nahi, data se pata nahi chalta)':'is din har install pe kam users aaye — ROAS aur breakeven asal se kam / late dikh sakte hain'); };
 // "ckc" {cc: letters}: the countries a letter comes from — named before its words ("US: …"); a letter with none of
 // them is the day's own (the whole day's eCPM_fs, the hole, the day-0 read)
 const beCkc=x=>x.ckc&&typeof x.ckc==='object'&&!Array.isArray(x.ckc)?x.ckc:{};
 const beCkcOf=(x,k)=>Object.keys(beCkc(x)).filter(cc=>typeof beCkc(x)[cc]==='string'&&beCkc(x)[cc].includes(k)).sort();
 const beChkT=x=>typeof x.ckw==='string'&&x.ckw?x.ckw.split('').map(k=>{ const cs=beCkcOf(x,k);
+    if(k==='u') return cs.map(cc=>ctyName(cc)+': '+beUt(x,cc)).join(' · ');   // (each country its own numbers)
     return BECKW[k]?(cs.length?cs.map(ctyName).join(', ')+': ':'')+BECKW[k]:''; }).filter(Boolean).join(' · ')||BECHK:BECHK;
 // one country row's own "data check" (its letters in "ckc"), beside its name in the opened day's table
-const beCkcTag=(x,cc)=>{ const w=beCkc(x)[cc], t=typeof w==='string'?w.split('').map(k=>BECKW[k]).filter(Boolean):[];
+const beCkcTag=(x,cc)=>{ const w=beCkc(x)[cc], t=typeof w==='string'?w.split('').map(k=>k==='u'?beUt(x,cc):BECKW[k]).filter(Boolean):[];
   return t.length?` <small class="cpx-chk" title="${E(t.join(' · '))}">data check</small>`:''; };
 // a country's benchmark "bm" = [bCPI $, beCPM_fs $, bBE days | null, bLim days]: per cell, what is a number is shown; a malformed one: no B line
 function beBm(m){ if(!Array.isArray(m)||m.length<4) return null; const c=num(m[0]), e=num(m[1]), b=num(m[2]), l=num(m[3])>0?Math.round(m[3]):null;
@@ -9821,15 +9831,26 @@ const beB=(t,w,pc)=>`<span class="cpx-bi" title="${E(w)}"> · ${E(t)}${pc||''}</
 // coloured as −15 %), never on a day not final yet (pv: plain); none without both numbers
 const beVsB=(v,b,f,pv)=>{ if(!(v!=null&&b!=null&&v>=0&&b>0)) return ''; const r=v/b-1, d=(r<0?-1:1)*Math.round(Math.abs(r)*100)/100;
   return ` <span class="cpx-dl ${pv?'cpx-flat':dCls(f,d)}" title="${E('is din ka benchmark (B) se farak'+(pv?' — din abhi final nahi, isliye rang nahi':''))}">${E(fP(r))}</span>`; };
+// ⚖️ "ROAS so far" (owner, 20 Nov 2026: "haan ROAS ab tak dikhao"): a country row's real ROAS at its latest lived age (its own
+// so-far read, as the app line's "ROAS … by day N") against B's median ROAS at that same age — the build's c[13] = [age, ROAS,
+// B's | null] (BE_RSF). "(not final)": that age is within the build's lag of the day's age (the app line's own rule); no B there
+// (none, or past the ages B's data watched): "B —" with why; an older file (no c[13]): "—". Coloured like the eCPM cell (up = good,
+// the D0 ROAS family's step), never on a day not final yet (pv)
+function beRsf(c,ag,pv){ const s=Array.isArray(c[13])?c[13]:null, a=s?num(s[0]):null, v=s?num(s[1]):null, b=s?num(s[2]):null, L=num(c[10]);
+  if(a==null||a<0||v==null||v<0) return beDash('is country ka ab tak ka ROAS nahi aaya');
+  const n=Math.round(a), fin=ag!=null&&n<=ag-beLag();
+  const B=b!=null&&b>=0?beB('B '+beRf(b),'benchmark ROAS: is country ke purane install dino ka median, usi din (day '+n+') par',beVsB(v,b,'ROAS_G',pv))
+    :beB('B —',L!=null&&L>0&&n>L?'benchmark ka ROAS day '+n+' tak nahi bana — is country ke purane install din sirf '+Math.round(L)+' din tak dekhe':'is country ka benchmark ROAS nahi aaya');
+  return `<span title="${E((fin?'asli: ':'ab tak (abhi final nahi): ')+'day '+n+' tak kamai ÷ spend')}">${E(beRf(v))}</span>${B}<small>day ${n}${fin?'':' (not final)'}</small>`; }
 const beIns=(h,s)=>{ const m=/<\/(?:b|span)>/.exec(h); if(!m) return h+s; const j=m.index+m[0].length; return h.slice(0,j)+s+h.slice(j); };   // right after a cell's main value (its "80%" / "real" line stays below)
 // the open day: its covered countries, one "data kam" line for the rest (the names on tap), its ROAS card
 function beDet(x,k,pv){ const o=[], C=(Array.isArray(x.cty)?x.cty:[]).filter(c=>Array.isArray(c)&&typeof c[0]==='string'&&c[0]).sort((p,q)=>(num(q[1])||0)-(num(p[1])||0));
   if(x.chk===1) o.push(`<p class="cpx-fn"><b class="cpx-chk">data check</b> — ${E(beChkT(x))}.</p>`);
   if(pv) o.push('<p class="cpx-fn">⏳ <b>Abhi final nahi</b> — ye install din '+bePv()+' din se kam purana hai: GA4 ki country aur first-session report abhi badal sakti hai, aur Google Ads ke installs bhi 1–2 din me poore judte hain (CPI abhi thoda zyada dikh sakta hai) — andaza bhi badlega.</p>');
-  if(C.length) o.push(`<h4 class="cpx-h4">Countries with a benchmark (${C.length})</h4><div class="cpx-x"><table class="cpx-t"><thead><tr><th>Country</th><th class="cpx-ben">Spend share</th><th class="cpx-ben" title="Google Ads spend ÷ installs. Saath me B = benchmark: is country ke purane install dino ka median CPI">CPI</th><th class="cpx-ben" title="is din ke users ka pehle session ka eCPM (upar chuni currency me), jo BE ke formula me lagta hai. Saath me B = benchmark: is country ke purane install dino ka median">eCPM</th><th title="is country ka breakeven: BE ho chuka to asli din, warna is din ke CPI / eCPM pe is country ke purane dino se bana andaza (80% range). Saath me B = benchmark: is country ke purane install dino ka median BE din">Breakeven</th></tr></thead><tbody>`
+  if(C.length) o.push(`<h4 class="cpx-h4">Countries with a benchmark (${C.length})</h4><div class="cpx-x"><table class="cpx-t"><thead><tr><th>Country</th><th class="cpx-ben">Spend share</th><th class="cpx-ben" title="Google Ads spend ÷ installs. Saath me B = benchmark: is country ke purane install dino ka median CPI">CPI</th><th class="cpx-ben" title="is din ke users ka pehle session ka eCPM (upar chuni currency me), jo BE ke formula me lagta hai. Saath me B = benchmark: is country ke purane install dino ka median">eCPM</th><th class="cpx-ben" title="ab tak ki asli kamai ÷ spend; B = benchmark usi din par">ROAS so far</th><th title="is country ka breakeven: BE ho chuka to asli din, warna is din ke CPI / eCPM pe is country ke purane dino se bana andaza (80% range). Saath me B = benchmark: is country ke purane install dino ka median BE din">Breakeven</th></tr></thead><tbody>`
     +C.map(c=>{ const sh=num(c[1]), cp=num(c[2]), ec=num(c[3]), bm=beBm(c[12]), rk=num(c[11]), bd=num(c[7]);
       return `<tr><td>${E(ctyName(c[0]))}${beCkcTag(x,c[0])}</td><td class="cpx-ben">${sh!=null?E(bePs(sh)):beDash('spend share nahi aaya')}</td><td class="cpx-ben">${cp!=null?beCpi(cp,k):beDash('CPI nahi aaya')}${bm&&bm.c!=null?beB('B '+beCpi(bm.c,k),'benchmark CPI: is country ke purane install dino ka median',beVsB(cp,bm.c,'CPI',pv)):''}</td>`
-        +`<td class="cpx-ben">${ec!=null?beCpi(ec,k):beDash('is din ka pehle session ka eCPM nahi aaya')}${bm&&bm.e!=null?beB('B '+beCpi(bm.e,k),'benchmark eCPM (pehle session ka): is country ke purane install dino ka median',beVsB(ec,bm.e,'ECPM',pv)):''}</td>`
+        +`<td class="cpx-ben">${ec!=null?beCpi(ec,k):beDash('is din ka pehle session ka eCPM nahi aaya')}${bm&&bm.e!=null?beB('B '+beCpi(bm.e,k),'benchmark eCPM (pehle session ka): is country ke purane install dino ka median',beVsB(ec,bm.e,'ECPM',pv)):''}</td><td class="cpx-ben">${beRsf(c,num(x.age),pv)}</td>`
         +`<td>${beIns(beCtyBe(c[7],c[8],c[9],c[10],c[11]),bm&&bm.t?beB(bm.t,bm.b!=null?'benchmark breakeven: is country ke purane install dino ka median din':'benchmark ka median breakeven '+bm.l+' din ke data ke aage hai — utna dekha hi nahi',
           (rk===0||rk===1||rk===3)&&bd!=null&&bd>=0&&bm.b!=null?beVsB(bd,bm.b,'BE',pv):''):'')}</td></tr>`; }).join('')+'</tbody></table></div>'   /* (BE: a % only on an exact or a model day — rk 1 / 3 / 0; never a "≤ day N" bound (2 / 4), "not by day N" (5 / 6) or "beyond data") */
     +'<p class="cpx-fn">B = benchmark: us country ke purane install dino ka median (beech wala number). Sirf wahi din ginte hain jinse benchmark bana; bot ke ajeeb din pehle hi hata diye jaate hain, aur jo din abhi BE nahi hue wo bhi gine jaate hain. eCPM = pehle session ka, wahi jo BE ke formula me lagta hai.</p>');
@@ -10499,7 +10520,7 @@ function hubVerdict(name){ const p=ptr(); if(!p||!Object.keys(p.apps).some(k=>p.
 return {ptr, render, paint, show:showMe, left, alarmN, alertNote, card, hubVerdict,
   _:{rg, fd, rng, isDef, sums, rows, rowOf, judge, normal, hLvl, lossG, epOf, eps, now3, perRestore, perLoad, keep, cal, fI, fU, fP, series, cSeries, ctyList, ctyOf, dayRows, dayHtml, ctyHtml, verdict, moneyLine, tabBody, ALLF, FILES, CHD,
     lvCheck, lvOf, lvV, lvActs, levelsHtml, tipHtml, chart, LVQ:()=>LVQ, PEND:()=>PEND, agTag, agRows, agBoard, agBt, agNums, agDetHtml, agListHtml, propLines,
-    beP, beA, beF, beK, beHtml, beRow, beDet, beCard, beSvg, beSure, ensureBe, beEcDr, beVsB, TABS,
+    beP, beA, beF, beK, beHtml, beRow, beDet, beCard, beSvg, beSure, ensureBe, beEcDr, beVsB, beRsf, TABS,
     beO, beOF, ensureBeO, beOrg, beORow, beODet, beOSvg, beSrcN,
     get:()=>({PER,PF,PTO,OPEN,TAB,DN,CTY,LVF,LVSET,LVBUSY,AGD,BOPEN,BUNC,BSRC}), set:o=>{ if('AGD' in o) AGD=o.AGD; if('BOPEN' in o) BOPEN=o.BOPEN; if('BUNC' in o) BUNC=!!o.BUNC; if('BSRC' in o) BSRC=o.BSRC==='o'?'o':'p'; if('LVBUSY' in o) LVBUSY=!!o.LVBUSY; if('LVF' in o) LVF=o.LVF; if('LVSET' in o) LVSET=o.LVSET; if('LVQ' in o) LVQ=o.LVQ; if('PEND' in o) PEND=o.PEND; if('PER' in o) PER=o.PER; if('PF' in o) PF=o.PF; if('PTO' in o) PTO=o.PTO; if('OPEN' in o) OPEN=o.OPEN; if('TAB' in o) TAB=o.TAB; if('DN' in o) DN=o.DN; if('PREAD' in o) PREAD=o.PREAD; if('CTY' in o) CTY=o.CTY; }}};
 })();
@@ -14167,7 +14188,7 @@ function faultBannerText(){ const f=tzFault(), st=((DATA.build_faults||[]).find(
 // the amber line ('' = none): build steps that reported a DATA CHECK (error "DataWarning" — a guard found inputs or
 // answers to doubt; nothing stopped updating, its days are marked on their tab). DCHK: a guard's step name → [the
 // tab's name, which days] (a new guard adds its own; an unknown name is shown as it is)
-const DCHK={'be guard':['Breakeven','kuch install dino']};
+const DCHK={'be guard':['Breakeven','kuch install dino'],'be gap':['Breakeven','kuch install dino']};   // ("be gap": round 5's ledger read)
 function dataCheckBannerText(){ const st=((DATA.build_faults||[]).find(x=>x&&x.kind==='step')||{}).steps||[],
     dc=st.filter(x=>x&&x.name&&x.error==='DataWarning').map(x=>DCHK[x.name]||[x.name,'kuch dino']);
   return dc.length?'🔎 Data check: '+dc.map(([n,w])=>n+' — '+w+" pe 'data check' laga hai").join(' · ')

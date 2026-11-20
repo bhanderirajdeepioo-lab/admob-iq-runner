@@ -1079,9 +1079,9 @@ def test_breakeven_day_opened_countries_data_kam_and_the_card(out):
     d = b["d25"]                                                                        # $ view, 25 Mar (age 4)
     assert d["row"]["on"] and d["row"]["exp"] == "true" and d["n"] == 1 and not d["pv"]
     assert d["cty_h4"] == "Countries with a benchmark (2)"
-    assert d["cty"]["head"] == ["Country", "Spend share", "CPI", "eCPM", "Breakeven"]   # (eCPM back, with its benchmark: 15 Nov "haan dono karo")
-    assert d["cty"]["rows"] == [["[IN] Name IN", "60%", "$0.31 · B $0.28 +11%", "$4.00 · B $3.50 +14%", "day 75 · B day 60 +25% 80%: day 40–160"],
-                                ["[US] Name US", "25%", "$0.62 · B $0.50 +24%", "$9.60 · B $8.04 +19%", "day 140 · B > 210 days 80%: day 70–210+"]]   # (16 Nov "tino me % add kar do": the day ÷ B − 1; no % against "B > L days")   # (the owner's mock: "₹120 · B ₹100" on one line)
+    assert d["cty"]["head"] == ["Country", "Spend share", "CPI", "eCPM", "ROAS so far", "Breakeven"]   # (eCPM back, with its benchmark: 15 Nov "haan dono karo"; ROAS so far: 20 Nov)
+    assert d["cty"]["rows"] == [["[IN] Name IN", "60%", "$0.31 · B $0.28 +11%", "$4.00 · B $3.50 +14%", "—", "day 75 · B day 60 +25% 80%: day 40–160"],
+                                ["[US] Name US", "25%", "$0.62 · B $0.50 +24%", "$9.60 · B $8.04 +19%", "—", "day 140 · B > 210 days 80%: day 70–210+"]]   # (16 Nov "tino me % add kar do": the day ÷ B − 1; no % against "B > L days")   # (the owner's mock: "₹120 · B ₹100" on one line)
     assert "10 me se 8 baar breakeven is range me (210+ = country ke dekhe hue 210 din ke aage)" in d["cty"]["titles"]   # beyond its watched limit
     k = 50000 / (50000 * fxd(date(2026, 3, 25)))                                        # the ₹ view: CPI $ × that day's ₹/$
     assert [r[2] for r in b["d25i"]["cty"]["rows"]] == ["₹%.1f · B ₹%.1f +11%%" % (0.31 * k, 0.28 * k), "₹%.1f · B ₹%.1f +24%%" % (0.62 * k, 0.5 * k)] == ["₹26.3 · B ₹23.7 +11%", "₹52.5 · B ₹42.4 +24%"]
@@ -1112,9 +1112,9 @@ def test_breakeven_day_opened_countries_data_kam_and_the_card(out):
     assert b["d21"]["card"]["none"] and b["d21"]["card"]["svg"] is None                  # no card: said, nothing drawn
     # 23 Mar: a country with unknown eCPM / chances / days — each "—" with its own why; US's median past its watched 210 days
     r = b["d23"]["cty"]
-    assert r["rows"][0] == ["[IN] Name IN", "60%", "₹26.3", "—", "—"]                   # (no "bm" on this day: no B lines — an old file)
+    assert r["rows"][0] == ["[IN] Name IN", "60%", "₹26.3", "—", "—", "—"]              # (no "bm" on this day: no B lines — an old file)
     k23 = 50000 / (50000 * fxd(date(2026, 3, 23)))
-    assert r["rows"][1][4] == "beyond data (> 210 days)" and r["rows"][1][2:4] == ["₹52.5", "₹%.1f" % (9.6 * k23)] and "country ka purana data sirf 210 din tak dekha — median breakeven usse aage" in r["titles"]
+    assert r["rows"][1][5] == "beyond data (> 210 days)" and r["rows"][1][2:4] == ["₹52.5", "₹%.1f" % (9.6 * k23)] and "country ka purana data sirf 210 din tak dekha — median breakeven usse aage" in r["titles"]
     for w in ("is country ka breakeven andaza nahi bana",):
         assert w in r["titles"], w
     # 26 Mar (provisional): one country covered, 40 % of the spend "data kam"
@@ -1370,6 +1370,21 @@ def test_breakeven_kitna_pakka_on_day_1_7_14_and_the_data_check_mark(out):
     assert q["title"] == aa + ", " + bb + ": " + F + " · " + bb + ": " + S
     assert q["tags"] == [[aa, F], [bb, F + " · " + S]]                            # (CC: no tag; a junk entry: nothing)
     assert q["whole_tags"] == 0                                                  # (the whole day's "f": no country tag)
+    g = out["be"]["ckgu"]                                                         # round 5: "g" and "u" ("cku": numbers)
+    G = ('is install din ke baad ek tareekh pe GA4 ki country report adhoori aayi (kamai ka bada hissa "(other)" me '
+         'gaya, app ka total poora hai) — is country ka ab tak ka ROAS aur breakeven ka andaza asal se kam / late dikh '
+         'sakta hai')
+    UB = ("Google Ads users per install 1.64, B 1.12 — breakeven in extra users ki kamai par tika hai (ye users isi "
+          "spend se aaye ya nahi, data se pata nahi chalta)")
+    UC = ("Google Ads users per install 0.70, B 1.05 — is din har install pe kam users aaye — ROAS aur breakeven asal "
+          "se kam / late dikh sakte hain")
+    na, nb, nc = (t[0] for t in g["tags"])
+    assert g["title"] == na + ", " + nb + ": " + G + " · " + nb + ": " + UB + " · " + nc + ": " + UC
+    assert g["tags"] == [[na, G], [nb, G + " · " + UB], [nc, UC]]                # (each country its own numbers)
+    assert g["junk"] == "data check — " + na + ": Google Ads users per install benchmark (B) se bahut alag — is din " \
+        "ka ROAS B jaise users pe nahi bana."                                    # (a malformed "cku": no number)
+    assert g["every"] == "data check — " + na + ": GA4 new users per install 1.40, B 1.00 — breakeven in extra users " \
+        "ki kamai par tika hai (ye users isi spend se aaye ya nahi, data se pata nahi chalta)."   # (no 1: every new user)
     p = _page()
     css = p[p.index("<style>"):p.index("</style>")]
     assert ".cpx-fn b.cpx-chk,.cpx-t td small.cpx-chk{color:var(--watch)" in css   # (amber in the row and the opened day:
@@ -1431,8 +1446,8 @@ def test_breakeven_countries_table_benchmark_lines(out):
     assert re.search(r"<h4 class=\"cpx-h4\">Countries with a benchmark \(1\)</h4><div", h)
     assert "B = benchmark: us country ke purane install dino ka median (beech wala number)" in h and "eCPM = pehle session ka" in h
     for bad in out["be"]["bm_bad"]:                                                     # null / short / junk "bm": the day's own value only
-        assert bad == ["[IN] Name IN", "100%", "₹0.40", "₹3.00", "day 30"], bad
-    assert out["be"]["bm_part"] == ["[IN] Name IN", "100%", "₹0.40 · B ₹0.35 +14%", "₹3.00", "day 30 · B > 99 days"]   # per cell: what is a number is shown
+        assert bad == ["[IN] Name IN", "100%", "₹0.40", "₹3.00", "—", "day 30"], bad
+    assert out["be"]["bm_part"] == ["[IN] Name IN", "100%", "₹0.40 · B ₹0.35 +14%", "₹3.00", "—", "day 30 · B > 99 days"]   # per cell: what is a number is shown
 
 
 def test_breakeven_roas_card_same_countries_marks_and_filled_benchmark_dots(out):
@@ -1571,7 +1586,7 @@ def test_breakeven_percent_vs_b_colour_provisional_be_kinds_and_phone(out):
                                  ["+24%", "cpx-flat", "is din ka benchmark (B) se farak"], ["−25%", "cpx-good", "is din ka benchmark (B) se farak"]] + [
         [v, "cpx-flat", "is din ka benchmark (B) se farak — din abhi final nahi, isliye rang nahi"] for v in ("+46%", "−28%", "+34%")]
     p = out["be"]["pvdet"]
-    assert p["row"] == p["row_np"] == ["[IN] Name IN", "100%", "₹0.40 · B ₹0.20 +100%", "₹3.00 · B ₹4.00 −25%", "day 30 · B day 20 +50%"]
+    assert p["row"] == p["row_np"] == ["[IN] Name IN", "100%", "₹0.40 · B ₹0.20 +100%", "₹3.00 · B ₹4.00 −25%", "—", "day 30 · B day 20 +50%"]
     assert [x[:2] for x in p["np"]] == [["cpx-bad", True]] * 3                                      # final: coloured, each inside its B span
     assert [x[:2] for x in p["pv"]] == [["cpx-flat", True]] * 3 and all(x[2].endswith("— din abhi final nahi, isliye rang nahi") for x in p["pv"])
     assert p["one"] == 3                                                                            # one span: " · B ₹0.20 +100%"
@@ -1619,6 +1634,9 @@ ORG_DAYS = [d.isoformat() for d in days("2026-02-23", "2026-03-29")][::-1] + ["2
 # the page before the switch (16 Nov 2026): tests/cpx_frontend.js's 96 old-file renders hashed — taken by running this harness on that
 # page (its _.set ignores BSRC); recompute only for a change the Google Ads view is meant to get
 OLD_BE_SHA = "5d107bfff4f0ab20a441a5f7a54aabb348e1a7cbef237c398e9c2f4f67a4e65c"
+# … and with the countries table's "ROAS so far" (20 Nov 2026: "haan ROAS ab tak dikhao"): the same renders, that column added
+# ("—" in every row of an old file) — its strip back to OLD_BE_SHA is checked in the test
+RSF_BE_SHA = "584b23b1602139e0258ca9ab1f950d41a2b11d244b06c7ae0c61da46a21ce9d8"
 
 
 def _opu(a):                       # the fixture's per user at card age a ($)
@@ -1637,11 +1655,42 @@ def _pu(v):                        # the page's per-unit $ (beCpi without a rate
     return "$%.3f" % v if v < 0.1 else "$%.2f" % v
 
 
+def test_breakeven_countries_table_roas_so_far(out):
+    """⚖️ 20 Nov 2026 (owner: "haan ROAS ab tak dikhao"): the opened day's countries table gets "ROAS so far" between eCPM and
+    Breakeven — the row's real ROAS at its latest lived age (c[13], the build's) against B's median ROAS at that same age, as the
+    CPI / eCPM cells ("73.6% · B 51.2% +44%"), "day N" under it and "(not final)" while that age is within the lag of the day's;
+    the % coloured up = good (the D0 ROAS family's 10 % step), plain on a day not final yet; no B there: "B —" with why; an old
+    row (no c[13]) or junk: "—" with why, nothing raw (all SYNTHETIC)."""
+    r = out["be"]["rsf"]
+    assert r["head"] == ["Country", "Spend share", "CPI", "eCPM", "ROAS so far", "Breakeven"]
+    assert r["th"] == "ab tak ki asli kamai ÷ spend; B = benchmark usi din par"
+    W, B9, D = "is din ka benchmark (B) se farak", "benchmark ROAS: is country ke purane install dino ka median, usi din (day 9) par", "day 30"
+    assert r["fmt"]["text"] == "73.6% · B 51.2% +44% day 9 (not final)" and r["fmt"]["next"] == D and r["fmt"]["n"] == 6
+    assert r["fmt"]["titles"] == ["ab tak (abhi final nahi): day 9 tak kamai ÷ spend", B9, W] and r["fmt"]["dl"] == [["cpx-good", True, W]]
+    assert r["fin"]["text"] == r["edge"]["text"] == "73.6% · B 51.2% +44% day 9"            # (age 20 / 12: day 9 ≤ age − 3 — final)
+    assert r["fin"]["titles"][0] == "asli: day 9 tak kamai ÷ spend" and r["noage"]["text"].endswith("(not final)")
+    assert r["low"]["text"] == "33.0% · B 51.2% −36% day 9" and r["low"]["dl"] == [["cpx-bad", True, W]]    # lower than B: red
+    assert r["flat"]["text"] == "54.0% · B 51.2% +5% day 9" and r["flat"]["dl"] == [["cpx-flat", True, W]]   # (under 10 %: plain)
+    assert r["over"]["text"] == "156.0% · B 120.0% +30% day 45" and r["over"]["dl"][0][0] == "cpx-good"
+    assert r["under"]["text"] == "99.9% · B 50.0% +100% day 6"                             # (never "100.0%" under 100 %)
+    assert r["pv"]["dl"] == [["cpx-flat", True, W + " — din abhi final nahi, isliye rang nahi"]]
+    assert r["nob"]["text"] == "73.6% · B — day 9" and r["nob"]["titles"][1] == "is country ka benchmark ROAS nahi aaya" and r["nob"]["dl"] == []
+    assert r["past"]["text"] == "90.0% · B — day 400 (not final)" and r["past"]["dl"] == []
+    assert r["past"]["titles"][1] == "benchmark ka ROAS day 400 tak nahi bana — is country ke purane install din sirf 360 din tak dekhe"
+    assert r["zero"]["text"] == "30.0% · B 0.0% day 6" and r["zero"]["dl"] == []            # (a B of 0: no %)
+    assert r["hostile_b"]["text"] == "50.0% · B — day 9" and "<script" not in r["hostile_b"]["html"]
+    for j in [r["old"], r["nul"]] + r["junk"]:                                              # an old row / junk: "—" + why
+        assert j["text"] == "—" and j["titles"] == ["is country ka ab tak ka ROAS nahi aaya"] and j["next"] == D, j
+        assert "<img" not in j["html"] and "onerror" not in j["html"] and "<b>" not in j["html"]
+
+
 def test_breakeven_old_file_is_todays_tab_byte_for_byte(out):
     """be_paid off = no "src" in the file: the tab renders exactly as on the 16 Nov 2026 page — 96 renders (₹ and $, every day
     opened, the names shown, 5 a page, every other app's state, the hostile file) hashed with the users switch left on Organic
     and an "org" pointer present: no switch, no note, the Organic file never fetched."""
-    assert out["be"]["guard"] == {"sha": OLD_BE_SHA, "n": 96, "org": [], "sw": 0}
+    g = out["be"]["guard"]
+    assert {k: g[k] for k in ("sha", "n", "org", "sw")} == {"sha": RSF_BE_SHA, "n": 96, "org": [], "sw": 0}
+    assert g["strip"] == OLD_BE_SHA and g["rsf"] > 0 and g["rsfh"] > 0      # ⚖️ 20 Nov: only the "ROAS so far" column ("—" on an old file)
 
 
 def test_breakeven_switch_google_ads_view_is_todays_tab_plus_its_line(out):

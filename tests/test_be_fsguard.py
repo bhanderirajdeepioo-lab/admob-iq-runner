@@ -417,15 +417,19 @@ def _paid_broken(tmp, mp):
     return site, data, dash
 
 
+R5_OFF = {"be_fsc": False, "be_gap": False, "be_upi": False, "be_rsf": False}   # (the later checks and the "ROAS so far"
+#                                          column off too: "before them" is before every one of them)
+
+
 def both_off_digests(tmp, mp):
     """The two worlds through the step with BE_FSQ and BE_SAN off (the sanity check's real rule trips the first, the
-    input guard's the second)."""
+    input guard's the second) — and every later switch (R5_OFF)."""
     out = {}
     site, data, dash = ff_world(tmp / "ff")
-    paths, line, err = P._go(dash, data, site, {"be_fsq": False, "be_san": False})
+    paths, line, err = P._go(dash, data, site, dict(R5_OFF, be_fsq=False, be_san=False))
     out["ff"] = P._digest(site, data, dash, paths, line, err)
     site, data, dash = _paid_broken(tmp / "paid", mp)
-    paths, line, err = P._go(dash, data, site, {"be_paid": True, "be_fsq": False, "be_san": False})
+    paths, line, err = P._go(dash, data, site, dict(R5_OFF, be_paid=True, be_fsq=False, be_san=False))
     out["paid"] = P._digest(site, data, dash, paths, line, err)
     return out
 
@@ -499,8 +503,8 @@ def test_the_caches_carry_the_guards_stamp_and_a_flip_makes_them_again(tmp_path,
     fp = os.path.join(data, "be_tab", "fitsp_%s.json.gz" % KA)
     cp = os.path.join(data, "be_tab", be.CALIB_P)
     with open(cp, encoding="utf-8") as f:
-        assert json.load(f)["fq"] == be.FSQ_V
-    assert P._rd(fp)["fq"] == be.FSQ_V
+        assert json.load(f)["fq"] == be._fqv()             # (round 5: FSC beside FSQ_V while on)
+    assert P._rd(fp)["fq"] == be._fqv()
     assert "fq" not in P._rd(os.path.join(data, "be_tab", "fits_%s.json.gz" % P.KB))   # (every user's: never)
     _, line, _ = P._go(dash, data, site, {"be_paid": True, "be_fsq": False}, T.NOW + timedelta(hours=1))
     assert "refit yes" in line and ", calib p yes" in line                      # the same UTC day: made again at once
@@ -567,10 +571,10 @@ def test_the_stamp_only_where_the_guard_ran_and_a_failed_state_is_tried_once_a_d
     fp, cp = os.path.join(data, "be_tab", "fitsp_%s.json.gz" % KA), os.path.join(data, "be_tab", be.CALIB_P)
     with open(cp, encoding="utf-8") as f:
         c = json.load(f)
-    assert "fq" not in P._rd(fp) and "fq" not in c and c["fqt"] == be.FSQ_V     # unguarded: not stamped; tried
+    assert "fq" not in P._rd(fp) and "fq" not in c and c["fqt"] == be._fqv()     # unguarded: not stamped; tried
     assert ", guard fail 1" in line and "be guard skipped: ZeroDivisionError" in err
     _, line, _ = P._go(dash, data, site, {"be_paid": True}, T.NOW + timedelta(hours=1))
     assert ", calib p no" in line                                            # (not again every build)
     monkeypatch.setattr(be, "_guard_in", real)                               # it works again: the fits at once
     _, line, _ = P._go(dash, data, site, {"be_paid": True}, T.NOW + timedelta(hours=2))
-    assert "refit yes" in line and P._rd(fp)["fq"] == be.FSQ_V
+    assert "refit yes" in line and P._rd(fp)["fq"] == be._fqv()
