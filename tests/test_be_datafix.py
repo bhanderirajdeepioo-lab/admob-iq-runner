@@ -18,6 +18,7 @@ import io
 import json
 import math
 import os
+import re
 from datetime import date, timedelta
 
 import pytest
@@ -164,6 +165,59 @@ def test_the_ledger_is_kept_per_month_file_and_a_month_is_parsed_once(tmp_path, 
     assert be._ledger(data, KA, True) == got and len(seen) == 2
     _cube(data, KA, [("2031-03", {"2031-03-02": {"t": 2_000_000, "loss": 2_000_000}}, "other-stream")], hot=False)
     assert date(2031, 3, 2).toordinal() not in be._ledger(data, KA, True)   # (another stream's month: still left out)
+
+
+def test_a_ledger_day_with_nothing_in_it_never_breaks_the_ledger(tmp_path):
+    data = str(tmp_path)
+    _cube(data, KA, [("2031-05", {"2031-05-02": {"t": 0, "loss": 0}, "2031-05-03": {"t": 4_000_000, "loss": 2_000_000},
+                                  "2031-05-04": {"t": "x"}, "junk": {"t": 9}, "2031-05-05": "x"}, None)])
+    for _ in range(2):                                               # (cold, then from its cache: the same, no raise)
+        assert be._ledger(data, KA, True) == {date(2031, 5, 3).toordinal(): (0.5, 4.0)}
+
+
+@pytest.mark.parametrize("bad", [[1], ["2031-05-03", 4_000_000], [2_000_000, 0], [2_000_000, -1], [2_000_000, "4"],
+                                 [2.5, 4_000_000], [True, 4_000_000], "x", None])
+def test_a_malformed_cached_day_is_dropped_and_its_month_read_again(tmp_path, bad):
+    data = str(tmp_path)
+    _cube(data, KA, [("2031-05", {"2031-05-03": {"t": 4_000_000, "loss": 2_000_000}}, None)])
+    want = be._ledger(data, KA, True)
+    cp = os.path.join(data, be.DIR, "ledgerp_%s.json.gz" % KA)
+    c = be._read(cp)
+    c["m"]["2031-05.json.gz"][4]["2031-05-03"] = bad                 # (a hand edit / a bug: never a raise, never a
+    P._wr(cp, c)                                                     # wrong share — the cube read again, the cache
+    assert be._ledger(data, KA, True) == want                        # healed)
+    assert be._read(cp)["m"]["2031-05.json.gz"][4] == {"2031-05-03": [2_000_000, 4_000_000]}
+    c["m"]["2031-05.json.gz"][4] = {"not-a-day": [1, 2]}
+    P._wr(cp, c)
+    assert be._ledger(data, KA, True) == want
+
+
+def test_a_ledger_cache_it_cannot_write_keeps_the_ledger_and_says_so_once(tmp_path, monkeypatch, capsys):
+    data = str(tmp_path)
+    _cube(data, KA, [("2031-05", {"2031-05-03": {"t": 4_000_000, "loss": 2_000_000}}, None)])
+    _cube(data, "000000000000", [("2031-05", {"2031-05-04": {"t": 2_000_000, "loss": 2_000_000}}, None)])
+
+    def full(*a, **k):
+        raise OSError("no space left")
+    monkeypatch.setattr(be, "write_gz_stable", full)
+    be.LEDW["n"] = 0
+    assert be._ledger(data, KA, True) == {date(2031, 5, 3).toordinal(): (0.5, 4.0)}
+    assert be._ledger(data, "000000000000", True) == {date(2031, 5, 4).toordinal(): (1.0, 2.0)}
+    err = capsys.readouterr().err
+    assert err.count("be ledger cache not written (OSError)") == 1 and " skipped: " not in err   # (once; never a
+    assert not os.path.exists(os.path.join(data, be.DIR, "ledgerp_%s.json.gz" % KA))           # health line)
+
+
+def test_the_ledger_caches_of_apps_gone_from_the_build_are_pruned(tmp_path, monkeypatch):
+    def prep(site, data, scr):
+        d = os.path.join(data, be.DIR)
+        os.makedirs(d, exist_ok=True)
+        for nm in ("ledgerp_000000000000.json.gz", "ledger_000000000001.json.gz", "ledgerp_%s.json.gz" % KA):
+            P._wr(os.path.join(d, nm), {"v": be.LEDGER_V, "m": {}})
+    b, line, err, data, _ = _go(tmp_path, monkeypatch, prep)
+    left = sorted(f for f in os.listdir(os.path.join(data, be.DIR)) if f.startswith("ledger"))
+    assert "ledgerp_000000000000.json.gz" not in left and "ledger_000000000001.json.gz" not in left   # (gone apps)
+    assert "ledgerp_%s.json.gz" % KA in left and err == ""          # (this build's app: kept)
 
 
 def _same_size(path, obj):
@@ -367,6 +421,52 @@ def test_users_per_install_is_judged_on_rows_from_2_days_old(tmp_path, monkeypat
     assert {c[0]: c for c in days[D1]["cty"]}["AA"][11] == 0         # (a forecast row: its installs
     assert "u" not in (days[D1].get("ckc") or {}).get("AA", "")     # still settling — no mark yet)
     assert "u" in days[D2]["ckc"]["AA"] and err == ""
+
+
+def _skips(line):
+    m = re.search(r", ref skip (\d+),", line)
+    return int(m.group(1)) if m else 0
+
+
+def test_a_sampled_or_over_cell_never_takes_every_users_cell_without_revenue(tmp_path, monkeypatch, base):
+    Y2 = (T.TODAY - timedelta(days=be.FSQ_YOUNG)).isoformat()       # (the newest day the over rule judges — young:
+    #                                                                 the final rule never reaches it)
+
+    def marks(site, data, scr):
+        _mark(data, "paid", YNG)                                    # YNG sampled …
+        _over(data, Y2, "AA")                                       # … Y2: AA over every user's
+
+    def no_rev(site, data, scr):                                    # every user's AA: impressions, no revenue (eCPM 0)
+        p = _store(data, "all")
+        st = P._rd(p)
+        for d in (YNG, Y2):
+            st["days"][d]["c"] = [[n, c, 0.0 if c == "AA" else rev, im] for n, c, rev, im in st["days"][d]["c"]]
+        P._wr(p, st)
+        marks(site, data, scr)
+    b0, line0, *_ = _go(tmp_path / "ctl", monkeypatch, marks)
+    assert all("AA" in _days(b0)[d]["ckc"] for d in (YNG, Y2))      # (the control: both rules take AA)
+    b, line, err, *_ = _go(tmp_path / "zero", monkeypatch, no_rev)
+    days, w = _days(b), _days(base[0])
+    assert all("AA" not in (days[d].get("ckc") or {}) for d in (YNG, Y2))   # AA: its own read kept, untagged
+    assert {c[0]: c[3] for c in days[YNG]["cty"]}["AA"] == {c[0]: c[3] for c in w[YNG]["cty"]}["AA"]
+    assert _skips(line) == _skips(line0) + 1 and "over 0)" in line and err == ""   # (the sampled one counted, the
+    #                                                                                  over one not)
+
+
+def test_a_row_the_final_rule_stopped_on_its_reference_gets_no_decision_on_a_sampled_day(tmp_path, monkeypatch):
+    def sampled(site, data, scr):
+        _mark(data, "paid", FG.D)
+
+    def doubted(site, data, scr):                                   # round 4's reference disagreeing with itself on
+        FG._pack_cell(site, "AA", FG.D, 0.1)                        # AA (every user's day 0 near-empty) on a final
+        FG._scale_nvr(data, FG.D, 0.85, "AA")                       # day GA4 also sampled
+        sampled(site, data, scr)
+    b0, line0, *_ = _go(tmp_path / "ctl", monkeypatch, sampled)
+    assert "AA" in _days(b0)[FG.D]["ckc"]                           # (the control: the sampled rule takes AA)
+    b, line, err, *_ = _go(tmp_path / "ref", monkeypatch, doubted)
+    day = _days(b)[FG.D]
+    assert "AA" not in day["ckc"] and _skips(line) == _skips(line0) + 1   # no decision at all, counted once —
+    assert "(sampled %d, over 0)" % len(day["ckc"]) in line and err == ""  # never then replaced by the doubted cell
 
 
 def _short_all(data, day, k=0.8):

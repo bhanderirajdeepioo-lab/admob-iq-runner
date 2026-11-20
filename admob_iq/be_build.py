@@ -288,7 +288,8 @@ was. Each app has one SOURCE a build:
       "u" only from UPI_AGE days old (installs settle); "g" from every pack-gap date — round 4's 0.35 rule's too, not
       only the new 0.6 / ledger ones; the relative rule's baseline needs ≥ 3 of the GAP_N non-gap dates before (as
       pack_gaps_p's own). The ledger is kept per month file (_ledger). The lived anchor never anchors on a cell whose
-      cumulative ROAS is under the final anchor's (_anchor_at: the final one answers, counted "lived fallback").
+      cumulative ROAS is under the final anchor's (_anchor_at: the final one answers, counted "lived fallback") — a
+      FLOOR, not a collapse test: a lived read short by a near-empty date but still above the final cell anchors.
 🌱 ORGANIC (src "p" apps only; the page's Google Ads | Organic switch): every new user who is NOT a Google Ads user = the
 all-users cells − the Google Ads users' cells per country × install day, from the two cubes' own reads (the probe measured
 the paid read + its complement = the whole read) — the all-users packs (out_dir, one at a time) and the paid packs
@@ -497,6 +498,7 @@ GAP_ON = True                        # PACK GAPS also (1) by a fall of the packs
 GAP_REL = 0.6
 GAP_LOSS = 0.4
 LEDGER_V = 1                         # (data/be_tab/ledger[p]_<key>.json.gz: each month file's ledger, by size + SHA-1)
+LEDGER_RE = re.compile(r"^ledgerp?_([0-9a-f]{12})\.json\.gz$")
 UPI_ON = True                        # a FORECAST country row whose GA4 Google Ads users per Google Ads install sit off its
 #                                      benchmark's basis: ≥ UPI_HI × or ≤ UPI_LO × the median of B's own training days
 #                                      (usable, settled by the origin) AND outside their q10 … q90 → "data check" "u"
@@ -793,29 +795,79 @@ def _ledger(data_dir, key, paid):
             raw = fh.read()
         h = hashlib.sha1(raw).hexdigest()
         e = old.get(f)
-        if not (isinstance(e, list) and len(e) == 5 and e[0] == len(raw) and e[1] == h and isinstance(e[4], dict)):
+        if not _led_ok(e, len(raw), h):      # (new, changed, or a cached entry in doubt: that month read again)
             m = json.loads(gzip.decompress(raw))
-            d = {}
-            if isinstance(m, dict):
-                for D, led in (m.get("days") or {}).items():
-                    t = int((led or {}).get("t") or 0) if isinstance(led, dict) else 0
-                    if t > 0:
-                        d[D] = [int(led.get("loss") or 0), t]
             e = [len(raw), h, m.get("v") if isinstance(m, dict) else None,
-                 str(m.get("stream_id") or "") if isinstance(m, dict) else "", d]
+                 str(m.get("stream_id") or "") if isinstance(m, dict) else "", _led_days(m)]
             del m
         del raw
         keep[f] = e
         if e[2] != cub.V or (sid and e[3] != sid):
             continue
         for D, (loss, t) in e[4].items():
-            o = _od(D)
-            if o is not None:
-                out[o] = (loss / t, t / 1e6)
+            out[_od(D)] = (loss / t, t / 1e6)
     if keep != old:
-        os.makedirs(os.path.dirname(cp), exist_ok=True)
-        write_gz_stable(cp, _raw({"v": LEDGER_V, "m": keep}))
+        try:
+            write_gz_stable(cp, _raw({"v": LEDGER_V, "m": keep}))
+        except Exception as ex:              # (a cache it cannot write — disk full, permissions: this build keeps
+            _led_wfail(ex)                   # its ledger, said once a build; the next build reads the cube again)
     return out
+
+
+def _led_days(m):
+    """A month file's own ledger → {day: [loss, t]} of its days with t > 0 — a day with nothing in it (an outage, a new
+    app) has no loss share, so never a ledger gap; a malformed day value is left out (never raises)."""
+    d = {}
+    for D, led in ((m.get("days") if isinstance(m, dict) else None) or {}).items():
+        if not isinstance(led, dict) or _od(D) is None:
+            continue
+        try:
+            t, loss = int(led.get("t") or 0), int(led.get("loss") or 0)
+        except (TypeError, ValueError, OverflowError):
+            continue
+        if t > 0:
+            d[D] = [loss, t]
+    return d
+
+
+def _led_ok(e, size, h):
+    """A cached month entry usable as it is: [size, SHA-1 of the bytes, v, stream id, {day: [loss, t]}] matching the
+    file, every day an ISO date with two ints and t > 0. Anything else — a malformed or hand-edited entry — is dropped
+    and that month read from the cube again."""
+    if not (isinstance(e, list) and len(e) == 5 and e[0] == size and e[1] == h and isinstance(e[3], str)
+            and isinstance(e[4], dict)):
+        return False
+    for D, v in e[4].items():
+        if _od(D) is None or not (isinstance(v, list) and len(v) == 2 and type(v[0]) is int and type(v[1]) is int
+                                  and v[1] > 0):
+            return False
+    return True
+
+
+LEDW = {"n": 0}                              # (the ledger cache writes that failed this build — run() resets it)
+
+
+def _led_wfail(ex):
+    LEDW["n"] += 1
+    if LEDW["n"] == 1:                       # (a plain line, never a health one: the build's answers are whole)
+        print("be ledger cache not written (%s): this build read the cube itself" % type(ex).__name__, file=sys.stderr,
+              flush=True)
+
+
+def _led_prune(data_dir, keys):
+    """The ledger caches of apps no longer in this build go (keys: every app key the build has)."""
+    d = cache_dir(data_dir)
+    try:
+        names = os.listdir(d)
+    except OSError:
+        return
+    for nm in names:
+        m = LEDGER_RE.match(nm)
+        if m and m.group(1) not in keys:
+            try:
+                os.remove(os.path.join(d, nm))
+            except OSError:
+                pass
 
 
 def _cbp():
@@ -1053,21 +1105,26 @@ def _cell_bad(G, cc, r, v):
     first-session read broken — its whole day's (G["app"]) or its own (_cell_final: fs_bad at the country floor
     FSQ_EC; final in both files, the reference agreeing with itself, not a pack-gap date of every user's packs)? → True
     (round 4's path: the re-read list, the counts, the final-only banner — decided FIRST, so a final day FSC would also
-    take keeps it); or, FSC on, on any day every user's store has read, with every user's OWN cell there (impressions
-    > 0 — a country GA4 folded into "(other)" on the bigger read has none: nothing to take, no decision): that day's
+    take keeps it; a row it stopped on its reference gets no decision at all); or, FSC on, on any day every user's
+    store has read, with every user's OWN cell there (revenue and impressions > 0: a positive eCPM — a country GA4
+    folded into "(other)" on the bigger read has none: nothing to take, no decision): that day's
     read GA4-sampled (G["smp"]; no cell: counted "ref skip") or the cell more than every user's (fs_over, only on a day
     ≤ G["ylim"] = the paid file's newest − FSQ_YOUNG, and never on a day whose every-user whole-day read is in doubt,
     G["dbt"]: counted "ref skip") → "a" (replaced like a country's own, but never re-read nor the banner)."""
     day = r[0]
     if day in G["app"]:
         return True
-    if _cell_final(G, cc, r, v):             # (round 4's final rule first: its path for every final broken read)
+    fin = _cell_final(G, cc, r, v)           # (round 4's final rule first: its path for every final broken read)
+    if fin is True:
         return True
+    if fin == "ref":                         # (it stopped on its reference — just doubted, counted once: no decision
+        return False                         # by FSC either, which would take that very cell)
     if FSC_ON and day in G["fa"]:            # ⚖️ FSC, ANY day (young too): GA4-sampled, or more than every user's
         a = (G["fc"].get(cc) or {}).get(day)
-        ok = bool(a) and (a[1] or 0) > 0     # (every user's own cell, read: the replacement exists)
+        ok = bool(a) and (a[0] or 0) > 0 and (a[1] or 0) > 0   # (every user's own cell, a positive eCPM: the
+        #                                      replacement exists — revenue 0 would be eCPM 0, no row)
         if day in G["smp"]:
-            if not ok:                       # no cell of every user's (folded into "(other)") / no impressions: no
+            if not ok:                       # no cell of every user's (folded into "(other)") / no eCPM in it: no
                 G["skip"] += 1               # decision, as the over rule — counted "ref skip"
                 return False
             G["c1"]["s"] += 1
@@ -1083,8 +1140,9 @@ def _cell_bad(G, cc, r, v):
 
 def _cell_final(G, cc, r, v):
     """Round 4's own per-country rule of _cell_bad: a FINAL day's first-session read broken against its day-0 cohort
-    (fs_bad at FSQ_EC), the reference agreeing with itself (ref_ok) and the date no pack gap of every user's packs
-    (else counted "ref skip") → True."""
+    (fs_bad at FSQ_EC), the reference agreeing with itself (ref_ok) and the date no pack gap of every user's packs →
+    True; broken but stopped on its reference (a pack-gap date, or ref_ok fails) → "ref" (counted "ref skip": the row
+    gets no decision at all); else False."""
     day = r[0]
     if G["limc"] is None or day > G["limc"] or day not in G["pd"] or len(r) < 6 or not (r[5] or 0) >= 1:
         return False
@@ -1097,7 +1155,7 @@ def _cell_final(G, cc, r, v):
         return False
     if day in G["gap"] or not ref_ok(*args, "fs"):
         G["skip"] += 1
-        return False
+        return "ref"
     return True
 
 
@@ -2516,7 +2574,8 @@ def predict(key, fc, cal, pin, sk=None, stats=None):
                 unc.append([REST_CC, round(rest, 4)])
             csp = sum(c[1].sp for c in cov)
             M = combine([(c[1].sp, c[3], c[4]) for c in cov]) if cov and csp > 0 else None
-            anc = _anchor_at(r, M[0][-1], nw, stats) if M else None    # (a daily anchor ≥ CLAG days old; LIVE_ON: lived)
+            anc = _anchor_at(r, M[0][-1], nw, stats if ok else None) if M else None    # (a daily anchor ≥ CLAG days
+            #                                         old; LIVE_ON: lived — its fallback counted only where it shifts)
             # "data check": a GA4 hole date in its first HOLE_W days — its real ROAS, and so its shifted curve, are low by
             # what GA4 lost (the forecast stays the shift: falling back cost accuracy against the recorded data)
             chk = anc is not None and any(r.X + k in holes for k in range(HOLE_W))
@@ -3224,6 +3283,7 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
     UPI_ON = keep[4] and bool((s or {}).get("be_upi", True))
     RSF_ON = keep[5] and bool((s or {}).get("be_rsf", True))
     LIVE_ON = keep[6] and bool((s or {}).get("be_lived", True))
+    LEDW["n"] = 0
     try:
         return _run(dashboard, data_dir, out_dir, s, now)
     finally:
@@ -3600,6 +3660,8 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
             cov += len(fc["fits"])
             unc += nu
         _clean(out_dir, keep)
+        if GAP_ON:                               # ⚖️ the ledger caches of apps this build no longer has
+            _led_prune(data_dir, {k for _, k, _ in apps})
         LINE = "be: apps %d, days %d, covered %d, uncovered %d, refit %s, calib %s%s%s%s%s%s%s%s%s%s%s" % (
             len(ptr), nd, cov, unc, "yes" if n["refit"] else "no", "yes" if ran.get("a") else "no",
             (", failed %d" % n["fail"]) if n["fail"] else "",

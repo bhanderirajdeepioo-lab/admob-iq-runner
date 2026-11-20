@@ -181,6 +181,13 @@ def test_a_short_lived_read_falls_back_to_the_final_anchor_end_to_end(tmp_path):
     assert ", lived fallback " not in P._go(dash2, data2, site2, {})[1]                  # a lived read above: none)
 
 
+def test_the_app_lines_fallback_counts_only_where_the_shift_runs(tmp_path, monkeypatch):
+    monkeypatch.setattr(be, "_shifts", lambda cal: False)           # (a calibration without the shift's parts:
+    site, data, dash = lived_world(tmp_path, k=0.3)                 # nothing shifts, so no fallback is counted)
+    paths, line, err = P._go(copy.deepcopy(dash), data, site, {})
+    assert ", lived fallback " not in line and err == ""
+
+
 # ── ⚖️ all FIVE new switches off where the lived rule acts: every output as before them all ────────────────────────
 
 OFF5 = {"be_fsc": False, "be_gap": False, "be_upi": False, "be_rsf": False, "be_lived": False}
