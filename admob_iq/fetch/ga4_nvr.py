@@ -80,6 +80,8 @@ WORKERS = 6                         # properties read side by side (each its own
 REREAD = None                       # a list of FINAL days to read again, ALONE (data_dir-relative JSON {"days": {app key:
 #                                     [day, …]}}; None: none) — fetch.ga4_nvr_paid's: be_build's input guard (the days
 #                                     whose Google Ads users' first-session read disagreed with their cohort read)
+REREAD_SWITCH = None                # the env switch that stops REREAD (config.switch_on: off → no re-read at all; None:
+#                                     none) — fetch.ga4_nvr_paid's: BE_FSQ, the guard's own switch
 RQ_MAX = 3                          # … each such day read again at most 3 times ("rq": {day: [times, last read]}) …
 RQ_GAP_H = 24.0                     # … at least a day apart …
 RQ_CAP = 2                          # … and at most 2 such days an app a run (newest first)
@@ -190,6 +192,7 @@ def step_app(ga, store, today, hs, now, ask=()):
     rr = store.setdefault("rr", {})
     edge = recent - timedelta(days=1)
     lone = set()                                        # (the days read alone in this run)
+    named = {str(x) for x in ask} if ask else set()
     for d in sorted((d for d, v in mark.items() if v == "s" and first <= gu._d(d) <= edge
                      and (d not in rr or d not in mp)), reverse=True):
         got, mk, pm = read(ga, gu._d(d), gu._d(d))
@@ -199,6 +202,11 @@ def step_app(ga, store, today, hs, now, ask=()):
         mp[d] = pm[d]
         rr[d] = 1
         lone.add(d)
+        if d in named:                                  # a day REREAD names: this read starts its gap clock (not a
+            rq = store.setdefault("rq", {})             # try — the same final data is not asked again a run later)
+            t = rq.get(d)
+            n0 = t[0] if isinstance(t, list) and len(t) == 2 and isinstance(t[0], int) else 0
+            rq[d] = [n0, now_iso]
         did = True
     # a final day a reader of the store found broken (REREAD: the Breakeven build's input guard — the day's first-session
     # read disagreed with the cohort read of the same users) is read again alone: newest first, at most RQ_CAP days a run,
@@ -311,6 +319,10 @@ def _asks(data_dir):
     """REREAD's days per app key ({} when off, missing or unreadable — never a failure of the run)."""
     if not REREAD:
         return {}
+    if REREAD_SWITCH:
+        from ..config import switch_on
+        if not switch_on(os.environ.get(REREAD_SWITCH)):
+            return {}                                   # (the guard switched off: its list is never acted on)
     try:
         with open(os.path.join(data_dir, REREAD), encoding="utf-8") as f:
             v = (json.load(f) or {}).get("days")

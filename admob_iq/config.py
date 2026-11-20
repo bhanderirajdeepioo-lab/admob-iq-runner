@@ -13,6 +13,16 @@ def _env(name, default=""):
     return v if v not in (None, "") else default
 
 
+OFF_WORDS = ("false", "0", "off", "no")
+
+
+def switch_on(value, default=True):
+    """A switch that is ON unless it is set off: unset or empty → default; after strip + lower, "false" / "0" / "off" /
+    "no" → off; anything else → on (a rollback typed any usual way turns it off)."""
+    v = str(value).strip().lower() if value is not None else ""
+    return default if v == "" else v not in OFF_WORDS
+
+
 def settings() -> dict:
     return {
         "database_url": _env("DATABASE_URL"),
@@ -233,8 +243,8 @@ def settings() -> dict:
         "be_paid": _env("BE_PAID", "false").lower() == "true",
         # … its two checks (be_build): the input guard of the Google Ads users' reads (BE_FSQ) and the sanity check of
         # its answers (BE_SAN) — on unless set false; both off: the tab's files exactly as without them
-        "be_fsq": _env("BE_FSQ", "true").lower() != "false",
-        "be_san": _env("BE_SAN", "true").lower() != "false",
+        "be_fsq": switch_on(os.getenv("BE_FSQ")),
+        "be_san": switch_on(os.getenv("BE_SAN")),
         # 🖼️ Screens: GA4 views and ad impressions per screen class per day, every layer (fetch.ga4_screens: the recent
         # days every 3 / 12 hours, the history newest first; runs after every live GA4 step, stricter quota floors —
         # only the Google Ads users' reads above run after it, under the same floors).

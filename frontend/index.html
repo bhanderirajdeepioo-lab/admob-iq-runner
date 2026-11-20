@@ -14156,10 +14156,14 @@ function faultBannerText(){ const f=tzFault(), st=((DATA.build_faults||[]).find(
     parts=[];
   if(f) parts.push('time zone data missing on the build machine ('+(f.names||[]).join(', ')+') — By date D0, eCPM same'
     +' time yesterday aur raat ka "today" ruke hue hain');
-  const bad=st.filter(x=>x&&x.error!=='DataWarning');   // (a DataWarning is a data check, not a stop: the amber line)
-  if(bad.length) parts.push('ye hisse update nahi ho rahe: '+bad.map(x=>x&&x.name).filter(Boolean).join(', ')
-    +' (robot me error)');
-  return parts.length?'⚠️ Build problem: '+parts.join(' · ')+'. Fix hone tak ye numbers update nahi honge.':''; }
+  const err=st.filter(x=>x&&x.error!=='DataWarning'),   // (a DataWarning is a data check, not a stop: the amber line)
+    bad=err.filter(x=>!(x.name in DCHK)), ck=err.filter(x=>x.name in DCHK);   // (a check's own failure: its numbers
+  if(bad.length) parts.push('ye hisse update nahi ho rahe: '+bad.map(x=>x&&x.name).filter(Boolean).join(', ')   // still
+    +' (robot me error)');                                                                                       // update)
+  const t=parts.length?parts.join(' · ')+'. Fix hone tak ye numbers update nahi honge.':'',
+    c=ck.length?ck.map(x=>DCHK[x.name][0]+' data check').join(', ')+' nahi chal paya (robot me error) — number update'
+      +' ho rahe hain, bas inki jaanch nahi hui.':'';
+  return t||c?'⚠️ Build problem: '+[t,c].filter(Boolean).join(' '):''; }
 // the amber line ('' = none): build steps that reported a DATA CHECK (error "DataWarning" — a guard found inputs or
 // answers to doubt; nothing stopped updating, its days are marked on their tab). DCHK: a guard's step name → [the
 // tab's name, which days] (a new guard adds its own; an unknown name is shown as it is)

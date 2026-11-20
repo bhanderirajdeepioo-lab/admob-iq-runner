@@ -431,7 +431,7 @@ def test_a_day_read_alone_for_its_sampled_mark_is_not_read_again_by_reread_in_th
     store["rr"].pop(d, None)
     ga = BumpGA()
     gv.step_app(ga, store, TODAY, hs, NOW + timedelta(minutes=30), [d])
-    assert _lone(ga) == [(d, d)] and d not in store.get("rq", {})          # one read; REREAD's tries untouched
+    assert _lone(ga) == [(d, d)] and store["rq"][d][0] == 0                 # one read; no REREAD try spent
 
 
 class SampledBumpGA(BumpGA):
@@ -452,3 +452,20 @@ def test_a_reread_that_comes_back_sampled_keeps_the_whole_stored_read_and_counts
     ga = BumpGA()                                                           # a day later a whole read: it replaces
     gv.step_app(ga, store, TODAY, hs, t + timedelta(days=1), [d])
     assert json.dumps(store["days"][d], sort_keys=True) != before and store["rq"][d][0] == 2
+
+
+def test_a_named_day_read_alone_for_its_sampled_mark_starts_its_gap_clock():
+    hs = TODAY - timedelta(days=40)
+    store = _settled(hs)
+    d = (TODAY - timedelta(days=8)).isoformat()
+    store["mark"][d] = "s"
+    store["rr"].pop(d, None)
+    t = NOW + timedelta(minutes=30)
+    gv.step_app(BumpGA(), store, TODAY, hs, t, [d])
+    assert store["rq"][d] == [0, gu._now_iso(t)]                             # the clock started, no try spent
+    ga = BumpGA()
+    gv.step_app(ga, store, TODAY, hs, t + timedelta(hours=20), [d])
+    assert _lone(ga) == []                                                   # under RQ_GAP_H: not again
+    ga = BumpGA()
+    gv.step_app(ga, store, TODAY, hs, t + timedelta(hours=25), [d])
+    assert _lone(ga) == [(d, d)] and store["rq"][d][0] == 1                  # a day later: its first try

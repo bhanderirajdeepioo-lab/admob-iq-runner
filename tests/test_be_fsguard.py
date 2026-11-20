@@ -127,25 +127,59 @@ def test_one_countrys_broken_read_replaces_only_that_country(tmp_path, monkeypat
     assert day["ckw"] == "f" and ", guard fs 1 " in line
 
 
-def test_the_finality_gate_boundary(tmp_path, monkeypatch):
-    """Judged only on a day final in both files: install day ≤ both newest − LAG (and both day-0 cells final)."""
-    edge = (T.TODAY - timedelta(days=be.LAG)).isoformat()
-    young = (T.TODAY - timedelta(days=be.LAG - 1)).isoformat()
+def _fsq_list(data):
+    with open(os.path.join(data, "be_tab", be.FSQ_FILE), encoding="utf-8") as f:
+        return json.load(f)["days"]
+
+
+def test_the_finality_gate_boundary_and_a_young_day(tmp_path, monkeypatch):
+    """Final: install day ≤ both newest − max(LAG, the first-session stores' own lag). The day after it is YOUNG: the
+    whole-day first-session rule still marks it ("f", replaced) — counted "young", never on the re-read list."""
+    lag = max(be.LAG, be.gv.FINAL_LAG)
+    edge = (T.TODAY - timedelta(days=lag)).isoformat()
+    young = (T.TODAY - timedelta(days=lag - 1)).isoformat()
+    newest2 = (T.TODAY - timedelta(days=be.FSQ_YOUNG - 1)).isoformat()      # (too young even for that)
 
     def prep(site, data, scr):
-        _scale_nvr(data, edge, 0.2)
-        _scale_nvr(data, young, 0.2)
+        for d in (edge, young, newest2):
+            _scale_nvr(data, d, 0.2)
     b, line, err, data = _run(tmp_path, monkeypatch, prep)
     days = {x["d"]: x for x in b["days"]}
-    assert days[edge].get("ckw") == "f" and "ckw" not in days[young]          # the edge judged, a day younger never
-    assert ", guard fs 1 " in line and err == ""
-    with open(os.path.join(data, "be_tab", be.FSQ_FILE), encoding="utf-8") as f:
-        assert json.load(f)["days"] == {KA: [edge]}                           # (the re-read list follows it)
+    want = _all_ecpm(data, young)
+    assert days[edge].get("ckw") == "f" and days[young].get("ckw") == "f" and "ckw" not in days[newest2]
+    assert all(c[3] == want[c[0]] for c in days[young]["cty"])               # (young: the whole day replaced)
+    assert ", guard fs 1 " in line and ", young 1" in line and err == ""
+    assert _fsq_list(data) == {KA: [edge]}                                   # (the list: final days only)
 
 
-def test_a_day_0_cell_not_final_is_never_judged(tmp_path, monkeypatch):
-    """An All row's day 0 not final (df 0) in either file: no app-line decision (the whole day is not replaced); a
-    country is judged on its own pack rows (final there) — AA, the one big enough, alone."""
+def test_a_young_day_never_raises_the_banner_and_never_judges_a_country_or_the_cohort(tmp_path, monkeypatch):
+    young = (T.TODAY - timedelta(days=be.FSQ_YOUNG)).isoformat()
+    whole = (T.TODAY - timedelta(days=max(be.LAG, be.gv.FINAL_LAG) - 1)).isoformat()   # (young too: its re-reads
+    #                                                                                   used up never count)
+
+    def prep(site, data, scr):
+        _scale_nvr(data, young, 0.45, "AA")                                  # one country only: not the whole day
+        p = os.path.join(data, "ga4_nvr_paid", KA + ".json.gz")
+        st = P._rd(p)
+        st["rq"] = {young: [be.FSQ_TRIES, "2031-06-01T00:00:00Z"], whole: [be.FSQ_TRIES, "2031-06-01T00:00:00Z"]}
+        P._wr(p, st)
+        _scale_nvr(data, whole, 0.2)
+        q = os.path.join(scr, "roi_%s_p.json.gz" % KA)                       # … and its paid day 0 near-empty
+        f = P._rd(q)
+        for r in f["rows"]:
+            if r[0] == young:
+                r[4] = [round(v * 0.1, 6) for v in r[4]]
+        P._wr(q, f)
+    b, line, err, _ = _run(tmp_path, monkeypatch, prep)
+    day = {x["d"]: x for x in b["days"]}[young]
+    assert "ckw" not in day and "guard" not in line and err == ""            # (a country / the cohort: not young)
+    assert {x["d"]: x for x in b["days"]}[whole].get("ckw") == "f" and ", young 1" in line   # (the whole day: marked,
+    #                                                                          its used-up re-reads no banner)
+
+
+def test_a_day_0_cell_not_final_is_judged_as_a_young_day(tmp_path, monkeypatch):
+    """An All row's day 0 not final (df 0) in either file: that day is not final — the app line's whole-day rule on
+    the cells as they are ("young", not on the list); a country is judged on its own pack rows (final there)."""
     for side in ("paid", "all"):
         def prep(site, data, scr, side=side):
             _scale_nvr(data, D, 0.2)
@@ -158,9 +192,22 @@ def test_a_day_0_cell_not_final_is_never_judged(tmp_path, monkeypatch):
         b, line, err, data = _run(tmp_path / side, monkeypatch, prep)
         day = {x["d"]: x for x in b["days"]}[D]
         want = _all_ecpm(data, D)
-        got = {c[0]: c[3] for c in day["cty"]}
-        assert day.get("ckc") == {"AA": "f"} and got["AA"] == want["AA"], side       # AA: its own decision
-        assert all(abs(got[cc] - 0.2 * 1.2 * want[cc]) < 0.01 for cc in got if cc != "AA"), side   # the rest as read
+        assert day.get("ckw") == "f" and "ckc" not in day, side                       # the whole day, as young
+        assert all(c[3] == want[c[0]] for c in day["cty"]), side
+        assert ", young 1" in line and "guard fs" not in line and _fsq_list(data) == {}, side
+
+
+def test_a_first_session_store_that_has_not_read_a_day_final_never_judges_it_final(tmp_path, monkeypatch):
+    """The paid store's last window read ("recent_at") too early for the day's final read: that day is not final (a
+    deferred store) — only the young whole-day rule, never the list."""
+    def prep(site, data, scr):
+        _scale_nvr(data, D, 0.2)
+        p = os.path.join(data, "ga4_nvr_paid", KA + ".json.gz")
+        st = P._rd(p)
+        st["recent_at"] = (T.TODAY - timedelta(days=8)).isoformat() + "T06:00:00Z"   # D + 2: before its final read
+        P._wr(p, st)
+    b, line, err, data = _run(tmp_path, monkeypatch, prep)
+    assert {x["d"]: x for x in b["days"]}[D].get("ckw") == "f" and ", young 1" in line and _fsq_list(data) == {}
 
 
 def test_a_country_row_whose_day_0_is_not_final_is_never_judged(tmp_path, monkeypatch):
@@ -355,8 +402,10 @@ def test_the_real_rule_trips_a_made_up_country_row_end_to_end(tmp_path):
     assert [x["cty"] for x in b0["days"]] == [x["cty"] for x in b["days"]]           # (numbers as they were)
 
 
-# sha256 (tests/test_be_paid._digest) of the step's outputs with BOTH checks off — worked out once with
-# admob_iq/be_build.py as it was before them (the commit this branch starts from, loaded in its place), on these worlds
+# sha256 (tests/test_be_paid._digest) of the step's outputs with BOTH checks off — worked out once with the code of
+# e71fbed (the commit this branch starts from: its whole admob_iq loaded in place of this tree's, these same worlds and
+# test helpers) at GA4_FINAL_DAYS = 3 (the tests' pin, tests/conftest.py); the same check at the production F 7 was
+# run by hand the same way (both sides equal) — this test pins F 3 only
 BOTH_OFF_BEFORE = {"ff": "b81b23c9de6c85713ca017e8b2e251dbdfec76dad9ff0efc11260ce393917e0c",       # (at the tests'
                    "paid": "133b0314922404934bc4ed200d91f6b1a180ba2c374cfc1296493629b59a54e7"}     # GA4_FINAL_DAYS)
 
@@ -483,3 +532,45 @@ def test_the_app_line_count_is_per_build_never_carried(tmp_path, monkeypatch):
     got = be.load(site, data, KA, "roi_%s.json.gz" % KA, True, (scr, "roi_%s_p.json.gz" % KA))
     be.predict(KA, fc, be.load_calib(data, "p"), be._pin(*got[:5]), None, st)
     assert st["app"] > 0 and not hasattr(be, "SANC")                            # (predict's own count, no global)
+
+
+# ── round 4: a stale re-read list, the switches' spelling, the stamp only where the guard ran ──────────────────────
+
+def test_the_guard_off_leaves_no_re_read_list(tmp_path, monkeypatch):
+    def stale(site, data, scr):
+        os.makedirs(os.path.join(data, "be_tab"), exist_ok=True)
+        with open(os.path.join(data, "be_tab", be.FSQ_FILE), "w", encoding="utf-8") as f:
+            json.dump({"v": be.V, "days": {KA: [D]}}, f)
+    for s in ({"be_fsq": False}, {"be_paid": False}):
+        _, _, _, data = _run(tmp_path / str(len(s) + len(str(s))), monkeypatch, stale, s)
+        assert not os.path.exists(os.path.join(data, "be_tab", be.FSQ_FILE)), s
+
+
+@pytest.mark.parametrize("v,want", [(None, True), ("", True), ("true", True), ("1", True), ("anything", True),
+                                    ("false", False), ("FALSE ", False), (" 0", False), ("off", False), ("No", False)])
+def test_the_switches_turn_off_on_every_usual_spelling(monkeypatch, v, want):
+    from admob_iq import config
+    for name, k in (("BE_FSQ", "be_fsq"), ("BE_SAN", "be_san")):
+        if v is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, v)
+        assert config.settings()[k] is want, (name, v)
+
+
+def test_the_stamp_only_where_the_guard_ran_and_a_failed_state_is_tried_once_a_day(tmp_path, monkeypatch):
+    site, data, dash, scr = P.paid_world(tmp_path)
+    P._state(monkeypatch, scr)
+    real = be._guard_in
+    monkeypatch.setattr(be, "_guard_in", lambda *a, **k: 1 / 0)              # its reads fail this build
+    _, line, err = P._go(dash, data, site, {"be_paid": True})
+    fp, cp = os.path.join(data, "be_tab", "fitsp_%s.json.gz" % KA), os.path.join(data, "be_tab", be.CALIB_P)
+    with open(cp, encoding="utf-8") as f:
+        c = json.load(f)
+    assert "fq" not in P._rd(fp) and "fq" not in c and c["fqt"] == be.FSQ_V     # unguarded: not stamped; tried
+    assert ", guard fail 1" in line and "be guard skipped: ZeroDivisionError" in err
+    _, line, _ = P._go(dash, data, site, {"be_paid": True}, T.NOW + timedelta(hours=1))
+    assert ", calib p no" in line                                            # (not again every build)
+    monkeypatch.setattr(be, "_guard_in", real)                               # it works again: the fits at once
+    _, line, _ = P._go(dash, data, site, {"be_paid": True}, T.NOW + timedelta(hours=2))
+    assert "refit yes" in line and P._rd(fp)["fq"] == be.FSQ_V

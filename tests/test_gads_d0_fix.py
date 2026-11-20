@@ -914,6 +914,11 @@ def ov(tmp_path_factory):
     # step, and an unknown guard's name as it is
     fx["dconly"] = json.loads(json.dumps(fx["daymiss"]))
     fx["dconly"]["build_faults"] = [{"kind": "step", "steps": [{"name": "be guard", "error": "DataWarning"}]}]
+    fx["dcfail"] = json.loads(json.dumps(fx["daymiss"]))                  # the check's OWN failure (a real error):
+    fx["dcfail"]["build_faults"] = [{"kind": "step", "steps": [{"name": "be guard", "error": "ValueError"}]}]
+    fx["dcfail2"] = json.loads(json.dumps(fx["daymiss"]))                 # … beside another step's
+    fx["dcfail2"]["build_faults"] = [{"kind": "step", "steps": [{"name": "be guard", "error": "ValueError"},
+                                                               {"name": "roi", "error": "KeyError"}]}]
     fx["dcboth"] = json.loads(json.dumps(fx["daymiss"]))
     fx["dcboth"]["build_faults"] = [{"kind": "step", "steps": [{"name": "be guard", "error": "DataWarning"},
                                                               {"name": "roi", "error": "ValueError"},
@@ -1924,6 +1929,14 @@ def test_day_a_morning_lost_to_the_build_machines_time_zone_says_so(ov):
     bh = ov["_bh"]["dcboth|USD"]
     assert bh.index('class="banner fault"') < bh.index('class="banner dcheck"') and bh.count("<div") == 2
     assert ov["_bh"]["daymiss|USD"] == "" and ov["_dc"]["daygap|USD"] == ""                     # no fault: no banner
+    # a check's own failure: red, named as the check — never "update nahi ho rahe" (its tab's numbers did update)
+    CF = ("Breakeven data check nahi chal paya (robot me error) — number update ho rahe hain, bas inki jaanch nahi"
+          " hui.")
+    assert ov["_fb"]["dcfail|USD"] == "⚠️ Build problem: " + CF and ov["_dc"]["dcfail|USD"] == ""
+    assert "update nahi ho rahe" not in ov["_fb"]["dcfail|USD"]
+    assert ov["_bh"]["dcfail|USD"].startswith('<div class="banner fault">')
+    assert ov["_fb"]["dcfail2|USD"] == ("⚠️ Build problem: ye hisse update nahi ho rahe: roi (robot me error). Fix hone"
+                                        " tak ye numbers update nahi honge. " + CF)
     with open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8") as f:
         p = f.read()
     css = p[p.index("<style>"):p.index("</style>")]

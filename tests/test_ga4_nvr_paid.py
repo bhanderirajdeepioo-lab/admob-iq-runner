@@ -262,3 +262,27 @@ def test_the_paid_store_re_reads_the_days_the_breakeven_guard_names():
     from admob_iq import be_build as be
     assert gnp.MOD.REREAD == os.path.join(be.DIR, be.FSQ_FILE).replace(os.sep, "/") and gv.REREAD is None
     assert be.FSQ_TRIES == gnp.MOD.RQ_MAX                     # (the build's "re-reads used up" = the fetch's own bound)
+
+
+def test_be_fsq_off_stops_the_re_reads_whatever_list_is_on_disk(tmp_path, monkeypatch):
+    """A stale list on disk + BE_FSQ off: the paid store reads nothing again and its store is left as it was."""
+    from datetime import date as _date
+    p = tmp_path / "be_tab" / "fsq_p.json"
+    p.parent.mkdir()
+    p.write_text(json.dumps({"v": 1, "days": {"k1": ["2026-10-20"]}}))
+    monkeypatch.delenv("BE_FSQ", raising=False)
+    assert gnp.MOD._asks(str(tmp_path)) == {"k1": ["2026-10-20"]}
+    for off in ("false", "0", "off", "no"):
+        monkeypatch.setenv("BE_FSQ", off)
+        assert gnp.MOD._asks(str(tmp_path)) == {}, off
+    store = {"v": gv.STORE_V, "days": {"2026-10-20": {"c": []}}, "mark": {}, "mp": {}, "rr": {},
+             "recent_at": gu._now_iso(NOW), "backfill": {"done": True}}
+    before = json.dumps(store, sort_keys=True)
+
+    class NoCall:
+        calls, tok, last_metas = 0, 0, []
+
+        def report_all(self, *a, **k):
+            raise AssertionError("a GA4 call")
+    gnp.MOD.step_app(NoCall(), store, TODAY, _date(2026, 1, 1), NOW, gnp.MOD._asks(str(tmp_path)).get("k1") or ())
+    assert json.dumps(store, sort_keys=True) == before

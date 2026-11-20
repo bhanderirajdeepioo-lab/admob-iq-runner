@@ -27,6 +27,7 @@ recent window, the lone read again of a final day still marked sampled ("rr"), t
   * a FINAL day be_build's input guard found broken (data/be_tab/fsq_p.json: the Google Ads users' first-session share
     far under their day-0 cohort share that day) is read again alone through ga4_nvr's REREAD path — newest first, at most
     RQ_CAP days an app a run, each at most RQ_MAX times, RQ_GAP_H hours apart ("rq" in the store); no other day is;
+    BE_FSQ off (the guard switched off): no re-read at all, whatever list is on disk;
   * a stuck app (ga4_paid.streak: failing FAIL_LINE runs in a row — ga4_nvr itself retries a failed app every
     RETRY_HOURS and never counts it) → counts "stuck": the build prints the health banner's line.
 Switched by GA4_NVRP. Never raises; never prints. PUBLIC LOG: counts only — log_line ("ga4 nvr paid: apps …") never
@@ -42,6 +43,7 @@ from . import ga4_paid
 
 MOD = ga4_paid.instance(ga4_nvr, "admob_iq.fetch._ga4_nvr_paid_impl", DIR="ga4_nvr_paid", APP=ga4_paid.App,
                         NAME="ga4 nvr paid", PARTS=("c",), REREAD="be_tab/fsq_p.json",
+                        REREAD_SWITCH="BE_FSQ",
                         MAX_CALLS=int(os.environ.get("GA4_NVRP_MAX_CALLS") or ga4_nvr.MAX_CALLS))
 BUDGET_SEC = 60                     # seconds a run (one light read a chunk, where ga4_nvr makes three)
 

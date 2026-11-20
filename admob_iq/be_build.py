@@ -192,9 +192,13 @@ was. Each app has one SOURCE a build:
     the Google Ads users' share of every user's first-session revenue (their store's "n" rows ÷ fetch.ga4_nvr's) and
     their share of the install day's day-0 cohort revenue (their All row's d[0] ÷ every user's; a country: their pack
     row's ÷ every user's pack row's) are two reads of the same users and must agree (measured on every app's whole
-    history: on a sound day they agree closely). Only on a day FINAL in both files (≤ both files' newest − LAG, both
-    All rows' day-0 cells final; a country also ≤ both pack edges, both pack rows' day 0 final — a young day is never
-    judged, marked or counted), and only where every user's own two reads of the cell agree (ref_ok: their day 0 vs
+    history: on a sound day they agree closely). On a day FINAL in both files and both first-session stores (≤ both
+    files' newest − max(LAG, the stores' own final lag), ≤ each store's own final edge — its last window read minus
+    its lag —, both All rows' day-0 cells final; a country also ≤ both pack edges and the pack-gap rule's edge, both
+    pack rows' day 0 final); on a YOUNG day (≤ the paid file's newest − FSQ_YOUNG, not final yet) only the app line's
+    whole-day first-session rule, on the day-0 cells as they are — a hit replaced and marked "f" like a final one,
+    counted "young N", never on the re-read list (GA4's 7-day rule re-reads it anyway) nor the banner; the countries,
+    the cohort side, the re-reads and the banner stay final-only. Only where every user's own two reads of the cell agree (ref_ok: their day 0 vs
     their first session, no paid read above every user's; a country not on a pack-gap date of every user's packs —
     else no decision, counted "ref skip N"), with every user's first-session revenue ≥ FSQ_MIN: the first-session share
     under FSQ × the cohort share (capped at 1) where the paid first session should carry ≥ FSQ_EA (fs_bad) → that
@@ -211,8 +215,11 @@ was. Each app has one SOURCE a build:
     every-user pack or store): that app answered without the guard, exactly as before it, counted ("guard fail N"),
     its own red line ("be guard", the error's type). The Google Ads users' caches (fitsp_<key>, calib_p.json) carry
     "fq" (FSQ_V) while it is on: one made in another state is made again at once — training and predict read the same
-    rows (the replaced eCPM_fs is load's: fit, the back-tests and predict all see it). FSQ_ON False or BE_FSQ false:
-    the step exactly as before the guard (no re-read list written).
+    rows (the replaced eCPM_fs is load's: fit, the back-tests and predict all see it); an app whose guard did not run
+    (its reads failed) is not stamped, and a remake in another state that fails or runs unguarded stamps "fqt" (the
+    state tried: not made again every build). FSQ_ON False or BE_FSQ off (config.switch_on: "false" / "0" / "off" /
+    "no"), or BE_PAID off: the step exactly as before the guard, and no re-read list on disk (a stale one is
+    removed; the paid fetch also honours BE_FSQ itself).
   THE SANITY CHECK (every source; _sus): a forecast row — a country row with ≥ SAN_SHARE of the day's spend, or the
     app line; shifted, not broken even — whose breakeven median is ≤ SAN_R × the day its cohort would break even
     growing as its BENCHMARK grows from the anchor (the countries' median past ROAS curves, the card's rule; none
@@ -391,10 +398,14 @@ FSQ_ON = True                        # (the guard itself; False: the step exactl
 #                                      the build's switch: BE_FSQ, settings "be_fsq" — both must be on)
 FSQ_V = 2                            # the guard's version: the Google Ads users' caches carry it ("fq") while it is on —
 #                                      a cache made without it (or with another version) is made again at once
-FQ_FS, FQ_LEFT, FQ_COH, FQ_CC = 1, 2, 4, 8   # a row's marks (_R.fq): its eCPM_fs is every user's (the app row: the
+FQ_FS, FQ_LEFT, FQ_COH, FQ_CC, FQ_YNG = 1, 2, 4, 8, 16   # a row's marks (_R.fq): its eCPM_fs is every user's (the app row: the
 #                                      whole day's first-session read broke) · still broken after the re-reads · the
 #                                      day-0 cohort read is the broken side (no fallback: its cells are what GA4 has) ·
-#                                      (the app row) some country's eCPM_fs is every user's that day
+#                                      (the app row) some country's eCPM_fs is every user's that day · (the app row) a
+#                                      YOUNG day's (not final yet) whole first-session read broke
+FSQ_YOUNG = 2                        # a young day: the app line's whole-day first-session rule from 2 days before the
+#                                      paid file's newest (both day-0 reads mostly in) until it is final — the cohort
+#                                      side, the countries, the re-reads and the banner stay final-only
 LINE = None
 
 
@@ -707,44 +718,73 @@ def _final_d0(rows):
     return {r[0]: r[4][0] for r in rows or [] if len(r) > 5 and r[4] and (r[5] or 0) >= 1}
 
 
-def _guard_in(data_dir, key, body, days, a_d0, a_pk, out_dir, rq, a_nw, a_ft, S_a):
+def _store_edge(st_at):
+    """The newest day a first-session store has surely read FINAL: the day of its last window read (its "recent_at",
+    UTC; one day less for the property's zone) − its final lag (fetch.ga4_nvr.FINAL_LAG) → ordinal, or None: the store
+    keeps no read time (no limit of its own then — the files' edge alone)."""
+    try:
+        return date.fromisoformat(str(st_at)[:10]).toordinal() - 1 - gv.FINAL_LAG
+    except (TypeError, ValueError):
+        return None
+
+
+def _guard_in(data_dir, key, body, days, a_d0, a_pk, out_dir, rq, a_nw, a_ft, S_a, a_d0r=None, p_at=None):
     """⚖️ The input guard's reads for one src "p" app (load): every user's first-session store (fetch.ga4_nvr) and the
-    day-0 cells of every user's packs against the Google Ads users' store days and their file's All rows. Judged only
-    on days FINAL in both files (≤ both newest − LAG, both day-0 cells final; a country also ≤ both pack edges) and
-    where the reference agrees with itself (ref_ok; a country not on a pack-gap date of every user's packs) → {"app":
-    the days whose whole first-session read broke (fs_bad on the app line), "coh": the days whose day-0 cohort read
-    did (coh_bad), "fa" / "fc": every user's first-session sums (app / country), "ad": every user's FINAL country
-    day-0 cells, "lim" / "limc": the newest day judged (app / country), "gap": every user's pack-gap dates (ISO),
-    "pd": the store's days, "rq": its re-reads, "cd": (filled by load) the days a country's eCPM_fs was replaced,
-    "skip": the decisions the reference stopped}. a_d0: every user's FINAL All-row day-0 cells; a_nw / a_ft: every
-    user's newest and pack edge (ordinals or None); S_a: every user's All rows' final daily revenue (the pack gaps)."""
+    day-0 cells of every user's packs against the Google Ads users' store days and their file's All rows. Judged on
+    days FINAL in both files and both first-session stores (≤ both newest − max(LAG, the stores' own final lag), ≤ each
+    store's own final edge — _store_edge —, both day-0 cells final; a country also ≤ both pack edges and the pack-gap
+    rule's edge) where the reference agrees with itself (ref_ok; a country not on a pack-gap date of every user's
+    packs); and the app line ALSO on a YOUNG day (≤ the paid file's newest − FSQ_YOUNG, not final yet): the whole day's
+    first-session rule only, on the day-0 cells as they are (FQ_YNG: never re-read, never the banner) → {"app": the
+    days whose whole first-session read broke (young ones too), "yng": the young ones, "coh": the days whose day-0
+    cohort read did (final only), "fa" / "fc": every user's first-session sums (app / country), "ad": every user's
+    FINAL country day-0 cells, "lim" / "limc": the newest final day judged (app / country), "gap": every user's
+    pack-gap dates (ISO), "pd": the store's days, "rq": its re-reads, "cd": (filled by load) the days a country's
+    eCPM_fs was replaced, "skip": the decisions the reference stopped}. a_d0: every user's FINAL All-row day-0 cells
+    (a_d0r: all of them, final or not); a_nw / a_ft: every user's newest and pack edge (ordinals or None); S_a: every
+    user's All rows' final daily revenue (the pack gaps); p_at: the paid store's last window read ("recent_at")."""
     nw = _od(body.get("newest"))
-    lim = None if nw is None or a_nw is None else _iso(min(nw, a_nw) - LAG)
+    sta = gv.load_store(os.path.join(data_dir, gv.DIR, key + ".json.gz"))
+    edge = None if nw is None or a_nw is None else min(nw, a_nw) - max(LAG, gv.FINAL_LAG)
+    for se in (_store_edge(p_at), _store_edge((sta or {}).get("recent_at"))):
+        if edge is not None and se is not None:
+            edge = min(edge, se)
+    lim = None if edge is None else _iso(edge)
     pft = _od(body.get("fthru"))
-    limc = None if lim is None or pft is None or a_ft is None else min(lim, _iso(min(pft, a_ft)))
-    fa, fc = _fs_sums(gv.load_store(os.path.join(data_dir, gv.DIR, key + ".json.gz")))
+    limc = None if lim is None or pft is None or a_ft is None else \
+        min(lim, _iso(min(pft, a_ft)), _iso(a_nw - CLAG))
+    fa, fc = _fs_sums(sta)
+    sta = None
     fp, _ = _fs_sums({"days": days})
     p_d0 = _final_d0(body.get("rows"))
-    bad, coh, skip = set(), set(), 0
+    p_d0r = {r[0]: r[4][0] for r in body.get("rows") or [] if len(r) > 4 and r[4]}
+    ylim = None if nw is None else _iso(nw - FSQ_YOUNG)
+    bad, yng, coh, skip = set(), set(), set(), 0
     for day in days:
-        if lim is None or day > lim or day not in p_d0 or day not in a_d0:
-            continue
         p, a = fp.get(day), fa.get(day)
-        args = (p[0] if p else 0.0, a[0] if a else None, p_d0[day], a_d0[day])
-        if fs_bad(*args, FSQ_EA):
-            if ref_ok(*args, "fs"):
-                bad.add(day)
-            else:
-                skip += 1
-        elif coh_bad(*args):
-            if ref_ok(*args, "coh"):
-                coh.add(day)
-            else:
-                skip += 1
+        if lim is not None and day <= lim and day in p_d0 and day in a_d0:
+            args = (p[0] if p else 0.0, a[0] if a else None, p_d0[day], a_d0[day])
+            if fs_bad(*args, FSQ_EA):
+                if ref_ok(*args, "fs"):
+                    bad.add(day)
+                else:
+                    skip += 1
+            elif coh_bad(*args):
+                if ref_ok(*args, "coh"):
+                    coh.add(day)
+                else:
+                    skip += 1
+        elif ylim is not None and day <= ylim and (lim is None or day > lim or day not in p_d0 or day not in a_d0):
+            args = (p[0] if p else 0.0, a[0] if a else None, p_d0r.get(day), (a_d0r or {}).get(day))
+            if fs_bad(*args, FSQ_EA):         # (young: the whole day's first-session rule only)
+                if ref_ok(*args, "fs"):
+                    yng.add(day)
+                else:
+                    skip += 1
     ad, S_c = (_d0s(out_dir, a_pk, PACK_RE) if limc else ({}, {}))
     gap = {_iso(D) for D in _gap_rule(S_a, S_c, a_nw, a_ft)} if limc and a_nw is not None else set()
-    return {"app": bad, "coh": coh, "fa": fa, "fc": fc, "ad": ad, "lim": lim, "limc": limc, "gap": gap,
-            "pd": frozenset(days), "rq": rq if isinstance(rq, dict) else {}, "cd": set(), "skip": skip}
+    return {"app": bad | yng, "yng": yng, "coh": coh, "fa": fa, "fc": fc, "ad": ad, "lim": lim, "limc": limc,
+            "gap": gap, "pd": frozenset(days), "rq": rq if isinstance(rq, dict) else {}, "cd": set(), "skip": skip}
 
 
 def _cell_bad(G, cc, r, v):
@@ -771,13 +811,14 @@ def _cell_bad(G, cc, r, v):
 
 def _guard_marks(G, app):
     """⚖️ The input guard's marks on the app rows: FQ_FS (the whole day's eCPM_fs is every user's), FQ_CC (a country's
-    is), FQ_COH (the day-0 cohort read broke), FQ_LEFT (a replaced day the store already re-read FSQ_TRIES times)."""
+    is), FQ_COH (the day-0 cohort read broke), FQ_LEFT (a replaced day the store already re-read FSQ_TRIES times),
+    FQ_YNG (a young day's whole first-session read broke: replaced and marked, never re-read nor the banner)."""
     for r in app:
         f = (FQ_FS if r.day in G["app"] else 0) | (FQ_CC if r.day in G["cd"] else 0) | \
-            (FQ_COH if r.day in G["coh"] else 0)
+            (FQ_COH if r.day in G["coh"] else 0) | (FQ_YNG if r.day in G["yng"] else 0)
         t = G["rq"].get(r.day)
         if f & (FQ_FS | FQ_CC) and isinstance(t, list) and t and isinstance(t[0], int) and t[0] >= FSQ_TRIES:
-            f |= FQ_LEFT
+            f |= FQ_LEFT                          # (a young day's never counts: _run counts young days on their own)
         r.fq = f
 
 
@@ -826,7 +867,8 @@ def load(out_dir, data_dir, key, fn, want_adm=False, paid=None, org=False, gst=N
             for r in ab.get("rows") or []:
                 _fday(S_a, r)
             cda = ab.get("cd") or {}
-            ga = (_final_d0(ab.get("rows")), cda.get("packs") or [], _od(ab.get("newest")), _od(cda.get("fthru")), S_a)
+            ga = (_final_d0(ab.get("rows")), cda.get("packs") or [], _od(ab.get("newest")), _od(cda.get("fthru")), S_a,
+                  {r[0]: r[4][0] for r in ab.get("rows") or [] if len(r) > 4 and r[4]})
         except Exception as e:
             ga = None
             if gst is not None:
@@ -847,7 +889,8 @@ def load(out_dir, data_dir, key, fn, want_adm=False, paid=None, org=False, gst=N
     G = None
     if ga is not None:                           # the days whose first-session read broke (fs_bad) or whose cohort did —
         try:                                     # an unreadable every-user store or pack: the app answered without the
-            G = _guard_in(data_dir, key, body, days, ga[0], ga[1], out_dir, (st or {}).get("rq") or {}, *ga[2:])
+            G = _guard_in(data_dir, key, body, days, ga[0], ga[1], out_dir, (st or {}).get("rq") or {}, *ga[2:],
+                          (st or {}).get("recent_at"))
         except Exception as e:                   # guard, exactly as before it (counted, its own health line)
             G = None
             if gst is not None:
@@ -903,6 +946,7 @@ def load(out_dir, data_dir, key, fn, want_adm=False, paid=None, org=False, gst=N
         _guard_marks(G, app)
         if gst is not None:
             gst["skip"] = gst.get("skip", 0) + G["skip"]
+            gst["ran"] = True                    # (the guard ran for this app: its caches may carry the stamp)
         G = None
     newest = body.get("newest") or (app[-1].day if app else None)
     tail = (oi,) if paid is not None and org else ()
@@ -2657,6 +2701,14 @@ def save_calib(data_dir, cal, src="a"):
     return True
 
 
+def drop_fsq(data_dir):
+    """⚖️ The re-read list removed (the guard off): nothing for the paid first-session store to re-read."""
+    try:
+        os.remove(os.path.join(cache_dir(data_dir), FSQ_FILE))
+    except FileNotFoundError:
+        pass
+
+
 def save_fsq(data_dir, days):
     """⚖️ data/be_tab/fsq_p.json {"v", "days": {app key: [the days whose first-session read broke]}} — sorted JSON,
     written only when it changed (atomic); the paid first-session store re-reads those days (fetch.ga4_nvr's REREAD)."""
@@ -2753,7 +2805,8 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
         paid = bool((s or {}).get("be_paid"))     # ⚖️ BE_PAID — off: not a byte of anything changes (no "src", no Organic)
         loc, pw, orgs, bodies = {}, {}, {}, {}
         n = {"refit": 0, "fail": 0, "ec": 0, "ec_fail": 0, "ec_stale": 0, "pfail": 0, "org_fail": 0,
-             "fs": 0, "fsl": 0, "coh": 0, "cohw": 0, "sus": 0, "susw": 0, "rskip": 0, "gfail": 0, "sapp": 0}
+             "fs": 0, "fsl": 0, "coh": 0, "cohw": 0, "sus": 0, "susw": 0, "rskip": 0, "gfail": 0, "sapp": 0,
+             "young": 0}
         fsq = {}                                  # ⚖️ the input guard's broken first-session days per src "p" app key
         if paid:
             from . import roi_build as rbm       # (its PAID / PAID_DIR: run_uninstall ran its pass earlier, this process)
@@ -2803,7 +2856,9 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
                         d["ecs"] = "a"
                 fqd = []                                        # ⚖️ the input guard's days: counted, and the broken
                 for r in pin[1]:                                # first-session days handed to their store's re-read
-                    if (r.fq or 0) & (FQ_FS | FQ_CC):
+                    if (r.fq or 0) & FQ_YNG:                    # (a young day: replaced and marked, counted on its
+                        n["young"] += 1                         # own — never re-read, never the banner)
+                    elif (r.fq or 0) & (FQ_FS | FQ_CC):
                         fqd.append(r.day)
                         n["fs"] += 1
                         n["fsl"] += bool(r.fq & FQ_LEFT) and win(r.X)
@@ -2851,8 +2906,11 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
                     return None, False, back
             mine = pa or old is None or bool(old.get("bp")) == paid    # (calib.json made in this mode? "bp": with BE_PAID)
             need = old is None or old.get("cv") != CALV or _lagged(old) or \
-                (old.get("tried") or old["built"]) != today or not mine or old.get("fq") != fqv   # (made with the
-            #                                                     guard in another state: again at once)
+                (old.get("tried") or old["built"]) != today or not mine or \
+                (old.get("fq") != fqv and old.get("fqt", old.get("fq")) != fqv)   # (made with the guard in another
+            #                                                     state: again at once — once: a remake that failed or
+            #                                                     ran unguarded for an app stamps "fqt", the state tried)
+            unguarded = []                                      # (⚖️ src "p" apps the guard did not run for)
             A, C = [], []                                       # (need: the first build of the UTC day, an older
             RB, CB, SKL, GA, GC, GK = {}, {}, {}, {}, {}, {}    # calibration's content or lag, or one of the other
             #                                                     mode)
@@ -2871,18 +2929,22 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
             for aid, key, fn in group:
                 try:
                     fc = load_fits(data_dir, key, src)
-                    refit = fc is None or fc["origin"] != today or fc.get("fv") != FV or \
-                        _lagged(fc) or fc.get("fq") != fqv      # (fv: the benchmark triple; another lag, or the
-                    oi = None                                   # guard in another state: at once)
+                    oi, gst = None, {}
                     if pa:                                      # (oi: the Organic pass's inputs, collected while its
-                        gst = {}                                # packs are read; gst: the input guard's own state)
+                        #                                         packs are read; gst: the input guard's own state)
                         newest, app, cty, adm, gaps, oi = load(out_dir, data_dir, key, fn, True, loc[aid], True, gst)
                         n["rskip"] += gst.get("skip", 0)
                         if gst.get("fail") is not None:         # its reads failed: the app answered without it, counted,
                             n["gfail"] += 1                     # its own health line
                             _fail(gst["fail"], "be guard")
-                    else:                                       # are read)
+                    else:
                         newest, app, cty, adm, gaps = load(out_dir, data_dir, key, fn, True)
+                    fqa = fqv if gst.get("ran") else None       # (its fits stamped only when the guard ran for it)
+                    if fqv is not None and fqa is None and newest:
+                        unguarded.append(key)
+                    refit = fc is None or fc["origin"] != today or fc.get("fv") != FV or \
+                        _lagged(fc) or fc.get("fq") != fqa      # (fv: the benchmark triple; another lag, or the
+                    #                                             guard in another state: at once)
                     if not newest:
                         if pa:                                  # (nothing of its Google Ads users: every user's)
                             pw[aid] = {"st": "none"}
@@ -2890,8 +2952,8 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
                         continue
                     if refit:
                         fc = fit(app, cty, O)
-                        if fqv is not None:
-                            fc["fq"] = fqv
+                        if fqa is not None:
+                            fc["fq"] = fqa
                         save_fits(data_dir, key, fc, src)
                         n["refit"] += 1
                     if bec is not None and (refit or fc.get("ec_v") != bec.stamp()):
@@ -2960,6 +3022,8 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
                             held = []
                         else:                            # (the last one stays, as a failed remake: tried tomorrow)
                             cal = dict(old, tried=today)
+                            if pa and old.get("fq") != fqv:      # (⚖️ the guard's state tried: not every build)
+                                cal["fqt"] = fqv
                             if SKL and _shifts(old):
                                 cal["skill"] = SKL
                             if paid and not pa:          # (every user's, kept in this mode: stamped as the remake's
@@ -2970,8 +3034,10 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
                             raise ValueError("empty back-test")      # (every app failed or unusable: not a calibration)
                         cal = calibrate(A, C, O, RB, CB, GA, GC)
                         cal["skill"] = SKL
-                        if fqv is not None:
+                        if fqv is not None and not unguarded:
                             cal["fq"] = fqv
+                        elif fqv is not None:            # (an app ran unguarded: not the guard's state — tried, so
+                            cal["fqt"] = fqv             # not made again every build; tomorrow's remake retries)
                         cal["grow"]["apps"] = {k: v for k, v in GK.items() if v.get("app") or v.get("cty")}
                         if paid and not pa:
                             cal["bp"] = 1                # ⚖️ made with BE_PAID on: from its src "a" apps only
@@ -2990,6 +3056,8 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
                         held = []
                     else:
                         cal = dict(old, tried=today)         # (no cv stamped: a calibration without the shift's parts
+                        if pa and old.get("fq") != fqv:      # (⚖️ the guard's state tried: not every build)
+                            cal["fqt"] = fqv
                         if SKL and _shifts(old):             # stays unshifted and is tried again; over one that has
                             cal["skill"] = SKL               # them, this build's own skill — asof() / skill2() ran
                         #                                      before; an older content than CALV is tried again every
@@ -3024,11 +3092,13 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
         del grp, back
         if bec is not None and n["ec_stale"]:                   # GA4's reads stopped for an app: the banner, once
             print("be ecpm skipped: StaleWarning", file=sys.stderr)
-        if paid and "p" in cals and FSQ_ON:                     # ⚖️ the re-read list (fetch.ga4_nvr_paid reads it)
-            try:
+        try:                                                    # ⚖️ the re-read list (fetch.ga4_nvr_paid reads it)
+            if paid and "p" in cals and FSQ_ON:
                 save_fsq(data_dir, fsq)
-            except Exception as e:
-                _fail(e, "be guard")
+            elif not (paid and FSQ_ON):                         # the guard off (or BE_PAID off): no list on disk —
+                drop_fsq(data_dir)                              # a stale one would keep its re-reads going
+        except Exception as e:
+            _fail(e, "be guard")
         if n["fsl"] or n["cohw"]:                               # a broken input the re-reads did not heal or a broken
             print("be guard skipped: DataWarning", file=sys.stderr)    # cohort read in the last FSQ_WIN days: the
         #                                                         amber banner, once (the sanity check's marks are not
@@ -3069,13 +3139,14 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
             cov += len(fc["fits"])
             unc += nu
         _clean(out_dir, keep)
-        LINE = "be: apps %d, days %d, covered %d, uncovered %d, refit %s, calib %s%s%s%s%s%s%s%s%s" % (
+        LINE = "be: apps %d, days %d, covered %d, uncovered %d, refit %s, calib %s%s%s%s%s%s%s%s%s%s" % (
             len(ptr), nd, cov, unc, "yes" if n["refit"] else "no", "yes" if ran.get("a") else "no",
             (", failed %d" % n["fail"]) if n["fail"] else "",
             (", check %d (recent %d)" % (n["sus"], n["susw"])) if n["sus"] else "",
             (", app check %d" % n["sapp"]) if n["sapp"] else "",
             (", guard fs %d (left %d), cohort %d (recent %d)" % (n["fs"], n["fsl"], n["coh"], n["cohw"]))
             if n["fs"] or n["coh"] else "",
+            (", young %d" % n["young"]) if n["young"] else "",
             (", ref skip %d" % n["rskip"]) if n["rskip"] else "",
             (", guard fail %d" % n["gfail"]) if n["gfail"] else "",
             (", ecpm apps %d, ecpm failed %d, ecpm stale %d" % (n["ec"], n["ec_fail"], n["ec_stale"]))
