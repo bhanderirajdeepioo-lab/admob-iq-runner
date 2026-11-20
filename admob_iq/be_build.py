@@ -127,8 +127,8 @@ breaks even (the page shows the days of its period).
                           ["…", rest]], "cty":
                           [[cc, share, CPI, eCPM_fs, P30, P90, P180, median, low, high, lim, rk, bm(, rs)], …] (rs,
                           BE_RSF on: the "ROAS so far" = [its so-far age, its real ROAS there, B's median ROAS at that
-                          same age (the curve's rmed, linear between its ages; null past its limit)] or null without a
-                          so-far read; P30 / P90 /
+                          same age (the curve's rmed, linear between its ages; null past its limit), ROAS to 3 places]
+                          or null without a so-far read; P30 / P90 /
                           P180 null outside the country's learned range; bm = [bCPI (USD, 4 dp), beCPM_fs
                           (USD, 3 dp), bBE (days, 1 dp, or null: beyond bLim), bLim] — the country's benchmark, or null
                           for an old fits cache; rk 1 / 2 / 3:
@@ -248,7 +248,10 @@ was. Each app has one SOURCE a build:
       whole, or when the cell holds MORE than every user's own cell (fs_over: impressions > FSO_K × theirs + FSO_IM,
       revenue > FSO_K × theirs + FSO_USD — a subset never does; no cell of theirs decides nothing: GA4 folds a small
       country into "(other)" sooner on the bigger read; on a day ≤ the paid file's newest − FSQ_YOUNG: newer days' two
-      reads are hot reads of different hours) → every user's eCPM_fs of that country and day, its row tagged ("ckc"
+      reads are hot reads of different hours; never on a day whose every-user whole-day read is in doubt — _fs_doubt:
+      the Google Ads users' first-session impressions ÷ every user's over that day's countries whose cells are not over
+      ≥ FSO_DBT × its own median of the FSO_DN days before — no decision there, counted "ref skip") → every user's
+      eCPM_fs of that country and day, its row tagged ("ckc"
       "f", the day's "ckw" "f"); never on the re-read list, never the banner (round 4's re-reads and banner stay
       final-only); counted ("guard cty N (sampled N, over N)"). Training reads the same rows: the Google Ads users'
       caches' stamp "fq" is _fqv() — FSQ_V, "FSQ_V+fscFSC_V" while FSC is on (a flip: made again at once). Its output
@@ -271,7 +274,8 @@ was. Each app has one SOURCE a build:
     RSF: every covered country row gets its "ROAS so far" (the row's 14th element, _rsf): its so-far age, its real
       ROAS there (the same so-far read the app line's "ROAS … by day N" is of its own row) and B's median ROAS at that
       same age (_bench_at: the curve's rmed — the country's median past ROAS — at a curve age, linear between two, null
-      past the curve's limit); the page's "ROAS so far" column between eCPM and Breakeven. No number of the model moves.
+      past the curve's limit), both ROAS to 3 places (_r3: the page shows 0.1 %); the page's "ROAS so far" column
+      between eCPM and Breakeven. No number of the model moves.
 🌱 ORGANIC (src "p" apps only; the page's Google Ads | Organic switch): every new user who is NOT a Google Ads user = the
 all-users cells − the Google Ads users' cells per country × install day, from the two cubes' own reads (the probe measured
 the paid read + its complement = the whole read) — the all-users packs (out_dir, one at a time) and the paid packs
@@ -459,6 +463,11 @@ FSC_V = 1                            # (its version beside FSQ_V in the Google A
 FSO_K, FSO_IM, FSO_USD = 1.05, 5, 1.0    # "more than every user's": impressions > 1.05 × theirs + 5, or revenue > 1.05 ×
 #                                      theirs + $1 (ref_ok's own subset margin) — on a day ≤ the paid file's newest −
 #                                      FSQ_YOUNG (a newer day's two reads are hot reads of different hours)
+FSO_DBT, FSO_DN, FSO_DMIN = 1.05, 14, 7   # … and never on a day whose every-user WHOLE-day read is in doubt: the Google
+#                                      Ads users' first-session impressions ÷ every user's that day (the countries whose
+#                                      cells are not over) ≥ 1.05 × its own median of the 14 days before (≥ 7 of them;
+#                                      fewer: no claim) — every user's read may be the short one; no decision, counted
+#                                      "ref skip" (ref_ok's principle)
 GAP_ON = True                        # PACK GAPS also (1) by a fall of the packs' share of the All rows' final revenue
 #                                      from its OWN level — under GAP_REL × the median of the GAP_N non-gap dates before
 #                                      (pack_gaps_p's relative rule; now the "cohort" case and src "a" too) — and (2) by
@@ -833,6 +842,33 @@ def fs_over(p, a):
     return (p[1] or 0) > FSO_K * ai + FSO_IM or (p[0] or 0.0) > FSO_K * ar + FSO_USD
 
 
+def _fs_doubt(fpc, fc):
+    """⚖️ FSC: the days whose every-user whole-day first-session read is in doubt (fpc / fc: _fs_sums' country sums of
+    the Google Ads users' store / every user's, {cc: {day: [revenue, impressions]}}) — that day's impressions ratio,
+    the subset's ÷ every user's over the countries both read whose own cells are NOT over every user's (the cells under
+    judgement never vote: one inflated subset cell must not make every user's read look short), ≥ FSO_DBT × its own
+    median over the FSO_DN calendar days before that have it (≥ FSO_DMIN of them, else no claim)."""
+    S = {}
+    for cc, dd in fpc.items():
+        ac = fc.get(cc) or {}
+        for d, p in dd.items():
+            a = ac.get(d)
+            if a and (a[1] or 0) > 0 and not fs_over(p, a):
+                s_ = S.setdefault(d, [0, 0])
+                s_[0] += p[1] or 0
+                s_[1] += a[1]
+    rat = {d: v[0] / v[1] for d, v in S.items() if v[0] > 0 and v[1] > 0}
+    out = set()
+    for d, r in rat.items():
+        o = _od(d)
+        if o is None:
+            continue
+        prev = [rat[e] for e in (_iso(o - i) for i in range(1, FSO_DN + 1)) if e in rat]
+        if len(prev) >= FSO_DMIN and r >= FSO_DBT * _median(prev):
+            out.add(d)
+    return out
+
+
 def _smp(st, day):
     """⚖️ FSC: was a first-session store's "c" read of `day` a GA4 sample? Its own per-read mark ("mp"); a day the store
     marked before it kept each read's own flag: its day mark ("mark") — True / False / None (no read of the day)."""
@@ -926,7 +962,8 @@ def _guard_in(data_dir, key, body, days, a_d0, a_pk, out_dir, rq, a_nw, a_ft, S_
     fa, fc = _fs_sums(sta)
     smp = {d for d in days if _smp(p_st, d) and _smp(sta, d) is False} if FSC_ON else set()   # (FSC: GA4-sampled)
     sta = None
-    fp, _ = _fs_sums({"days": days})
+    fp, fpc = _fs_sums({"days": days})
+    dbt = _fs_doubt(fpc, fc) if FSC_ON else set()   # (FSC: the days every user's whole-day read is in doubt)
     p_d0 = _final_d0(body.get("rows"))
     p_d0r = {r[0]: r[4][0] for r in body.get("rows") or [] if len(r) > 4 and r[4]}
     ylim = None if nw is None else _iso(nw - FSQ_YOUNG)
@@ -956,7 +993,7 @@ def _guard_in(data_dir, key, body, days, a_d0, a_pk, out_dir, rq, a_nw, a_ft, S_
     gap = {_iso(D) for D in _gap_rule(S_a, S_c, a_nw, a_ft)} if limc and a_nw is not None else set()
     return {"app": bad | yng, "yng": yng, "coh": coh, "fa": fa, "fc": fc, "ad": ad, "lim": lim, "limc": limc,
             "gap": gap, "pd": frozenset(days), "rq": rq if isinstance(rq, dict) else {}, "cd": set(), "skip": skip,
-            "smp": smp, "ylim": ylim, "c1": {"s": 0, "o": 0}}
+            "smp": smp, "ylim": ylim, "dbt": dbt, "c1": {"s": 0, "o": 0}}
 
 
 def _cell_bad(G, cc, r, v):
@@ -973,8 +1010,11 @@ def _cell_bad(G, cc, r, v):
             G["c1"]["s"] += 1
             return "a"
         if G["ylim"] is not None and day <= G["ylim"] and fs_over(v, (G["fc"].get(cc) or {}).get(day)):
-            G["c1"]["o"] += 1
-            return "a"
+            if day in G["dbt"]:              # every user's own whole-day read in doubt that day: no decision (ref_ok's
+                G["skip"] += 1               # principle — counted "ref skip")
+            else:
+                G["c1"]["o"] += 1
+                return "a"
     if G["limc"] is None or day > G["limc"] or day not in G["pd"] or len(r) < 6 or not (r[5] or 0) >= 1:
         return False
     ad = (G["ad"].get(cc) or {}).get(day)
@@ -2134,13 +2174,18 @@ def _bench_at(ages, bench, a):
     return None
 
 
+def _r3(v):
+    """⚖️ RSF's ROAS to 3 places (the page shows 0.1 %: exact for it), never 1.0 for a value still under 100 %."""
+    return None if v is None else (min(round(v, 3), 0.999) if v < 1.0 else round(v, 3))
+
+
 def _rsf(x, ages, cf):
     """⚖️ A country row's "ROAS so far" (RSF_ON) → [its so-far age, its real ROAS there (the so-far read: cumulative
     revenue ÷ spend), B's median ROAS at that same age (_bench_at on the curve's rmed; None: past B's watched ages or no
-    median)], ROAS as _rr rounds them; None without a so-far read."""
+    median)], both ROAS to 3 places (_r3); None without a so-far read."""
     if x.sfa is None or x.sfv is None or not x.sp or x.sp <= 0:
         return None
-    return [int(x.sfa), _rr(x.sfv / x.sp), _rr(_bench_at(ages, _bench_of(cf), x.sfa))]
+    return [int(x.sfa), _r3(x.sfv / x.sp), _r3(_bench_at(ages, _bench_of(cf), x.sfa))]
 
 
 def _bench_curve(ages, cov):

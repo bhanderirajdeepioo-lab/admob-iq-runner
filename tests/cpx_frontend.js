@@ -1062,7 +1062,7 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
       // have no c[13], so each of its cells is "—"; that column taken out, every render is the 16 Nov page's byte for byte
       const RSFH = '<th class="cpx-ben" title="ab tak ki asli kamai ÷ spend; B = benchmark usi din par">ROAS so far</th>',
         RSFD = '<td class="cpx-ben"><span class="cpx-nv" title="is country ka ab tak ka ROAS nahi aaya">—</span></td>';
-      BO.guard.strip = require('crypto').createHash('sha256').update(OR.map(h => h.split(RSFH).join('').split(RSFD).join('')).join('\u0000')).digest('hex');
+      BO.guard.strip = require('crypto').createHash('sha256').update(OR.map(h => h.split(RSFH).join('').split(RSFD).join('').split('<table class="cpx-t cpx-btc">').join('<table class="cpx-t">')).join('\u0000')).digest('hex');   // (+ the countries table's class: its width steps)
       BO.guard.rsf = OR.reduce((n, h) => n + h.split(RSFD).length - 1, 0); BO.guard.rsfh = OR.reduce((n, h) => n + h.split(RSFH).length - 1, 0); }
     // ── ⚖️ the users switch (owner, 16 Nov 2026: "google ads and organic dono ka alag alag dekh saku esa kar do"; cpx_fixture.js
     // paid(): the build's be_paid on) — Google Ads | Organic on top of the tab, the viewer's state, a tap never moves the page; the

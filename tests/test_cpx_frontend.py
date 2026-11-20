@@ -1599,7 +1599,14 @@ def test_breakeven_percent_vs_b_colour_provisional_be_kinds_and_phone(out):
     page = _page()
     css = page[page.index("/* ---- 📉 CPI vs eCPM (CPX)"):page.index("/* ---------- 👥 Audience")]
     assert "@container cpx (max-width:520px){.cpx-mrow{" in css                                     # the screen's phone step is a container query
-    assert "@container cpx (max-width:520px){.cpx-bed .cpx-t td .cpx-bi{display:block}}" in css
+    assert "@container cpx (max-width:520px){.cpx-bed .cpx-t td .cpx-bi{display:block}}" not in css   # (20 Nov: the step moved up —
+    # B under its value below the screen width where every one-line countries table fits, a phone too; a narrow laptop window
+    # also wraps the countries table's heads, names and breakeven words; wider screens keep the one-line look)
+    assert "@container cpx (max-width:1159px){.cpx-bed .cpx-t td .cpx-bi{display:block}}" in css
+    assert ("@container cpx (min-width:521px) and (max-width:899px){.cpx-bed .cpx-btc th,.cpx-bed .cpx-btc td:first-child,"
+            ".cpx-bed .cpx-btc td:last-child{white-space:normal}.cpx-bed .cpx-btc td:first-child small,"
+            ".cpx-bed .cpx-btc td:last-child small{white-space:nowrap}}") in css
+    assert css.count("cpx-btc") == 5 and '<table class="cpx-t cpx-btc"><thead><tr><th>Country</th>' in page   # (the countries table only)
     assert "@media (max-width:520px)" not in css
 
 
@@ -1635,8 +1642,8 @@ ORG_DAYS = [d.isoformat() for d in days("2026-02-23", "2026-03-29")][::-1] + ["2
 # page (its _.set ignores BSRC); recompute only for a change the Google Ads view is meant to get
 OLD_BE_SHA = "5d107bfff4f0ab20a441a5f7a54aabb348e1a7cbef237c398e9c2f4f67a4e65c"
 # … and with the countries table's "ROAS so far" (20 Nov 2026: "haan ROAS ab tak dikhao"): the same renders, that column added
-# ("—" in every row of an old file) — its strip back to OLD_BE_SHA is checked in the test
-RSF_BE_SHA = "584b23b1602139e0258ca9ab1f950d41a2b11d244b06c7ae0c61da46a21ce9d8"
+# ("—" in every row of an old file) and the table's class for its width steps — its strip back to OLD_BE_SHA is checked in the test
+RSF_BE_SHA = "711a0963bed7b5c690bf91ca2c0877b5c00a6c4401c52cfc153d556a5cb074fe"
 
 
 def _opu(a):                       # the fixture's per user at card age a ($)

@@ -256,6 +256,42 @@ def test_a_cell_over_every_users_replaces_only_that_country_and_only_up_to_newes
     assert "ckw" not in day[NEW] and ", guard cty 1 (sampled 0, over 1)" in line and err == ""
 
 
+def test_fs_doubt_is_a_whole_day_ratio_off_its_own_median():
+    D = ["2030-01-%02d" % i for i in range(1, 21)]
+    fc = {"AA": {d: [10.0, 1000] for d in D}, "BB": {d: [1.0, 100] for d in D}}   # every user's cells
+    fp = {"AA": {d: [5.0, 500] for d in D}, "BB": {d: [0.5, 50] for d in D}}      # the subset at 0.5 of them
+    fp["AA"]["2030-01-18"] = [5.0, 527.5]                                       # the day's ratio 1.05 × its median:
+    assert be._fs_doubt(fp, fc) == {"2030-01-18"}                               # in doubt
+    fp["AA"]["2030-01-18"] = [5.0, 527]                                         # under it: not
+    assert be._fs_doubt(fp, fc) == set()
+    fp["AA"]["2030-01-18"], fp["BB"]["2030-01-18"] = [5.0, 500], [9.0, 900]    # (one cell over every user's never votes:
+    assert be._fs_doubt(fp, fc) == set()                                        # the day is not in doubt — whole-day
+    assert (500 + 900) / 1100 >= 1.05 * 0.5                                     # it would have been)
+    fp["AA"]["2030-01-05"] = fp["AA"]["2030-01-08"] = [5.0, 600]                # (4 days before it: no claim; 7: judged)
+    assert be._fs_doubt(fp, fc) == {"2030-01-08"}
+    del fc["AA"]["2030-01-08"]                                                  # (BB alone that day: its normal ratio)
+    assert be._fs_doubt(fp, fc) == set()
+
+
+def _short_all(data, day, k=0.8):
+    """Every user's store: the whole day's first-session impressions × k (their read of the day short)."""
+    p = _store(data, "all")
+    st = P._rd(p)
+    st["days"][day]["c"] = [[n, c, rev, int(im * k) if n == "n" else im] for n, c, rev, im in st["days"][day]["c"]]
+    P._wr(p, st)
+
+
+def test_an_over_cell_on_a_day_every_users_whole_read_is_in_doubt_decides_nothing(tmp_path, monkeypatch, base):
+    def prep(site, data, scr):
+        _short_all(data, YNG)                                       # every user's whole day short: the subset's share
+        _over(data, YNG, "AA")                                      # of it jumps — the over rule says nothing there
+    b, line, err, *_ = _go(tmp_path, monkeypatch, prep)
+    day = _days(b)[YNG]
+    assert "AA" not in (day.get("ckc") or {}) and "guard cty" not in line and ", ref skip 1" in line and err == ""
+    assert {c[0]: c[3] for c in day["cty"]}["AA"] != {c[0]: c[3] for c in _days(base[0])[YNG]["cty"]}["AA"]   # (its
+    #                                                                 own over read stays: nothing replaced it)
+
+
 def test_a_paid_cell_every_user_has_none_of_decides_nothing(tmp_path, monkeypatch):
     def prep(site, data, scr):                                      # every user's read without AA that day (folded
         p = _store(data, "all")                                     # into "(other)" on the bigger read), the paid
@@ -408,19 +444,26 @@ def test_bench_at_reads_a_curve_age_linear_between_two_and_none_past_its_limit()
     assert be._bench_at([3, 6], [0.42, 0.46], 1) is None                          # (before its first age)
 
 
+def test_r3_rounds_to_3_places_and_never_to_100_percent_under_it():
+    assert be._r3(0.81449) == 0.814 and be._r3(0.8145) in (0.814, 0.815) and be._r3(1.23456) == 1.235
+    assert be._r3(0.9996) == 0.999 and be._r3(0.99949) == 0.999 and be._r3(1.0) == 1.0 and be._r3(None) is None
+
+
 def test_rsf_is_the_rows_so_far_read_against_bs_median_at_the_same_age():
     cf = [[e[0], [e[1][0] + math.log(2.0), 0.0, 0.0]] + e[2:] for e in T._up_fits()["AA"]["cv"]]   # rmed = log of T.UP at
     ages = [be.GRID[e[0]] for e in cf]                                           # the 13 grid ages; the model 2 × it (B is
     #                                                                              the past median, never the model)
     x = T.R(day="2030-12-20", sp=100.0, na=50.0, sfa=10, sfv=73.6)
-    b10 = round(T.UP[4] + (T.UP[5] - T.UP[4]) * 4 / 7, 4)                         # day 10: between day 6 and day 13
+    b10 = round(T.UP[4] + (T.UP[5] - T.UP[4]) * 4 / 7, 3)                         # day 10: between day 6 and day 13
     assert be._rsf(x, ages, cf) == [10, 0.736, b10]
     x.sfa = 13
     assert be._rsf(x, ages, cf) == [13, 0.736, T.UP[5]]                           # a grid age: B's own there
     x.sfa = ages[-1] + 5
     assert be._rsf(x, ages, cf) == [ages[-1] + 5, 0.736, None]                    # past B's watched ages: none
-    x.sfa, x.sfv = 6, 99.996                                                     # never "100.0 %" under 100 % (_rr)
-    assert be._rsf(x, ages, cf) == [6, 0.9999, T.UP[4]]
+    x.sfa, x.sfv = 6, 99.96                                                      # never "100.0 %" under 100 % (_r3)
+    assert be._rsf(x, ages, cf) == [6, 0.999, T.UP[4]]
+    x.sfv = 81.449
+    assert be._rsf(x, ages, cf) == [6, 0.814, T.UP[4]]                            # 3 places: the page's 0.1 %
     x.sfv = 250.0
     assert be._rsf(x, ages, cf) == [6, 2.5, T.UP[4]]
     assert be._rsf(T.R(day="2030-12-20", sp=100.0, na=50.0, sfa=None, sfv=None), ages, cf) is None   # no so-far read
@@ -434,7 +477,7 @@ def test_every_country_row_gets_its_roas_so_far_and_off_leaves_the_row_as_before
     cs = {"AA": T.R(day=day, sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0), sfa=10, sfv=73.6)}
     app = T.R(day=day, sp=100.0, na=50.0, obs=10, oc=73.6)
     row = T._one(T._up_fits(), T.CAL0, app, cs, day=day)["cty"][0]
-    assert len(row) == 14 and row[13] == [10, 0.736, round(T.UP[4] + (T.UP[5] - T.UP[4]) * 4 / 7, 4)]
+    assert len(row) == 14 and row[13] == [10, 0.736, round(T.UP[4] + (T.UP[5] - T.UP[4]) * 4 / 7, 3)]
     nos = {"AA": T.R(day=day, sp=100.0, na=50.0, cpi=2.0, c=math.log(2.0), e=math.log(3.0), sfa=None, sfv=None)}
     assert T._one(T._up_fits(), T.CAL0, app, nos, day=day)["cty"][0][13] is None   # no so-far read: null, the row kept
     monkeypatch.setattr(be, "RSF_ON", False)
