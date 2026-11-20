@@ -255,6 +255,9 @@ def settings() -> dict:
         # … and the countries table's "ROAS so far" (BE_RSF: each covered country row's real ROAS at its latest lived
         # age against its benchmark's at the same age; off: the rows without it, the page's column "—")
         "be_rsf": switch_on(os.getenv("BE_RSF")),
+        # … and the lived re-anchor (BE_LIVED, on unless set false: once a day has a final anchor the shift anchors at its
+        # latest cell at least 4 days old; off: the tab's files exactly as without it)
+        "be_lived": switch_on(os.getenv("BE_LIVED")),
         # 🖼️ Screens: GA4 views and ad impressions per screen class per day, every layer (fetch.ga4_screens: the recent
         # days every 3 / 12 hours, the history newest first; runs after every live GA4 step, stricter quota floors —
         # only the Google Ads users' reads above run after it, under the same floors).

@@ -301,6 +301,9 @@ jobs:
           BE_UPI:               ${{ vars.BE_UPI || 'true' }}
           # … and the countries table's "ROAS so far" column's data (BE_RSF, on unless set false; false: the column "—")
           BE_RSF:               ${{ vars.BE_RSF || 'true' }}
+          # … and the lived re-anchor (BE_LIVED, on unless set false: the shift anchors at the latest cell at least 4 days
+          # old once a final anchor exists; false: the tab's files exactly as without it)
+          BE_LIVED:             ${{ vars.BE_LIVED || 'true' }}
           # 🖼️ Screens (admob_iq/fetch/ga4_screens.py; data/ga4_screens/ in the private repo, kept for good): GA4 views and
           # ad impressions per screen class per day with every layer, read AFTER every live GA4 step under stricter
           # quota floors (only the Google Ads users' reads above run after it). GA4_SCREENS=false stops the reads without a code push; GA4_SCREENS_BUDGET_SEC = its seconds per

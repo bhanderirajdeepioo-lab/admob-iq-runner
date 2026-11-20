@@ -95,8 +95,12 @@ breaks even (the page shows the days of its period).
   errors at a (bandb); its growth from a never outside what real install days grew there (the 1st / 99th percentile
   over every app: calib "grow" — a model read far outside its inputs could claim growth no real day had). Each covered
   country the same on its own curve and its own final read, its range for its size (cbandb), its growth bound from the
-  country rows. Not shifted: a day with nothing final yet. A DATA HOLE — a calendar date on which the app's older
-  cohorts (7–30 days old) together earned under GAP × the median of the GAP_N dates before while AdMob's own revenue
+  country rows. Not shifted: a day with nothing final yet. THE LIVED RE-ANCHOR (owner, 20 Nov 2026: "yes"; LIVE_ON,
+  BE_LIVED): once a day (or a country row) has a final anchor, the shift anchors at its latest grid age whose cell is at
+  least LIVED days old, read as it is now (_anchor_at / _lived_cells) — the days the cohort has already lived count,
+  never only its final cells (measured on every app's history: the answers of install days 7–12 err much less, from
+  day 13 on the same anchor); the ranges stay those of that anchor age; a younger day keeps no anchor.
+  A DATA HOLE — a calendar date on which the app's older cohorts (7–30 days old) together earned under GAP × the median of the GAP_N dates before while AdMob's own revenue
   was normal (_holes: GA4 lost it on every cohort at once — never one weak install day, never a real outage) — in a
   day's first HOLE_W days marks it "chk": 1 (the page's "data check": its real ROAS and so its shifted curve are low by what
   the data lost); the forecast stays the shift (measured against the recorded data, falling back cost accuracy).
@@ -391,6 +395,12 @@ SAN_SHARE = 0.05                     # … a country row only with ≥ 5 % of th
 #                                      the rule finds carry a tiny share of their day — noise, not the day's answer)
 SAN_ON = True                        # (the sanity check; False: no "s" mark, no count — with FSQ_ON False too every file
 #                                      exactly as before both; the build's switch: BE_SAN, settings "be_san")
+LIVE_ON = True                       # the LIVED re-anchor (owner, 20 Nov 2026: "yes"): once a day has a final anchor, the
+#                                      shift anchors at its latest grid age whose cell is at least LIVED days old (lived,
+#                                      maybe not final yet) instead of the latest FINAL one; the build's switch: BE_LIVED,
+#                                      settings "be_lived" (off: every file exactly as before it)
+LIVED = 4                            # (a cell 4 days old: measured, its later revisions are small against what the
+#                                      extra lived days tell — the back-test on every app's history, 20 Nov 2026)
 PACK_MIN = 1.0                       # a pack-gap date needs the app's final revenue of that date ≥ 1 USD (a smaller total
                                      # is noise: a ratio of two cents says nothing about a missing pack)
 PACK_GAP = 0.35                      # … and the country packs' sum of it under 0.35 × the All rows' (GA4's cube folds a date
@@ -2249,12 +2259,37 @@ def _sus(med, ages, bench, a, ra, tag=None, bbe=None):
     return hit
 
 
+def _lived_cells(x, nw):
+    """A row's cumulative revenue at the GRID ages the shift may anchor at under the lived re-anchor: its final cells,
+    and where a cell is not final yet but at least LIVED days old (install day + age + LIVED ≤ nw) and lived (age ≤ its
+    last observed age), the cell as read now."""
+    out = []
+    for j, a in enumerate(GRID):
+        v = x.fin[j] if x.fin and j < len(x.fin) else None
+        if v is None and x.cum and j < len(x.cum) and x.cum[j] is not None and x.X + a + LIVED <= nw and \
+                x.obs is not None and a <= x.obs:
+            v = x.cum[j]
+        out.append(v)
+    return out
+
+
+def _anchor_at(x, last, nw):
+    """The shift's anchor of a row (the app line or a country): its latest FINAL grid age (a daily one ≥ CLAG days old);
+    with LIVE_ON, once such a final anchor exists, its latest LIVED one (≥ LIVED days old) — a younger day keeps no
+    anchor (unshifted), as without it."""
+    fin = _anchor(x.fin, x.sp, last, nw - x.X - CLAG)
+    if not LIVE_ON or fin is None:
+        return fin
+    return _anchor(_lived_cells(x, nw), x.sp, last, nw - x.X - LIVED) or fin
+
+
 def _cty_shift(ages, mid, x, cb, upto=None, gq=None):
     """A country's [median, low, high] day off its own curve SHIFTED to its real ROAS at its latest final grid age (as
     the app line), its 80 % range from the shift's back-test errors for its size (cbandb: its size bucket, else every
     size pooled; past the band's reach: no end) — then _cty_days' own bounds (its so-far read pinned, capped before,
     floored after; never a day at or before it). None (its unshifted curve answers) with nothing final inside its curve."""
-    anc = _anchor(x.fin, x.sp, ages[-1], upto)
+    anc = _anchor(x.fin, x.sp, ages[-1], upto) if not LIVE_ON or upto is None else \
+        _anchor_at(x, ages[-1], upto + x.X + CLAG)    # (upto = nw − X − CLAG gives back nw)
     if anc is None:
         return None
     af, rc = anc
@@ -2411,7 +2446,7 @@ def predict(key, fc, cal, pin, sk=None, stats=None):
                 unc.append([REST_CC, round(rest, 4)])
             csp = sum(c[1].sp for c in cov)
             M = combine([(c[1].sp, c[3], c[4]) for c in cov]) if cov and csp > 0 else None
-            anc = _anchor(r.fin, r.sp, M[0][-1], nw - r.X - CLAG) if M else None    # (a daily anchor ≥ CLAG days old)
+            anc = _anchor_at(r, M[0][-1], nw) if M else None    # (a daily anchor ≥ CLAG days old; LIVE_ON: lived)
             # "data check": a GA4 hole date in its first HOLE_W days — its real ROAS, and so its shifted curve, are low by
             # what GA4 lost (the forecast stays the shift: falling back cost accuracy against the recorded data)
             chk = anc is not None and any(r.X + k in holes for k in range(HOLE_W))
@@ -2437,7 +2472,7 @@ def predict(key, fc, cal, pin, sk=None, stats=None):
                 days_ = (dd if dd is not None else _cty_days(ages, mid, clo, chi, x)) + [clim, 0]   # one curve, one
                 # answer) — its daily anchor at least CLAG days old
                 if SAN_ON and dd is not None and dd[0] is not None and x.sp / tot >= SAN_SHARE:   # the sanity
-                    ca = _anchor(x.fin, x.sp, ages[-1], nw - x.X - CLAG)      # check (_sus): an early answer its
+                    ca = _anchor_at(x, ages[-1], nw)                         # check (_sus): an early answer its
                     if ca and _sus(dd[0], ages, _bench_of(f["cv"]), ca[0], ca[1], (key, r.day, cc),   # real ROAS
                                    (_bm(f.get("bm")) or [None] * 4)[2]):                            # did not make
                         sus[cc] = 1
@@ -3107,20 +3142,21 @@ def _tried_p(data_dir):
 def run(dashboard, data_dir, out_dir, s=None, now=None):
     """The step (_run) with the build's switches of its checks: BE_FSQ (settings "be_fsq") and BE_SAN ("be_san"), and
     round 5's BE_FSC ("be_fsc"), BE_GAP ("be_gap"), BE_UPI ("be_upi") and the countries table's "ROAS so far" BE_RSF
-    ("be_rsf"), each on unless set false, AND the module's own FSQ_ON / SAN_ON / FSC_ON / GAP_ON / UPI_ON / RSF_ON — all
-    off: every file exactly as before them (FSC needs the guard on)."""
-    global FSQ_ON, SAN_ON, FSC_ON, GAP_ON, UPI_ON, RSF_ON
-    keep = FSQ_ON, SAN_ON, FSC_ON, GAP_ON, UPI_ON, RSF_ON
+    ("be_rsf"), and the lived re-anchor BE_LIVED ("be_lived"), each on unless set false, AND the module's own
+    FSQ_ON / SAN_ON / FSC_ON / GAP_ON / UPI_ON / RSF_ON / LIVE_ON — all off: every file exactly as before them (FSC needs the guard on)."""
+    global FSQ_ON, SAN_ON, FSC_ON, GAP_ON, UPI_ON, RSF_ON, LIVE_ON
+    keep = FSQ_ON, SAN_ON, FSC_ON, GAP_ON, UPI_ON, RSF_ON, LIVE_ON
     FSQ_ON = keep[0] and bool((s or {}).get("be_fsq", True))
     SAN_ON = keep[1] and bool((s or {}).get("be_san", True))
     FSC_ON = keep[2] and bool((s or {}).get("be_fsc", True))
     GAP_ON = keep[3] and bool((s or {}).get("be_gap", True))
     UPI_ON = keep[4] and bool((s or {}).get("be_upi", True))
     RSF_ON = keep[5] and bool((s or {}).get("be_rsf", True))
+    LIVE_ON = keep[6] and bool((s or {}).get("be_lived", True))
     try:
         return _run(dashboard, data_dir, out_dir, s, now)
     finally:
-        FSQ_ON, SAN_ON, FSC_ON, GAP_ON, UPI_ON, RSF_ON = keep
+        FSQ_ON, SAN_ON, FSC_ON, GAP_ON, UPI_ON, RSF_ON, LIVE_ON = keep
 
 
 def _run(dashboard, data_dir, out_dir, s=None, now=None):
