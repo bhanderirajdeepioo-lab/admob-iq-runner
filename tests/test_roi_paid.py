@@ -558,7 +558,7 @@ def test_be_build_holds_their_own_all_rows_against_their_packs(tmp_path, monkeyp
             beb._fday(S_every, x)
         assert sum(S_own.values()) > 0 and got[0] == body["newest"] and got[4] == set()
         if co:
-            assert kind == "all" and args[0] == S_own and args[2:] == (date(2026, 10, 13).toordinal(),
+            assert kind == "all" and args[0] == S_own and args[2:4] == (date(2026, 10, 13).toordinal(),
                                                                        date(2026, 10, 10).toordinal())
         else:
             assert kind == "ref" and args[0] == S_every != S_own

@@ -264,21 +264,21 @@ def test_breakeven_caches_are_made_again_at_once_when_the_lag_moves_and_byte_for
     gcu3, gco3, gce3, gv3, be3, bec3 = final_days.pin(gcu, gco, gce, gv, be, bec)
     site, data, dash = TB.make(tmp_path)
     d3 = copy.deepcopy(dash)
-    assert be3.run(d3, data, site, {}, TB.NOW) == ["/be_*"] and be3.pop_line().endswith("refit yes, calib yes")
+    assert be3.run(d3, data, site, {}, TB.NOW) == ["/be_*"] and TB._l4(be3.pop_line()).endswith("refit yes, calib yes")
     first = TB._snap(site, data)
     fits = lambda: _gz(be3._fits_path(data, TB.KEYS["a"]))                    # noqa: E731
     assert "lag" not in _cal(data) and "lag" not in fits() and not {"pv", "lag"} & set(d3["be"])   # (as before)
     gcu7, gco7, be7 = final_days(7, gcu, gco, be)
     d7 = copy.deepcopy(dash)                        # GA4_FINAL_DAYS 7 deployed the same UTC day: made again at once
     assert be7.run(d7, data, site, {}, TB.NOW + timedelta(hours=2)) == ["/be_*"]
-    assert be7.pop_line().endswith("refit yes, calib yes")
+    assert TB._l4(be7.pop_line()).endswith("refit yes, calib yes")
     assert _cal(data)["lag"] == 7 and fits()["lag"] == 7 and (d7["be"]["pv"], d7["be"]["lag"]) == (7, 7)
     d7b = copy.deepcopy(dash)                       # … once: the next build that day reads the caches
     be7.run(d7b, data, site, {}, TB.NOW + timedelta(hours=3))
-    assert be7.pop_line().endswith("refit no, calib no") and d7b["be"] == d7["be"]
+    assert TB._l4(be7.pop_line()).endswith("refit no, calib no") and d7b["be"] == d7["be"]
     d3b = copy.deepcopy(dash)                       # the rollback (3 again, the same day): made again at once, and
     be3.run(d3b, data, site, {}, TB.NOW + timedelta(hours=4))    # every file and cache byte for byte the first build's
-    assert be3.pop_line().endswith("refit yes, calib yes")
+    assert TB._l4(be3.pop_line()).endswith("refit yes, calib yes")
     assert TB._snap(site, data) == first and d3b["be"] == d3["be"]
 
 
