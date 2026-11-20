@@ -178,6 +178,7 @@
   .banner.demo{background:var(--watch-b);color:var(--watch);border:1px solid #4a3a12}
   .banner.empty{background:var(--panel);color:var(--muted);border:1px solid var(--line2)}
   .banner.fault{background:var(--bad-b);color:var(--bad);border:1px solid var(--bad)}
+  .banner.dcheck{background:var(--watch-b);color:var(--watch);border:1px solid var(--watch)}   /* a data check: amber, nothing stopped */
   .std-cus{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:6px 0 8px}
   .rng-mon{gap:2px;padding-left:4px;padding-right:4px}
   .rng-mon button{background:none;border:0;color:var(--ink2);font:inherit;font-weight:700;padding:2px 6px;border-radius:6px;cursor:pointer}
@@ -5120,8 +5121,7 @@ function render(){
   if(bn){
     if(DATA.is_demo){ bn.innerHTML='<div class="banner demo">🧪 SAMPLE DATA — ye demo numbers hain. Setup poora hone ke baad yahan aapka asli AdMob data aa jayega.</div>'; }
     else if(DATA.empty){ bn.innerHTML='<div class="banner empty">⏳ Abhi koi data nahi aaya. Pehle sync ke baad (ya AdMob me is duration ki earning aane par) yahan dikh jayega.</div>'; }
-    else { bn.innerHTML=''; const t=faultBannerText();
-      if(t){ const d=document.createElement('div'); d.className='banner fault'; d.textContent=t; bn.appendChild(d); } }
+    else bn.innerHTML=faultBannersHtml();
   }
   updateFreshness();
   HUB.hold++; try{ show('overview'); }finally{ HUB.hold--; }   // ✨ hub: not a route — the caller shows the real screen next
@@ -14148,9 +14148,22 @@ function faultBannerText(){ const f=tzFault(), st=((DATA.build_faults||[]).find(
     parts=[];
   if(f) parts.push('time zone data missing on the build machine ('+(f.names||[]).join(', ')+') — By date D0, eCPM same'
     +' time yesterday aur raat ka "today" ruke hue hain');
-  if(st.length) parts.push('ye hisse update nahi ho rahe: '+st.map(x=>x&&x.name).filter(Boolean).join(', ')
+  const bad=st.filter(x=>x&&x.error!=='DataWarning');   // (a DataWarning is a data check, not a stop: the amber line)
+  if(bad.length) parts.push('ye hisse update nahi ho rahe: '+bad.map(x=>x&&x.name).filter(Boolean).join(', ')
     +' (robot me error)');
   return parts.length?'⚠️ Build problem: '+parts.join(' · ')+'. Fix hone tak ye numbers update nahi honge.':''; }
+// the amber line ('' = none): build steps that reported a DATA CHECK (error "DataWarning" — a guard found inputs or
+// answers to doubt; nothing stopped updating, its days are marked on their tab). DCHK: a guard's step name → [the
+// tab's name, which days] (a new guard adds its own; an unknown name is shown as it is)
+const DCHK={'be guard':['Breakeven','kuch install dino']};
+function dataCheckBannerText(){ const st=((DATA.build_faults||[]).find(x=>x&&x.kind==='step')||{}).steps||[],
+    dc=st.filter(x=>x&&x.name&&x.error==='DataWarning').map(x=>DCHK[x.name]||[x.name,'kuch dino']);
+  return dc.length?'🔎 Data check: '+dc.map(([n,w])=>n+' — '+w+" pe 'data check' laga hai").join(' · ')
+    +'; un dino ke number pakka na maanein (din kholkar wajah dekhein).':''; }
+// both banners over every screen: the red one (a part not updating) first, then the amber data check
+function faultBannersHtml(){ const t=faultBannerText(), d=dataCheckBannerText(),
+    esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return (t?`<div class="banner fault">${esc(t)}</div>`:'')+(d?`<div class="banner dcheck">${esc(d)}</div>`:''); }
 // The install-day ("Day") D0 of an app over the period vs DATA.roas.d0's Day keys: the backend (merge_spend) takes a
 // store's click date ONCE, from a complete read at most day_next.late_h after its Day moment ((date+1 00:00 in its
 // accounts' zone) + Google's lag: the next morning), and never changes it. by_app[app].d0day_next: the app's own next

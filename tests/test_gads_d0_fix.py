@@ -910,6 +910,14 @@ def ov(tmp_path_factory):
                                                                  {"name": "gads geo", "error": "HttpError"}]}]
     fx["bothfault"] = json.loads(json.dumps(fx["daygap"]))
     fx["bothfault"]["build_faults"].append({"kind": "step", "steps": [{"name": "roi", "error": "ValueError"}]})
+    # a DATA CHECK (error "DataWarning": a guard's doubt, nothing stopped): alone, beside a real failure of the same
+    # step, and an unknown guard's name as it is
+    fx["dconly"] = json.loads(json.dumps(fx["daymiss"]))
+    fx["dconly"]["build_faults"] = [{"kind": "step", "steps": [{"name": "be guard", "error": "DataWarning"}]}]
+    fx["dcboth"] = json.loads(json.dumps(fx["daymiss"]))
+    fx["dcboth"]["build_faults"] = [{"kind": "step", "steps": [{"name": "be guard", "error": "DataWarning"},
+                                                              {"name": "roi", "error": "ValueError"},
+                                                              {"name": "new guard", "error": "DataWarning"}]}]
     fx["daylater"] = json.loads(json.dumps(fx["daymiss"]))
     by = fx["daylater"]["roas"]["by_app"]
     by["Demo Gallery"]["d0day_next"] = {"date": "2026-01-07", "at": "2026-01-08T12:00:00Z"}     # 17:30 IST, 8 Jan
@@ -945,7 +953,8 @@ def ov(tmp_path_factory):
     rep = json.loads(out.stdout)
     assert rep["errors"] == []
     return {k: v["ov"] for k, v in rep["other"].items()} | {"_fx": fx} | {"_fb": {k: v["fb"] for k, v in
-                                                                                rep["other"].items()}}
+                                                                                rep["other"].items()}} | \
+        {"_dc": {k: v["dc"] for k, v in rep["other"].items()}, "_bh": {k: v["bh"] for k, v in rep["other"].items()}}
 
 
 def _tds(h):
@@ -1900,6 +1909,25 @@ def test_day_a_morning_lost_to_the_build_machines_time_zone_says_so(ov):
                                           ' — By date D0, eCPM same time yesterday aur raat ka "today" ruke hue hain ·'
                                           ' ye hisse update nahi ho rahe: roi (robot me error). Fix hone tak ye numbers'
                                           ' update nahi honge.')
+    # a data check is never the red "update nahi ho rahe" line: its own amber line; a real failure stays red
+    DC = ("🔎 Data check: Breakeven — kuch install dino pe 'data check' laga hai; un dino ke number pakka na maanein"
+          " (din kholkar wajah dekhein).")
+    assert ov["_fb"]["dconly|USD"] == "" and ov["_dc"]["dconly|USD"] == DC                       # amber only
+    assert ov["_bh"]["dconly|USD"] == '<div class="banner dcheck">' + DC.replace("'", "&#39;") + "</div>"
+    assert ov["_dc"]["stepfault|USD"] == "" and ov["_bh"]["stepfault|USD"] == (                   # red only
+        '<div class="banner fault">' + ov["_fb"]["stepfault|USD"] + "</div>")
+    assert ov["_fb"]["dcboth|USD"] == ("⚠️ Build problem: ye hisse update nahi ho rahe: roi (robot me error). Fix hone"
+                                       " tak ye numbers update nahi honge.")                     # both: red first
+    assert ov["_dc"]["dcboth|USD"] == ("🔎 Data check: Breakeven — kuch install dino pe 'data check' laga hai · new"
+                                       " guard — kuch dino pe 'data check' laga hai; un dino ke number pakka na"
+                                       " maanein (din kholkar wajah dekhein).")
+    bh = ov["_bh"]["dcboth|USD"]
+    assert bh.index('class="banner fault"') < bh.index('class="banner dcheck"') and bh.count("<div") == 2
+    assert ov["_bh"]["daymiss|USD"] == "" and ov["_dc"]["daygap|USD"] == ""                     # no fault: no banner
+    with open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8") as f:
+        p = f.read()
+    css = p[p.index("<style>"):p.index("</style>")]
+    assert ".banner.dcheck{background:var(--watch-b);color:var(--watch);border:1px solid var(--watch)}" in css
 
 
 def test_day_each_app_at_its_own_moment(ov):

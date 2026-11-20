@@ -120,7 +120,7 @@ breaks even (the page shows the days of its period).
                           covered), "chk" 1 (a GA4 hole date in its first week: "data check" — information only, still shifted;
                           with "ckw": the reasons, one letter each — "h" that hole, "f" the input guard put every
                           user's eCPM_fs in (src "p"), "c" its day-0 cohort read broke (src "p"), "s" the sanity check:
-                          a forecast row far earlier than its benchmark's growth while its real ROAS sits at the
+                          a country row far earlier than its benchmark's growth while its real ROAS sits at the
                           benchmark — absent: the hole alone), "unc": [[cc, share], …,
                           ["…", rest]], "cty":
                           [[cc, share, CPI, eCPM_fs, P30, P90, P180, median, low, high, lim, rk, bm], …] (P30 / P90 /
@@ -204,13 +204,17 @@ was. Each app has one SOURCE a build:
     a run; its "rq" in the store) — a later whole read heals the day by itself. Counted in the counts line ("guard fs
     N (left N), cohort N (recent N)"); the health banner ("be guard", DataWarning — once a build, counts only) when a
     replaced day of the last FSQ_WIN days was read again FSQ_TRIES times and is still broken, or a broken day-0 read is
-    there, or the sanity check (below) flagged a row there. FSQ_ON False: the step exactly as before the guard.
-  THE SANITY CHECK (every source; _sus): a forecast row — the app line, or a country row with ≥ SAN_SHARE of the
-    day's spend; shifted, not broken even — whose breakeven median is ≤ SAN_R × the day its cohort would break even
+    there (the page's amber "Data check" line, never the red "not updating" one). FSQ_ON False: the step exactly as before the guard.
+  THE SANITY CHECK (every source; _sus): a forecast row — a country row with ≥ SAN_SHARE of the day's spend, or the
+    app line; shifted, not broken even — whose breakeven median is ≤ SAN_R × the day its cohort would break even
     growing as its BENCHMARK grows from the anchor (the countries' median past ROAS curves, the card's rule; none
     within them: their last age) while its real ROAS at the anchor is within ÷ / × SAN_C of the benchmark's there: an
-    early answer from the model's growth alone, not from what the cohort made → the day's "data check" ("ckw" "s"),
-    counted ("check N (recent N)") — the numbers are not changed.
+    early answer from the model's growth alone, not from what the cohort made. Checked against outcomes on every app's
+    history (20 Nov 2026: each day answered as of its anchor with the fits of that time): such country rows broke even
+    clearly later than their median far more often than the rows past the rule; the app line's did not — so a country
+    row marks its day's "data check" ("ckw" "s") and is counted ("check N (recent N)"), an app-line row is only counted
+    ("app check N"). The numbers are not changed, and the health banner does not count them (they would hold it on
+    most build days).
 🌱 ORGANIC (src "p" apps only; the page's Google Ads | Organic switch): every new user who is NOT a Google Ads user = the
 all-users cells − the Google Ads users' cells per country × install day, from the two cubes' own reads (the probe measured
 the paid read + its complement = the whole read) — the all-users packs (out_dir, one at a time) and the paid packs
@@ -1811,6 +1815,7 @@ def _bench_curve(ages, cov):
 
 
 SAN_LOG = None                       # (a list: every row the sanity check judged is appended — a back-test's measure)
+SANC = {"app": 0}                    # this build's app-line rows the sanity check found (counted, never marked)
 
 
 def _bench_growth(ages, bench, a, ra):
@@ -2065,7 +2070,8 @@ def predict(key, fc, cal, pin, sk=None):
                 if yet and be is not None:            # the sanity check on the app line: its countries' own benchmark
                     bc = _bench_curve(ages, cov)      # curves joined by the day's spend (the card's rule)
                     if _sus(be, ages, bc, anc[0], anc[1], (key, r.day, "*")):
-                        sus = True
+                        SANC["app"] += 1      # (counted only: on the app line the rule did not tell a late day —
+                        #                       the outcome back-test, 20 Nov 2026 — so no mark)
         fq = (r.fq or 0) | (FQ_CC if any((x.fq or 0) & FQ_FS for x in byday.get(r.day, {}).values()) else 0)
         ck = ("f" if fq & (FQ_FS | FQ_CC) else "") + ("c" if fq & FQ_COH else "") + ("s" if sus else "")
         if chk or ck:
@@ -2620,6 +2626,7 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
     its calib.json stamped with the mode it was made in)."""
     global LINE
     LINE = None
+    SANC["app"] = 0
     if not isinstance(dashboard, dict):
         return []
     dashboard.pop("be", None)
@@ -2898,9 +2905,11 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                 save_fsq(data_dir, fsq)
             except Exception as e:
                 _fail(e, "be guard")
-        if n["fsl"] or n["cohw"] or n["susw"]:                  # a broken input the re-reads did not heal, a broken
-            print("be guard skipped: DataWarning", file=sys.stderr)    # cohort read or an early answer the cohort did
-        #                                                         not make, in the last FSQ_WIN days: the banner, once
+        if n["fsl"] or n["cohw"]:                               # a broken input the re-reads did not heal or a broken
+            print("be guard skipped: DataWarning", file=sys.stderr)    # cohort read in the last FSQ_WIN days: the
+        #                                                         amber banner, once (the sanity check's marks are not
+        #                                                         in it: measured on every app's history it would stand
+        #                                                         on most build days — its marks and counts stay)
         os.makedirs(out_dir, exist_ok=True)
         ptr, keep, nd, cov, unc = {}, set(), 0, 0, 0
         ns = {"p": 0, "a": 0, "org": 0}
@@ -2936,10 +2945,11 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             cov += len(fc["fits"])
             unc += nu
         _clean(out_dir, keep)
-        LINE = "be: apps %d, days %d, covered %d, uncovered %d, refit %s, calib %s%s%s%s%s%s" % (
+        LINE = "be: apps %d, days %d, covered %d, uncovered %d, refit %s, calib %s%s%s%s%s%s%s" % (
             len(ptr), nd, cov, unc, "yes" if n["refit"] else "no", "yes" if ran.get("a") else "no",
             (", failed %d" % n["fail"]) if n["fail"] else "",
             (", check %d (recent %d)" % (n["sus"], n["susw"])) if n["sus"] else "",
+            (", app check %d" % SANC["app"]) if SANC["app"] else "",
             (", guard fs %d (left %d), cohort %d (recent %d)" % (n["fs"], n["fsl"], n["coh"], n["cohw"]))
             if n["fs"] or n["coh"] else "",
             (", ecpm apps %d, ecpm failed %d, ecpm stale %d" % (n["ec"], n["ec_fail"], n["ec_stale"]))

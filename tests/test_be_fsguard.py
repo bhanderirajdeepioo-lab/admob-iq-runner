@@ -7,9 +7,9 @@ country cells only when only one country's broke, and carries the page's "data c
 broken day-0 read is marked ("c") and changes nothing; the re-read list for the paid first-session store; the health
 line only for a broken day of the last FSQ_WIN days whose re-reads are used up (or a broken day-0 read there), once a
 build, the counts line counts only; with the guard off every file as before it. The OUTPUT sanity check (_sus): the
-benchmark-growth day, its thresholds, a flagged row marking its day ("ckw" "s", counted, the banner; its numbers
-unchanged), a country row under SAN_SHARE of the day's spend never judged. SYNTHETIC values only (apps
-"app~synth-…", countries AA … DH, the calendar 2030–2031)."""
+benchmark-growth day, its thresholds, a flagged country row marking its day ("ckw" "s", counted; its numbers
+unchanged; never the banner), an app-line row counted, never marked, a country row under SAN_SHARE never judged.
+SYNTHETIC values only (apps "app~synth-…", countries AA … DH, the calendar 2030–2031)."""
 import gzip
 import json
 import os
@@ -217,9 +217,24 @@ def test_a_flagged_row_marks_its_day_and_counts_once(tmp_path, monkeypatch, whol
     day = {x["d"]: x for x in b["days"]}[D]
     assert hit["n"] == 1 and day["chk"] == 1 and day["ckw"] == "s"
     assert not any("ckw" in x for x in b["days"] if x["d"] != D)
-    assert ", check 1 (recent 1)" in line and err == "be guard skipped: DataWarning\n"
+    assert ", check 1 (recent 1)" in line and err == ""                   # (counted; never the health banner)
     w = {x["d"]: x for x in whole[0]["days"]}[D]                           # (information only: the numbers as they were)
     assert day["cty"] == w["cty"] and day.get("app") == w.get("app")
+
+
+def test_an_app_line_row_is_counted_never_marked(tmp_path, monkeypatch):
+    real, hits = be._sus, []
+
+    def sus(med, ages, bench, a, ra, tag=None, bbe=None):
+        if tag and tag[0] == KA and tag[2] == "*":
+            hits.append(tag)
+            return True
+        return real(med, ages, bench, a, ra, tag, bbe)
+    monkeypatch.setattr(be, "_sus", sus)
+    b, line, err, _ = _run(tmp_path, monkeypatch)
+    n = len(hits)
+    assert n > 0 and ", app check %d," % n in line and err == ""           # every app-line row it judged: counted …
+    assert not any("ckw" in x for x in b["days"]) and "check" not in line.replace("app check", "")   # … never marked
 
 
 def test_a_country_row_under_san_share_of_the_days_spend_is_never_judged(tmp_path, monkeypatch):

@@ -57,7 +57,7 @@ for (const dash of Object.keys(ctx.__FX).filter(k => k !== 'app')) {
     try {
       other[k] = JSON.parse(run(set(dash, view, '') + `JSON.stringify({spa: spendByApp(curWin()), hub: hubSpend(__FX.app),
         dw: dateWiseRows(curWinArr()).reduce((t, r) => t + r.spend, 0), ov: renderOverview().innerHTML,
-        fb: faultBannerText()})`));
+        fb: faultBannerText(), dc: dataCheckBannerText(), bh: faultBannersHtml()})`));
     } catch (e) { errors.push(k + ' other: ' + (e.stack || e.message)); }
   }
 }
