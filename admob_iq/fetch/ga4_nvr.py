@@ -189,6 +189,7 @@ def step_app(ga, store, today, hs, now, ask=()):
     # the window reads again leaves "rr" (above): its lone read comes again when it leaves the window.
     rr = store.setdefault("rr", {})
     edge = recent - timedelta(days=1)
+    lone = set()                                        # (the days read alone in this run)
     for d in sorted((d for d, v in mark.items() if v == "s" and first <= gu._d(d) <= edge
                      and (d not in rr or d not in mp)), reverse=True):
         got, mk, pm = read(ga, gu._d(d), gu._d(d))
@@ -197,11 +198,14 @@ def step_app(ga, store, today, hs, now, ask=()):
         mark.update(mk)
         mp[d] = pm[d]
         rr[d] = 1
+        lone.add(d)
         did = True
     # a final day a reader of the store found broken (REREAD: the Breakeven build's input guard — the day's first-session
     # read disagreed with the cohort read of the same users) is read again alone: newest first, at most RQ_CAP days a run,
     # each at most RQ_MAX times and RQ_GAP_H hours apart ("rq": {day: [times, last read]}) — GA4 may give the whole day
-    # on a later read; past RQ_MAX the day stays as read (the reader falls back and says so)
+    # on a later read; past RQ_MAX the day stays as read (the reader falls back and says so). A day read alone earlier
+    # in this run is not read again here; a read that comes back worse-flagged than the stored one (whole > thresholded >
+    # sampled, per part — the backfill's merge) keeps the stored part: the try is counted all the same
     if ask:
         rq, k = store.setdefault("rq", {}), 0
         for d in sorted({str(x) for x in ask}, reverse=True):
@@ -211,17 +215,26 @@ def step_app(ga, store, today, hs, now, ask=()):
                 dd = gu._d(d)
             except ValueError:
                 continue
-            if d not in days or not first <= dd <= edge:
-                continue                                # (a day the window still reads every hour, or one not held)
+            if d not in days or not first <= dd <= edge or d in lone:
+                continue                                # (a day the window still reads every hour, one not held, or
+            #                                             one read alone already this run)
             t = rq.get(d)
             t = t if isinstance(t, list) and len(t) == 2 and isinstance(t[0], int) else [0, None]
             if t[0] >= RQ_MAX or gu._hours_since(t[1], now) < RQ_GAP_H:
                 continue
             got, mk, pm = read(ga, dd, dd)
-            days[d] = got[d]
-            mark.pop(d, None)
-            mark.update(mk)
-            mp[d] = pm[d]
+            cur, own = days[d], mp.get(d)
+            own = dict(own) if isinstance(own, dict) else {}
+            cur = days[d] = dict(cur) if isinstance(cur, dict) else {}
+            for p in PARTS:                             # each part: the new read unless the stored one is better
+                if p not in cur or RANK[pm[d].get(p)] >= RANK[own.get(p)]:
+                    cur[p] = got[d][p]
+                    if pm[d].get(p):
+                        own[p] = pm[d][p]
+                    else:
+                        own.pop(p, None)
+            mp[d] = own
+            _remark(mark, d, own)
             rr[d] = 1
             rq[d] = [t[0] + 1, now_iso]
             k += 1

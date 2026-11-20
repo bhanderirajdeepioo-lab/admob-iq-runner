@@ -421,3 +421,34 @@ def test_reread_reads_its_list_per_app_key_and_is_off_without_it(tmp_path, monke
     assert gv._asks(str(tmp_path)) == {}                                    # unreadable: nothing (never a failure)
     monkeypatch.setattr(gv, "REREAD", "be_tab/none.json")
     assert gv._asks(str(tmp_path)) == {}
+
+
+def test_a_day_read_alone_for_its_sampled_mark_is_not_read_again_by_reread_in_the_same_run():
+    hs = TODAY - timedelta(days=40)
+    store = _settled(hs)
+    d = (TODAY - timedelta(days=8)).isoformat()
+    store["mark"][d] = "s"                                                  # (still marked sampled, never read alone)
+    store["rr"].pop(d, None)
+    ga = BumpGA()
+    gv.step_app(ga, store, TODAY, hs, NOW + timedelta(minutes=30), [d])
+    assert _lone(ga) == [(d, d)] and d not in store.get("rq", {})          # one read; REREAD's tries untouched
+
+
+class SampledBumpGA(BumpGA):
+    def __init__(self):
+        super().__init__(sampled=True)
+
+
+def test_a_reread_that_comes_back_sampled_keeps_the_whole_stored_read_and_counts_the_try():
+    hs = TODAY - timedelta(days=40)
+    store = _settled(hs)
+    d = (TODAY - timedelta(days=8)).isoformat()
+    before, t = json.dumps(store["days"][d], sort_keys=True), NOW + timedelta(minutes=30)
+    assert store["mp"][d] == {}                                             # (stored: whole)
+    ga = SampledBumpGA()
+    gv.step_app(ga, store, TODAY, hs, t, [d])
+    assert _lone(ga) == [(d, d)] and json.dumps(store["days"][d], sort_keys=True) == before   # kept …
+    assert store["mp"][d] == {} and d not in store["mark"] and store["rq"][d] == [1, gu._now_iso(t)]   # … try counted
+    ga = BumpGA()                                                           # a day later a whole read: it replaces
+    gv.step_app(ga, store, TODAY, hs, t + timedelta(days=1), [d])
+    assert json.dumps(store["days"][d], sort_keys=True) != before and store["rq"][d][0] == 2

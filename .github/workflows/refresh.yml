@@ -288,6 +288,10 @@ jobs:
           # … the Breakeven tab from them: BE_PAID=true builds it from Google Ads users only, with its Organic view
           # (needs GA4_CUBEP; off: the tab's files as without it)
           BE_PAID:              ${{ vars.BE_PAID || 'false' }}
+          # … its two checks: BE_FSQ (the input guard of the Google Ads users' reads) and BE_SAN (the sanity check of the
+          # answers) — on unless set false; both false: the tab's files exactly as without them
+          BE_FSQ:               ${{ vars.BE_FSQ || 'true' }}
+          BE_SAN:               ${{ vars.BE_SAN || 'true' }}
           # 🖼️ Screens (admob_iq/fetch/ga4_screens.py; data/ga4_screens/ in the private repo, kept for good): GA4 views and
           # ad impressions per screen class per day with every layer, read AFTER every live GA4 step under stricter
           # quota floors (only the Google Ads users' reads above run after it). GA4_SCREENS=false stops the reads without a code push; GA4_SCREENS_BUDGET_SEC = its seconds per

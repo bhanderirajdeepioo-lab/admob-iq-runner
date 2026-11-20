@@ -872,7 +872,16 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
       // 20 Nov: the build's "ckw" beside chk — why (its input guard / sanity check; "h" the GA4 hole too; junk = the hole's)
       const ck = w => { const h = _.beRow(Object.assign({ chk: 1, ckw: w }, X), 'Alpha', G), d = _.beDet(Object.assign({ chk: 1, ckw: w }, X), 1, false);
         BER.push(h, d); return { cell: rowsOf(h)[0].cells[1], title: rowsOf(h)[0].titles[0], det: txt((d.match(/<p class="cpx-fn"><b class="cpx-chk">([\s\S]*?)<\/p>/) || [])[1] || '') }; };
-      BO.ckw = { f: ck('f'), c: ck('c'), s: ck('s'), hf: ck('hf'), junk: ck('z'), num: ck(7) }; }
+      BO.ckw = { f: ck('f'), c: ck('c'), s: ck('s'), hf: ck('hf'), junk: ck('z'), num: ck(7) };
+      // 20 Nov (round 3): "ckc" names the countries a letter comes from — the day's title, and each country row's own tag
+      const cty = [['AA', 0.6, 1.2, 5.0, null, null, null, 40, 30, 60, 120, 0, null], ['BB', 0.3, 1.0, 4.0, null, null, null, 50, 40, 80, 120, 0, null],
+        ['CC', 0.1, 1.0, 4.0, null, null, null, 50, 40, 80, 120, 0, null]];
+      const Y = Object.assign({}, X, { chk: 1, ckw: 'fs', ckc: { AA: 'f', BB: 'fs', ZZ: 7 }, cty });
+      const hy = _.beRow(Y, 'Alpha', G), dy = _.beDet(Y, 1, false);
+      BER.push(hy, dy);
+      const tags = [...dy.matchAll(/<tr><td>([^<]*) <small class="cpx-chk" title="([^"]*)">data check<\/small><\/td>/g)].map(m => [m[1], dec(m[2])]);
+      const whole = _.beDet(Object.assign({}, X, { chk: 1, ckw: 'f', cty }), 1, false);
+      BO.ckc = { title: rowsOf(hy)[0].titles[0], tags, whole_tags: (whole.match(/<small class="cpx-chk"/g) || []).length }; }
     // 15 Nov: the countries table's B lines (a null / short / junk "bm" = none; per cell) and the new card fields (all SYNTHETIC)
     { const row = bm => { const h = _.beDet({ d: '2026-02-10', age: 50, cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, 30, null, null, 400, 0].concat(bm === undefined ? [] : [bm])], unc: [], now: ['no', 20, 0.5] }, 1, false); BER.push(h); return tblOf(h, '<h4 class="cpx-h4">Countries with a benchmark').rows[0]; };
       BO.bm_bad = [undefined, null, [0.35], 'x', {}, [null, null, null, null]].map(row);

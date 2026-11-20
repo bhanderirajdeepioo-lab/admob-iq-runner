@@ -9803,7 +9803,15 @@ const BECKW={h:BECHK,
   f:'Google Ads users ka first-session data is din adhura aaya — sab users ka eCPM liya',
   c:'Google Ads users ka install-din (day 0) data is din adhura aaya — is din ke number asal se kam dikh sakte hain',
   s:'breakeven benchmark se bahut pehle dikh raha hai jabki ab tak ka asli ROAS benchmark jaisa hi hai — ye jaldi wala din sirf model ke andaze se hai, isse pakka na maanein'};
-const beChkT=x=>typeof x.ckw==='string'&&x.ckw?x.ckw.split('').map(k=>BECKW[k]).filter(Boolean).join(' · ')||BECHK:BECHK;
+// "ckc" {cc: letters}: the countries a letter comes from — named before its words ("US: …"); a letter with none of
+// them is the day's own (the whole day's eCPM_fs, the hole, the day-0 read)
+const beCkc=x=>x.ckc&&typeof x.ckc==='object'&&!Array.isArray(x.ckc)?x.ckc:{};
+const beCkcOf=(x,k)=>Object.keys(beCkc(x)).filter(cc=>typeof beCkc(x)[cc]==='string'&&beCkc(x)[cc].includes(k)).sort();
+const beChkT=x=>typeof x.ckw==='string'&&x.ckw?x.ckw.split('').map(k=>{ const cs=beCkcOf(x,k);
+    return BECKW[k]?(cs.length?cs.map(ctyName).join(', ')+': ':'')+BECKW[k]:''; }).filter(Boolean).join(' · ')||BECHK:BECHK;
+// one country row's own "data check" (its letters in "ckc"), beside its name in the opened day's table
+const beCkcTag=(x,cc)=>{ const w=beCkc(x)[cc], t=typeof w==='string'?w.split('').map(k=>BECKW[k]).filter(Boolean):[];
+  return t.length?` <small class="cpx-chk" title="${E(t.join(' · '))}">data check</small>`:''; };
 // a country's benchmark "bm" = [bCPI $, beCPM_fs $, bBE days | null, bLim days]: per cell, what is a number is shown; a malformed one: no B line
 function beBm(m){ if(!Array.isArray(m)||m.length<4) return null; const c=num(m[0]), e=num(m[1]), b=num(m[2]), l=num(m[3])>0?Math.round(m[3]):null;
   return {c:c!=null&&c>=0?c:null, e:e!=null&&e>=0?e:null, b:b!=null&&b>=0?b:null, l, t:b!=null&&b>=0?'B day '+Math.round(b):l!=null?'B > '+l+' days':''}; }
@@ -9820,7 +9828,7 @@ function beDet(x,k,pv){ const o=[], C=(Array.isArray(x.cty)?x.cty:[]).filter(c=>
   if(pv) o.push('<p class="cpx-fn">⏳ <b>Abhi final nahi</b> — ye install din '+bePv()+' din se kam purana hai: GA4 ki country aur first-session report abhi badal sakti hai, aur Google Ads ke installs bhi 1–2 din me poore judte hain (CPI abhi thoda zyada dikh sakta hai) — andaza bhi badlega.</p>');
   if(C.length) o.push(`<h4 class="cpx-h4">Countries with a benchmark (${C.length})</h4><div class="cpx-x"><table class="cpx-t"><thead><tr><th>Country</th><th class="cpx-ben">Spend share</th><th class="cpx-ben" title="Google Ads spend ÷ installs. Saath me B = benchmark: is country ke purane install dino ka median CPI">CPI</th><th class="cpx-ben" title="is din ke users ka pehle session ka eCPM (upar chuni currency me), jo BE ke formula me lagta hai. Saath me B = benchmark: is country ke purane install dino ka median">eCPM</th><th title="is country ka breakeven: BE ho chuka to asli din, warna is din ke CPI / eCPM pe is country ke purane dino se bana andaza (80% range). Saath me B = benchmark: is country ke purane install dino ka median BE din">Breakeven</th></tr></thead><tbody>`
     +C.map(c=>{ const sh=num(c[1]), cp=num(c[2]), ec=num(c[3]), bm=beBm(c[12]), rk=num(c[11]), bd=num(c[7]);
-      return `<tr><td>${E(ctyName(c[0]))}</td><td class="cpx-ben">${sh!=null?E(bePs(sh)):beDash('spend share nahi aaya')}</td><td class="cpx-ben">${cp!=null?beCpi(cp,k):beDash('CPI nahi aaya')}${bm&&bm.c!=null?beB('B '+beCpi(bm.c,k),'benchmark CPI: is country ke purane install dino ka median',beVsB(cp,bm.c,'CPI',pv)):''}</td>`
+      return `<tr><td>${E(ctyName(c[0]))}${beCkcTag(x,c[0])}</td><td class="cpx-ben">${sh!=null?E(bePs(sh)):beDash('spend share nahi aaya')}</td><td class="cpx-ben">${cp!=null?beCpi(cp,k):beDash('CPI nahi aaya')}${bm&&bm.c!=null?beB('B '+beCpi(bm.c,k),'benchmark CPI: is country ke purane install dino ka median',beVsB(cp,bm.c,'CPI',pv)):''}</td>`
         +`<td class="cpx-ben">${ec!=null?beCpi(ec,k):beDash('is din ka pehle session ka eCPM nahi aaya')}${bm&&bm.e!=null?beB('B '+beCpi(bm.e,k),'benchmark eCPM (pehle session ka): is country ke purane install dino ka median',beVsB(ec,bm.e,'ECPM',pv)):''}</td>`
         +`<td>${beIns(beCtyBe(c[7],c[8],c[9],c[10],c[11]),bm&&bm.t?beB(bm.t,bm.b!=null?'benchmark breakeven: is country ke purane install dino ka median din':'benchmark ka median breakeven '+bm.l+' din ke data ke aage hai — utna dekha hi nahi',
           (rk===0||rk===1||rk===3)&&bd!=null&&bd>=0&&bm.b!=null?beVsB(bd,bm.b,'BE',pv):''):'')}</td></tr>`; }).join('')+'</tbody></table></div>'   /* (BE: a % only on an exact or a model day — rk 1 / 3 / 0; never a "≤ day N" bound (2 / 4), "not by day N" (5 / 6) or "beyond data") */

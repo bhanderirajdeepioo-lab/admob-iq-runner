@@ -1364,6 +1364,12 @@ def test_breakeven_kitna_pakka_on_day_1_7_14_and_the_data_check_mark(out):
     assert k["s"]["title"].startswith("breakeven benchmark se bahut pehle dikh raha hai jabki ab tak ka asli ROAS")
     assert k["hf"]["title"] == c["titles"][0] + " · " + k["f"]["title"]          # (a hole and the guard: both, in order)
     assert k["junk"]["title"] == k["num"]["title"] == c["titles"][0]             # (an unknown / junk "ckw": the hole's text)
+    q = out["be"]["ckc"]                                                          # "ckc": the countries named, each row tagged
+    F, S = k["f"]["title"], k["s"]["title"]
+    aa, bb = q["tags"][0][0], q["tags"][1][0]                                    # (the page's own country names)
+    assert q["title"] == aa + ", " + bb + ": " + F + " · " + bb + ": " + S
+    assert q["tags"] == [[aa, F], [bb, F + " · " + S]]                            # (CC: no tag; a junk entry: nothing)
+    assert q["whole_tags"] == 0                                                  # (the whole day's "f": no country tag)
     p = _page()
     css = p[p.index("<style>"):p.index("</style>")]
     assert ".cpx-fn b.cpx-chk,.cpx-t td small.cpx-chk{color:var(--watch)" in css   # (amber in the row and the opened day:

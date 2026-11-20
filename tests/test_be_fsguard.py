@@ -12,12 +12,14 @@ unchanged; never the banner), an app-line row counted, never marked, a country r
 SYNTHETIC values only (apps "app~synth-…", countries AA … DH, the calendar 2030–2031)."""
 import gzip
 import json
+import math
 import os
 from datetime import timedelta
 
 import pytest
 
 from admob_iq import be_build as be
+from admob_iq.fetch import ga4_uninstall as gu
 from tests import test_be_build as T
 from tests import test_be_paid as P
 
@@ -125,10 +127,56 @@ def test_one_countrys_broken_read_replaces_only_that_country(tmp_path, monkeypat
     assert day["ckw"] == "f" and ", guard fs 1 " in line
 
 
-def test_a_young_or_small_day_is_not_judged(tmp_path, monkeypatch):
-    young = (T.TODAY - timedelta(days=be.FSQ_AGE - 1)).isoformat()
-    b, line, *_ = _run(tmp_path, monkeypatch, lambda s, d, c: _scale_nvr(d, young, 0.2))
-    assert "ckw" not in {x["d"]: x for x in b["days"]}[young] and "guard" not in line   # (both day-0 reads not settled)
+def test_the_finality_gate_boundary(tmp_path, monkeypatch):
+    """Judged only on a day final in both files: install day ≤ both newest − LAG (and both day-0 cells final)."""
+    edge = (T.TODAY - timedelta(days=be.LAG)).isoformat()
+    young = (T.TODAY - timedelta(days=be.LAG - 1)).isoformat()
+
+    def prep(site, data, scr):
+        _scale_nvr(data, edge, 0.2)
+        _scale_nvr(data, young, 0.2)
+    b, line, err, data = _run(tmp_path, monkeypatch, prep)
+    days = {x["d"]: x for x in b["days"]}
+    assert days[edge].get("ckw") == "f" and "ckw" not in days[young]          # the edge judged, a day younger never
+    assert ", guard fs 1 " in line and err == ""
+    with open(os.path.join(data, "be_tab", be.FSQ_FILE), encoding="utf-8") as f:
+        assert json.load(f)["days"] == {KA: [edge]}                           # (the re-read list follows it)
+
+
+def test_a_day_0_cell_not_final_is_never_judged(tmp_path, monkeypatch):
+    """An All row's day 0 not final (df 0) in either file: no app-line decision (the whole day is not replaced); a
+    country is judged on its own pack rows (final there) — AA, the one big enough, alone."""
+    for side in ("paid", "all"):
+        def prep(site, data, scr, side=side):
+            _scale_nvr(data, D, 0.2)
+            p = os.path.join(scr, "roi_%s_p.json.gz" % KA) if side == "paid" else os.path.join(site, "roi_%s.json.gz" % KA)
+            f = P._rd(p)
+            for r in f["rows"]:
+                if r[0] == D:
+                    r[5] = 0
+            P._wr(p, f)
+        b, line, err, data = _run(tmp_path / side, monkeypatch, prep)
+        day = {x["d"]: x for x in b["days"]}[D]
+        want = _all_ecpm(data, D)
+        got = {c[0]: c[3] for c in day["cty"]}
+        assert day.get("ckc") == {"AA": "f"} and got["AA"] == want["AA"], side       # AA: its own decision
+        assert all(abs(got[cc] - 0.2 * 1.2 * want[cc]) < 0.01 for cc in got if cc != "AA"), side   # the rest as read
+
+
+def test_a_country_row_whose_day_0_is_not_final_is_never_judged(tmp_path, monkeypatch):
+    """One country's own decision needs its day-0 cell final in BOTH files' packs (the row's df ≥ 1)."""
+    for side in ("paid", "all"):
+        def prep(site, data, scr, side=side):
+            _scale_nvr(data, D, 0.45, "AA")
+            p = os.path.join(scr, "roi_%s_p00.json.gz" % KA) if side == "paid" else \
+                os.path.join(site, "roi_%s_c00.json.gz" % KA)
+            pk = P._rd(p)
+            for r in pk["c"]["AA"]:
+                if r[0] == D:
+                    r[5] = 0
+            P._wr(p, pk)
+        b, line, *_ = _run(tmp_path / side, monkeypatch, prep)
+        assert "ckw" not in {x["d"]: x for x in b["days"]}[D] and "guard" not in line, side
 
 
 def test_the_health_line_only_when_the_re_reads_are_used_up_in_the_window(tmp_path, monkeypatch):
@@ -244,3 +292,194 @@ def test_a_country_row_under_san_share_of_the_days_spend_is_never_judged(tmp_pat
     b, line, err, _ = _run(tmp_path, monkeypatch)
     assert seen and all(t[2] == "*" for t in seen)                          # only the app line judged
     assert all("s" in x.get("ckw", "s") for x in b["days"] if x.get("ckw"))
+
+
+# ── a made-up app whose real rows trip the sanity check end to end (no mocked _sus) ─────────────────────────────────
+
+KF = gu.file_key("app~synth-f")
+SAN_DAY = (T.TODAY - timedelta(days=9)).isoformat()      # anchored at day 3 (age 2): CLAG days of final cells before it
+
+
+def ff_world(tmp):
+    """One app, one country FF whose ROAS grows FASTER the lower its first-session eCPM (growth (1 + age)^g, g = ½ +
+    0.6 log(5 / eCPM): the model learns "a low start, a big catch-up"), 540 install days; on SAN_DAY its eCPM_fs is
+    far under the learned range while its real ROAS so far grows exactly as the benchmark (g = ½, at its level) — the
+    model's growth alone makes its breakeven early."""
+    site, data = str(tmp / "site"), str(tmp / "data")
+    os.makedirs(site, exist_ok=True)
+    os.makedirs(os.path.join(data, "ga4_nvr"), exist_ok=True)
+    g = T.prng(23)
+    rows, pack, store = [], {"FF": []}, {}
+    for i in range(T.NDAYS):
+        x = T.TODAY - timedelta(days=T.NDAYS - 1 - i)
+        xs, age = x.isoformat(), (T.TODAY - x).days
+        sp = 200.0 * (1 + 0.1 * next(g))
+        cpi, ecpm = 0.5 * math.exp(0.3 * next(g)), 5.0 * math.exp(0.4 * next(g))
+        gg, r0 = 0.5 + 0.6 * math.log(5.0 / ecpm), 0.01 * ecpm / cpi * math.exp(0.1 * next(g))
+        if xs == SAN_DAY:
+            ecpm, cpi, gg, r0 = 1.5, 0.5, 0.5, 0.1
+        na = round(sp / cpi, 2)
+        n = int(na * 1.3) + 1
+        d = [round(sp * r0 * (1.0 + a) ** gg, 6) for a in range(min(age, 30) + 1)]
+        m = [round(sp * r0 * (1.0 + a) ** gg, 6) for a in range(60, age + 1, 30)]
+        pack["FF"].append(T.roi_row(xs, n, na, round(sp, 6), d, m))
+        rows.append(T.roi_row(xs, n, na, round(sp, 6), d, m))
+        imp = n * 10
+        store[xs] = {"c": [["n", "FF", round(ecpm * imp / 1000, 6), imp], ["r", "FF", 1.0, 400]], "u": [], "s": []}
+    pf = "roi_%s_c00.json.gz" % KF
+    with gzip.open(os.path.join(site, pf), "wt", encoding="utf-8") as f:
+        json.dump({"v": 1, "b": "x", "key": KF, "c": pack}, f)
+    with gzip.open(os.path.join(site, "roi_%s.json.gz" % KF), "wt", encoding="utf-8") as f:
+        json.dump({"v": 1, "key": KF, "newest": T.TODAY.isoformat(), "rows": rows, "cd": {"packs": [[pf, "x"]]}}, f)
+    with gzip.open(os.path.join(data, "ga4_nvr", KF + ".json.gz"), "wt", encoding="utf-8") as f:
+        json.dump({"v": 2, "days": store}, f)
+    return site, data, {"roi": {"file": "roi.json.gz", "apps": {"app~synth-f": {"file": "roi_%s.json.gz" % KF,
+                                                                                    "st": "Normal"}}}}
+
+
+def _ff(tmp, s):
+    site, data, dash = ff_world(tmp)
+    paths, line, err = P._go(dash, data, site, s)
+    return site, data, dash, paths, line, err
+
+
+def test_the_real_rule_trips_a_made_up_country_row_end_to_end(tmp_path):
+    site, data, dash, paths, line, err = _ff(tmp_path, {})
+    b = P._rd(os.path.join(site, "be_%s.json.gz" % KF))
+    day = {x["d"]: x for x in b["days"]}[SAN_DAY]
+    assert day["chk"] == 1 and day["ckw"] == "s" and day["ckc"] == {"FF": "s"}       # its own row, named
+    assert ", check " in line and err == ""                                          # (counted; not the banner)
+    _, _, _, _, line0, _ = _ff(tmp_path / "off", {"be_san": False})                  # BE_SAN off: nothing of it
+    b0 = P._rd(os.path.join(str(tmp_path / "off" / "site"), "be_%s.json.gz" % KF))
+    assert not any("ckw" in x or "ckc" in x for x in b0["days"]) and "check" not in line0
+    assert [x["cty"] for x in b0["days"]] == [x["cty"] for x in b["days"]]           # (numbers as they were)
+
+
+# sha256 (tests/test_be_paid._digest) of the step's outputs with BOTH checks off — worked out once with
+# admob_iq/be_build.py as it was before them (the commit this branch starts from, loaded in its place), on these worlds
+BOTH_OFF_BEFORE = {"ff": "b81b23c9de6c85713ca017e8b2e251dbdfec76dad9ff0efc11260ce393917e0c",       # (at the tests'
+                   "paid": "133b0314922404934bc4ed200d91f6b1a180ba2c374cfc1296493629b59a54e7"}     # GA4_FINAL_DAYS)
+
+
+def _paid_broken(tmp, mp):
+    site, data, dash, scr = P.paid_world(tmp)
+    _scale_nvr(data, D, 0.2)
+    P._state(mp, scr)
+    return site, data, dash
+
+
+def both_off_digests(tmp, mp):
+    """The two worlds through the step with BE_FSQ and BE_SAN off (the sanity check's real rule trips the first, the
+    input guard's the second)."""
+    out = {}
+    site, data, dash = ff_world(tmp / "ff")
+    paths, line, err = P._go(dash, data, site, {"be_fsq": False, "be_san": False})
+    out["ff"] = P._digest(site, data, dash, paths, line, err)
+    site, data, dash = _paid_broken(tmp / "paid", mp)
+    paths, line, err = P._go(dash, data, site, {"be_paid": True, "be_fsq": False, "be_san": False})
+    out["paid"] = P._digest(site, data, dash, paths, line, err)
+    return out
+
+
+def test_both_checks_off_every_output_byte_for_byte_as_before_them(tmp_path, monkeypatch):
+    if be.LAG != be.LAG0:
+        pytest.skip("the digests were worked out at the tests' GA4_FINAL_DAYS (3)")
+    assert both_off_digests(tmp_path, monkeypatch) == BOTH_OFF_BEFORE
+
+
+# ── the reference agrees with itself; the guard's own failure; its cache stamp; the switch; the app-line count ──────
+
+def test_ref_ok_at_its_thresholds():
+    assert be.ref_ok(10.0, 40.0, 5.0, 14.0, "fs") and not be.ref_ok(10.0, 40.0, 5.0, 13.9, "fs")     # d0 ≥ 0.35 × fs
+    assert be.ref_ok(10.0, 30.0, 20.0, 100.0, "coh") and not be.ref_ok(10.0, 29.9, 20.0, 100.0, "coh")  # fs ≥ 0.3 × d0
+    assert not be.ref_ok(43.1, 40.0, 20.0, 100.0, "fs") and be.ref_ok(43.0, 40.0, 20.0, 100.0, "fs")  # paid ≤ 1.05 × + 1
+    assert not be.ref_ok(10.0, 40.0, 106.1, 100.0, "fs") and be.ref_ok(10.0, 40.0, 106.0, 100.0, "fs")
+    assert not be.ref_ok(1.0, None, 1.0, 100.0, "fs") and not be.ref_ok(1.0, 40.0, 1.0, None, "coh")
+
+
+def _pack_cell(site, cc, day, k):
+    """Every user's pack: country cc's row of `day`, its cells × k (its day-0 read near-empty)."""
+    p = os.path.join(site, "roi_%s_c00.json.gz" % KA)
+    pk = P._rd(p)
+    for r in pk["c"][cc]:
+        if r[0] == day:
+            r[4] = [round(v * k, 6) for v in r[4]]
+    P._wr(p, pk)
+
+
+def test_a_reference_that_disagrees_with_itself_decides_nothing(tmp_path, monkeypatch):
+    def near_empty_d0(site, data, scr):                     # AA: every user's day 0 near-empty, paid first session a
+        _pack_cell(site, "AA", D, 0.1)                      # little low — judged on that reference it would be "broken"
+        _scale_nvr(data, D, 0.85, "AA")
+    b, line, err, _ = _run(tmp_path / "d0", monkeypatch, near_empty_d0)
+    day = {x["d"]: x for x in b["days"]}[D]
+    assert "ckw" not in day and "ckc" not in day and ", ref skip 1" in line and err == ""
+
+    def near_empty_fs(site, data, scr):                     # every user's first session near-empty: the cohort rule's
+        p = os.path.join(data, "ga4_nvr", KA + ".json.gz")  # reference is in doubt (paid above every user's)
+        st = P._rd(p)
+        st["days"][D]["c"] = [[n, c, round(rev * 0.1, 6), im] for n, c, rev, im in st["days"][D]["c"]]
+        P._wr(p, st)
+    b, line, err, _ = _run(tmp_path / "fs", monkeypatch, near_empty_fs)
+    day = {x["d"]: x for x in b["days"]}[D]
+    assert "c" not in day.get("ckw", "") and ", ref skip 1" in line and "cohort" not in line and err == ""
+
+
+def test_a_pack_gap_date_of_every_users_packs_is_never_judged_for_a_country(tmp_path, monkeypatch):
+    real = be._gap_rule
+    monkeypatch.setattr(be, "_gap_rule", lambda *a, **k: real(*a, **k) | {T.TODAY.toordinal() - 10})
+    b, line, *_ = _run(tmp_path, monkeypatch, lambda s, d, c: _scale_nvr(d, D, 0.45, "AA"))
+    assert "ckw" not in {x["d"]: x for x in b["days"]}[D] and ", ref skip 1" in line
+
+
+def test_a_failing_guard_read_costs_only_the_guard(tmp_path, monkeypatch, whole):
+    def junk(site, data, scr):
+        _scale_nvr(data, D, 0.2)
+        with open(os.path.join(site, "roi_%s_c00.json.gz" % KA), "wb") as f:
+            f.write(b"not a gzip")
+    b, line, err, _ = _run(tmp_path, monkeypatch, junk)
+    assert b["src"] == "p" and len(b["days"]) == len(whole[0]["days"])          # its file, as without the guard
+    assert "ckw" not in {x["d"]: x for x in b["days"]}[D] and ", guard fail 1" in line
+    assert "be guard skipped: BadGzipFile\n" in err
+
+
+def test_the_caches_carry_the_guards_stamp_and_a_flip_makes_them_again(tmp_path, monkeypatch):
+    site, data, dash, scr = P.paid_world(tmp_path)
+    P._state(monkeypatch, scr)
+    P._go(dash, data, site, {"be_paid": True})
+    fp = os.path.join(data, "be_tab", "fitsp_%s.json.gz" % KA)
+    cp = os.path.join(data, "be_tab", be.CALIB_P)
+    with open(cp, encoding="utf-8") as f:
+        assert json.load(f)["fq"] == be.FSQ_V
+    assert P._rd(fp)["fq"] == be.FSQ_V
+    assert "fq" not in P._rd(os.path.join(data, "be_tab", "fits_%s.json.gz" % P.KB))   # (every user's: never)
+    _, line, _ = P._go(dash, data, site, {"be_paid": True, "be_fsq": False}, T.NOW + timedelta(hours=1))
+    assert "refit yes" in line and ", calib p yes" in line                      # the same UTC day: made again at once
+    assert "fq" not in P._rd(fp)
+    with open(cp, encoding="utf-8") as f:
+        assert "fq" not in json.load(f)
+    _, line, _ = P._go(dash, data, site, {"be_paid": True, "be_fsq": False}, T.NOW + timedelta(hours=2))
+    assert "refit no" in line and ", calib p no" in line                        # (and only once)
+
+
+def test_be_fsq_false_is_the_guard_off(tmp_path, monkeypatch):
+    b, line, err, data = _run(tmp_path, monkeypatch, lambda s, d, c: _scale_nvr(d, D, 0.2), {"be_fsq": False})
+    assert "ckw" not in {x["d"]: x for x in b["days"]}[D] and "guard" not in line
+    assert not os.path.exists(os.path.join(data, "be_tab", be.FSQ_FILE))       # (no re-read list either)
+    assert be.FSQ_ON is True and be.SAN_ON is True                             # (the module's own switches untouched)
+
+
+def test_the_app_line_count_is_per_build_never_carried(tmp_path, monkeypatch):
+    real = be._sus
+    monkeypatch.setattr(be, "_sus", lambda med, ages, bench, a, ra, tag=None, bbe=None:
+                        True if tag and tag[2] == "*" else real(med, ages, bench, a, ra, tag, bbe))
+    site, data, dash, scr = P.paid_world(tmp_path)
+    P._state(monkeypatch, scr)
+    lines = [P._go(dash, data, site, {"be_paid": True}, T.NOW + timedelta(hours=h))[1] for h in (0, 1)]
+    k = [int(x.split(", app check ")[1].split(",")[0]) for x in lines]
+    assert k[0] == k[1] > 0                                                     # the same each build: never added up
+    st = {}
+    fc = be.load_fits(data, KA, "p")
+    got = be.load(site, data, KA, "roi_%s.json.gz" % KA, True, (scr, "roi_%s_p.json.gz" % KA))
+    be.predict(KA, fc, be.load_calib(data, "p"), be._pin(*got[:5]), None, st)
+    assert st["app"] > 0 and not hasattr(be, "SANC")                            # (predict's own count, no global)
