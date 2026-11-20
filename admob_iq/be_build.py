@@ -117,7 +117,10 @@ breaks even (the page shows the days of its period).
                           within "lim"; a day that broke even: [its real day, null, null]), "lim", "roas" / "lo" /
                           "hi" (the curve and its band at the grid ages ≤ lim: real where final, bounded by what it
                           made elsewhere), "anc" (the grid age it is shifted at; absent: not shifted)} (absent: nothing
-                          covered), "chk" 1 (a GA4 hole date in its first week: "data check" — information only, still shifted), "unc": [[cc, share], …,
+                          covered), "chk" 1 (a GA4 hole date in its first week: "data check" — information only, still shifted;
+                          with "ckw": the reasons, one letter each — "h" that hole, "f" the input guard put every
+                          user's eCPM_fs in (src "p"), "c" its day-0 cohort read broke (src "p") — absent: the hole
+                          alone), "unc": [[cc, share], …,
                           ["…", rest]], "cty":
                           [[cc, share, CPI, eCPM_fs, P30, P90, P180, median, low, high, lim, rk, bm], …] (P30 / P90 /
                           P180 null outside the country's learned range; bm = [bCPI (USD, 4 dp), beCPM_fs
@@ -184,6 +187,23 @@ was. Each app has one SOURCE a build:
   health line) and, every one of them tried then (none new, none that raised), nothing of them is read or tried again
   that UTC day (no paid load, no back-test, no Organic pass). A real exception there: its health line, counted, tried
   again the next build.
+  THE INPUT GUARD of src "p" (owner, 20 Nov 2026: "haan fix shuru karo", "aage se ye na ho US vala galti"; FSQ…):
+    the Google Ads users' share of every user's first-session revenue (their store's "n" rows ÷ fetch.ga4_nvr's) and
+    their share of the install day's day-0 cohort revenue (their All row's d[0] ÷ every user's; a country: their pack
+    row's ÷ every user's pack row's) are two reads of the same users and must agree (measured on every app's whole
+    history: on a sound day they agree closely). On a day at least FSQ_AGE days
+    older than the paid file's newest, with every user's first-session revenue ≥ FSQ_MIN: the first-session share
+    under FSQ × the cohort share (capped at 1) where the paid first session should carry ≥ FSQ_EA (fs_bad) → that
+    read broke: the day's eCPM_fs, the app's and EVERY country's, is every user's that day/country; one country's
+    alone (its own share against its own cohort share, ≥ FSQ_EC) → only that country's. The other way round (the
+    day-0 share under FSQ × the first-session share, the paid day 0 expected ≥ FSQ_EA — coh_bad) the cohort read broke:
+    nothing measured replaces cohort cells, the day is marked and counted. The day carries the page's "data check"
+    ("chk" 1, "ckw" "f" / "c"); the days whose first-session read broke go to data/be_tab/fsq_p.json (save_fsq) and
+    fetch.ga4_nvr_paid reads each of them again alone, bounded (ga4_nvr's REREAD: RQ_MAX times, RQ_GAP_H apart, RQ_CAP
+    a run; its "rq" in the store) — a later whole read heals the day by itself. Counted in the counts line ("guard fs
+    N (left N), cohort N (recent N)"); the health banner ("be guard", DataWarning — once a build, counts only) when a
+    replaced day of the last FSQ_WIN days was read again FSQ_TRIES times and is still broken, or a broken day-0 read is
+    there. FSQ_ON False: the step exactly as before the guard.
 🌱 ORGANIC (src "p" apps only; the page's Google Ads | Organic switch): every new user who is NOT a Google Ads user = the
 all-users cells − the Google Ads users' cells per country × install day, from the two cubes' own reads (the probe measured
 the paid read + its complement = the whole read) — the all-users packs (out_dir, one at a time) and the paid packs
@@ -313,6 +333,25 @@ OTOL_R = 1e-6                        # … + 1 ppm of the cell
 OBENCH = 13                          # the Organic benchmark ahead of a day it has not lived: the card days 1 … 14
 K_APP = 16                           # a pack row's ≈ bit: a month of its revenue on the app's k (roi_build's k bits)
 NAN = float("nan")                   # (a cell not final, in the Organic pass's compact arrays)
+# ⚖️ src "p" — the INPUT GUARD (owner, 20 Nov 2026: "haan fix shuru karo", "aage se ye na ho"): two reads of the same
+# Google Ads users that must agree — their share of every user's FIRST-SESSION revenue (fetch.ga4_nvr_paid ÷ ga4_nvr,
+# "n" rows) and their share of the install day's DAY-0 cohort revenue (the paid ROI rows' d[0] ÷ every user's). The
+# thresholds below were measured on every app's whole history (20 Nov 2026): on a sound day the two shares agree
+# closely; every app-line day the rule flags was one broken first-session read, and nothing else was flagged.
+FSQ = 0.6                            # a share under 0.6 × the other read's share: that read is broken that day
+FSQ_EA = 5.0                         # … only where the broken side should carry ≥ $5 (the app line: E = the other share ×
+FSQ_EC = 10.0                        # every user's revenue on the broken side; a country row: ≥ $10) — a few cents' share
+FSQ_MIN = 1.0                        # … and every user's first-session revenue ≥ $1 (a smaller total says nothing)
+FSQ_AGE = 2                          # … a day at least 2 days older than the newest read (both day-0 reads settled)
+FSQ_WIN = 30                         # the health line: a broken day of the last 30 that the re-reads could not heal
+FSQ_FILE = "fsq_p.json"              # data/be_tab/: the broken first-session days per app key — the paid first-session
+#                                      store re-reads them (fetch.ga4_nvr's REREAD: bounded, ≥ 1 day apart)
+FSQ_TRIES = 3                        # (fetch.ga4_nvr.RQ_MAX — its attempts at one day: past them the day stays broken)
+FSQ_ON = True                        # (the guard itself; False: the step exactly as before it — a back-test's baseline)
+FQ_FS, FQ_LEFT, FQ_COH, FQ_CC = 1, 2, 4, 8   # a row's marks (_R.fq): its eCPM_fs is every user's (the app row: the
+#                                      whole day's first-session read broke) · still broken after the re-reads · the
+#                                      day-0 cohort read is the broken side (no fallback: its cells are what GA4 has) ·
+#                                      (the app row) some country's eCPM_fs is every user's that day
 LINE = None
 
 
@@ -337,7 +376,7 @@ class _R:
     (a final 30-day column / a checkpoint), "bn" "≤ that day" on a 30-day column not final yet, "s" "≤ its so-far age"
     (the so-far read paid back, no cell pins the day)."""
     __slots__ = ("day", "X", "n", "na", "sp", "cpi", "c", "e", "lo", "hi", "be", "obs", "oc", "cum", "jd", "fin", "sfa",
-                 "sfv", "rbe", "dd", "kc", "kf")
+                 "sfv", "rbe", "dd", "kc", "kf", "fq")
 
 
 def _pts(r):
@@ -414,6 +453,7 @@ def _row(r, ecpm, full):
     elif x.sfv is not None and x.sfa is not None and x.sfv >= sp0:
         x.rbe = (x.sfa, "s")                   # its so-far read already paid back, no cell pins the day: "≤ that day"
     x.jd = sp >= MIN_SP and x.n >= MIN_N
+    x.fq = 0                                   # (⚖️ the input guard's marks: FQ_FS / FQ_COH / FQ_LEFT)
     return x
 
 
@@ -562,6 +602,115 @@ def _nvp():
     return ga4_nvr_paid.MOD
 
 
+def fs_bad(p_fs, a_fs, p_d0, a_d0, floor=FSQ_EA):
+    """⚖️ The input guard, first-session side: is the Google Ads users' first-session read of a day (or of one country's
+    day) broken? Their share of every user's first-session revenue (p_fs ÷ a_fs) under FSQ × their share of the
+    install day's day-0 cohort revenue (p_d0 ÷ a_d0, capped at 1), where every user's first-session revenue is ≥
+    FSQ_MIN and the expected paid first-session revenue (that cohort share × a_fs) is ≥ floor."""
+    if a_fs is None or a_fs < FSQ_MIN or not a_d0 or a_d0 <= 0 or p_d0 is None or p_d0 <= 0:
+        return False
+    s0 = min(p_d0 / a_d0, 1.0)
+    return s0 * a_fs >= floor and (p_fs or 0.0) / a_fs < FSQ * s0
+
+
+def coh_bad(p_fs, a_fs, p_d0, a_d0):
+    """⚖️ The input guard, cohort side: the day-0 cohort read is the broken one — their day-0 share under FSQ × their
+    first-session share (capped at 1), where the expected paid day 0 (that share × a_d0) is ≥ FSQ_EA. Nothing measured
+    replaces cohort cells: the day is marked and counted, never changed."""
+    if a_fs is None or a_fs < FSQ_MIN or not p_fs or p_fs <= 0 or not a_d0 or a_d0 <= 0 or p_d0 is None:
+        return False
+    sf = min(p_fs / a_fs, 1.0)
+    return sf * a_d0 >= FSQ_EA and p_d0 / a_d0 < FSQ * sf
+
+
+def _fs_sums(st):
+    """A first-session store → ({day: [revenue, impressions]} of its "n" rows, {cc: {day: [revenue, impressions]}})."""
+    app, cc_ = {}, {}
+    for day, rv in ((st or {}).get("days") or {}).items():
+        a = app.setdefault(day, [0.0, 0])
+        for k, cc, rev, im in (rv or {}).get("c") or []:
+            if k == "n":
+                a[0] += rev
+                a[1] += im
+                e = cc_.setdefault(cc, {}).setdefault(day, [0.0, 0])
+                e[0] += rev
+                e[1] += im
+    return app, cc_
+
+
+def _ecpm(v):
+    return v[0] / v[1] * 1000 if v and v[1] > 0 else None
+
+
+def _guard_in(data_dir, key, body, days, a_d0, a_pk, out_dir, rq):
+    """⚖️ The input guard's reads for one src "p" app (load): every user's first-session store (fetch.ga4_nvr) and the
+    day-0 cells of every user's packs against the Google Ads users' store days and their file's All rows → {"app": the
+    days whose whole first-session read broke (fs_bad on the app line), "coh": the days whose day-0 cohort read did
+    (coh_bad), "fa" / "fc": every user's first-session sums (app / country), "ad": every user's country day-0 cells,
+    "lim": the newest day judged (FSQ_AGE before the file's newest), "pd": the store's days, "rq": its re-reads,
+    "cd": (filled by load) the days a country's eCPM_fs was replaced}."""
+    nw = _od(body.get("newest"))
+    lim = None if nw is None else _iso(nw - FSQ_AGE)
+    fa, fc = _fs_sums(gv.load_store(os.path.join(data_dir, gv.DIR, key + ".json.gz")))
+    fp, _ = _fs_sums({"days": days})
+    p_d0 = {r[0]: r[4][0] for r in body.get("rows") or [] if len(r) > 4 and r[4]}
+    bad, coh = set(), set()
+    for day in days:
+        if lim is None or day > lim:
+            continue
+        p, a = fp.get(day), fa.get(day)
+        args = (p[0] if p else 0.0, a[0] if a else None, p_d0.get(day), a_d0.get(day))
+        if fs_bad(*args, FSQ_EA):
+            bad.add(day)
+        elif coh_bad(*args):
+            coh.add(day)
+    return {"app": bad, "coh": coh, "fa": fa, "fc": fc, "ad": _d0s(out_dir, a_pk, PACK_RE) if lim else {},
+            "lim": lim, "pd": frozenset(days), "rq": rq if isinstance(rq, dict) else {}, "cd": set()}
+
+
+def _cell_bad(G, cc, r, v):
+    """⚖️ One Google Ads users' country row (r; v: its first-session [revenue, impressions] or None): is its
+    first-session read broken — its whole day's (G["app"]) or its own (fs_bad at the country floor FSQ_EC)?"""
+    day = r[0]
+    if day in G["app"]:
+        return True
+    if G["lim"] is None or day > G["lim"] or day not in G["pd"]:
+        return False
+    a = (G["fc"].get(cc) or {}).get(day)
+    return fs_bad(v[0] if v else 0.0, a[0] if a else None, r[4][0] if r[4] else None,
+                  (G["ad"].get(cc) or {}).get(day), FSQ_EC)
+
+
+def _guard_marks(G, app):
+    """⚖️ The input guard's marks on the app rows: FQ_FS (the whole day's eCPM_fs is every user's), FQ_CC (a country's
+    is), FQ_COH (the day-0 cohort read broke), FQ_LEFT (a replaced day the store already re-read FSQ_TRIES times)."""
+    for r in app:
+        f = (FQ_FS if r.day in G["app"] else 0) | (FQ_CC if r.day in G["cd"] else 0) | \
+            (FQ_COH if r.day in G["coh"] else 0)
+        t = G["rq"].get(r.day)
+        if f & (FQ_FS | FQ_CC) and isinstance(t, list) and t and isinstance(t[0], int) and t[0] >= FSQ_TRIES:
+            f |= FQ_LEFT
+        r.fq = f
+
+
+def _d0s(folder, packs, pre):
+    """Every country row's day-0 cohort revenue in a side's packs → {cc: {day: USD}} (read one pack at a time)."""
+    out = {}
+    for pf, _ in packs or []:
+        if not isinstance(pf, str) or not pre.match(pf):
+            raise ValueError("pack name")
+        pk = _read(os.path.join(folder, pf))
+        for cc, rows in pk["c"].items():
+            if cc in SKIP_CC:
+                continue
+            m = out.setdefault(cc, {})
+            for r in rows:
+                if len(r) >= 14 and r[4]:
+                    m[r[0]] = r[4][0]
+        del pk
+    return out
+
+
 def load(out_dir, data_dir, key, fn, want_adm=False, paid=None, org=False):
     """One app → (newest, the All rows, {cc: rows}), spend > 0 only, by day — every day (the tab answers every judged
     install day). want_adm: (newest, app, cty, adm, gaps) — AdMob's daily revenue and the pack-gap dates (pack_gaps).
@@ -581,6 +730,9 @@ def load(out_dir, data_dir, key, fn, want_adm=False, paid=None, org=False):
     oi = _OIn.of(ab.get("cd") or {}, body) if paid is not None and org else None
     ref_nw = _od(ab.get("newest")) if paid is not None else None       # (every user's read: final through − CLAG)
     life = ab.get("life") if want_adm else None
+    fsg = paid is not None and FSQ_ON            # ⚖️ the input guard (src "p" only): every user's day-0 cells, packs
+    a_d0 = {r[0]: r[4][0] for r in ab.get("rows") or [] if len(r) > 4 and r[4]} if fsg else None
+    a_pk = ((ab.get("cd") or {}).get("packs") or []) if fsg else None
     ab = None
     nvm = gv if paid is None else _nvp()
     st = nvm.load_store(os.path.join(data_dir, nvm.DIR, key + ".json.gz"))
@@ -594,6 +746,12 @@ def load(out_dir, data_dir, key, fn, want_adm=False, paid=None, org=False):
                 ia += im
         if ia > 0:
             nv_app[day] = ra / ia * 1000
+    G = None
+    if fsg:                                      # the days whose first-session read broke (fs_bad) or whose cohort did
+        G = _guard_in(data_dir, key, body, days, a_d0, a_pk, out_dir, (st or {}).get("rq") or {})
+        for day in G["app"]:                     # (a broken day's eCPM_fs: every user's that day)
+            nv_app[day] = _ecpm(G["fa"].get(day))
+        a_d0 = a_pk = None
     app = [_row(r, nv_app.get(r[0]), True) for r in body.get("rows") or []
            if len(r) >= 14 and r[3] is not None and r[3] > 0]
     app.sort(key=lambda r: r.X)
@@ -625,11 +783,21 @@ def load(out_dir, data_dir, key, fn, want_adm=False, paid=None, org=False):
                 if len(r) < 14 or r[3] is None or r[3] <= 0:
                     continue
                 v = ncc.get(r[0])
+                bad = G is not None and _cell_bad(G, cc, r, v)
+                if bad:                          # ⚖️ its first-session read broke: every user's eCPM_fs of the country
+                    v = G["fc"].get(cc, {}).get(r[0])
                 e = v[0] / v[1] * 1000 if v and v[1] > 0 else None
-                cty.setdefault(cc, []).append(_row(r, e, r[3] >= MIN_SP and (r[1] or 0) >= MIN_N))
+                x = _row(r, e, r[3] >= MIN_SP and (r[1] or 0) >= MIN_N)
+                if bad:
+                    x.fq = FQ_FS
+                    G["cd"].add(r[0])
+                cty.setdefault(cc, []).append(x)
         del pk
     for v in cty.values():
         v.sort(key=lambda r: r.X)
+    if G is not None:
+        _guard_marks(G, app)
+        G = None
     newest = body.get("newest") or (app[-1].day if app else None)
     tail = (oi,) if paid is not None and org else ()
     if not want_adm:
@@ -1811,8 +1979,12 @@ def predict(key, fc, cal, pin, sk=None):
                           "roas": [_rr(v) for v in roas], "lo": [_rr(v) for v in lo], "hi": [_rr(v) for v in hi]}
             if did:
                 out["app"]["anc"] = anc[0]            # shifted at this grid age (its real ROAS there)
-        if chk:
+        fq = (r.fq or 0) | (FQ_CC if any((x.fq or 0) & FQ_FS for x in byday.get(r.day, {}).values()) else 0)
+        ck = ("f" if fq & (FQ_FS | FQ_CC) else "") + ("c" if fq & FQ_COH else "")
+        if chk or ck:
             out["chk"] = 1                            # a GA4 hole in its first week: "data check" on the page (still shifted)
+        if ck:                                        # ⚖️ … or the input guard: why, for the page's words ("h" the
+            out["ckw"] = ("h" if chk else "") + ck    # hole, "f" every user's eCPM_fs, "c" the day-0 read)
         out["card"], cw = _card(r, cov, tot, gaps, nw)
         if cw:
             out["cw"] = "j" if not r.jd else "k" if not ctys and not unc else cw   # why there is none (the page says it)
@@ -2293,6 +2465,24 @@ def save_calib(data_dir, cal, src="a"):
     return True
 
 
+def save_fsq(data_dir, days):
+    """⚖️ data/be_tab/fsq_p.json {"v", "days": {app key: [the days whose first-session read broke]}} — sorted JSON,
+    written only when it changed (atomic); the paid first-session store re-reads those days (fetch.ga4_nvr's REREAD)."""
+    path = os.path.join(cache_dir(data_dir), FSQ_FILE)
+    text = _raw({"v": V, "days": {k: list(v) for k, v in sorted(days.items())}}).decode("utf-8")
+    try:
+        with open(path, encoding="utf-8") as f:
+            if f.read() == text:
+                return False
+    except OSError:
+        pass
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".tmp", "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(path + ".tmp", path)
+    return True
+
+
 # ── the step ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 def _apps(dashboard):
@@ -2357,7 +2547,9 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             return []
         paid = bool((s or {}).get("be_paid"))     # ⚖️ BE_PAID — off: not a byte of anything changes (no "src", no Organic)
         loc, pw, orgs, bodies = {}, {}, {}, {}
-        n = {"refit": 0, "fail": 0, "ec": 0, "ec_fail": 0, "ec_stale": 0, "pfail": 0, "org_fail": 0}
+        n = {"refit": 0, "fail": 0, "ec": 0, "ec_fail": 0, "ec_stale": 0, "pfail": 0, "org_fail": 0,
+             "fs": 0, "fsl": 0, "coh": 0, "cohw": 0}
+        fsq = {}                                  # ⚖️ the input guard's broken first-session days per src "p" app key
         if paid:
             from . import roi_build as rbm       # (its PAID / PAID_DIR: run_uninstall ran its pass earlier, this process)
             for aid, key, _ in apps:
@@ -2392,11 +2584,24 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                 except Exception as e:                          # costs the card's eCPM part only
                     n["ec_fail"] += 1
                     bec._fail(e)
+            nw_ = _od(pin[0])
+            win = (lambda X: nw_ is not None and X >= nw_ - FSQ_WIN)
             if src == "p":                                      # ⚖️ the Google Ads users' file — its eCPM card stays
                 body["src"] = "p"                               # every user's read ("ecs": the page's "saare users")
                 for d in body["days"]:
                     if "ec" in d:
                         d["ecs"] = "a"
+                fqd = []                                        # ⚖️ the input guard's days: counted, and the broken
+                for r in pin[1]:                                # first-session days handed to their store's re-read
+                    if (r.fq or 0) & (FQ_FS | FQ_CC):
+                        fqd.append(r.day)
+                        n["fs"] += 1
+                        n["fsl"] += bool(r.fq & FQ_LEFT) and win(r.X)
+                    if (r.fq or 0) & FQ_COH:
+                        n["coh"] += 1
+                        n["cohw"] += win(r.X)
+                if fqd:
+                    fsq[key] = sorted(fqd)
             elif paid:
                 body["src"], body["pw"] = "a", pw.get(aid) or {"st": "off"}
             unc = {cc for cs in pin[2].values() for cc in cs} - set(fc["fits"])      # (the folded ones too)
@@ -2597,6 +2802,14 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
         del grp, back
         if bec is not None and n["ec_stale"]:                   # GA4's reads stopped for an app: the banner, once
             print("be ecpm skipped: StaleWarning", file=sys.stderr)
+        if paid and "p" in cals:                                # ⚖️ the re-read list (fetch.ga4_nvr_paid reads it)
+            try:
+                save_fsq(data_dir, fsq)
+            except Exception as e:
+                _fail(e, "be guard")
+        if n["fsl"] or n["cohw"]:                               # a broken input the re-reads did not heal or a broken
+            print("be guard skipped: DataWarning", file=sys.stderr)    # cohort read in the last FSQ_WIN days: the
+        #                                                         banner, once
         os.makedirs(out_dir, exist_ok=True)
         ptr, keep, nd, cov, unc = {}, set(), 0, 0, 0
         ns = {"p": 0, "a": 0, "org": 0}
@@ -2632,9 +2845,11 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             cov += len(fc["fits"])
             unc += nu
         _clean(out_dir, keep)
-        LINE = "be: apps %d, days %d, covered %d, uncovered %d, refit %s, calib %s%s%s%s" % (
+        LINE = "be: apps %d, days %d, covered %d, uncovered %d, refit %s, calib %s%s%s%s%s" % (
             len(ptr), nd, cov, unc, "yes" if n["refit"] else "no", "yes" if ran.get("a") else "no",
             (", failed %d" % n["fail"]) if n["fail"] else "",
+            (", guard fs %d (left %d), cohort %d (recent %d)" % (n["fs"], n["fsl"], n["coh"], n["cohw"]))
+            if n["fs"] or n["coh"] else "",
             (", ecpm apps %d, ecpm failed %d, ecpm stale %d" % (n["ec"], n["ec_fail"], n["ec_stale"]))
             if bec is not None else "",
             (", src p %d a %d, calib p %s, org %d, org fail %d%s" % (

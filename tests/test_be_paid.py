@@ -549,8 +549,8 @@ def test_caches_per_source_never_mix(tmp_path, monkeypatch):
     _state(monkeypatch, scr)
     _go(copy.deepcopy(dash), data, site, {"be_paid": True})
     cache = os.path.join(data, "be_tab")
-    assert sorted(os.listdir(cache)) == sorted(["calib.json", "calib_p.json", "fitsp_%s.json.gz" % KA] +
-                                               ["fits_%s.json.gz" % k for k in (KB, KC, KD)])
+    assert sorted(os.listdir(cache)) == sorted(["calib.json", "calib_p.json", "fitsp_%s.json.gz" % KA, be.FSQ_FILE] +
+                                               ["fits_%s.json.gz" % k for k in (KB, KC, KD)])   # (+ the input guard's list)
     with open(os.path.join(cache, "calib_p.json"), encoding="utf-8") as f:
         cp = json.load(f)
     with open(os.path.join(cache, "calib.json"), encoding="utf-8") as f:
@@ -605,7 +605,8 @@ def test_switch_off_the_same_utc_day_answers_every_app_as_a_build_that_never_had
     assert "bp" not in ca and set(ca["skill"]) == {KA, KB, KC, KD}
     assert _be(site, KA)["skill"] == _be(site0, KA)["skill"] and _be(site, KA)["skill"]["n"] > 0
     now = _snap(site, data)
-    assert {f: v for f, v in now.items() if f not in ("cache/calib_p.json", "cache/fitsp_%s.json.gz" % KA)} == never
+    assert {f: v for f, v in now.items() if f not in ("cache/calib_p.json", "cache/fitsp_%s.json.gz" % KA,
+                                                      "cache/" + be.FSQ_FILE)} == never   # (src "p"'s, kept)
     _, line, err = _go(copy.deepcopy(dash), data, site, {"be_paid": True}, T.NOW + timedelta(hours=4))
     assert len(calls) == 2 and err == ""                                      # (its src "a" one again; calib_p: kept)
     with open(cpath, encoding="utf-8") as f:
@@ -1200,7 +1201,7 @@ def test_too_few_google_ads_users_days_for_a_first_calibration_is_a_state_not_a_
 
 def test_each_paid_pack_read_once_a_build_and_the_organic_pass_only_after_its_file(tmp_path, monkeypatch):
     """Each Google Ads users' pack is read ONCE a build (load() collects the Organic pass's cells), and so is each file
-    of the app — on the day's calibration build (the app held for it) and on one answered from the caches; the Organic
+    of the app (every user's packs twice: load's input guard reads their day-0 cells, the Organic pass their cells) — on the day's calibration build (the app held for it) and on one answered from the caches; the Organic
     pass runs only once the app's src "p" file exists: that file failing (predict raising there), no Organic pass."""
     from collections import Counter
     site, data, dash, scr = paid_world(tmp_path)
@@ -1216,8 +1217,9 @@ def test_each_paid_pack_read_once_a_build_and_the_organic_pass_only_after_its_fi
         _, line, err = _go(copy.deepcopy(dash), data, site, {"be_paid": True}, at)
         assert err == "" and _be(site, KA)["src"] == "p" and ", org 1, org fail 0" in line
         for f in ("roi_%s_p00.json.gz", "roi_%s_p.json.gz", "roi_%s.json.gz", "roi_%s_c00.json.gz"):
-            assert reads[f % KA] == 1, (at, f, reads[f % KA])                 # (paid pack / file: load; every user's
-    org = os.path.join(site, "be_%s_o.json.gz" % KA)                          # file: load; its packs: the Organic pass)
+            want = 2 if f == "roi_%s_c00.json.gz" else 1                      # (paid pack / file: load; every user's
+            assert reads[f % KA] == want, (at, f, reads[f % KA])              # file: load; its packs: the input guard's
+    org = os.path.join(site, "be_%s_o.json.gz" % KA)                          # day-0 cells in load + the Organic pass)
     assert os.path.exists(org)
     calls, real_pred, real_org = {"pred": 0, "org": 0}, be.predict, be.organic
 

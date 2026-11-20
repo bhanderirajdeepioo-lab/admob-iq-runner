@@ -1356,6 +1356,13 @@ def test_breakeven_kitna_pakka_on_day_1_7_14_and_the_data_check_mark(out):
     assert c["titles"][0].startswith("is install din ke pehle hafte me ek tareekh pe GA4 me app ki kamai lagbhag gayab")
     assert c["det"].startswith("data check — is install din ke pehle hafte me") and not c["det_plain"]
     assert "AdMob me normal thi" in c["titles"][0]                               # (a GA4 gap, never a real outage)
+    k = out["be"]["ckw"]                                                         # the build's "ckw": why, in the SAME mark
+    assert all(k[w]["cell"] == "day 61 data check" for w in k)
+    assert k["f"]["title"] == "Google Ads users ka first-session data is din adhura aaya — sab users ka eCPM liya"
+    assert k["f"]["det"] == "data check — " + k["f"]["title"] + "."
+    assert k["c"]["title"].startswith("Google Ads users ka install-din (day 0) data is din adhura aaya")
+    assert k["hf"]["title"] == c["titles"][0] + " · " + k["f"]["title"]          # (a hole and the guard: both, in order)
+    assert k["junk"]["title"] == k["num"]["title"] == c["titles"][0]             # (an unknown / junk "ckw": the hole's text)
     p = _page()
     css = p[p.index("<style>"):p.index("</style>")]
     assert ".cpx-fn b.cpx-chk,.cpx-t td small.cpx-chk{color:var(--watch)" in css   # (amber in the row and the opened day:

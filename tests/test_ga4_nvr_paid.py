@@ -255,3 +255,10 @@ def test_a_day_read_alone_keeps_its_country_read_unless_the_chunks_is_better(mon
     st = case({"c": "t"}, None)                                        # whole beats thresholded
     assert st["days"][lone]["c"][0] == ["n", "--", 0.8, 40] and st["mp"][lone] == {} and lone not in st["mark"]
     assert gv._mark is not m._mark                                      # (the base's own, untouched)
+
+
+def test_the_paid_store_re_reads_the_days_the_breakeven_guard_names():
+    """be_build's input guard writes data/be_tab/fsq_p.json; the paid instance (only it) reads that list (REREAD)."""
+    from admob_iq import be_build as be
+    assert gnp.MOD.REREAD == os.path.join(be.DIR, be.FSQ_FILE).replace(os.sep, "/") and gv.REREAD is None
+    assert be.FSQ_TRIES == gnp.MOD.RQ_MAX                     # (the build's "re-reads used up" = the fetch's own bound)

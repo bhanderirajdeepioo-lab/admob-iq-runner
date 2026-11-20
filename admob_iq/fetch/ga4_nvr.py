@@ -21,6 +21,7 @@ Store, kept for good: data/ga4_nvr/<key>.json.gz (private repo)
                            "s": [[nvr, sessions, users], …]}}     (nvr: "n" new · "r" returning · "x" not set; [] = nothing)
      "mark": {YYYY-MM-DD: "s" (a read of the day came from a GA4 sample) | "t" (subject to thresholding)},
      "rr": {YYYY-MM-DD: 1} (a final day read once more alone for its sampled mark),
+     "rq": {YYYY-MM-DD: [times, last read]} (a final day REREAD named, read again alone — at most RQ_MAX times),
      "mp": {YYYY-MM-DD: {"u" | "c" | "s": "s" | "t"}} (EACH read's own flag; {} = all three whole; "mark" = "s" when any
            read was sampled, else "t" when any was thresholded — the Breakeven card's day 1 reads only "c"'s own),
      "backfill": {"oldest": the oldest day read, "done": reached the app's history start}}
@@ -76,6 +77,12 @@ BUDGET_SEC = 150
 RETRY_HOURS = 3.0
 PAGE_ROWS = 100000
 WORKERS = 6                         # properties read side by side (each its own quota; one call at a time each)
+REREAD = None                       # a list of FINAL days to read again, ALONE (data_dir-relative JSON {"days": {app key:
+#                                     [day, …]}}; None: none) — fetch.ga4_nvr_paid's: be_build's input guard (the days
+#                                     whose Google Ads users' first-session read disagreed with their cohort read)
+RQ_MAX = 3                          # … each such day read again at most 3 times ("rq": {day: [times, last read]}) …
+RQ_GAP_H = 24.0                     # … at least a day apart …
+RQ_CAP = 2                          # … and at most 2 such days an app a run (newest first)
 
 
 def body(a, b, dims, mets):
@@ -151,8 +158,10 @@ def read(ga, a, b):
     return days, ({d: mark for d in days} if mark else {}), {d: dict(part_mk) for d in days}
 
 
-def step_app(ga, store, today, hs, now):
-    """One app's run on its store → "fetched" (something read) or "fresh" (nothing due). Raises Stop (gf.Stop)."""
+def step_app(ga, store, today, hs, now, ask=()):
+    """One app's run on its store → "fetched" (something read) or "fresh" (nothing due). Raises Stop (gf.Stop). ask: the
+    days REREAD names for the app (a final day the store has is read again alone, bounded: RQ_MAX / RQ_GAP_H / RQ_CAP;
+    a day not named is never read again for it)."""
     did, now_iso = False, gu._now_iso(now)
     days = store.setdefault("days", {})
     mark = store.setdefault("mark", {})
@@ -189,6 +198,34 @@ def step_app(ga, store, today, hs, now):
         mp[d] = pm[d]
         rr[d] = 1
         did = True
+    # a final day a reader of the store found broken (REREAD: the Breakeven build's input guard — the day's first-session
+    # read disagreed with the cohort read of the same users) is read again alone: newest first, at most RQ_CAP days a run,
+    # each at most RQ_MAX times and RQ_GAP_H hours apart ("rq": {day: [times, last read]}) — GA4 may give the whole day
+    # on a later read; past RQ_MAX the day stays as read (the reader falls back and says so)
+    if ask:
+        rq, k = store.setdefault("rq", {}), 0
+        for d in sorted({str(x) for x in ask}, reverse=True):
+            if k >= RQ_CAP:
+                break
+            try:
+                dd = gu._d(d)
+            except ValueError:
+                continue
+            if d not in days or not first <= dd <= edge:
+                continue                                # (a day the window still reads every hour, or one not held)
+            t = rq.get(d)
+            t = t if isinstance(t, list) and len(t) == 2 and isinstance(t[0], int) else [0, None]
+            if t[0] >= RQ_MAX or gu._hours_since(t[1], now) < RQ_GAP_H:
+                continue
+            got, mk, pm = read(ga, dd, dd)
+            days[d] = got[d]
+            mark.pop(d, None)
+            mark.update(mk)
+            mp[d] = pm[d]
+            rr[d] = 1
+            rq[d] = [t[0] + 1, now_iso]
+            k += 1
+            did = True
     bf = store.setdefault("backfill", {})
     while not bf.get("done"):
         top = (gu._d(bf["oldest"]) - timedelta(days=1)) if bf.get("oldest") else recent - timedelta(days=1)
@@ -257,6 +294,18 @@ def save_state(data_dir, state):
     return True
 
 
+def _asks(data_dir):
+    """REREAD's days per app key ({} when off, missing or unreadable — never a failure of the run)."""
+    if not REREAD:
+        return {}
+    try:
+        with open(os.path.join(data_dir, REREAD), encoding="utf-8") as f:
+            v = (json.load(f) or {}).get("days")
+        return {str(k): [str(d) for d in x] for k, x in v.items() if isinstance(x, list)} if isinstance(v, dict) else {}
+    except (OSError, ValueError, AttributeError, TypeError):
+        return {}
+
+
 COUNTS = ("selected", "with_ga4", "fetched", "fresh", "failed", "deferred", "waiting", "calls", "tokens")
 
 
@@ -275,6 +324,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
                                             "GA4_REFRESH_TOKEN": cfg.get("refresh_token") or ""})
         owner_rt, access, props = dict(tokens), {}, {}
         now_iso = gu._now_iso(now)
+        asks = _asks(data_dir)
 
         def over():
             return "budget" if clock() - t0 >= budget else None
@@ -322,7 +372,7 @@ def refresh_all(cfg, data_dir, apps, now=None, clock=time.monotonic, budget=BUDG
             store = load_store(path) or {"v": STORE_V}
             ga = (APP or gf.App)(access[owner], pid, r["stream_id"], prop, over=over, max_calls=MAX_CALLS)
             try:
-                res = step_app(ga, store, today, hs, now)
+                res = step_app(ga, store, today, hs, now, asks.get(gu.file_key(aid)) or ())
                 st.pop("deferred", None)
                 st.update(last_try=now_iso, fail=None)
                 if res == "fetched":

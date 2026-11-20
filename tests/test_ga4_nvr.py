@@ -2,10 +2,12 @@
 countries / numbers: the three reads (ad unit, country, sessions) by newVsReturning, "(not set)" kept as "x", the recent days
 every hour, the history newest first in chunks down to the history start (resumed after a stop), sampled days marked, and a
 counts-only line."""
+import json
 from datetime import date, datetime, timedelta, timezone
 
 from admob_iq.fetch import ga4_firstopen as gf
 from admob_iq.fetch import ga4_nvr as gv
+from admob_iq.fetch import ga4_uninstall as gu
 
 NOW = datetime(2026, 11, 2, 6, 0, tzinfo=timezone.utc)
 TODAY = date(2026, 11, 2)
@@ -352,3 +354,70 @@ def test_a_lone_read_part_is_replaced_only_by_a_better_chunk_part_and_a_day_with
     st = case({"u": "t"}, None, rows=False)                                      # no rows kept: the chunk's, whole
     assert st["days"][lone]["u"][0][3] == 1 and st["days"][lone]["c"] and st["mp"][lone] == {}
     assert st["rr"] == {lone: 1}
+
+
+# ── REREAD (20 Nov 2026: the Breakeven build's input guard names a final day whose Google Ads users' first-session read
+# disagreed with their cohort read): that day read again alone — bounded; no other day ───────────────────────────────
+
+class BumpGA(FakeGA):
+    """GA4 that answers each later read of a range with new numbers (the n-th call's revenue × n): a re-read shows."""
+    def report_all(self, body, **kw):
+        rows = super().report_all(body, **kw)
+        for r in rows:
+            if "totalAdRevenue" in r:
+                r["totalAdRevenue"] = r["totalAdRevenue"] * (1 + self.calls)
+        return rows
+
+
+def _settled(hs):
+    """A store whose window and whole history are read (nothing due at NOW)."""
+    store = {"v": gv.STORE_V}
+    gv.step_app(FakeGA(), store, TODAY, hs, NOW)
+    return store
+
+
+def _lone(ga):
+    return [r for r in _ranges(ga) if r[0] == r[1]]
+
+
+def test_a_day_the_guard_names_is_read_again_alone_at_most_rq_max_times_a_day_apart_and_rq_cap_a_run():
+    hs = TODAY - timedelta(days=40)
+    store = _settled(hs)
+    d = [(TODAY - timedelta(days=i)).isoformat() for i in (8, 9, 10)]       # final (left the window)
+    win = TODAY.isoformat()                                                 # (in the window: read every hour anyway)
+    healthy = (TODAY - timedelta(days=11)).isoformat()
+    before = {k: store["days"][k] for k in d + [healthy]}
+    ga = BumpGA()
+    t = NOW + timedelta(minutes=30)                                         # (the window still fresh: no refresh)
+    assert gv.step_app(ga, store, TODAY, hs, t, d + [win, "junk", "2001-01-01"]) == "fetched"
+    assert _ranges(ga) == [(d[0], d[0]), (d[1], d[1])]                      # newest first, RQ_CAP (2) a run
+    assert store["rq"] == {d[0]: [1, gu._now_iso(t)], d[1]: [1, gu._now_iso(t)]}
+    assert store["days"][d[0]] != before[d[0]] and store["days"][d[2]] == before[d[2]]
+    assert store["days"][healthy] == before[healthy] and store["rr"][d[0]] == 1   # (a day not named: never read again)
+    ga = BumpGA()                                                           # later: only the day not tried yet
+    gv.step_app(ga, store, TODAY, hs, t + timedelta(minutes=20), d)
+    assert _ranges(ga) == [(d[2], d[2])]
+    ga = BumpGA()                                                           # under RQ_GAP_H since its last read: nothing
+    gv.step_app(ga, store, TODAY, hs, t + timedelta(hours=23), d)           # (the window's own hourly read only)
+    assert _lone(ga) == [] and ga.calls == 3
+    for k in range(2, gv.RQ_MAX + 2):                                       # a day apart: again, up to RQ_MAX times each
+        ga = BumpGA()
+        gv.step_app(ga, store, TODAY, hs, t + timedelta(days=k), d[:1])
+        assert _lone(ga) == ([(d[0], d[0])] if k <= gv.RQ_MAX else [])
+    assert store["rq"][d[0]] == [gv.RQ_MAX, gu._now_iso(t + timedelta(days=gv.RQ_MAX))]
+    ga = BumpGA()                                                           # nothing named: no re-read at all
+    gv.step_app(ga, store, TODAY, hs, t + timedelta(days=9))
+    assert _lone(ga) == []
+
+
+def test_reread_reads_its_list_per_app_key_and_is_off_without_it(tmp_path, monkeypatch):
+    p = tmp_path / "be_tab" / "fsq_p.json"
+    p.parent.mkdir()
+    p.write_text(json.dumps({"v": 1, "days": {"k1": ["2026-10-20"], "k2": "junk"}}))
+    assert gv._asks(str(tmp_path)) == {}                                    # REREAD None (the base): off
+    monkeypatch.setattr(gv, "REREAD", "be_tab/fsq_p.json")
+    assert gv._asks(str(tmp_path)) == {"k1": ["2026-10-20"]}
+    p.write_text("{not json")
+    assert gv._asks(str(tmp_path)) == {}                                    # unreadable: nothing (never a failure)
+    monkeypatch.setattr(gv, "REREAD", "be_tab/none.json")
+    assert gv._asks(str(tmp_path)) == {}
