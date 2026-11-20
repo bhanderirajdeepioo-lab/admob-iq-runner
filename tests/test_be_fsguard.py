@@ -6,7 +6,9 @@ paid share of 1); a day whose first-session read broke (every country's) answers
 country cells only when only one country's broke, and carries the page's "data check" with its reason ("ckw" "f"); a
 broken day-0 read is marked ("c") and changes nothing; the re-read list for the paid first-session store; the health
 line only for a broken day of the last FSQ_WIN days whose re-reads are used up (or a broken day-0 read there), once a
-build, the counts line counts only; with the guard off every file as before it. SYNTHETIC values only (apps
+build, the counts line counts only; with the guard off every file as before it. The OUTPUT sanity check (_sus): the
+benchmark-growth day, its thresholds, a flagged row marking its day ("ckw" "s", counted, the banner; its numbers
+unchanged), a country row under SAN_SHARE of the day's spend never judged. SYNTHETIC values only (apps
 "app~synth-…", countries AA … DH, the calendar 2030–2031)."""
 import gzip
 import json
@@ -170,3 +172,60 @@ def test_the_guard_off_is_the_step_as_before_it(tmp_path, monkeypatch, whole):
     assert "ckw" not in day and "guard" not in line
     assert all(abs(c[3] - 0.2 * 1.2 * _all_ecpm(data, D)[c[0]]) < 0.01 for c in day["cty"])   # (the broken read, as is)
 
+
+# ── the output sanity check (C2) ────────────────────────────────────────────────────────────────────────────────────
+
+AGES = [0, 1, 2, 3, 6, 13, 30, 60, 90, 120, 180]
+BENCH = [0.30, 0.34, 0.36, 0.38, 0.42, 0.48, 0.60, 0.72, 0.80, 0.90, 1.00]   # a benchmark reaching 100 % at day 180
+
+
+def test_the_benchmark_growth_day():
+    # 0.36 at day 3 (age 2) growing as the benchmark: × 1/0.36 → 1.0 at day 180; a cohort 2 × ahead (0.72) reaches 1.0
+    # where the benchmark reaches 0.5: between its ages 13 (0.48) and 30 (0.60)
+    assert be._bench_growth(AGES, BENCH, 2, 0.36) == (180.0, 180)
+    assert be._bench_growth(AGES, BENCH, 2, 0.72)[0] == pytest.approx(13 + 17 * 0.02 / 0.12)
+    assert be._bench_growth(AGES, BENCH, 2, 0.20) == (None, 180)          # never within the benchmark's ages
+    d, _ = be._bench_growth(AGES, BENCH, 2, 0.42)                          # (between two ages: linear — 0.857 of
+    assert d == pytest.approx(90 + 30 * (0.36 / 0.42 - 0.80) / 0.10)       # the benchmark lies between 90 and 120)
+
+
+def test_sus_at_its_thresholds(monkeypatch):
+    # real 0.36 = the benchmark at day 3 → its benchmark-growth day 180: a median ≤ 90 is "only the model's growth"
+    assert be._sus(90, AGES, BENCH, 2, 0.36) and not be._sus(91, AGES, BENCH, 2, 0.36)
+    assert be._sus(40, AGES, BENCH, 2, 0.36 * 1.249) and not be._sus(40, AGES, BENCH, 2, 0.36 * 1.26)  # ±25 %
+    assert be._sus(60, AGES, BENCH, 2, 0.36 / 1.249) and not be._sus(60, AGES, BENCH, 2, 0.36 / 1.26)
+    assert not be._sus(None, AGES, BENCH, 2, 0.36) and not be._sus(60, AGES, None, 2, 0.36)
+    assert not be._sus(60, AGES, BENCH, 5, 0.36)                           # (an anchor the benchmark has no age of)
+    assert be._sus(90, AGES, BENCH[:-1] + [0.95], 2, 0.36)                 # never reaching 100 %: its last age (180)
+    log = []
+    monkeypatch.setattr(be, "SAN_LOG", log)
+    be._sus(90, AGES, BENCH, 2, 0.36, ("k", "d", "AA"), 150.0)
+    assert log == [(("k", "d", "AA"), 2, 90, 180.0, 180, 1.0, 150.0, True)]
+
+
+def test_a_flagged_row_marks_its_day_and_counts_once(tmp_path, monkeypatch, whole):
+    hit = {"n": 0}
+    real = be._sus
+
+    def sus(med, ages, bench, a, ra, tag=None, bbe=None):
+        if tag and tag == (KA, D, "AA"):
+            hit["n"] += 1
+            return True
+        return real(med, ages, bench, a, ra, tag, bbe)
+    monkeypatch.setattr(be, "_sus", sus)
+    b, line, err, _ = _run(tmp_path, monkeypatch)
+    day = {x["d"]: x for x in b["days"]}[D]
+    assert hit["n"] == 1 and day["chk"] == 1 and day["ckw"] == "s"
+    assert not any("ckw" in x for x in b["days"] if x["d"] != D)
+    assert ", check 1 (recent 1)" in line and err == "be guard skipped: DataWarning\n"
+    w = {x["d"]: x for x in whole[0]["days"]}[D]                           # (information only: the numbers as they were)
+    assert day["cty"] == w["cty"] and day.get("app") == w.get("app")
+
+
+def test_a_country_row_under_san_share_of_the_days_spend_is_never_judged(tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setattr(be, "_sus", lambda med, ages, bench, a, ra, tag=None, bbe=None: seen.append(tag) or True)
+    monkeypatch.setattr(be, "SAN_SHARE", 0.6)                              # (every covered country here is under 60 %)
+    b, line, err, _ = _run(tmp_path, monkeypatch)
+    assert seen and all(t[2] == "*" for t in seen)                          # only the app line judged
+    assert all("s" in x.get("ckw", "s") for x in b["days"] if x.get("ckw"))

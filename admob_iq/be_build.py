@@ -119,8 +119,9 @@ breaks even (the page shows the days of its period).
                           made elsewhere), "anc" (the grid age it is shifted at; absent: not shifted)} (absent: nothing
                           covered), "chk" 1 (a GA4 hole date in its first week: "data check" — information only, still shifted;
                           with "ckw": the reasons, one letter each — "h" that hole, "f" the input guard put every
-                          user's eCPM_fs in (src "p"), "c" its day-0 cohort read broke (src "p") — absent: the hole
-                          alone), "unc": [[cc, share], …,
+                          user's eCPM_fs in (src "p"), "c" its day-0 cohort read broke (src "p"), "s" the sanity check:
+                          a forecast row far earlier than its benchmark's growth while its real ROAS sits at the
+                          benchmark — absent: the hole alone), "unc": [[cc, share], …,
                           ["…", rest]], "cty":
                           [[cc, share, CPI, eCPM_fs, P30, P90, P180, median, low, high, lim, rk, bm], …] (P30 / P90 /
                           P180 null outside the country's learned range; bm = [bCPI (USD, 4 dp), beCPM_fs
@@ -203,7 +204,13 @@ was. Each app has one SOURCE a build:
     a run; its "rq" in the store) — a later whole read heals the day by itself. Counted in the counts line ("guard fs
     N (left N), cohort N (recent N)"); the health banner ("be guard", DataWarning — once a build, counts only) when a
     replaced day of the last FSQ_WIN days was read again FSQ_TRIES times and is still broken, or a broken day-0 read is
-    there. FSQ_ON False: the step exactly as before the guard.
+    there, or the sanity check (below) flagged a row there. FSQ_ON False: the step exactly as before the guard.
+  THE SANITY CHECK (every source; _sus): a forecast row — the app line, or a country row with ≥ SAN_SHARE of the
+    day's spend; shifted, not broken even — whose breakeven median is ≤ SAN_R × the day its cohort would break even
+    growing as its BENCHMARK grows from the anchor (the countries' median past ROAS curves, the card's rule; none
+    within them: their last age) while its real ROAS at the anchor is within ÷ / × SAN_C of the benchmark's there: an
+    early answer from the model's growth alone, not from what the cohort made → the day's "data check" ("ckw" "s"),
+    counted ("check N (recent N)") — the numbers are not changed.
 🌱 ORGANIC (src "p" apps only; the page's Google Ads | Organic switch): every new user who is NOT a Google Ads user = the
 all-users cells − the Google Ads users' cells per country × install day, from the two cubes' own reads (the probe measured
 the paid read + its complement = the whole read) — the all-users packs (out_dir, one at a time) and the paid packs
@@ -312,6 +319,11 @@ CLAG = max(4, LAG)                   # the shift, the card, the pack gaps, the h
                                      # days ago carried no revenue yet, and a few small apps' own rows — measured 15 Nov
                                      # 2026), so 4; folded at the final lag (GA4_FINAL_DAYS ≥ 4) a cell needs no day
                                      # more (measured 17 Nov 2026: GA4's day cells settle before it)
+SAN_R, SAN_C = 0.5, 1.25             # the sanity check (_sus): a breakeven ≤ 0.5 × the day its cohort would reach growing
+#                                      as its benchmark grows, while its real ROAS at the anchor is within ÷ / × 1.25 of
+#                                      the benchmark's there …
+SAN_SHARE = 0.05                     # … a country row only with ≥ 5 % of the day's spend (measured 20 Nov 2026: most rows
+#                                      the rule finds carry a tiny share of their day — noise, not the day's answer)
 PACK_MIN = 1.0                       # a pack-gap date needs the app's final revenue of that date ≥ 1 USD (a smaller total
                                      # is noise: a ratio of two cents says nothing about a missing pack)
 PACK_GAP = 0.35                      # … and the country packs' sum of it under 0.35 × the All rows' (GA4's cube folds a date
@@ -1771,6 +1783,72 @@ def _bound(ages, vals, a, ra, gq):
     return out
 
 
+def _bench_of(cf):
+    """A country's benchmark ROAS at its curve's ages: its stored median past ROAS (each curve entry's rmed)."""
+    return [math.exp(e[5]) if len(e) > 5 else None for e in cf]
+
+
+def _bench_curve(ages, cov):
+    """The app line's benchmark ROAS at its ages: each covered country's median past ROAS (its last entry ≤ the age),
+    joined by the day's spend (the card's rule); None with no spend."""
+    tot = sum(c[1].sp for c in cov)
+    if tot <= 0:
+        return None
+    out = []
+    for a in ages:
+        v = 0.0
+        for c in cov:
+            ent = None
+            for e in c[2]["cv"]:
+                if GRID[e[0]] > a:
+                    break
+                ent = e
+            if ent is None or len(ent) <= 5:
+                return None
+            v += c[1].sp / tot * math.exp(ent[5])
+        out.append(v)
+    return out
+
+
+SAN_LOG = None                       # (a list: every row the sanity check judged is appended — a back-test's measure)
+
+
+def _bench_growth(ages, bench, a, ra):
+    """The day a cohort at real ROAS ra at age a breaks even growing as its BENCHMARK grows from a (ra × bench(t) ÷
+    bench(a), linear between the ages) → (day or None, the last age the benchmark reaches)."""
+    if a not in ages or not bench[ages.index(a)] or ra is None or ra <= 0:
+        return None, ages[-1] if ages else None
+    b0 = bench[ages.index(a)]
+    pa, pv = a, ra
+    for t, v in zip(ages, bench):
+        if t <= a:
+            continue
+        g = ra * v / b0
+        if g >= 1.0:
+            return (float(t) if g <= pv else pa + (t - pa) * (1.0 - pv) / (g - pv)), ages[-1]
+        pa, pv = t, g
+    return None, ages[-1]
+
+
+def _sus(med, ages, bench, a, ra, tag=None, bbe=None):
+    """⚖️ The OUTPUT sanity check (owner, 20 Nov 2026: "aage se ye na ho US vala galti"): a forecast whose breakeven
+    median is far earlier (≤ SAN_R ×) than the day its cohort would break even growing as its BENCHMARK grows from the
+    anchor (_bench_growth; none within the benchmark's ages: its last age) while its REAL ROAS at the anchor a is close to
+    the benchmark's there (ratio within 1 / SAN_C … SAN_C) — the early answer comes from the model's growth alone, not
+    from what the cohort made → True (the day's "data check"). ages / bench: the benchmark curve (ROAS)."""
+    if med is None or not bench or any(v is None for v in bench) or a not in ages or ra is None or ra <= 0:
+        return False
+    bra = bench[ages.index(a)]
+    if not bra or bra <= 0:
+        return False
+    bg, last = _bench_growth(ages, bench, a, ra)
+    Be = bg if bg is not None else last
+    hit = bool(Be and med <= SAN_R * Be and 1.0 / SAN_C <= ra / bra <= SAN_C)
+    if SAN_LOG is not None:
+        SAN_LOG.append((tag, a, med, bg, last, ra / bra, bbe, hit))
+    return hit
+
+
 def _cty_shift(ages, mid, x, cb, upto=None, gq=None):
     """A country's [median, low, high] day off its own curve SHIFTED to its real ROAS at its latest final grid age (as
     the app line), its 80 % range from the shift's back-test errors for its size (cbandb: its size bucket, else every
@@ -1892,7 +1970,7 @@ def predict(key, fc, cal, pin, sk=None):
     days = []
     for r, tot, cov, unc, csp, M, anc, chk in each():
         shift = ok and anc is not None            # the "ROAS ab tak" shift (nothing final yet: unshifted)
-        ctys = []
+        ctys, sus = [], False
         for cc, x, f, ages, mid, clo, chi in cov:
             b0, b1, b2, s_, tmax = f["k3"][:5]
             mu = b0 + b1 * x.c + b2 * x.e if _seen(f["rng"], x) else None     # (K3: only inside its range)
@@ -1908,6 +1986,11 @@ def predict(key, fc, cal, pin, sk=None):
                 dd = _cty_shift(ages, mid, x, cbandb, nw - x.X - CLAG, cgr) if shift else None   # same countries:
                 days_ = (dd if dd is not None else _cty_days(ages, mid, clo, chi, x)) + [clim, 0]   # one curve, one
                 # answer) — its daily anchor at least CLAG days old
+                if dd is not None and dd[0] is not None and x.sp / tot >= SAN_SHARE:   # the sanity check (_sus): an
+                    ca = _anchor(x.fin, x.sp, ages[-1], nw - x.X - CLAG)      # early answer its real ROAS did not make
+                    if ca and _sus(dd[0], ages, _bench_of(f["cv"]), ca[0], ca[1], (key, r.day, cc),
+                                   (_bm(f.get("bm")) or [None] * 4)[2]):
+                        sus = True
             ctys.append([cc, round(x.sp / tot, 4), round(x.cpi, 4), round(math.exp(x.e), 3), *[_r(v, 3) for v in pk],
                          *days_, _bm(f.get("bm"))])
         out = {"d": r.day, "age": nw - r.X, "sp": round(r.sp, 2), "inst": r.na, "cov": round(csp / tot, 4),
@@ -1979,13 +2062,17 @@ def predict(key, fc, cal, pin, sk=None):
                           "roas": [_rr(v) for v in roas], "lo": [_rr(v) for v in lo], "hi": [_rr(v) for v in hi]}
             if did:
                 out["app"]["anc"] = anc[0]            # shifted at this grid age (its real ROAS there)
+                if yet and be is not None:            # the sanity check on the app line: its countries' own benchmark
+                    bc = _bench_curve(ages, cov)      # curves joined by the day's spend (the card's rule)
+                    if _sus(be, ages, bc, anc[0], anc[1], (key, r.day, "*")):
+                        sus = True
         fq = (r.fq or 0) | (FQ_CC if any((x.fq or 0) & FQ_FS for x in byday.get(r.day, {}).values()) else 0)
-        ck = ("f" if fq & (FQ_FS | FQ_CC) else "") + ("c" if fq & FQ_COH else "")
+        ck = ("f" if fq & (FQ_FS | FQ_CC) else "") + ("c" if fq & FQ_COH else "") + ("s" if sus else "")
         if chk or ck:
             out["chk"] = 1                            # a GA4 hole in its first week: "data check" on the page (still shifted)
-        if ck:                                        # ⚖️ … or the input guard: why, for the page's words ("h" the
-            out["ckw"] = ("h" if chk else "") + ck    # hole, "f" every user's eCPM_fs, "c" the day-0 read)
-        out["card"], cw = _card(r, cov, tot, gaps, nw)
+        if ck:                                        # ⚖️ … or the input guard / the sanity check: why, for the page's
+            out["ckw"] = ("h" if chk else "") + ck    # words ("h" the hole, "f" every user's eCPM_fs, "c" the day-0
+        out["card"], cw = _card(r, cov, tot, gaps, nw)     # read, "s" an early answer the cohort did not make)
         if cw:
             out["cw"] = "j" if not r.jd else "k" if not ctys and not unc else cw   # why there is none (the page says it)
         sfr = None if r.sfv is None else _rr(r.sfv / r.sp)
@@ -2548,7 +2635,7 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
         paid = bool((s or {}).get("be_paid"))     # ⚖️ BE_PAID — off: not a byte of anything changes (no "src", no Organic)
         loc, pw, orgs, bodies = {}, {}, {}, {}
         n = {"refit": 0, "fail": 0, "ec": 0, "ec_fail": 0, "ec_stale": 0, "pfail": 0, "org_fail": 0,
-             "fs": 0, "fsl": 0, "coh": 0, "cohw": 0}
+             "fs": 0, "fsl": 0, "coh": 0, "cohw": 0, "sus": 0, "susw": 0}
         fsq = {}                                  # ⚖️ the input guard's broken first-session days per src "p" app key
         if paid:
             from . import roi_build as rbm       # (its PAID / PAID_DIR: run_uninstall ran its pass earlier, this process)
@@ -2586,6 +2673,10 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                     bec._fail(e)
             nw_ = _od(pin[0])
             win = (lambda X: nw_ is not None and X >= nw_ - FSQ_WIN)
+            for d in body["days"]:                              # the sanity check's days (every source)
+                if "s" in d.get("ckw", ""):
+                    n["sus"] += 1
+                    n["susw"] += win(_od(d["d"]))
             if src == "p":                                      # ⚖️ the Google Ads users' file — its eCPM card stays
                 body["src"] = "p"                               # every user's read ("ecs": the page's "saare users")
                 for d in body["days"]:
@@ -2807,9 +2898,9 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
                 save_fsq(data_dir, fsq)
             except Exception as e:
                 _fail(e, "be guard")
-        if n["fsl"] or n["cohw"]:                               # a broken input the re-reads did not heal or a broken
-            print("be guard skipped: DataWarning", file=sys.stderr)    # cohort read in the last FSQ_WIN days: the
-        #                                                         banner, once
+        if n["fsl"] or n["cohw"] or n["susw"]:                  # a broken input the re-reads did not heal, a broken
+            print("be guard skipped: DataWarning", file=sys.stderr)    # cohort read or an early answer the cohort did
+        #                                                         not make, in the last FSQ_WIN days: the banner, once
         os.makedirs(out_dir, exist_ok=True)
         ptr, keep, nd, cov, unc = {}, set(), 0, 0, 0
         ns = {"p": 0, "a": 0, "org": 0}
@@ -2845,9 +2936,10 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
             cov += len(fc["fits"])
             unc += nu
         _clean(out_dir, keep)
-        LINE = "be: apps %d, days %d, covered %d, uncovered %d, refit %s, calib %s%s%s%s%s" % (
+        LINE = "be: apps %d, days %d, covered %d, uncovered %d, refit %s, calib %s%s%s%s%s%s" % (
             len(ptr), nd, cov, unc, "yes" if n["refit"] else "no", "yes" if ran.get("a") else "no",
             (", failed %d" % n["fail"]) if n["fail"] else "",
+            (", check %d (recent %d)" % (n["sus"], n["susw"])) if n["sus"] else "",
             (", guard fs %d (left %d), cohort %d (recent %d)" % (n["fs"], n["fsl"], n["coh"], n["cohw"]))
             if n["fs"] or n["coh"] else "",
             (", ecpm apps %d, ecpm failed %d, ecpm stale %d" % (n["ec"], n["ec_fail"], n["ec_stale"]))

@@ -1361,6 +1361,7 @@ def test_breakeven_kitna_pakka_on_day_1_7_14_and_the_data_check_mark(out):
     assert k["f"]["title"] == "Google Ads users ka first-session data is din adhura aaya — sab users ka eCPM liya"
     assert k["f"]["det"] == "data check — " + k["f"]["title"] + "."
     assert k["c"]["title"].startswith("Google Ads users ka install-din (day 0) data is din adhura aaya")
+    assert k["s"]["title"].startswith("breakeven benchmark se bahut pehle dikh raha hai jabki ab tak ka asli ROAS")
     assert k["hf"]["title"] == c["titles"][0] + " · " + k["f"]["title"]          # (a hole and the guard: both, in order)
     assert k["junk"]["title"] == k["num"]["title"] == c["titles"][0]             # (an unknown / junk "ckw": the hole's text)
     p = _page()

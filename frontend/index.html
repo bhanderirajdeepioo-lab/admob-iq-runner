@@ -9798,10 +9798,11 @@ function beEcFn(C,pl){ const ap=C.ap?' · ≈ = GA4 ne us din kuch rows jod di /
 // AdMob's own revenue was normal — a gap in the data, never a real outage): its real ROAS, and the curve shifted to it,
 // are low by what GA4 lost
 const BECHK='is install din ke pehle hafte me ek tareekh pe GA4 me app ki kamai lagbhag gayab thi jabki AdMob me normal thi (data me gap) — is din ke asli aur andaze wale number asal se kam dikh sakte hain';
-// the build's "ckw" beside chk (its input guard; absent: the GA4 hole above): why, one text a letter
+// the build's "ckw" beside chk (its input guard / sanity check; absent: the GA4 hole above): why, one text a letter
 const BECKW={h:BECHK,
   f:'Google Ads users ka first-session data is din adhura aaya — sab users ka eCPM liya',
-  c:'Google Ads users ka install-din (day 0) data is din adhura aaya — is din ke number asal se kam dikh sakte hain'};
+  c:'Google Ads users ka install-din (day 0) data is din adhura aaya — is din ke number asal se kam dikh sakte hain',
+  s:'breakeven benchmark se bahut pehle dikh raha hai jabki ab tak ka asli ROAS benchmark jaisa hi hai — ye jaldi wala din sirf model ke andaze se hai, isse pakka na maanein'};
 const beChkT=x=>typeof x.ckw==='string'&&x.ckw?x.ckw.split('').map(k=>BECKW[k]).filter(Boolean).join(' · ')||BECHK:BECHK;
 // a country's benchmark "bm" = [bCPI $, beCPM_fs $, bBE days | null, bLim days]: per cell, what is a number is shown; a malformed one: no B line
 function beBm(m){ if(!Array.isArray(m)||m.length<4) return null; const c=num(m[0]), e=num(m[1]), b=num(m[2]), l=num(m[3])>0?Math.round(m[3]):null;

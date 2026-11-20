@@ -869,10 +869,10 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
       const r = rowsOf(hr)[0], q = rowsOf(hq)[0];
       BO.chk = { cell: r.cells[1], titles: r.titles, plain: q.cells[1], det: txt((hd.match(/<p class="cpx-fn"><b class="cpx-chk">([\s\S]*?)<\/p>/) || [])[1] || ''),
         det_plain: hn.includes('cpx-chk'), cls: (hr.match(/<small class="([^"]*)"[^>]*>data check/) || [])[1] || '' };
-      // 20 Nov: the build's "ckw" beside chk — why (its input guard; "h" the GA4 hole too; junk = the hole's)
+      // 20 Nov: the build's "ckw" beside chk — why (its input guard / sanity check; "h" the GA4 hole too; junk = the hole's)
       const ck = w => { const h = _.beRow(Object.assign({ chk: 1, ckw: w }, X), 'Alpha', G), d = _.beDet(Object.assign({ chk: 1, ckw: w }, X), 1, false);
         BER.push(h, d); return { cell: rowsOf(h)[0].cells[1], title: rowsOf(h)[0].titles[0], det: txt((d.match(/<p class="cpx-fn"><b class="cpx-chk">([\s\S]*?)<\/p>/) || [])[1] || '') }; };
-      BO.ckw = { f: ck('f'), c: ck('c'), hf: ck('hf'), junk: ck('z'), num: ck(7) }; }
+      BO.ckw = { f: ck('f'), c: ck('c'), s: ck('s'), hf: ck('hf'), junk: ck('z'), num: ck(7) }; }
     // 15 Nov: the countries table's B lines (a null / short / junk "bm" = none; per cell) and the new card fields (all SYNTHETIC)
     { const row = bm => { const h = _.beDet({ d: '2026-02-10', age: 50, cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, 30, null, null, 400, 0].concat(bm === undefined ? [] : [bm])], unc: [], now: ['no', 20, 0.5] }, 1, false); BER.push(h); return tblOf(h, '<h4 class="cpx-h4">Countries with a benchmark').rows[0]; };
       BO.bm_bad = [undefined, null, [0.35], 'x', {}, [null, null, null, null]].map(row);
