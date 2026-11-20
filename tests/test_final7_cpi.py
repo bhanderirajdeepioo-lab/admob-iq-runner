@@ -212,15 +212,25 @@ def _sent(st, day):
     st["push"][TC.IDS["a"]], st["due"] = day, {}
 
 
+def _old_rec(st, fam, opened, closed, notices=None):
+    """A made-up record from an earlier build: an alarm told at its opening, closed (a day) or open (None)."""
+    k = "%s|%s|%s" % (TC.IDS["a"], fam, opened)
+    st["eps"][k] = {"app_id": TC.IDS["a"], "fam": fam, "opened": opened, "closed": closed, "tier": "ALERT",
+                    "seeded": False, "first_at": "2026-01-01T05:00:00Z",
+                    "notices": notices or {"open": {"day": opened, "notified_at": opened + "T05:00:00Z"}}}
+    return k
+
+
 def test_a_roas_c_shift_move_sends_nothing_already_told_on_the_switch_build_or_later(monkeypatch, final_days):
     """Written at the pin (no "cshift": C_SHIFT0 1), built at shift 5 (GA4_FINAL_DAYS 7): the D7 ROAS alarm told on 5 Mar
     replays as opened 14 Mar (9 days > MATCH_DAYS: the same record, widened by the 4-day move), the install-day ROAS
-    one's re-notice moved 9 days (the same notice), the D1 ROAS one moved 14 days (a new record: seeded on the switch
-    build), a re-notice the old shifts had not reached yet shown, not sent — none is due. D0 ROAS (its confirm keeps its
-    shift) does not move: its new alarm is due as always, and so is another family's. A later build at 5: the D7 ROAS
-    alarm told on 5 Mar now opens on 15 Mar (10 days: still the same alarm, never re-sent), and a genuinely new D1 ROAS
-    alarm is sent (a record written at 5 has no widening). The rollback flip (5 → 1) switches over the same way (a new
-    D7 ROAS record seeded once, a new D0 ROAS alarm sent) and drops "cshift"."""
+    one's re-notice moved 9 days (the same notice), the D1 ROAS one moved 14 days (a new record: its opening shown on the
+    switch build), a re-notice the old shifts had not reached yet shown, not sent — none is due. D0 ROAS (its confirm
+    keeps its shift) does not move: its new alarm is due as always, and so is another family's. A later build at 5: the
+    D7 ROAS alarm told on 5 Mar now opens on 15 Mar (10 days: still the same alarm, never re-sent), and a genuinely new
+    D1 ROAS alarm is sent (a record written at 5 has no widening). The rollback flip (5 → 1) switches over the same way
+    (a new D7 ROAS record opening at most t − 4 days, which shift 5 could have told: its opening shown once; a new D0
+    ROAS alarm sent) and drops "cshift"."""
     ca, cb_ = final_days.pin(CA, cb)                                 # (the pin's, in a session at another F too)
     assert cb_.C_SHIFT0 == ca.FAMILIES["ROAS_C0"]["shift"] == 1 and cb_.C_FAMS == {"ROAS_C0", "ROAS_C1", "ROAS_C7"}
     aid = TC.IDS["a"]
@@ -252,7 +262,7 @@ def test_a_roas_c_shift_move_sends_nothing_already_told_on_the_switch_build_or_l
     assert set(st["eps"][old["ROAS_C0"]]["notices"]) == {"open", "2026-03-06"}           # the re-notice, moved
     assert st["eps"][old["ROAS_C7"]]["notices"]["2026-03-23"] == {"day": "2026-03-23", "seeded": True}
     new_c1 = st["eps"][key("ROAS_C1", "2026-03-15")]
-    assert new_c1["seeded"] is True and new_c1["notices"]["open"] == {"day": "2026-03-15", "seeded": True}
+    assert new_c1["seeded"] is False and new_c1["notices"]["open"] == {"day": "2026-03-15", "seeded": True}
     _sent(st, "2026-03-24")
 
     c7_later = dict(c7_new, opened="2026-03-15")                      # the alarm told on 5 Mar, restated a day more
@@ -265,12 +275,125 @@ def test_a_roas_c_shift_move_sends_nothing_already_told_on_the_switch_build_or_l
 
     _shifts(monkeypatch, 1, ca)                                           # the rollback flip, 5 → 1
     g3 = dict(g_new, opened="2026-04-20", c="2026-04-17")
-    c7_3 = dict(c7_old, opened="2026-04-19", c="2026-04-16")
+    c7_3 = dict(c7_old, opened="2026-04-16", c="2026-04-13")         # (≤ t − 4: shift 5 had it by 20 Apr)
     cb_.alerts(st, False, [_app(dict(c1_2, opened="2026-03-31"), c7_3, g3)], date(2026, 4, 21), TC.NOW)
     assert "cshift" not in st and _due(st) == {(key("ROAS_G", "2026-04-20"), "open")}
     assert key("ROAS_C1", "2026-03-31") not in st["eps"]             # (the record written at 5, 4 days off)
-    assert st["eps"][key("ROAS_C7", "2026-04-19")]["seeded"] is True                     # new on the flip: seeded
+    c7_rec = st["eps"][key("ROAS_C7", "2026-04-16")]                 # new on the flip: its opening shown once
+    assert c7_rec["seeded"] is False and c7_rec["notices"]["open"] == {"day": "2026-04-16", "seeded": True}
     assert st["eps"][key("ROAS_C1", "2026-04-04")]["wide"] == 4 and new_c1["wide"] == 4
+
+
+def test_a_new_roas_c_alarm_on_the_switch_build_is_sent_where_no_old_shift_could_have_told_it(monkeypatch,
+                                                                                             final_days):
+    """Review R2-1. 3 → 7 (shift 1 → 5, up: every day shift 5 sees, shift 1 saw 4 days sooner): a new D1 ROAS alarm of
+    an app with a D1 ROAS record from before is shown on the switch build (the old shifts could have told it), a new D7
+    ROAS one of an app with no D7 ROAS record at all is sent (nothing could have told it). 7 → 3 (5 → 1, down: shift 1
+    sees 4 days newer): a new install-day ROAS alarm opening at most t − 4 days is shown, a new D7 ROAS one opening later
+    is sent — although the app has a D7 ROAS record from before. Neither new record is seeded: every later re-notice
+    goes out as always."""
+    ca, cb_ = final_days.pin(CA, cb)
+    aid = TC.IDS["a"]
+    key = lambda f, d: "%s|%s|%s" % (aid, f, d)                      # noqa: E731
+    for c0, was, old_fam, old_op in ((5, None, "ROAS_C1", "2026-03-18"), (1, 5, "ROAS_C0", "2026-03-16")):
+        st = {"v": cb_.STATE_V, "eps": {}, "push": {aid: "2026-02-01"}, "due": {}}
+        if was:
+            st["cshift"] = was
+            _old_rec(st, "ROAS_C7", "2026-01-05", "2026-01-12")      # (7 → 3: a D7 ROAS record from before too)
+        _old_rec(st, old_fam, "2026-01-10", "2026-01-20")
+        _shifts(monkeypatch, c0, ca)
+        shown = {"fam": old_fam, "opened": old_op, "c": "2026-03-12", "confirm": None}
+        sent = {"fam": "ROAS_C7", "opened": "2026-03-18", "c": "2026-03-15", "confirm": None}
+        cb_.alerts(st, False, [_app(shown, sent)], date(2026, 3, 20), TC.NOW)
+        new_k, old_k = key("ROAS_C7", "2026-03-18"), key(old_fam, old_op)
+        assert _due(st) == {(new_k, "open")}, c0
+        assert st["eps"][old_k]["notices"]["open"] == {"day": old_op, "seeded": True}
+        assert st["eps"][old_k]["seeded"] is False and st["eps"][new_k]["seeded"] is False
+        assert st.get("cshift") == (5 if c0 == 5 else None) and "cpend" not in st
+        _sent(st, "2026-03-20")
+        esc = [["2026-04-10", "step"]]                                # three weeks on: both re-noticed
+        cb_.alerts(st, False, [_app(dict(shown, esc=esc), dict(sent, esc=esc))], date(2026, 4, 11), TC.NOW)
+        assert _due(st) == {(new_k, "2026-04-10"), (old_k, "2026-04-10")}, c0
+
+
+def test_an_alarm_told_at_shift_5_that_moved_is_never_re_sent_after_the_rollback(monkeypatch, final_days):
+    """7 → 3 (shift 5 → 1): the D7 ROAS alarm told on 10 Mar replays as opened 1 Mar (9 days: the same record, widened
+    by 4) and its re-notice told on 14 Mar as 6 Mar (8 days: the same notice) — nothing due on the switch build or on a
+    later one."""
+    ca, cb_ = final_days.pin(CA, cb)
+    aid = TC.IDS["a"]
+    st = {"v": cb_.STATE_V, "eps": {}, "push": {aid: "2026-03-14"}, "due": {}, "cshift": 5}
+    k = _old_rec(st, "ROAS_C7", "2026-03-10", None, notices={
+        "open": {"day": "2026-03-10", "notified_at": "2026-03-10T05:00:00Z"},
+        "2026-03-14": {"day": "2026-03-14", "notified_at": "2026-03-14T05:00:00Z"}})
+    _shifts(monkeypatch, 1, ca)
+    ep = {"fam": "ROAS_C7", "opened": "2026-03-01", "c": "2026-02-26", "confirm": None, "esc": [["2026-03-06", "step"]]}
+    for t in (date(2026, 3, 20), date(2026, 3, 28)):
+        cb_.alerts(st, False, [_app(ep)], t, TC.NOW)
+        assert _due(st) == set() and list(st["eps"]) == [k] and st["eps"][k]["wide"] == 4
+        assert set(st["eps"][k]["notices"]) == {"open", "2026-03-14"} and "cshift" not in st
+
+
+def test_an_app_without_a_view_on_the_switch_build_switches_over_on_its_next_build_with_one(tmp_path, monkeypatch,
+                                                                                           final_days):
+    """Review R2-2. 3 → 7: the switch build has no view of the app (its step failed) — it waits in "cpend" (kept across
+    save / load); its next build with one switches it over: the D7 ROAS alarm told on 1 Mar, now opening 15 Mar (14
+    days: a new record), is shown, not re-sent; a build after that sends a new alarm as always. 7 → 3: the switch build
+    has the app's view without ROI rows (no ROAS_C episode can show); on its next build the alarm told on 1 Mar at
+    shift 5 replays as opened 15 Feb with its re-notice told on 17 Mar as 16 Mar — shown, not re-sent."""
+    ca, cb_ = final_days.pin(CA, cb)
+    aid = TC.IDS["a"]
+    key = lambda f, d: "%s|%s|%s" % (aid, f, d)                      # noqa: E731
+    told = {"fam": "ROAS_C7", "opened": "2026-03-01", "c": "2026-02-26", "confirm": None}
+    st = {"v": cb_.STATE_V, "eps": {}, "push": {}, "due": {}}
+    cb_.alerts(st, False, [_app(told)], date(2026, 3, 2), TC.NOW)
+    _sent(st, "2026-03-02")
+    _shifts(monkeypatch, 5, ca)                                           # 3 → 7
+    cb_.alerts(st, False, [dict(_app(told), view=None)], date(2026, 3, 20), TC.NOW)
+    assert st["cshift"] == 5 and st["cpend"] == {aid: 1} and "wide" not in st["eps"][key("ROAS_C7", "2026-03-01")]
+    cb_.save_state(str(tmp_path), st)
+    st, first = cb_.load_state(str(tmp_path))
+    assert not first and st["cpend"] == {aid: 1}
+    moved = dict(told, opened="2026-03-15")
+    cb_.alerts(st, False, [_app(moved)], date(2026, 3, 21), TC.NOW)
+    assert _due(st) == set() and "cpend" not in st and st["eps"][key("ROAS_C7", "2026-03-01")]["wide"] == 4
+    assert st["eps"][key("ROAS_C7", "2026-03-15")]["notices"]["open"] == {"day": "2026-03-15", "seeded": True}
+    c0 = {"fam": "ROAS_C0", "opened": "2026-03-21", "c": "2026-03-18", "confirm": None}
+    cb_.alerts(st, False, [_app(moved, c0)], date(2026, 3, 22), TC.NOW)
+    assert _due(st) == {(key("ROAS_C0", "2026-03-21"), "open")}                          # (the switch is over)
+
+    st = {"v": cb_.STATE_V, "eps": {}, "push": {aid: "2026-03-17"}, "due": {}, "cshift": 5}
+    _old_rec(st, "ROAS_C7", "2026-03-01", None, notices={
+        "open": {"day": "2026-03-01", "notified_at": "2026-03-01T05:00:00Z"},
+        "2026-03-17": {"day": "2026-03-17", "notified_at": "2026-03-17T05:00:00Z"}})
+    _shifts(monkeypatch, 1, ca)                                           # 7 → 3
+    cpi = {"fam": "CPI", "opened": "2026-02-01", "c": "2026-01-29", "closed": "2026-03-01", "confirm": None}
+    cb_.alerts(st, False, [dict(_app(cpi), notes={"roi_rows": 0})], date(2026, 3, 20), TC.NOW)
+    assert "cshift" not in st and st["cpend"] == {aid: 5} and _due(st) == set()
+    back = dict(told, opened="2026-02-15", c="2026-02-12", esc=[["2026-03-16", "step"]])
+    cb_.alerts(st, False, [_app(back)], date(2026, 3, 21), TC.NOW)
+    assert _due(st) == set() and "cpend" not in st
+    assert st["eps"][key("ROAS_C7", "2026-02-15")]["notices"]["2026-03-16"] == {"day": "2026-03-16", "seeded": True}
+
+
+def test_a_short_alarm_told_before_a_3_to_14_move_is_the_same_alarm_after_it(monkeypatch, final_days):
+    """Review R2-4. 3 → 14 (shift 1 → 12: 11 days): the D7 ROAS alarm told on 1 Mar closed on 3 Mar; at shift 12 it
+    opens again on 12 Mar — after the old record closed, but within its 11-day widening: the same alarm, not re-sent
+    (10 days after the push: PUSH_GAP's join would not hold it)."""
+    ca, cb_ = final_days.pin(CA, cb)
+    aid = TC.IDS["a"]
+    told = {"fam": "ROAS_C7", "opened": "2026-03-01", "c": "2026-02-26", "confirm": None}
+    st = {"v": cb_.STATE_V, "eps": {}, "push": {}, "due": {}}
+    cb_.alerts(st, False, [_app(told)], date(2026, 3, 2), TC.NOW)
+    _sent(st, "2026-03-02")
+    cb_.alerts(st, False, [_app(dict(told, closed="2026-03-03"))], date(2026, 3, 4), TC.NOW)
+    _shifts(monkeypatch, 12, ca)                                          # 3 → 14
+    cpi = {"fam": "CPI", "opened": "2026-02-01", "c": "2026-01-29", "closed": "2026-03-01", "confirm": None}
+    cb_.alerts(st, False, [_app(cpi)], date(2026, 3, 5), TC.NOW)    # the switch build: the replay not open yet
+    k = "%s|ROAS_C7|2026-03-01" % aid
+    assert st["cshift"] == 12 and st["eps"][k]["wide"] == 11
+    cb_.alerts(st, False, [_app(dict(told, opened="2026-03-12"))], date(2026, 3, 13), TC.NOW)
+    assert _due(st) == set() and [x for x in st["eps"] if "ROAS_C7" in x] == [k]
 
 
 def test_without_a_shift_move_a_new_roas_alarm_is_sent_as_before(final_days):
@@ -280,7 +403,7 @@ def test_without_a_shift_move_a_new_roas_alarm_is_sent_as_before(final_days):
     st = {"v": cb_.STATE_V, "eps": {}, "push": {}, "due": {}}
     cb_.alerts(st, False, [_app({"fam": "ROAS_C7", "opened": "2026-03-13", "confirm": None})], date(2026, 3, 14),
               TC.NOW)
-    assert "cshift" not in st and [d for v in st["due"].values() for _, d in v] == ["open"]
+    assert "cshift" not in st and "cpend" not in st and [d for v in st["due"].values() for _, d in v] == ["open"]
     assert not any("wide" in r for r in st["eps"].values())
 
 
@@ -297,10 +420,11 @@ def test_the_ledger_keeps_its_shift_across_load_and_save(tmp_path, monkeypatch):
 
 def test_the_switch_follows_the_knob(final_days):
     """At 7 the build's own copy has ROAS_C0's shift 5: a ledger without "cshift" switches over once (a new D7 ROAS
-    alarm shown, not sent; a new D0 ROAS one sent as always)."""
+    alarm of an app with a D7 ROAS record from before shown, not sent; a new D0 ROAS one sent as always)."""
     ca, b = final_days(7, CA, cb)
     assert b.C_SHIFT0 == 1 and ca.FAMILIES["ROAS_C0"]["shift"] == 5 and b.C_FAMS == {"ROAS_C0", "ROAS_C1", "ROAS_C7"}
     st = {"v": b.STATE_V, "eps": {}, "push": {}, "due": {}}
+    _old_rec(st, "ROAS_C7", "2026-01-10", "2026-01-20")
     b.alerts(st, False, [_app({"fam": "ROAS_C7", "opened": "2026-03-13", "confirm": None},
                               {"fam": "ROAS_G", "opened": "2026-03-13", "confirm": "confirmed"})], date(2026, 3, 14),
              TC.NOW)

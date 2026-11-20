@@ -2903,8 +2903,9 @@ def state_path(data_dir):
 
 def load_state(data_dir):
     """The private ledger {"v", "eps": {key: record}, "push": {app id: last push day}, "due": {alert id: [[key, day],
-    …]}, "cshift": ROAS_C0's shift it was last written at — only off C_SHIFT0}; a default on a missing or broken file
-    (first = True: every open episode is seeded)."""
+    …]}, "cshift": ROAS_C0's shift it was last written at — only off C_SHIFT0, "cpend": {app id: the shift its ROAS_C
+    records were written at} — only for an app whose switch-over is still to come (_ledger)}; a default on a missing or
+    broken file (first = True: every open episode is seeded)."""
     st = {"v": STATE_V, "eps": {}, "push": {}, "due": {}}
     raw = _load_json(state_path(data_dir))
     if not isinstance(raw, dict) or raw.get("v") != STATE_V:
@@ -2914,6 +2915,10 @@ def load_state(data_dir):
             st[k] = raw[k]
     if isinstance(raw.get("cshift"), int) and not isinstance(raw["cshift"], bool):
         st["cshift"] = raw["cshift"]
+    pend = {k: v for k, v in (raw.get("cpend") or {}).items() if isinstance(v, int) and not isinstance(v, bool)} \
+        if isinstance(raw.get("cpend"), dict) else {}
+    if pend:
+        st["cpend"] = pend
     st["eps"] = {k: v for k, v in st["eps"].items() if isinstance(v, dict) and isinstance(v.get("opened"), str)
                  and isinstance(v.get("notices"), dict)}
     return st, False
@@ -2991,24 +2996,51 @@ def _ledger(st, first, apps, t, now, quiet=None):
     episode (shown only), and joined (not sent) when the app had a push in the PUSH_GAP days before — a seeded opening
     day counts as that push day. quiet ({(app id, fam, opened): build day}: an alarm the level agent re-opened):
     every notice of it dated on or before that day is seeded, never sent; later ones follow the rules above.
-    The switch-over (GA4_FINAL_DAYS moved the ROAS_C shifts since the ledger's last build: st["cshift"], ROAS_C0's;
-    none: C_SHIFT0): the C_FAMS episodes are replayed at other shifts, so their openings and re-notice days move — by
-    more than MATCH_DAYS too (ROAS_G does not move: its confirm keeps its own shift). Every record of them already kept
-    (written at the old shifts) matches ±(MATCH_DAYS + the shift move) from then on (its "wide"): an alarm told at the
-    old shifts that opens again at the new ones, on this build or a later one, is the same alarm. On that ONE build
-    each of their new records and new notices is seeded too (shown, never sent: one that moved further still); a new
-    alarm on a later build is sent as always. A record no episode matches stays as it is (closing it would turn the same
-    alarm, opening a few days later at the new shifts, into a new one). Then st["cshift"] = the shift (dropped at
-    C_SHIFT0: the ledger file as before the knob).
+    The switch-over (GA4_FINAL_DAYS moved the ROAS_C shifts since the app's records were written: st["cshift"],
+    ROAS_C0's, none: C_SHIFT0; an app still waiting for its switch-over: st["cpend"][app id]): the C_FAMS episodes are
+    replayed at other shifts, so their openings and re-notice days move — by more than MATCH_DAYS too (ROAS_G does not
+    move: its confirm keeps its own shift). It is done per app, on the app's first build after the move whose view has
+    its ROI rows or a C_FAMS episode (one can show only then; an app without either waits in "cpend"): each of the app's
+    C_FAMS records (written at its old shifts) matches ±(MATCH_DAYS + the app's shift move) from then on (its "wide"),
+    so an alarm told at the old shifts that opens again at the new ones, on this build or a later one, is the same
+    alarm. On that ONE build a new C_FAMS notice (a new record's opening or a re-notice) is seeded (shown, never sent:
+    one that moved further still) only where an alarm at the old shifts could already have told it (_told_before): the
+    app has a record of that family from before this build, and the shift went up (every day the new shifts see, the old
+    ones saw sooner) or the notice's day is at most t − the move (a smaller shift sees newer days: a notice after that
+    is new to the old shifts too); every other notice follows the rules above, and a new record is seeded only as always
+    (first build, unchecked D0 ROAS), so its later re-notices go out. A record no episode matches stays as it is
+    (closing it would turn the same alarm, opening a few days later at the new shifts, into a new one). Then
+    st["cshift"] = the shift (dropped at C_SHIFT0: the ledger file as before the knob), "cpend" only while an app waits.
     → {(app id, fam, opened): (key, due)}, due = [notice key, …]."""
     used, out = set(), {}
     now_iso = gu._now_iso(now)
     cshift = CA.FAMILIES["ROAS_C0"]["shift"]
-    moved = abs(cshift - int(st.get("cshift", C_SHIFT0)))
-    sw = C_FAMS if moved and not first else frozenset()
+    was = int(st.get("cshift", C_SHIFT0))
+    pend = {} if first else dict(st.get("cpend") or {})
+    fams = {}                                       # app id → its C_FAMS families with a record from before this build
+    if pend or was != cshift:
+        for r in st["eps"].values():
+            if r.get("fam") in C_FAMS:
+                fams.setdefault(r.get("app_id"), set()).add(r["fam"])
+    ready = {a["app_id"] for a in apps if a.get("view") and (
+        (a.get("notes") or {}).get("roi_rows") or any(e["fam"] in C_FAMS for e in a["view"]["eps"]))}
+    if not first and was != cshift:
+        for aid in fams:
+            if aid not in ready:
+                pend.setdefault(aid, was)           # no ROAS_C view on this build: its switch-over waits
+    sw = {}                                         # app id → its shift move (new − old) on its switch-over build
+    for aid in ready:
+        old = pend.pop(aid, was)
+        if old != cshift and not first:
+            sw[aid] = cshift - old
+    pend = {aid: s for aid, s in pend.items() if s != cshift and aid in fams}
     for r in st["eps"].values():
-        if r.get("fam") in sw:
-            r["wide"] = max(_wide(r), moved)
+        if r.get("fam") in C_FAMS and r.get("app_id") in sw:
+            r["wide"] = max(_wide(r), abs(sw[r["app_id"]]))
+
+    def _told_before(aid, fam, day):
+        mv = sw.get(aid)
+        return bool(mv) and fam in fams.get(aid, ()) and (mv > 0 or (t - _d(day)).days >= -mv)
     for a in apps:
         v = a.get("view")
         if not v:
@@ -3023,7 +3055,7 @@ def _ledger(st, first, apps, t, now, quiet=None):
             if k is None:
                 k = "%s|%s|%s" % (aid, ep["fam"], ep["opened"])
                 st["eps"][k] = {"app_id": aid, "fam": ep["fam"], "opened": ep["opened"],
-                                "seeded": bool(first or _unchecked(a, ep) or ep["fam"] in sw), "first_at": now_iso,
+                                "seeded": bool(first or _unchecked(a, ep)), "first_at": now_iso,
                                 "notices": {}}
             used.add(k)
             rec = st["eps"][k]
@@ -3044,7 +3076,8 @@ def _ledger(st, first, apps, t, now, quiet=None):
                         if n.get("notified_at") is None and not n.get("seeded") and not n.get("joined"):
                             due.append(nk)
                         continue
-                    if first or rec.get("seeded") or ep["fam"] in sw or (t - _d(day)).days > LATE_DAYS:
+                    if first or rec.get("seeded") or _told_before(aid, ep["fam"], day) or \
+                            (t - _d(day)).days > LATE_DAYS:
                         rec["notices"][nk] = {"day": day, "seeded": True}
                         continue
                     last = st["push"].get(aid)
@@ -3061,6 +3094,10 @@ def _ledger(st, first, apps, t, now, quiet=None):
         st.pop("cshift", None)
     else:
         st["cshift"] = cshift
+    if pend:
+        st["cpend"] = pend
+    else:
+        st.pop("cpend", None)
     return out
 
 
