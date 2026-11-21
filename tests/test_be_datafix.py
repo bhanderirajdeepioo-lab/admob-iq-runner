@@ -740,7 +740,8 @@ THREE_BEFORE = ["c8698c0c65b71f745efb16c830f345ee9a2422f08e013b55cb075257dfd04fc
 def test_all_four_off_every_output_byte_for_byte_as_before_them(tmp_path, monkeypatch):
     if be.LAG != be.LAG0:
         pytest.skip("the digests were worked out at the tests' GA4_FINAL_DAYS (3)")
-    off = three_digests(tmp_path / "off", monkeypatch, {"be_fsc": False, "be_gap": False, "be_upi": False, "be_rsf": False})
+    off = three_digests(tmp_path / "off", monkeypatch, {"be_fsc": False, "be_gap": False, "be_upi": False, "be_rsf": False,
+                                                        "be_small": False})
     assert off == THREE_BEFORE
     on = three_digests(tmp_path / "on", monkeypatch, {})
     assert on[0] != off[0]                                                 # (the world trips them: on is not off)

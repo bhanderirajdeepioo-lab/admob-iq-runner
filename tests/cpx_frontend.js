@@ -804,6 +804,10 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
         unjudged: one({ jd: 0, now: ['no', 66, 0.7, 1] }),
         unjudged_det: txt(_.beDet({ d: '2026-02-10', age: 70, jd: 0, cty: [], unc: [], now: ['no', 66, 0.7, 1] }, 1, false)) };
       BO.ctyk2 = [5, 6, 4].map(rk => txt(_.beDet({ d: '2026-02-10', age: 450, cty: [['IN', 1, 0.4, 3, 0.5, 0.7, 0.9, rk === 4 ? 60 : 400, null, null, 400, rk]], unc: [], now: ['no', 440, 0.5, 1] }, 1, false)));
+      // ⚖️ a small row (under $5 / 30 new users, the build's rk 7): "data kam" in Breakeven, its B line and every other cell as before
+      { const sm = _.beDet({ d: '2026-02-10', age: 10, cty: [['IS', 0.02, 0.5, 40.0, 0.1, 0.2, 0.3, null, null, null, null, 7, [0.6, 45.0, 120.0, 300], [8, 0.12, 0.4]]], unc: [], now: ['no', 10, 0.5] }, 1, false);
+        const tb = tblOf(sm, '<table class="cpx-t cpx-btc">');
+        BO.ctyk3 = { text: txt(sm), cells: tb && tb.rows[0], titles: tb && tb.titles, head: tb && tb.head }; }
       const cd = _.beCard({ roas: [0.2, 0.4, 0.6, 0.8, 0.9, 0.9997], bench: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6] });
       BO.card999 = [...cd.matchAll(/14 days: ROAS <b>([^<]*)<\/b>/g)].map(m => m[1]); }
     { const cf = _.beCard({ roas: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7], bench: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6], fin: [1, 1, 1, 1, 0, 0] });

@@ -258,6 +258,9 @@ def settings() -> dict:
         # … and the lived re-anchor (BE_LIVED, on unless set false: once a day has a final anchor the shift anchors at its
         # latest cell at least 4 days old; off: the tab's files exactly as without it)
         "be_lived": switch_on(os.getenv("BE_LIVED")),
+        # … and the small rows' "data kam" (BE_SMALL, on unless set false: a country row under $5 / 30 new users that
+        # day shows "data kam" in place of its curve's breakeven day; off: the tab's files exactly as without it)
+        "be_small": switch_on(os.getenv("BE_SMALL")),
         # 🖼️ Screens: GA4 views and ad impressions per screen class per day, every layer (fetch.ga4_screens: the recent
         # days every 3 / 12 hours, the history newest first; runs after every live GA4 step, stricter quota floors —
         # only the Google Ads users' reads above run after it, under the same floors).

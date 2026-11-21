@@ -190,7 +190,8 @@ def test_the_app_lines_fallback_counts_only_where_the_shift_runs(tmp_path, monke
 
 # ── ⚖️ all FIVE new switches off where the lived rule acts: every output as before them all ────────────────────────
 
-OFF5 = {"be_fsc": False, "be_gap": False, "be_upi": False, "be_rsf": False, "be_lived": False}
+OFF5 = {"be_fsc": False, "be_gap": False, "be_upi": False, "be_rsf": False, "be_lived": False,
+        "be_small": False}                 # (and the small rows' "data kam", after them: before them all)
 # sha256 (tests/test_be_paid._digest) of lived_world through the step — worked out once with 60cd202's admob_iq (the
 # commit before round 5: loaded in place of this tree's, the same world and helpers), at GA4_FINAL_DAYS 3 and 7
 OFF5_BEFORE = {"3": "077e49d3c2da2d3c189d0c8019f31aaa8b6f0d49a16f73d84302829a4327ce4e",

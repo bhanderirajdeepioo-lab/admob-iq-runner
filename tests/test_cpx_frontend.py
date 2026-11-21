@@ -1304,6 +1304,19 @@ def test_breakeven_bn_kind_not_final_column_and_unjudged_days_and_country_lived_
     assert out["be"]["card999"] == ["99.9%"]
 
 
+def test_breakeven_a_small_country_row_says_data_kam(out):
+    """⚖️ A country row under $5 / 30 new users that day (the build's rk 7; owner, 21 Nov 2026: "haan, chhoti rows me data
+    kam likh do"): Breakeven says "data kam" with its why on tap — no day, no 80 % range, no % against B — its B line and
+    every other cell (spend share, CPI, eCPM, ROAS so far) as on any row; the table's head as before (a file without
+    such a row renders byte for byte as before: test_breakeven_old_file_is_todays_tab_byte_for_byte)."""
+    s = out["be"]["ctyk3"]
+    cells, titles = s["cells"], s["titles"]
+    assert cells[5] == "data kam · B day 120"              # (no day, no 80 %, no % against B's day 120; the B line stays)
+    assert "is din is country me spend $5 se kam ya 30 se kam naye users — itne kam users se breakeven ka andaza nahi banta" in titles
+    assert cells[1:5] == ["2%", "₹0.50 · B ₹0.60 −17%", "₹40.0 · B ₹45.0 −11%", "12.0% · B 40.0% −70% day 8 (not final)"]
+    assert s["head"] == ["Country", "Spend share", "CPI", "eCPM", "ROAS so far", "Breakeven"]
+
+
 def test_breakeven_lower_bounds_say_whether_they_are_final_and_lived_cells_show_their_own_number(out):
     """A "≥" floor rests on the so-far read: "asli" only when that read is final (now[3] / now[5] = 1), else "ab tak (abhi
     final nahi)", never "andaze se"; a lived, not-final age shows the day's own cell (x.prov), never the model's number;

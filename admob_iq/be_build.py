@@ -140,8 +140,9 @@ breaks even (the page shows the days of its period).
                           own curve (shifted to its own final read when it has one) given it has not broken even by its
                           own so-far age; 4: ≤ a 30-day column not final yet;
                           5 / 6: it lived past K3's limit without breaking even — median = its so-far age, final /
-                          not final yet), "jd" 0 (only on a day under $5 / 30 new users: no model, no countries — its
-                          real numbers only), "card": {"roas", "bench", "fin" (1 final / 0 not final yet), "cv" (S_j's share of the day's country spend), "chk"
+                          not final yet; 7 (SMALL_ON): a small row's forecast — under $5 / 30 new users that day —
+                          withheld, "data kam": median, low, high and lim null), "jd" 0 (only on a day under
+                          $5 / 30 new users: no model, no countries — its real numbers only), "card": {"roas", "bench", "fin" (1 final / 0 not final yet), "cv" (S_j's share of the day's country spend), "chk"
                           (1: a pack-gap date inside the window; the point is low by what the data lost)}, "now": ["be", BE day, kind ("x" exact / "nf" not final
                           / "b" ≤ a column / "s" ≤ its so far), so-far age, ROAS so far] (the ROI row's own) | ["no",
                           so-far age, ROAS so far, final? (1: older than LAG days)]}]} (every install day with
@@ -280,6 +281,15 @@ was. Each app has one SOURCE a build:
       same age (_bench_at: the curve's rmed — the country's median past ROAS — at a curve age, linear between two, null
       past the curve's limit), both ROAS to 3 places (_r3: the page shows 0.1 %); the page's "ROAS so far" column
       between eCPM and Breakeven. No number of the model moves.
+    SMALL (owner, 21 Nov 2026: "haan, chhoti rows me data kam likh do"; BE_SMALL, "be_small", SMALL_ON): a covered
+      country row under $5 / 30 new users that day (not x.jd — the judged-day rule; such a row has no final cells of its
+      own, so no anchor: its curve alone answered) that has neither broken even nor lived past its curve answers "data
+      kam" (rk RK_SMALL; its median, low, high and lim null — the page's "ROAS so far" never needs the lim of such a row,
+      its so-far age being under it, and a page still open from before reads "—", never "beyond data") instead of its
+      curve's day: a few installs' revenue is noise. Nothing else moves: a real fact stays (rk 1 … 6), its curve stays in
+      the app line and the card (the day's whole spend), its other cells stay, round 5's marks ("g" / "u": they speak of
+      its cells too — its "ROAS so far" is shown) and counts as before (the sanity check never read such a row: no
+      anchor); counted ("data kam N (recent N)"). Off: every file exactly as before it.
     INTENDED, as reviewed (20 Nov 2026): (b) "more than every user's" runs only on days ≤ the paid newest − FSQ_YOUNG
       (a newer day's two reads are hot reads of different hours); the doubt exception (_fs_doubt) is (b)'s only — (a)
       follows GA4's own sampled mark; both need every user's own cell (none or no impressions: no decision, (a)'s
@@ -512,6 +522,13 @@ RSF_ON = True                        # ⚖️ the countries table's "ROAS so far
 #                                      dikhao"): each covered country row's real ROAS at its latest lived age (its own
 #                                      so-far read, as the app line's "ROAS … by day N") and B's median ROAS at that
 #                                      same age — the row's 14th element (_rsf); no number of the model moves
+SMALL_ON = True                      # ⚖️ a SMALL country row's forecast (under $5 / 30 new users that day — the judged-day
+#                                      rule, MIN_SP / MIN_N: a few installs' revenue is noise) → "data kam" (rk RK_SMALL:
+#                                      no day, no range, no limit) instead of its curve's day (owner, 21 Nov 2026: "haan,
+#                                      chhoti rows me data kam likh do"; BE_SMALL, "be_small"); a real fact (it broke even
+#                                      / it lived past its curve) stays; the app line, the card, the row's other cells and
+#                                      the day's marks as before
+RK_SMALL = 7
 LINE = None
 
 
@@ -2585,6 +2602,7 @@ def predict(key, fc, cal, pin, sk=None, stats=None):
         shift = ok and anc is not None            # the "ROAS ab tak" shift (nothing final yet: unshifted)
         ctys, sus = [], {}                        # (sus: the countries the sanity check found)
         gpc, upc = {}, {}                         # (⚖️ the forecast rows holding a gap date / off B's users per install)
+        nsm = 0                                   # (⚖️ the small rows answered "data kam")
         for cc, x, f, ages, mid, clo, chi in cov:
             b0, b1, b2, s_, tmax = f["k3"][:5]
             mu = b0 + b1 * x.c + b2 * x.e if _seen(f["rng"], x) else None     # (K3: only inside its range)
@@ -2596,6 +2614,9 @@ def predict(key, fc, cal, pin, sk=None, stats=None):
                 days_ = [x.rbe[0], None, None, clim, {"x": 1, "b": 2, "s": 2, "nf": 3, "bn": 4}[k]]
             elif x.sfa is not None and x.sfa >= clim:    # it lived past its curve without breaking even: that real fact
                 days_ = [x.sfa, None, None, clim, 5 if x.sfa <= nw - x.X - LAG else 6]
+            elif SMALL_ON and not x.jd:          # ⚖️ a small row (under $5 / 30 new users): "data kam" — no day, no
+                days_ = [None, None, None, None, RK_SMALL]   # range, no limit (an older page still open reads that
+                nsm += 1                         # "—", never "beyond data"); its marks below as before
             else:                                # its OWN curve, shifted to its own ROAS so far (the app line adds up the
                 dd = _cty_shift(ages, mid, x, cbandb, nw - x.X - CLAG, cgr, stats) if shift else None   # same countries:
                 days_ = (dd if dd is not None else _cty_days(ages, mid, clo, chi, x)) + [clim, 0]   # one curve, one
@@ -2605,17 +2626,19 @@ def predict(key, fc, cal, pin, sk=None, stats=None):
                     if ca and _sus(dd[0], ages, _bench_of(f["cv"]), ca[0], ca[1], (key, r.day, cc),   # real ROAS
                                    (_bm(f.get("bm")) or [None] * 4)[2]):                            # did not make
                         sus[cc] = 1
-                if x.sp / tot >= SAN_SHARE:          # ⚖️ round 5's marks on a forecast row (≥ SAN_SHARE of the day)
-                    if gsl and _gap_in(x, gsl):      # its cells (install day … so far) hold a pack-gap date
-                        gpc[cc] = 1
-                    u = _upi(x, ub.get(cc)) if ub and nw - x.X >= UPI_AGE else None    # its users per install off B's
-                    #                                                     basis (from UPI_AGE days old: installs settle)
-                    if u is not None:
-                        upc[cc] = u
-                    e_ = eb.get(cc)                  # (FSC's output check, counted only: measured on every app's
-                    if e_ and stats is not None and x.e is not None and not e_[0] <= x.e <= e_[1]:   # history it
-                        stats["eco"] = stats.get("eco", 0) + 1               # marks real eCPM lows / highs at the
-                        stats["ecow"] = stats.get("ecow", 0) + (r.X >= nw - FSQ_WIN)   # band's own rate — no mark)
+            if days_[4] in (0, RK_SMALL) and x.sp / tot >= SAN_SHARE:   # ⚖️ round 5's marks on a forecast row (≥
+                #                                  SAN_SHARE of the day) — a small one's too: they speak of its cells,
+                #                                  and its "ROAS so far" is shown
+                if gsl and _gap_in(x, gsl):          # its cells (install day … so far) hold a pack-gap date
+                    gpc[cc] = 1
+                u = _upi(x, ub.get(cc)) if ub and nw - x.X >= UPI_AGE else None    # its users per install off B's
+                #                                                     basis (from UPI_AGE days old: installs settle)
+                if u is not None:
+                    upc[cc] = u
+                e_ = eb.get(cc)                      # (FSC's output check, counted only: measured on every app's
+                if e_ and stats is not None and x.e is not None and not e_[0] <= x.e <= e_[1]:   # history it
+                    stats["eco"] = stats.get("eco", 0) + 1               # marks real eCPM lows / highs at the
+                    stats["ecow"] = stats.get("ecow", 0) + (r.X >= nw - FSQ_WIN)   # band's own rate — no mark)
             ctys.append([cc, round(x.sp / tot, 4), round(x.cpi, 4), round(math.exp(x.e), 3), *[_r(v, 3) for v in pk],
                          *days_, _bm(f.get("bm"))] + ([_rsf(x, ages, f["cv"])] if RSF_ON else []))   # (⚖️ "ROAS so far")
         out = {"d": r.day, "age": nw - r.X, "sp": round(r.sp, 2), "inst": r.na, "cov": round(csp / tot, 4),
@@ -2721,6 +2744,10 @@ def predict(key, fc, cal, pin, sk=None, stats=None):
             if r.X >= nw - FSQ_WIN:
                 stats["gapw"] = stats.get("gapw", 0) + len(gpc)
                 stats["upiw"] = stats.get("upiw", 0) + len(upc)
+        if stats is not None and nsm:                 # ⚖️ (counted the same way: the "data kam" rows)
+            stats["sml"] = stats.get("sml", 0) + nsm
+            if r.X >= nw - FSQ_WIN:
+                stats["smlw"] = stats.get("smlw", 0) + nsm
         out["card"], cw = _card(r, cov, tot, gaps, nw)
         if cw:
             out["cw"] = "j" if not r.jd else "k" if not ctys and not unc else cw   # why there is none (the page says it)
@@ -3272,10 +3299,11 @@ def _tried_p(data_dir):
 def run(dashboard, data_dir, out_dir, s=None, now=None):
     """The step (_run) with the build's switches of its checks: BE_FSQ (settings "be_fsq") and BE_SAN ("be_san"), and
     round 5's BE_FSC ("be_fsc"), BE_GAP ("be_gap"), BE_UPI ("be_upi") and the countries table's "ROAS so far" BE_RSF
-    ("be_rsf"), and the lived re-anchor BE_LIVED ("be_lived"), each on unless set false, AND the module's own
-    FSQ_ON / SAN_ON / FSC_ON / GAP_ON / UPI_ON / RSF_ON / LIVE_ON — all off: every file exactly as before them (FSC needs the guard on)."""
-    global FSQ_ON, SAN_ON, FSC_ON, GAP_ON, UPI_ON, RSF_ON, LIVE_ON
-    keep = FSQ_ON, SAN_ON, FSC_ON, GAP_ON, UPI_ON, RSF_ON, LIVE_ON
+    ("be_rsf"), the lived re-anchor BE_LIVED ("be_lived") and the small rows' "data kam" BE_SMALL ("be_small"), each on
+    unless set false, AND the module's own FSQ_ON / SAN_ON / FSC_ON / GAP_ON / UPI_ON / RSF_ON / LIVE_ON / SMALL_ON —
+    all off: every file exactly as before them (FSC needs the guard on)."""
+    global FSQ_ON, SAN_ON, FSC_ON, GAP_ON, UPI_ON, RSF_ON, LIVE_ON, SMALL_ON
+    keep = FSQ_ON, SAN_ON, FSC_ON, GAP_ON, UPI_ON, RSF_ON, LIVE_ON, SMALL_ON
     FSQ_ON = keep[0] and bool((s or {}).get("be_fsq", True))
     SAN_ON = keep[1] and bool((s or {}).get("be_san", True))
     FSC_ON = keep[2] and bool((s or {}).get("be_fsc", True))
@@ -3283,11 +3311,12 @@ def run(dashboard, data_dir, out_dir, s=None, now=None):
     UPI_ON = keep[4] and bool((s or {}).get("be_upi", True))
     RSF_ON = keep[5] and bool((s or {}).get("be_rsf", True))
     LIVE_ON = keep[6] and bool((s or {}).get("be_lived", True))
+    SMALL_ON = keep[7] and bool((s or {}).get("be_small", True))
     LEDW["n"] = 0
     try:
         return _run(dashboard, data_dir, out_dir, s, now)
     finally:
-        FSQ_ON, SAN_ON, FSC_ON, GAP_ON, UPI_ON, RSF_ON, LIVE_ON = keep
+        FSQ_ON, SAN_ON, FSC_ON, GAP_ON, UPI_ON, RSF_ON, LIVE_ON, SMALL_ON = keep
 
 
 def _run(dashboard, data_dir, out_dir, s=None, now=None):
@@ -3315,8 +3344,9 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
         n = {"refit": 0, "fail": 0, "ec": 0, "ec_fail": 0, "ec_stale": 0, "pfail": 0, "org_fail": 0,
              "fs": 0, "fsl": 0, "coh": 0, "cohw": 0, "sus": 0, "susw": 0, "rskip": 0, "gfail": 0, "sapp": 0,
              "young": 0, "c1s": 0, "c1o": 0, "gap": 0, "gapw": 0, "gapr": 0, "gapl": 0, "lfail": 0, "upi": 0,
-             "upiw": 0, "eco": 0, "ecow": 0, "lfb": 0, "lfbc": 0}   # (⚖️ round 5's counts: FSC, the pack gaps' marks /
-        #                                         dates, UPI; the lived anchors that fell back to the final one)
+             "upiw": 0, "eco": 0, "ecow": 0, "lfb": 0, "lfbc": 0, "sml": 0, "smlw": 0}   # (⚖️ round 5's counts:
+        #                                         FSC, the pack gaps' marks / dates, UPI; the lived anchors that fell back
+        #                                         to the final one; the small rows answered "data kam")
         fsq = {}                                  # ⚖️ the input guard's broken first-session days per src "p" app key
         if paid:
             from . import roi_build as rbm       # (its PAID / PAID_DIR: run_uninstall ran its pass earlier, this process)
@@ -3384,7 +3414,8 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
             unc = {cc for cs in pin[2].values() for cc in cs} - set(fc["fits"])      # (the folded ones too)
             bodies[aid] = (key, fc, body, len(unc))
             n["sapp"] += st.get("app", 0)
-            for k_ in ("gap", "gapw", "upi", "upiw", "eco", "ecow", "lfb", "lfbc"):   # ⚖️ round 5 (predict's own counts)
+            for k_ in ("gap", "gapw", "upi", "upiw", "eco", "ecow", "lfb", "lfbc", "sml", "smlw"):   # ⚖️ round 5 (predict's
+                #                                                                    own counts)
                 n[k_] += st.get(k_, 0)
 
         def _org(aid, key, fn, oi):
@@ -3699,7 +3730,8 @@ def _line5(n):
     more than every user's) and its output check (forecast rows ≥ SAN_SHARE whose eCPM_fs lies outside B's own 1st …
     99th percentile — counted, never marked: on every app's history it found real lows / highs at the band's own
     rate), the forecast rows holding a pack-gap date and the gap dates the new rules added (the share's own fall /
-    the ledger), the forecast rows off B's users per install, the ledger reads that failed."""
+    the ledger), the forecast rows off B's users per install, the ledger reads that failed, the lived anchors that fell
+    back to their final one, and the small rows answered "data kam" (SMALL_ON)."""
     out = ""
     if n["c1s"] or n["c1o"]:
         out += ", guard cty %d (sampled %d, over %d)" % (n["c1s"] + n["c1o"], n["c1s"], n["c1o"])
@@ -3713,6 +3745,8 @@ def _line5(n):
         out += ", gap fail %d" % n["lfail"]
     if n["lfb"] or n["lfbc"]:                # (the lived anchors under their final one: the final answered)
         out += ", lived fallback %d (app %d)" % (n["lfb"] + n["lfbc"], n["lfb"])
+    if n["sml"]:                             # (⚖️ the small rows answered "data kam": all, and the last FSQ_WIN days')
+        out += ", data kam %d (recent %d)" % (n["sml"], n["smlw"])
     return out
 
 

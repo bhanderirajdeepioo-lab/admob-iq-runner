@@ -417,8 +417,9 @@ def _paid_broken(tmp, mp):
     return site, data, dash
 
 
-R5_OFF = {"be_fsc": False, "be_gap": False, "be_upi": False, "be_rsf": False}   # (the later checks and the "ROAS so far"
-#                                          column off too: "before them" is before every one of them)
+R5_OFF = {"be_fsc": False, "be_gap": False, "be_upi": False, "be_rsf": False, "be_small": False}   # (the later checks,
+#                                          the "ROAS so far" column and the small rows' "data kam" off too: "before them"
+#                                          is before every one of them)
 
 
 def both_off_digests(tmp, mp):

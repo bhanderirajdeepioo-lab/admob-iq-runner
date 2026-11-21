@@ -9653,8 +9653,11 @@ function beAppBe(A,G){ const L=num(A.lim)!=null?Math.round(A.lim):null, b=Array.
   const r=lo!=null&&(hi!=null||BL!=null)&&!(hi!=null&&Math.round(lo)===Math.round(hi))?`<small title="10 me se 8 baar breakeven is range me${hi==null?' ('+BL+'+ = '+BL+' din ke andaze ke aage)':''}">80%: day ${Math.round(lo)}–${hi!=null?Math.round(hi):BL+'+'}</small>`:'';
   return `<b>day ${Math.round(m)}</b>${r}`; }
 // a country's days: [median, low, high] + its watched limit L (the longest age its data saw): a day past L is null (an older
-// shape: −L); no L and null: no answer
+// shape: −L); no L and null: no answer; rk 7: a small row's forecast withheld (owner, 21 Nov 2026: "haan, chhoti rows me
+// data kam likh do") — "data kam"
+const BESMT='is din is country me spend $5 se kam ya 30 se kam naye users — itne kam users se breakeven ka andaza nahi banta';
 function beCtyBe(m0,lo0,hi0,L0,rk){ const m=num(m0), lo=num(lo0), hi=num(hi0), L=num(L0)!=null&&L0>0?Math.round(L0):null;
+  if(rk===7) return `<span title="${E(BESMT)}">data kam</span>`;   // ⚖️ a small row (under $5 / 30 new users): no andaza
   if(rk>=1&&rk<=4&&m!=null&&m>=0) return beDayTxt(m,['','x','b','nf','bn'][rk],true);   // its own real day
   if((rk===5||rk===6)&&m!=null&&m>=0) return beNot(m,rk===5);                // it lived past the benchmark's limit without it
   const past=v=>v!=null&&v<0?Math.round(-v):v==null?L:null;                // the limit a day is past (null: not past / not known)

@@ -124,8 +124,9 @@ BEFORE = {
 }
 
 
-R5_OFF = {"be_fsc": False, "be_gap": False, "be_upi": False, "be_rsf": False}   # (round 5's switches: off wherever a
-#                                          test pins an output from before them — "as before it" is before every one)
+R5_OFF = {"be_fsc": False, "be_gap": False, "be_upi": False, "be_rsf": False, "be_small": False}   # (round 5's
+#                                          switches and the small rows' "data kam": off wherever a test pins an output
+#                                          from before them — "as before it" is before every one)
 
 
 _l4 = T._l4                            # (the counts line without round 5's own counts)
