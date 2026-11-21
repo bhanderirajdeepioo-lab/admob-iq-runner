@@ -69,6 +69,11 @@
   @media(max-width:1387px){.c6{grid-template-columns:repeat(3,minmax(0,1fr))}}
   @media(max-width:1173px){.c5,.c9{grid-template-columns:repeat(3,minmax(0,1fr))}}
   @media(max-width:1000px){.c4,.c5{grid-template-columns:repeat(2,minmax(0,1fr))}.c6,.c7,.c8,.c9{grid-template-columns:repeat(3,minmax(0,1fr))}.c3{grid-template-columns:minmax(0,1fr)}.span2{grid-column:auto}}
+  /* 11 tiles (Overview with Google Ads + the two 📡 Meta tiles): 6+5 → 4+4+3 (≤1387px) → 3+3+3+2 (≤1000px), the same
+     ~175px floor as above; phones 2-up below (the 11th on its own row) */
+  .c11{grid-template-columns:repeat(6,minmax(0,1fr))}
+  @media(max-width:1387px){.c11{grid-template-columns:repeat(4,minmax(0,1fr))}}
+  @media(max-width:1000px){.c11{grid-template-columns:repeat(3,minmax(0,1fr))}}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:16px 17px}.card.pad0{padding:0;overflow:hidden}
   .ct{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.ct h3{font-size:14px;margin:0;font-weight:700}.ct .lnk{font-size:11.5px;color:var(--cyan);cursor:pointer;font-weight:600}
   .muted{color:var(--muted)}.faint{color:var(--faint)}.up{color:var(--good)}.down{color:var(--bad)}.flat{color:var(--watch)}
@@ -241,6 +246,7 @@
     h2.sc{font-size:18px}
     .row.c2,.row.c3{grid-template-columns:minmax(0,1fr)}
     .row.c4,.row.c5,.row.c6,.row.c7,.row.c8,.row.c9{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .row.c11{grid-template-columns:repeat(2,minmax(0,1fr))}
     .span2{grid-column:auto}
     .kpi .v{--vmax:21px}
     th,td{padding:9px 10px}
@@ -259,6 +265,8 @@
     .ov-kpi.row.c5>.kpi:nth-child(5){grid-column:1/-1}
     .ov-kpi.row.c7>.kpi:nth-child(7){grid-column:1/-1}
     .ov-kpi.row.c9>.kpi:nth-child(9){grid-column:1/-1}
+    .ov-kpi.row.c11{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .ov-kpi.row.c11>.kpi:nth-child(11){grid-column:1/-1}
     .ov-kpi .kpi{padding:15px 13px}
     .ov-kpi .kpi .v{--vmax:25px;margin-top:5px}
     .ov-kpi .kpi .l{font-size:11.5px}
@@ -339,6 +347,16 @@
   .ec-kpi:hover{border-color:var(--cyan);background:#13223a}.ec-kpi:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
   .ec-kpi .l{padding-right:58px}
   .ec-kpi .ec-hint{position:absolute;top:16px;right:17px;font-size:10.5px;font-weight:700;color:var(--cyan);white-space:nowrap;line-height:1.4}
+  /* ===== 📡 Meta won % / Bid requests — two Overview tiles; in All apps a tap opens the app-wise list ===== */
+  .mk-kpi .v{min-height:calc(var(--vmax,24px)*1.5)}   /* "…" → the number: the same height (no page shift) */
+  .mk-kpi.mk-tap{position:relative;cursor:pointer;transition:border-color .12s,background .12s}
+  .mk-kpi.mk-tap:hover{border-color:var(--cyan);background:#13223a}.mk-kpi.mk-tap:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .mk-kpi.mk-tap .l{padding-right:46px}
+  .mk-kpi .mk-hint{position:absolute;top:16px;right:17px;font-size:10.5px;font-weight:700;color:var(--cyan);white-space:nowrap;line-height:1.4}
+  .bq-full{overflow-x:auto}
+  .bq-full th,.bq-full td{border-right:1px solid var(--line)}.bq-full th:last-child,.bq-full td:last-child{border-right:none}
+  .bq-full th:not(:first-child),.bq-full td:not(:first-child){text-align:right;white-space:nowrap}
+  .bq-full th .bq-s{display:block;font-weight:400;font-size:10px;text-transform:none;color:var(--faint)}
   body[data-screen="ecpm"] #rangectl,body[data-screen="ecpm"] #rangecustom{display:none!important}   /* the view has its own range */
   #ec-root{min-width:0}
   .ec-nav{display:flex;align-items:center;gap:2px 16px;flex-wrap:wrap;margin:-4px 0 8px}
@@ -445,6 +463,10 @@
     .ec-ma{min-width:40px;min-height:40px}.ec-cmp .ec-seg button{min-height:40px}
     .ec-kpi .l{padding-right:52px}
     .ov-kpi .ec-kpi .ec-hint{top:15px;right:13px}
+    .ov-kpi .mk-kpi .mk-hint{top:15px;right:13px}
+    .card.pad0.bq-full table{min-width:0}   /* 4 short columns fit a phone: no sideways scroll */
+    .bq-full th,.bq-full td{padding:9px 8px}
+    .bq-full th:not(:first-child){white-space:normal}   /* "AdMob / req" on two lines: the 4 columns fit, numbers stay one line */
     .ec-kpis.row.c4,.ec-kpis.row.c5{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     .ec-kpis .kpi{padding:13px 12px}.ec-kpis .kpi .d{font-size:11.5px}
   }
@@ -4773,6 +4795,7 @@ const TITLES={overview:["Portfolio Overview","Live · engine-computed"],placemen
   scr:["Screens","Har screen pe views vs ads · full history (GA4 + AdMob)"],
   review:["Daily Review","One card per app per day · team review"],
   datewise:["Date-wise Report","Har din · spend · installs · revenue · P/L"],
+  bidreq:["Bid requests","AdMob · Meta (bidding) · har app"],
   ecpm:["eCPM trend","Daily · monthly · har app · ad units"],
   settings:["Accounts & Apps","Connect · auto-sync"]};
 
@@ -5092,6 +5115,7 @@ function render(){
   root.append(hubOv(renderOverview()),renderPlacements(),renderReport(),renderAppDetail(),renderMovers(),renderAlerts(),
               renderDeductions(),renderCountries(),renderBaseline(),renderMediation(),renderRoas(),renderActive(),renderUninstall(),renderDateWise(),renderReco(),renderHealth(),renderSettings(),renderValue());
   root.append(renderEcpm());     // 📈 eCPM trend (from the Overview "Avg eCPM" tile): an empty shell, filled by show('ecpm')
+  root.append(renderBidReq());   // 📡 Bid requests, app-wise (from the Overview's two Meta tiles)
   root.append(renderAudience()); // 👪 Audience: an empty shell, filled by show('audience') (its app / mode / day / open folds live in AU)
   { const li=document.getElementById('nav-aud-li'); if(li) li.hidden=!AU.ptr(); }   // the tab only when this build wrote its file
   root.append(renderFirstOpen()); // 🆕 First open: the same (filled by show('firstopen'), its lazy file loads on the first open)
@@ -5266,6 +5290,7 @@ function show(id){
   if(!REFRESH_SILENT) closeNav();          // mobile: selecting a screen closes the drawer (not a silent background refresh — don't shut a menu the reader has open)
   if(id==='baseline') loadBaseline();     // lazy-fetch the baseline payload on first open
   if(id==='mediation') loadMED(()=>medRerender());   // lazy-fetch daily-by-source → window to period
+  if(id==='overview') Promise.resolve().then(()=>{ if(bqScr()==='overview') loadMED(bqOvPaint); });   // 📡 its two Meta tiles: the same file, once the Overview really is on screen (render() passes through it)
   if(id==='deductions') loadDED(()=>dedRerender());  // lazy-fetch per-unit decay → window to period
   if(id==='uninstall'){ loadUNI(()=>uniRerender()); US.ensure(()=>uniRerender()); }   // lazy-fetch the GA4 uninstall detail (uninstall.json.gz) + the 🧭 Studio's file
   if(id==='active'){ actEnsure(); AS.ensure(()=>actRerender()); }   // the open app's active_<key>.json.gz (also after setApp on this screen) + the 🧭 Studio's file
@@ -5278,6 +5303,7 @@ function show(id){
   document.querySelectorAll('.botbar .tabbtn').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));
   if(TITLES[id]){document.getElementById('tb-title').textContent=TITLES[id][0];document.getElementById('tb-sub').textContent=TITLES[id][1];}
   if(id==='ecpm') ecPaint(); else ecLeft();   // 📈 eCPM trend: filled when shown (its own range); leaving it takes its Back steps off
+  if(id==='bidreq') bqPaint(); else bqLeft();   // 📡 Bid requests: filled when shown (the file may still be on its way); leaving it takes its Back step off
   if(id==='audience') AU.show(); else AU.left();   // 👪 Audience: the same (its lazy file loads on the first open)
   if(id==='firstopen') FO.show();                  // 🆕 First open: the same
   if(id==='scr') SCR.show(); else SCR.left();      // 🖼️ Screens: the same; leaving it takes its drill-down's Back step off
@@ -5345,7 +5371,7 @@ const HUB_T={overview:['Overview','📊','overview','overview'],revenue:['Revenu
 const HUB_ALL=['overview','revenue','ecpm','active','uninstall','value','audience','firstopen','scr','mediation','roas','cpx','baseline','deductions','health','movers'];
 const HUB_APP=['overview','revenue','ecpm','active','uninstall','value','audience','firstopen','scr','baseline','alerts','review','mediation','roas','cpx','deductions','health','movers'];
 const HUB_PAGE={review:1,reco:1,settings:1};                                    // left-nav pages outside Home (Alerts: below)
-const HUB_DRILL={datewise:'overview',countries:'overview',reportcard:'revenue'};   // drill pages: inside the tab they came from
+const HUB_DRILL={datewise:'overview',countries:'overview',reportcard:'revenue',bidreq:'overview'};   // drill pages: inside the tab they came from
 function hubLsGet(){ try{ return localStorage.getItem(HUB_LS); }catch(e){ return null; } }
 function hubLsSet(v){ try{ if(v) localStorage.setItem(HUB_LS,v); else localStorage.removeItem(HUB_LS); }catch(e){} }
 function hubScr(){ const o=document.querySelector('.screen.on'); return (o&&o.dataset&&o.dataset.screen)||''; }
@@ -5854,7 +5880,7 @@ function renderOverview(){
         ${dec.slice(0,2).map(p=>`<div class="al crit"><span>▼</span><span><b>${p.name}</b> ${signed(p.change_pct)} · ${appIcon(p.app,14,'ail')}${p.app}</span></div>`).join('')||(inc.length?'':'<div class="muted" style="font-size:12px">Is app me abhi mover nahi.</div>')}`;
   s.innerHTML=`${ap?`<div class="verdict ov-app" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2);margin-bottom:14px"><div>${appIcon(APP,32)}</div><div><div class="big">${APP}</div><div class="muted" style="font-size:12.5px">Only this app’s data${ap.platform?' · '+ap.platform:''} · ${ap.placements} placements</div></div><div class="spacer"></div><span class="lnk" onclick="setApp('')">✕ Show all apps</span></div>`:''}
     <div class="ov">
-      <div class="ov-kpi row ${SHOWSP?'c9':'c4'}">
+      <div class="ov-kpi row ${SHOWSP?'c11':'c6'}">
         ${kpi('Revenue',money(k.revenue),dspan,'muted',sparkbars(trendSeries,'g'))}
         ${SHOWSP?kpi('Ad spend',spendTot>0?money(spendTot):'—',
             blended!=null?`ROAS ${blended.toFixed(2)}× · ${dspan}`:`No spend this period · ${dspan}`,
@@ -5865,6 +5891,8 @@ function renderOverview(){
         ${SHOWSP?kpi('Old revenue',plFmt(oldRevTot),'Rev − D0 · '+dspan,'muted'):''}
         ${ecKpiTile(kpi('Avg eCPM',cm(k.ecpm),dspan,'muted',sparkbars(trendSeries)))}
         ${kpi('Match rate',pct(k.match_rate||0),dspan,'muted',sparkbars(trendSeries,'g'))}
+        ${bqTile('won')}
+        ${bqTile('req')}
         ${lastTile}
       </div>
       <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ke <b>pending revision (deduction) ghatane ke baad</b> hai — tumhare <b>live AdMob se match</b>. Raw estimate + kitna revise hua wo <b>Deductions</b> tab me.${SHOWSP?` Spend <b>Google Ads (MCC)</b> se, USD me — <b>ROAS ${blended!=null?blended.toFixed(2)+'×':'—'}</b> matlab har $1 marketing pe ${blended!=null?'$'+blended.toFixed(2):'—'} revenue.${roasFxRule()} Installs yahan <b>sirf Google Ads</b> wale hain — 💸 Install value tab <b>all installs</b> (ads + organic) ginta hai, isliye wahan number bada.`:''}${unmatched>0?` <span class="down">⚠️ ${money(unmatched)} spend abhi kisi app se match nahi hua — detail <b>Marketing ROAS</b> tab me.</span>`:''}</div>
@@ -13749,9 +13777,105 @@ function renderCountries(){
 
 // ---------- MEDIATION ----------
 let MED=null, MEDLOADING=false;   // daily-by-source mediation (date×app×source) — lazy from mediation_daily.json
-function loadMED(cb){ if(MED){cb&&cb();return;} if(MEDLOADING)return; MEDLOADING=true;
-  fetch('mediation_daily.json?t='+Date.now()).then(r=>r.ok?r.json():null).then(j=>{MED=j||{dates:[],names:{},by_app:{}};MEDLOADING=false;cb&&cb();}).catch(()=>{MEDLOADING=false;}); }
+// MEDB = the build (DATA.generated_at) MED was fetched for: a newer build fetches it again (MED serves until the new one
+// lands); MEDERR = the last fetch failed (a network error; a missing file is an empty MED, as before); MEDCB = every caller
+// waiting for the fetch in flight (the Overview's tiles and the Mediation tab can both be waiting) — called back on success
+// and on failure, so a tile never stays on "…"; a newer build landing while the file was on its way: the waiting callers
+// ask again (the newer build's file), never stopped on the older one
+let MEDB=null, MEDERR=false, MEDCB=[];
+function medBuild(){ return (typeof DATA!=='undefined'&&DATA&&DATA.generated_at)||''; }
+function loadMED(cb){ const b=medBuild(); if(MED&&MEDB===b){cb&&cb();return;} if(cb&&MEDCB.indexOf(cb)<0) MEDCB.push(cb); if(MEDLOADING)return; MEDLOADING=true;
+  const fire=()=>{ MEDCB.splice(0).forEach(f=>{ try{ f(); }catch(e){} }); };
+  fetch('mediation_daily.json?t='+Date.now()).then(r=>r.ok?r.json():null).then(j=>{MED=j||{dates:[],names:{},by_app:{}};MEDB=b;MEDERR=false;MEDLOADING=false;
+    if(medBuild()!==b){ MEDCB.splice(0).forEach(f=>loadMED(f)); return; } fire();}).catch(()=>{MEDLOADING=false;MEDERR=true;fire();}); }
 function medRerender(){ const old=document.querySelector('.screen[data-screen=mediation]'); if(old){const f=renderMediation(); if(old.classList.contains('on'))f.classList.add('on'); old.replaceWith(f);} }
+// ---------- 📡 META BIDDING + BID REQUESTS — two Overview tiles and the app-wise list behind them ----------
+// Owner, 21 Nov 2026: "bidding auction %, win % kitna he for meta — ye KPI me add karna he — for all apps and abhi jo he
+// system vese hi" and "app wise bid req admob and meta dono ki kitni kitini he vo bhi add karna he"; agreed ("haan dono card
+// daal do"): two Overview tiles, All apps and each app, on the top bar's Period — "Meta won %" and "Bid requests" (AdMob ·
+// Meta) — the other tiles as they were; in All apps a tap on either opens one row per app: App · AdMob req · Meta bid req ·
+// Meta won %.
+// The numbers are the mediation report the page already ships (mediation_daily.json: date × app × ad source → [revenue,
+// impressions, matched, requests]), summed over the Period's dates — nothing new is fetched from AdMob:
+//   * AdMob req = the "AdMob Network" source's requests (its bidding; "AdMob Network Waterfall" is a line of its own);
+//   * Meta bid req = "Meta Audience Network (bidding)"'s requests; Meta won = its matched requests (for a bidding source:
+//     the auctions it won and returned an ad for), so Meta won % = won ÷ bid requests = AdMob's "Bids in auction %" ×
+//     "Win %" (those two are only in AdMob's Ads Activity report, not in the Mediation report its API gives).
+//   The sources are found by their AdMob names. One ad request goes to several sources: the two are never added up.
+// Every date of the Period must be in the file (stricter than the Mediation tab's range check): else "—", never a part-sum
+// that reads as a drop. An older build's file (a new one on its way) answers only for days before its last one: that day
+// was its build's partial one ("…" until the new file lands).
+const BQ_ADM=/^admob network$/i, BQ_META=/^meta audience network \(bidding\)$/i;
+const BQ_WHY={err:"couldn't load",none:'no mediation data',src:'no AdMob Network source'};
+let BQC={m:null,b:null,k:'',v:null};   // the last bqWin answer (the two tiles and the list ask for the same Period)
+function bqScr(){ const on=document.querySelector('.screen.on'); return (on&&on.dataset&&on.dataset.screen)||''; }
+// the Period's sums → {ok:true, apps:{app:[AdMob req, Meta bid req, Meta won]}, t:[the same for all apps]} or {ok:false, why}:
+//   'load' the file is on its way · 'err' it failed · 'none' nothing for this Period · 'src' no "AdMob Network" source in it
+function bqWin(win){
+  const b=medBuild();
+  if(!MED) return {ok:false, why:MEDERR&&!MEDLOADING?'err':'load'};
+  const ds=MED.dates||[];
+  if(!ds.length||!MED.by_app||!win.length) return {ok:false, why:'none'};
+  const have=new Set(ds);
+  if(!win.every(d=>have.has(d))) return {ok:false, why:MEDB!==b?(MEDERR&&!MEDLOADING?'err':'load'):'none'};
+  if(MEDB!==b&&win.indexOf(ds[ds.length-1])>=0) return {ok:false, why:MEDERR&&!MEDLOADING?'err':'load'};   // an older build's file: its last day was partial
+  const key=win.length+'|'+win[0]+'|'+win[win.length-1];
+  if(BQC.m===MED&&BQC.b===MEDB&&BQC.k===key) return BQC.v;
+  const want=new Set(win), keep=new Set(), nm=MED.names||{}, ka=[], km=[];
+  ds.forEach((d,i)=>{ if(want.has(d)) keep.add(i); });
+  Object.keys(nm).forEach(k=>{ const n=String(nm[k]==null?'':nm[k]).trim(); if(BQ_ADM.test(n)) ka.push(k); else if(BQ_META.test(n)) km.push(k); });
+  let v;
+  if(!ka.length) v={ok:false, why:'src'};
+  else { const apps={}, t=[0,0,0];
+    Object.keys(MED.by_app).forEach(app=>{ const src=MED.by_app[app]||{}, x=[0,0,0];
+      ka.forEach(k=>(src[k]||[]).forEach(r=>{ if(keep.has(r[0])) x[0]+=(+r[4]||0); }));
+      km.forEach(k=>(src[k]||[]).forEach(r=>{ if(keep.has(r[0])){ x[1]+=(+r[4]||0); x[2]+=(+r[3]||0); } }));
+      if(x[0]||x[1]){ apps[app]=x; t[0]+=x[0]; t[1]+=x[1]; t[2]+=x[2]; } });
+    v={ok:true, apps, t}; }
+  BQC={m:MED,b:MEDB,k:key,v}; return v; }
+// a count, short: 9,518 · 52.1k · 13.5M · 1.2B (the exact one is in its title)
+function bqN(n){ n=Math.round(+n||0); const a=Math.abs(n);
+  return a>=999950000?(n/1e9).toFixed(1)+'B':a>=999950?(n/1e6).toFixed(1)+'M':a>=1e4?(n/1e3).toFixed(1)+'k':n.toLocaleString(); }
+function bqPct(won,req){ return req>0?(won/req*100).toFixed(1)+'%':'—'; }
+// one tile ('won' = Meta won %, 'req' = Bid requests) for the header's App (All apps: the total) and Period; a button into
+// the list in All apps (an app's own tile already is its row)
+function bqTile(kind){
+  const W=bqWin(curWinArr()), ds=curWinLabel(), tap=!APP, won=kind==='won';
+  const T=W.ok?(APP?(W.apps[APP]||[0,0,0]):W.t):null;
+  let v, d;
+  if(!W.ok){ v=W.why==='load'?'…':'—'; d=(W.why==='load'?(won?'won ÷ bid requests':'AdMob · Meta'):BQ_WHY[W.why])+' · '+ds; }
+  else if(won){ v=bqPct(T[2],T[1]); d=(T[1]?'won ÷ bid requests':'no Meta bidding')+' · '+ds; }
+  else { const any=T[0]||T[1]; v=any?(T[0]?bqN(T[0]):'—')+' · '+(T[1]?bqN(T[1]):'—'):'—'; d=(any?'AdMob · Meta':'no bid requests')+' · '+ds; }
+  const ex=W.ok?(won?(T[1]?'\n'+T[1].toLocaleString()+' bid requests · '+T[2].toLocaleString()+' won':''):'\nAdMob '+T[0].toLocaleString()+' · Meta '+T[1].toLocaleString()):'';
+  const tip=(won?'Meta Audience Network (bidding): jitni bid requests Meta ko gayi, unme se kitni auction Meta ne jeeti aur ad diya. Ye AdMob ke “Bids in auction %” × “Win %” ke barabar hai — wo dono alag se AdMob ke API me nahi milte.'
+    :'Upar wale Period me AdMob Network (bidding) aur Meta Audience Network (bidding) ko gayi bid requests. Ek hi ad request dono ko jaati hai — inko jodna nahi.')
+    +(tap?' Tap = har app ka.':'')+ex;
+  return kpi(won?'Meta won %':'Bid requests',v,d,'muted').replace('<div class="card kpi">',`<div class="card kpi mk-kpi${tap?' mk-tap':''}" data-mk="${kind}" title="${hAttr(tip)}"`
+    +(tap?` role="button" tabindex="0" onclick="bqOpen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();bqOpen()}"><span class="mk-hint" aria-hidden="true">Apps →</span>`:'>')); }
+// the file landed: the tiles on the page take their numbers in place (the same size: nothing on the page moves)
+function bqOvPaint(){ document.querySelectorAll('.mk-kpi[data-mk]').forEach(el=>{ el.outerHTML=bqTile(el.dataset.mk); }); }
+// the list: one row per app with a bid request in the Period (most AdMob requests first), All apps last; an app picked in
+// the header (on the list, or restored with it): that app's row only
+function bqHtml(){ const W=bqWin(curWinArr());
+  const scope=APP?' · '+appIcon(APP,14,'ail')+APP:'';
+  const head=`<div class="verdict" style="background:linear-gradient(90deg,#12213a,transparent);border:1px solid var(--line2);margin-bottom:14px"><div style="font-size:22px">📡</div><div><div class="big">Bid requests · har app</div><div class="muted" style="font-size:12.5px">AdMob Network aur Meta (bidding) ko kitni bid requests gayi, aur Meta ne kitni jeeti — <b>${curWinLabel()}</b>${scope}. Period upar se badlo.</div></div><div class="spacer"></div><span class="lnk" style="cursor:pointer;color:var(--cyan);font-weight:700" onclick="bqClose()">← Overview</span></div>`;
+  if(!W.ok) return head+`<div class="card"><div class="muted" style="font-size:13px">${W.why==='load'?'⏳ Mediation data load ho raha hai…':W.why==='err'?'Mediation data load nahi hua — page refresh karo.':W.why==='src'?'Mediation data me “AdMob Network” source nahi mila.':'Is period ka mediation data nahi — Period badal ke dekho.'}</div></div>`;
+  const cells=x=>`<td${x[0]?` title="${x[0].toLocaleString()}"`:''}>${x[0]?bqN(x[0]):'—'}</td><td${x[1]?` title="${x[1].toLocaleString()}"`:''}>${x[1]?bqN(x[1]):'—'}</td>`
+    +`<td${x[1]?` title="${x[2].toLocaleString()} won of ${x[1].toLocaleString()}"`:''}>${bqPct(x[2],x[1])}</td>`;
+  const apps=Object.keys(W.apps).filter(a=>!APP||a===APP).sort((a,b)=>(W.apps[b][0]-W.apps[a][0])||(W.apps[b][1]-W.apps[a][1])||(a<b?-1:a>b?1:0));
+  const rows=apps.map(a=>`<tr><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(a,22)}<span>${appNm(a)}</span></span></td>${cells(W.apps[a])}</tr>`).join('')
+    ||`<tr><td colspan="4" class="muted" style="padding:16px">Is period me${APP?' is app ki':''} koi bid request nahi.</td></tr>`;
+  return head+`<div class="card pad0 bq-full"><table><thead><tr><th>App</th><th title="AdMob Network (bidding) ko gayi requests">AdMob req</th>`
+    +`<th title="Meta Audience Network (bidding) ko gayi bid requests">Meta bid req</th><th title="Meta ne jo auction jeeti aur ad diya ÷ Meta bid requests">Meta won %<span class="bq-s">won ÷ bid req</span></th></tr></thead>`
+    +`<tbody>${rows}${apps.length&&!APP?`<tr class="dw-tot"><td class="nm">All apps</td>${cells(W.t)}</tr>`:''}</tbody></table></div>`; }
+function renderBidReq(){ const s=screenDiv('bidreq'); s.innerHTML=bqHtml(); return s; }
+function bqListPaint(){ const el=document.querySelector('.screen[data-screen=bidreq]'); if(el) el.innerHTML=bqHtml(); }
+function bqPaint(){ if(!(MED&&MEDB===medBuild())) bqListPaint(); loadMED(bqListPaint); }   // shown: now, and again once the file is in
+function bqOpen(){ hbOv('bidreq',true,bqUndo); show('bidreq'); }   // a tile's tap: phone Back → Overview (in the ✨ hub too)
+function bqUndo(){ if(bqScr()==='bidreq') show('overview'); }
+function bqClose(){ hbDrop('bidreq'); show('overview'); }               // "← Overview"
+function bqLeft(){ if(!HB.st.some(x=>x.tag==='bidreq')) return;          // left by the menu / a link: its Back step goes too
+  Promise.resolve().then(()=>{ if(bqScr()!=='bidreq') hbDrop('bidreq'); }); }
 // Collapse windowed per-source sums [rev_micros,impr,matched,req] → the SAME row shape the engine
 // ships (mirrors dataservice._mediation_rows): fill, eCPM, revenue, share, status.
 function _medRowsFrom(bySrc){
