@@ -307,6 +307,9 @@ jobs:
           # … and the small rows' "data kam" (BE_SMALL, on unless set false: a country row under $5 / 30 new users that
           # day shows "data kam" in place of its curve's breakeven day; false: the tab's files exactly as without it)
           BE_SMALL:             ${{ vars.BE_SMALL || 'true' }}
+          # 📡 the Ads Activity report probe (admob_iq/fetch/ads_activity_probe.py, on unless set false): once a UTC day,
+          # can each account's token read Meta's "Bids in auction"? The answer goes to the private data repo only
+          ADS_ACTIVITY_PROBE:   ${{ vars.ADS_ACTIVITY_PROBE || 'true' }}
           # 🖼️ Screens (admob_iq/fetch/ga4_screens.py; data/ga4_screens/ in the private repo, kept for good): GA4 views and
           # ad impressions per screen class per day with every layer, read AFTER every live GA4 step under stricter
           # quota floors (only the Google Ads users' reads above run after it). GA4_SCREENS=false stops the reads without a code push; GA4_SCREENS_BUDGET_SEC = its seconds per

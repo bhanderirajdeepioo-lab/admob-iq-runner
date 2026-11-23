@@ -261,6 +261,9 @@ def settings() -> dict:
         # … and the small rows' "data kam" (BE_SMALL, on unless set false: a country row under $5 / 30 new users that
         # day shows "data kam" in place of its curve's breakeven day; off: the tab's files exactly as without it)
         "be_small": switch_on(os.getenv("BE_SMALL")),
+        # 📡 the Ads Activity report probe (fetch.ads_activity_probe, on unless set false): once a UTC day, can each
+        # account's token read Meta's "Bids in auction"? The answer goes to the private data/ads_activity_probe.json only
+        "ads_activity_probe": switch_on(os.getenv("ADS_ACTIVITY_PROBE")),
         # 🖼️ Screens: GA4 views and ad impressions per screen class per day, every layer (fetch.ga4_screens: the recent
         # days every 3 / 12 hours, the history newest first; runs after every live GA4 step, stricter quota floors —
         # only the Google Ads users' reads above run after it, under the same floors).

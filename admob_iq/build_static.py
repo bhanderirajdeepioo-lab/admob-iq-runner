@@ -1778,6 +1778,16 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         except Exception as e:
             mu_bf = None
             print(f"mediation ad-unit history backfill skipped: {type(e).__name__}: {e}", file=sys.stderr)
+        # 📡 can each account's token read Meta's "Bids in auction" (the Ads Activity report alpha)? Once a UTC day; the
+        # answer only in the private data/ads_activity_probe.json; the log gets a word (no id, no number)
+        if s.get("ads_activity_probe", True):
+            with _sc.stage("ads_activity_probe"):
+                try:
+                    from .fetch.ads_activity_probe import probe as _ads_activity_probe
+                    print(_ads_activity_probe(accounts, s["google_client_id"], s["google_client_secret"], data_dir),
+                          file=sys.stderr)
+                except Exception as e:
+                    print(f"ads activity probe skipped: {type(e).__name__}", file=sys.stderr)
     _sc.step("repo_flush")
     repo.flush()          # persist the refreshed history to disk (committed by CI)
     if mu_bf is not None:

@@ -68,7 +68,7 @@ STAGES = (
     "repo_load_network", "repo_load_mediation", "repo_load_snapshots", "repo_load_country",
     "repo_load_placement_country", "repo_load_mediation_unit", "repo_load_adunit_country_monthly",
     "repo_load_adunit_country_daily",
-    "admob_backfill_accounts", "admob_backfill_apps", "admob_backfill_mu", "repo_flush",
+    "admob_backfill_accounts", "admob_backfill_apps", "admob_backfill_mu", "ads_activity_probe", "repo_flush",
     # FileRepo.flush: each history file's write (db.FileRepo.WRITE_STAGES), children of repo_flush
     "repo_write_network", "repo_write_mediation", "repo_write_snapshots", "repo_write_country",
     "repo_write_placement_country", "repo_write_mediation_unit", "repo_write_adunit_country_monthly",
