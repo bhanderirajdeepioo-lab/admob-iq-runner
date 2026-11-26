@@ -2380,28 +2380,47 @@ class _Agent:
     #    again on matured data), the accept trial, the verdicts ──
     def parity(self):
         """Every stored ask made under the rule in force decided again from its own rule inputs → True when one differs
-        (run before this build's asks: it reads only the answers earlier builds froze)."""
+        (run before this build's asks: it reads only the answers earlier builds froze). An answer this code cannot decide
+        again (any error: e.g. frozen by an older evidence() shape) counts as one that differs — the accept trial starts
+        again — with one "cpi agent parity skipped: <ErrorType>" line a build (the health banner); the agent runs on."""
         pr = self.blk["parity"]
-        n, bad = 0, False
+        n, bad, err = 0, False, None
         for r in self.rows:
             for a in r["asks"]:
                 if not a.get("ri") or a.get("mkt") is None or a.get("th") != self.th:
                     continue
-                out = LA.decide(a["ri"], a["mkt"], self.cfg, a.get("fl") or {})
                 n += 1
-                if (out["decision"], out["branch"], out["part"], out["cause"]) != \
-                        (a["dec"], a["branch"], a.get("part"), a.get("cause")):
+                try:
+                    out = LA.decide(a["ri"], a["mkt"], self.cfg, a.get("fl") or {})
+                    same = (out["decision"], out["branch"], out["part"], out["cause"]) == \
+                        (a["dec"], a.get("branch"), a.get("part"), a.get("cause"))
+                except Exception as e:                       # this answer only: it cannot be decided again
+                    err, same = err or type(e).__name__, False
+                if not same:
                     pr["bad"] += 1
                     bad = True
         pr["checked"] += n
         if bad:
             pr["last_bad"] = self.ts
+        if err:
+            print("cpi agent parity skipped: %s" % err, file=sys.stderr)
         return bad
 
     def vintage(self):
         """Each ask with its rule inputs, made under the rule in force, asked again 7 and 28 days after its build: the
         same day, episode and new days on this build's data. An accept / not-accept flip starts the trial again right
-        where it is recorded (a timeout later in this build keeps both)."""
+        where it is recorded (a timeout later in this build keeps both). An ask made under another window lag
+        (_same_lag: a GA4 final-days move) is not asked again. A re-ask that fails costs only itself — left unanswered,
+        asked again on the next build — with one "cpi agent vintage skipped: <ErrorType>" line a build (the health
+        banner); the agent runs on."""
+        bad = []
+        try:
+            self._vintage(bad)
+        finally:
+            if bad:
+                print("cpi agent vintage skipped: %s" % bad[0], file=sys.stderr)
+
+    def _vintage(self, bad):
         vt = self.blk["vintage"]
         n = 0
         for r in self.rows:
@@ -2410,23 +2429,38 @@ class _Agent:
             for a in r["asks"]:
                 if not a.get("ri") or a.get("mkt") is None or a.get("th") != self.th:
                     continue
-                vin = a.setdefault("vin", {"7": None, "28": None})
+                ri0 = a["ri"]
+                try:
+                    if not _same_lag(ri0):
+                        continue
+                    age = (self.t - _d(a["t"])).days
+                except Exception as e:                       # a frozen ask this code cannot read: only its re-asks
+                    bad.append(type(e).__name__)
+                    continue
+                vin = a.get("vin")
+                if not isinstance(vin, dict):                    # (absent; a history file never writes another shape)
+                    vin = a["vin"] = {"7": None, "28": None}
                 for key, k in (("7", 7), ("28", 28)):
-                    if vin.get(key) is not None or (self.t - _d(a["t"])).days < k:
+                    if vin.get(key) is not None or age < k:
                         continue
                     if n >= self.cfg["max_asks"]:
                         return
                     self.tick()
-                    ri0 = a["ri"]
-                    e = {"fam": ri0["fam"], "opened": ri0["ep"]["opened"], "c": ri0["ep"]["c"],
-                         "base": ri0["old"]["v"], "bspan": ri0["old"]["days"], "base_src": None}
-                    app = self.apps[r["app"]]
-                    ri = LA.evidence(app, self.camps.get(r["app"], []), self.ctys(r["app"]), e, ri0["new"]["days"],
-                                     ri0["d"], ri0["why"], CA.P_PROD)
-                    out = LA.decide(ri, LA.market(ri, app, self.others(r["app"])), self.cfg, a.get("fl") or {})
-                    err, f = _leaf_err(ri0, ri)
+                    try:
+                        e = {"fam": ri0["fam"], "opened": ri0["ep"]["opened"], "c": ri0["ep"]["c"],
+                             "base": ri0["old"]["v"], "bspan": ri0["old"]["days"], "base_src": None}
+                        app = self.apps[r["app"]]
+                        ri = LA.evidence(app, self.camps.get(r["app"], []), self.ctys(r["app"]), e,
+                                         ri0["new"]["days"], ri0["d"], ri0["why"], CA.P_PROD)
+                        out = LA.decide(ri, LA.market(ri, app, self.others(r["app"])), self.cfg, a.get("fl") or {})
+                        err, f = _leaf_err(ri0, ri)
+                    except AgentTimeout:
+                        raise
+                    except Exception as ex:                  # this re-ask only: unanswered, asked again next build
+                        bad.append(type(ex).__name__)
+                        continue
                     x = {"t": self.ts, "dec": out["decision"], "branch": out["branch"],
-                         "flip": out["decision"] != a["dec"] or out["branch"] != a["branch"],
+                         "flip": out["decision"] != a["dec"] or out["branch"] != a.get("branch"),
                          "acc_flip": (a["dec"] == "accept") != (out["decision"] == "accept"), "err": err, "f": f}
                     vin[key] = x
                     n += 1
@@ -2751,6 +2785,15 @@ def _leaves(x, path=""):
             yield from _leaves(v, "%s[%d]" % (path, i))
     elif x is None or (isinstance(x, (int, float)) and not isinstance(x, bool)):
         yield path, x
+
+
+def _same_lag(ri):
+    """A frozen ask's new days end at d − its family's shift as it was when asked (ask(): a row's own days, a proposal's
+    and a settle's all end there) → True while that is still the family's shift. A GA4 final-days move changes the
+    ROAS_C shifts (cpi_alarm.c_shift): an older ask asked again would read other days — under a longer shift days the
+    rule does not allow yet (evidence raises "look-ahead"), under a shorter one other inputs — so vintage leaves it out,
+    as it leaves out an ask of another rule."""
+    return (_d(ri["d"]) - _d(ri["new"]["days"][1])).days == CA.FAMILIES[ri["fam"]]["shift"]
 
 
 def _leaf_err(a, b):

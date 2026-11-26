@@ -2127,6 +2127,136 @@ def test_after_a_rule_change_the_old_rules_answers_are_never_re_asked_as_vintage
     assert (blk["trial"]["why"], blk["trial"]["since"]) == ("rule", ag_day(p_ix + 1))
 
 
+def test_an_answer_made_under_another_window_lag_is_not_asked_again_and_the_agent_runs_on(tmp_path, agent_on,
+                                                                                          no_ecpm_settle,
+                                                                                          monkeypatch, capsys):
+    # a family's shift places a question's new days (they end at d − shift): an answer made under one shift, asked
+    # again under a longer one, would read days the rule does not allow yet (evidence raises "look-ahead") — that
+    # stopped the whole agent on every build. It is left out while the lag differs; nothing restarts, the fingerprint
+    # stays; back at its own lag it is asked again as before
+    own, others = ecpm_world()
+    ents = ag_world(own, others)
+    p_ix = ecpm_p_ix(ents)
+    _, part = ag_build(tmp_path, ents, p_ix)
+    th, trial = part["ledger"]["agent"]["th"], copy.deepcopy(part["ledger"]["agent"]["trial"])
+    with monkeypatch.context() as m:
+        m.setitem(CA.FAMILIES["ECPM"], "shift", CA.FAMILIES["ECPM"]["shift"] + 3)
+        capsys.readouterr()
+        for t_ix in (p_ix + 1, p_ix + 7):
+            _, part = ag_build(tmp_path, ents, t_ix)
+        assert skipped(capsys.readouterr().err, "cpi agent") == [] and part["agent"]["ran"]
+        blk = part["ledger"]["agent"]
+        a0 = rows_of(part, "ECPM")[0]["asks"][0]
+        moved = [a for r in blk["rows"] for a in r["asks"] if a.get("ri") and not cb._same_lag(a["ri"])]
+        assert (blk["th"], blk["trial"], a0["vin"]["7"]) == (th, trial, None) and a0 in moved
+        assert all((a.get("vin") or {}).get("7") is None for a in moved)        # the others: asked again as always
+    _, part = ag_build(tmp_path, ents, p_ix + 8)
+    a0 = rows_of(part, "ECPM")[0]["asks"][0]
+    assert a0["vin"]["7"]["t"] == ag_day(p_ix + 8) and part["ledger"]["agent"]["trial"] == trial
+
+
+def test_an_answer_made_under_a_longer_lag_is_not_compared_once_the_lag_is_shorter(tmp_path, agent_on, no_ecpm_settle,
+                                                                                  monkeypatch, capsys):
+    # the other way (a final-days rollback): its windows would still be readable, but asked again they would read
+    # other days than the answer did — another question, not a matured answer
+    own, others = ecpm_world()
+    ents = ag_world(own, others)
+    with monkeypatch.context() as m:
+        m.setitem(CA.FAMILIES["ECPM"], "shift", 2)
+        p_ix = ecpm_p_ix(ents)
+        _, part = ag_build(tmp_path, ents, p_ix)
+        a0 = rows_of(part, "ECPM")[0]["asks"][0]
+        assert (date.fromisoformat(a0["ri"]["d"]) - date.fromisoformat(a0["ri"]["new"]["days"][1])).days == 2
+    capsys.readouterr()
+    _, part = ag_build(tmp_path, ents, p_ix + 7)
+    assert skipped(capsys.readouterr().err, "cpi agent") == []
+    blk = part["ledger"]["agent"]
+    moved = [a for r in blk["rows"] for a in r["asks"] if a.get("ri") and not cb._same_lag(a["ri"])]
+    assert rows_of(part, "ECPM")[0]["asks"][0] in moved and all(a["vin"]["7"] is None for a in moved)
+
+
+def test_a_re_ask_that_fails_costs_only_itself_and_tells_the_health_banner(tmp_path, agent_on, no_ecpm_settle,
+                                                                         monkeypatch, capsys):
+    # one frozen answer that cannot be asked again (any error) leaves that re-ask unanswered for this build — the agent
+    # still answers everything else — and says so once (the red banner names it); the next build asks it again
+    own, others = ecpm_world()
+    ents = ag_world(own, others)
+    p_ix = ecpm_p_ix(ents)
+    ag_build(tmp_path, ents, p_ix)
+    real = LA.evidence
+
+    def broken(app, camps, ctys, ep, new_days, d, why, P):
+        if d == ag_day(p_ix):                                                 # the re-asks of the first answer only
+            raise KeyError("ri")
+        return real(app, camps, ctys, ep, new_days, d, why, P)
+    monkeypatch.setattr(LA, "evidence", broken)
+    capsys.readouterr()
+    _, part = ag_build(tmp_path, ents, p_ix + 7)
+    lines = skipped(capsys.readouterr().err, "cpi agent")
+    assert lines == ["cpi agent vintage skipped: KeyError"]
+    assert health.SKIP.findall(lines[0]) == [("cpi agent vintage", "KeyError")]          # the banner names the step
+    assert part["agent"]["ran"] and rows_of(part, "ECPM")[0]["asks"][0]["vin"]["7"] is None
+    blk = part["ledger"]["agent"]
+    due = [a for r in blk["rows"] for a in r["asks"] if a.get("ri") and a["t"] <= ag_day(p_ix) and cb._same_lag(a["ri"])]
+    hit = [a for a in due if a["ri"]["d"] == ag_day(p_ix)]
+    assert hit and all(a["vin"]["7"] is None for a in hit)
+    assert blk["vintage"]["done7"] == len(due) - len(hit) >= 1                # every other due re-ask: answered
+    monkeypatch.setattr(LA, "evidence", real)
+    capsys.readouterr()
+    _, part = ag_build(tmp_path, ents, p_ix + 8)
+    assert skipped(capsys.readouterr().err, "cpi agent") == []
+    assert rows_of(part, "ECPM")[0]["asks"][0]["vin"]["7"]["t"] == ag_day(p_ix + 8)
+
+
+@pytest.mark.parametrize("damage", ["drop_key", "vin_null"])
+def test_one_frozen_answer_this_code_cannot_read_never_stops_the_agent(tmp_path, agent_on, no_ecpm_settle, capsys,
+                                                                      damage):
+    # an answer frozen by an older evidence() shape (a key decide() reads is gone), or a history file with another vin
+    # shape: the agent still runs and answers everything else. An answer it cannot decide again counts as a parity
+    # mismatch (the accept trial starts again) and says so once a build; a vin of another shape reads as empty
+    own, others = ecpm_world()
+    ents = ag_world(own, others)
+    p_ix = ecpm_p_ix(ents)
+    ag_build(tmp_path, ents, p_ix)
+    path = cb.levels_path(str(tmp_path / "data"))
+    with open(path, encoding="utf-8") as f:
+        led = json.load(f)
+    a0 = [r for r in led["agent"]["rows"] if r["fam"] == "ECPM"][0]["asks"][0]
+    if damage == "drop_key":
+        del a0["ri"]["alarm"]
+    else:
+        a0["vin"] = None
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(led, f)
+    capsys.readouterr()
+    _, part = ag_build(tmp_path, ents, p_ix + 7)
+    lines = skipped(capsys.readouterr().err, "cpi agent")
+    blk = part["ledger"]["agent"]
+    assert part["agent"]["ran"] and not [ln for ln in lines if ln.startswith("cpi agent skipped")]
+    if damage == "drop_key":
+        assert "cpi agent parity skipped: KeyError" in lines and set(lines) <= {"cpi agent parity skipped: KeyError",
+                                                                                "cpi agent vintage skipped: KeyError"}
+        assert blk["parity"]["bad"] >= 1 and (blk["trial"]["why"], blk["trial"]["since"]) == ("parity",
+                                                                                               ag_day(p_ix + 7))
+    else:
+        assert lines == [] and rows_of(part, "ECPM")[0]["asks"][0]["vin"]["7"]["t"] == ag_day(p_ix + 7)
+        assert blk["parity"]["bad"] == 0 and blk["trial"]["why"] == "start"
+
+
+@pytest.mark.parametrize("c0_ask, c0_now", [(1, 5), (5, 1), (1, 1), (5, 5), (5, 12)])
+def test_a_roas_c_answer_is_asked_again_only_at_the_shift_it_was_made_at(monkeypatch, c0_ask, c0_now):
+    # the GA4 final-days knob moves the ROAS_C shifts (ROAS_C0's + 0 / 1 / 7): an answer's new days end at d − its
+    # shift when asked; after a move either way it is left out (a longer shift would raise "look-ahead")
+    d = "2026-01-20"
+    for fam, age in (("ROAS_C0", 0), ("ROAS_C1", 1), ("ROAS_C7", 7)):
+        end = (date.fromisoformat(d) - timedelta(days=c0_ask + age)).isoformat()
+        ri = {"fam": fam, "d": d, "new": {"days": ["2025-11-01", end]}}
+        monkeypatch.setitem(CA.FAMILIES[fam], "shift", c0_ask + age)
+        assert cb._same_lag(ri) is True
+        monkeypatch.setitem(CA.FAMILIES[fam], "shift", c0_now + age)
+        assert cb._same_lag(ri) is (c0_ask == c0_now)
+
+
 def test_a_lasting_parity_mismatch_logs_one_restart_per_data_day_not_one_per_build(tmp_path, agent_on, no_ecpm_settle,
                                                                                     monkeypatch):
     own, others = ecpm_world()

@@ -132,7 +132,9 @@ def next_phase(d):
 
 
 def th_sha(cfg):
-    """The rule's fingerprint: a change of any threshold restarts the accept trial (old asks are not compared)."""
+    """The rule's fingerprint: a change of any threshold restarts the accept trial (old asks are not compared). The
+    shifts are not in it: decide() never reads them, and vintage leaves an ask made under another shift out on its own
+    (cpi_build._same_lag). LAGS is code, the same at every final-days value: changing it needs its own switch-over."""
     raw = json.dumps({"rule": RULE, "TH": TH, "PERSIST": PERSIST, "move_bands": cfg["move_bands"],
                       "engine_band": cfg["engine_band"]}, sort_keys=True, separators=(",", ":"))
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
