@@ -339,13 +339,11 @@ def build_mediation_daily(repo):
     Portfolio (all-apps) view is summed from by_app in the UI, so we don't duplicate it here.
     Revenue stays in micros (integer) for exactness; the UI divides by 1e6."""
     from collections import defaultdict
-    med = [dict(r) for r in repo.fetch_mediation()          # copies → safe to net down without touching the cache
-           if str(r.get("report_date") or "") not in ("", "None")]
+    # Revenue as stored = AdMob's own latest number (every run re-pulls the recent days, so a revision is already in
+    # it): shown as is, never netted again — the Mediation total stays equal to the Overview and to the live AdMob
+    med = [r for r in repo.fetch_mediation() if str(r.get("report_date") or "") not in ("", "None")]
     if not med:
         return {"dates": [], "names": {}, "by_app": {}, "currency": "USD"}
-    # Net each unit-day's mediation revenue DOWN by the same tracked deduction, so the Mediation total
-    # stays equal to the (also-adjusted) Overview and the user's live AdMob.
-    _apply_deduction(med, _deduction_by_unit_date(repo))
     dates = sorted({str(r.get("report_date")) for r in med})
     didx = {d: i for i, d in enumerate(dates)}
     names = {}
@@ -372,53 +370,6 @@ def build_mediation_daily(repo):
             out[k] = [[di, c[0], c[1], c[2], c[3]] for di, c in sorted(days.items())]
         by_app[app] = out
     return {"dates": dates, "names": names, "by_app": by_app, "currency": cur or "USD"}
-
-
-def _deduction_by_unit_date(repo):
-    """{(ad_unit_id, report_date): deduction_micros} — how much AdMob has revised each unit-day DOWN
-    since it closed (first vs latest POST-CLOSE snapshot, only when it dropped). Same signal the
-    Deductions tab shows; used to net revenue down to the user's LIVE AdMob (which already applied it).
-    Only recent still-settling days carry a value; finalized days have none. Zero new fetch."""
-    from collections import defaultdict
-    cell = defaultdict(dict)
-    for s in repo.fetch_snapshots():
-        rd = str(s.get("report_date") or ""); sd = str(s.get("snapshot_date") or "")
-        uid = s.get("ad_unit_id")
-        if not uid or rd in ("", "None") or sd in ("", "None") or sd <= rd:
-            continue                                        # post-close snapshots only
-        cell[(uid, rd)][sd] = s.get("estimated_earnings_micros", 0) or 0
-    out = {}
-    for key, snaps in cell.items():
-        if len(snaps) < 2:
-            continue
-        ks = sorted(snaps)
-        first, latest = snaps[ks[0]], snaps[ks[-1]]
-        if first > latest:
-            out[key] = first - latest
-    return out
-
-
-def _apply_deduction(rows, ded_ud):
-    """Subtract each (unit, date)'s tracked deduction from that unit-date's revenue rows, split
-    proportionally across them and floored at 0. Mutates rows in place. Keeps totals matching across
-    Overview/Mediation because every consumer nets down by the same per-unit-day amount."""
-    if not ded_ud:
-        return
-    from collections import defaultdict
-    ud = defaultdict(list)
-    for r in rows:
-        ud[(r.get("ad_unit_id"), str(r.get("report_date")))].append(r)
-    for key, ded in ded_ud.items():
-        rs = ud.get(key)
-        if not rs or ded <= 0:
-            continue
-        tot = sum((r.get("estimated_earnings_micros") or 0) for r in rs)
-        if tot <= 0:
-            continue
-        take = min(ded, tot)                                # never push a day below 0
-        for r in rs:
-            sh = (r.get("estimated_earnings_micros") or 0) / tot
-            r["estimated_earnings_micros"] = int(round((r.get("estimated_earnings_micros") or 0) - take * sh))
 
 
 def build_deductions_daily(repo):
@@ -597,10 +548,9 @@ def build_from_db(repo, today=None):
     net = [r for r in _revenue_rows(repo) if str(r.get("report_date") or "") not in ("", "None")]
     if not net:
         return build_dashboard()
-    # Net revenue DOWN by AdMob's tracked estimate-revision (deductions), so every number matches the
-    # user's LIVE AdMob (which already applied it). Only recent still-settling days move; finalized
-    # days are untouched. The Deductions tab still shows the raw revision — this is where it's applied.
-    _apply_deduction(net, _deduction_by_unit_date(repo))
+    # Revenue = AdMob's own latest number: every run re-pulls the recent days (rolling_days), so a revision AdMob made
+    # after a day closed is already in the stored row. It is never subtracted again (that showed every revised day below
+    # the live AdMob); the Deductions tab shows the revision itself (first → latest post-close snapshot).
     snaps = list(repo.fetch_snapshots())
     med = list(repo.fetch_mediation())
     cur = _common_currency(net)

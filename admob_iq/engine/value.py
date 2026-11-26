@@ -3262,8 +3262,6 @@ def _check_text(sc, g12, old, ded, fx_mode, S=None, src_ccy=None):
     if old is not None:
         out.append("Old users (14 mahine se pehle install) ki revenue: %s%% — ye install-week me nahi ginte"
                    % _num1(100 * old))
-    if not (ded and ded.get("rate")):
-        out.append("Revenue deduction se pehle, isliye Marketing ROAS se thoda zyada")
     if fx_mode == "one":
         out.append("Google Ads spend: purane hafte aaj ke rate pe (₹→$)")
     elif src_ccy and src_ccy != "USD":

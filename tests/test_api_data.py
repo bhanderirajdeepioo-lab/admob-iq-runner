@@ -183,35 +183,99 @@ def test_build_deductions_daily_empty_is_safe():
     assert dd == {"dates": [], "units": {}, "data": {}}
 
 
-def test_revenue_is_deduction_adjusted():
-    """Revenue is netted DOWN by the tracked per-unit-day deduction so it matches the user's live
-    AdMob; the Deductions data itself stays raw (it's the source of the adjustment)."""
+def test_revenue_is_admobs_latest_number_never_netted_again():
+    """Every run re-pulls the recent days, so the stored row is AdMob's latest (already revised) number: the Overview
+    and the Mediation tab show it as is (= the live AdMob); the Deductions data still shows the revision itself."""
     from datetime import date
     from admob_iq.db import InMemoryRepo
-    from admob_iq.api.dataservice import build_from_db, build_deductions_daily
+    from admob_iq.api.dataservice import build_from_db, build_deductions_daily, build_mediation_daily
     repo = InMemoryRepo()
-    repo.upsert_mediation(_med_row("2026-07-20", "App A", "app-a", "ADMOB", "AdMob Network", 100))
-    # post-close snapshots for that unit-day decay $100 -> $88 (deduction $12)
+    repo.upsert_mediation(_med_row("2026-07-20", "App A", "app-a", "ADMOB", "AdMob Network", 88))   # the latest pull
+    # post-close snapshots for that unit-day: $100 -> $88 (AdMob revised it by $12; the row above already has it)
     repo.append_snapshot(_snap("2026-07-20", "2026-07-21", "app-a/u1", 100))
     repo.append_snapshot(_snap("2026-07-20", "2026-07-23", "app-a/u1", 88))
     d = build_from_db(repo, today=date(2026, 7, 22))
     pl = [p for p in d["placements"] if p["id"] == "app-a/u1"]
     assert pl, "placement present"
     day = [r for r in pl[0]["daily"] if r[0] == "2026-07-20"][0]
-    assert abs(day[1] - 88_000_000) < 10_000, f"revenue netted to ~$88, got {day[1]/1e6}"
-    # deductions_daily stays RAW ($12), unaffected by the revenue adjustment
+    assert day[1] == 88_000_000, f"the stored (latest) revenue as is, got {day[1]/1e6}"
+    med = build_mediation_daily(repo)
+    assert sum(c[1] for cells in med["by_app"]["App A"].values() for c in cells) == 88_000_000
     dd = build_deductions_daily(repo)
-    assert dd["data"]["app-a/u1"] == [[0, 100_000_000, 88_000_000]]
+    assert dd["data"]["app-a/u1"] == [[0, 100_000_000, 88_000_000]]     # the revision itself, unchanged
 
 
-def test_revenue_unadjusted_when_no_decay():
-    """No decaying snapshots → no adjustment (finalized/older days keep the raw AdMob estimate)."""
+class _RevisingClient:
+    """An AdMob account with one unit on one closed day whose earnings AdMob revises from run to run (synthetic)."""
+    DAY = __import__("datetime").date(2026, 1, 10)
+
+    def __init__(self, earn, fail_mediation=False):
+        self.earn, self.fail_mediation, self.truncations = earn, fail_mediation, []
+
+    def _row(self, src=None):
+        r = {"report_date": self.DAY, "account_id": "pub-x", "app_id": "app~a", "app_name": "App A",
+             "ad_unit_id": "app~a/u1", "unit_name": "u1", "country": "All", "format": "BANNER", "platform": "ANDROID",
+             "ad_requests": 1000, "matched_requests": 900, "impressions": 800, "clicks": 8,
+             "estimated_earnings_micros": self.earn, "currency_code": "USD"}
+        if src:
+            r.update(ad_source=src, source_name=src, mediation_group="")
+        return r
+
+    def network_report(self, s, e, dim_filters=None):
+        yield self._row()
+
+    def mediation_report(self, s, e, dim_filters=None):
+        if self.fail_mediation:
+            raise RuntimeError("synthetic report error")
+        yield self._row("AdMob Network")
+
+    def country_report(self, s, e):
+        return iter(())
+
+    def placement_country_report(self, s, e):
+        return iter(())
+
+
+def test_a_day_admob_revises_shows_admobs_latest_number_after_every_run(tmp_path, monkeypatch):
+    """End to end: AdMob lowers one closed day on each run ($100 → $92 → $88) and every run re-pulls it. After every
+    run the stored row, the Overview and the Mediation tab show AdMob's own number for that day — never the revision
+    taken a second time (the old code showed $100 → $84 → $76)."""
     from datetime import date
-    from admob_iq.db import InMemoryRepo
-    from admob_iq.api.dataservice import build_from_db
-    repo = InMemoryRepo()
-    repo.upsert_mediation(_med_row("2026-07-20", "App A", "app-a", "ADMOB", "AdMob Network", 100))
-    d = build_from_db(repo, today=date(2026, 7, 22))
-    pl = [p for p in d["placements"] if p["id"] == "app-a/u1"][0]
-    day = [r for r in pl["daily"] if r[0] == "2026-07-20"][0]
-    assert abs(day[1] - 100_000_000) < 10_000, "no decay → revenue unchanged ($100)"
+    from admob_iq.db import FileRepo
+    from admob_iq.fetch import fetcher
+    from admob_iq.api.dataservice import build_from_db, build_mediation_daily
+    day = _RevisingClient.DAY
+    earn = {date(2026, 1, 11): 100_000_000, date(2026, 1, 12): 92_000_000, date(2026, 1, 13): 88_000_000}
+    for t in sorted(earn):
+        repo = FileRepo(str(tmp_path))
+        monkeypatch.setattr(fetcher, "make_client", lambda acct, *a, _e=earn[t], **k: _RevisingClient(_e))
+        fetcher.run_once([{"account_id": "pub-x"}], repo, today=t, mode="mock", rolling_days=7)
+        repo.flush()
+        repo = FileRepo(str(tmp_path))
+        assert [r["estimated_earnings_micros"] for r in repo.fetch_mediation()] == [earn[t]]
+        d = build_from_db(repo, today=t)
+        pl = [p for p in d["placements"] if p["id"] == "app~a/u1"][0]
+        assert [r[1] for r in pl["daily"] if r[0] == str(day)] == [earn[t]], t
+        med = build_mediation_daily(repo)
+        assert [c[1] for cells in med["by_app"]["App A"].values() for c in cells] == [earn[t]], t
+    assert sorted(s["estimated_earnings_micros"] for s in repo.fetch_snapshots()) == sorted(earn.values())
+    assert d["kpis_by_range"]["7d"]["revenue"] == 88.0
+
+
+def test_an_account_whose_report_pull_fails_tells_the_health_banner(tmp_path, monkeypatch, capsys):
+    """An account's pull that fails after its network report was stored keeps its last mediation rows (the Overview's
+    revenue) — say so on the page: one "admob account skipped: <ErrorType>" line, no account id (labels go public)."""
+    from datetime import date
+    from admob_iq import health
+    from admob_iq.db import FileRepo
+    from admob_iq.fetch import fetcher
+    repo = FileRepo(str(tmp_path))
+    monkeypatch.setattr(fetcher, "make_client", lambda acct, *a, **k: _RevisingClient(92_000_000, fail_mediation=True))
+    capsys.readouterr()
+    fetcher.run_once([{"account_id": "pub-x"}], repo, today=date(2026, 1, 12), mode="mock", rolling_days=7)
+    err = capsys.readouterr().err
+    lines = [ln for ln in err.splitlines() if ln.startswith("admob account skipped")]
+    assert lines == ["admob account skipped: RuntimeError"] and "pub-x" not in lines[0]
+    assert health.SKIP.findall(lines[0]) == [("admob account", "RuntimeError")]
+
+

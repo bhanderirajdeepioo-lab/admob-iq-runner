@@ -5895,7 +5895,7 @@ function renderOverview(){
         ${bqTile('req')}
         ${lastTile}
       </div>
-      <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ke <b>pending revision (deduction) ghatane ke baad</b> hai — tumhare <b>live AdMob se match</b>. Raw estimate + kitna revise hua wo <b>Deductions</b> tab me.${SHOWSP?` Spend <b>Google Ads (MCC)</b> se, USD me — <b>ROAS ${blended!=null?blended.toFixed(2)+'×':'—'}</b> matlab har $1 marketing pe ${blended!=null?'$'+blended.toFixed(2):'—'} revenue.${roasFxRule()} Installs yahan <b>sirf Google Ads</b> wale hain — 💸 Install value tab <b>all installs</b> (ads + organic) ginta hai, isliye wahan number bada.`:''}${unmatched>0?` <span class="down">⚠️ ${money(unmatched)} spend abhi kisi app se match nahi hua — detail <b>Marketing ROAS</b> tab me.</span>`:''}</div>
+      <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ka <b>latest number</b> hai (baad me hua revision isme <b>pehle se shamil</b>) — aapke <b>live AdMob se match</b>. Pehle kitna tha aur kitna revise hua, wo <b>Deductions</b> tab me.${SHOWSP?` Spend <b>Google Ads (MCC)</b> se, USD me — <b>ROAS ${blended!=null?blended.toFixed(2)+'×':'—'}</b> matlab har $1 marketing pe ${blended!=null?'$'+blended.toFixed(2):'—'} revenue.${roasFxRule()} Installs yahan <b>sirf Google Ads</b> wale hain — 💸 Install value tab <b>all installs</b> (ads + organic) ginta hai, isliye wahan number bada.`:''}${unmatched>0?` <span class="down">⚠️ ${money(unmatched)} spend abhi kisi app se match nahi hua — detail <b>Marketing ROAS</b> tab me.</span>`:''}</div>
       <div class="ov-apps card pad0"><div class="ct" style="padding:16px 17px 0"><h3>${APP?'This app':'Revenue by app'}</h3><span class="faint" style="font-size:11.5px">app pe tap = poori report · ↗ = Play Store</span></div>
         <table style="margin-top:10px"><thead><tr><th>App</th>${SHOWSP?'<th>Google Ads installs<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">ads only · not all installs</div></th><th>Spend<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">+ ROAS</div></th>':''}<th>Total Revenue</th>${SHOWSP?'<th>D0 rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Google Ads · '+(DATA.roas.d0?'by date / by 24h':'first 24h')+'</div></th><th>New rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">new users · live</div></th><th>Old rev<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − D0</div></th><th>P/L<div class="faint" style="font-weight:400;font-size:10px;text-transform:none">Rev − Spend</div></th>':''}<th>eCPM</th><th>Placements</th><th>Avg health <span style="cursor:help;color:var(--faint);font-weight:400" title="Health 0–100 = revenue trend 30% + fill/match 20% + eCPM vs peer 20% + show rate 15% + no-IVT 15%.  75+ green · 50–74 yellow · below 50 red.">ⓘ</span></th></tr></thead><tbody>${appRows}</tbody></table></div>
       <div class="ov-datewise card pad0"><div class="ct" style="padding:16px 17px 0"><h3>Date-wise report <span class="faint" style="font-weight:400;font-size:11px">· latest ${dwRows.length} days</span></h3><span class="lnk" onclick="openDateWise('')">View more →</span></div>${dateWiseTable(dwRows)}</div>
@@ -9235,7 +9235,7 @@ function perName(k){ if(monOf(k)) return monName(monOf(k)); const p=PERS.find(z=
 const perDates=(lo,hi)=>rg(lo,hi,true);
 // ---- the period's "now" numbers per app NAME, from DATA: spend in the view's currency (₹ as billed, $ at each day's own rate:
 // roasDaily), spend in ₹, Google Ads installs (ads only), Google D0 value ÷ the same-rate spend (= ₹ ÷ ₹), AdMob earnings ÷
-// impressions (every ad source, net) — kept per (DATA, period, currency): a tap / the 5-minute refresh on the same build never
+// impressions (every ad source) — kept per (DATA, period, currency): a tap / the 5-minute refresh on the same build never
 // sums the days again ----
 const SUMM=new WeakMap();
 // ₹ of a one-rate USD micros amount (the rate the build converted the billed ₹ with: roas.fx.INR = USD per ₹)
@@ -23712,7 +23712,7 @@ function valChkCard(d){
   if(I.qb_win&&!/retention/.test(It)) L.push('GA4 me old users ka data kam dikh raha — property ki data retention setting check karo.');
   if(!ET.length){ const fx=valM(d.fx); L.push(fx.mode==='one'?'Google Ads ₹ → $: purane hafte aaj ke rate pe (har hafte ka rate nahi mila).':'Google Ads ₹ → $: har hafte ke apne rate pe.');
     L.push('GA4 din property ke time me'+(d.tz?` (${hAttr(actTz(d.tz))})`:'')+', AdMob / Google Ads India time me — hafte me milaya.');
-    const De=Sc.ded; L.push(De&&valOk(De.rate)?`Invalid-traffic deduction ~${valPct(De.rate)} ghata ke — Marketing ROAS jaisa.`:'AdMob kamai deduction se pehle, isliye Marketing ROAS se thoda zyada.'); }
+  }
   return `<div class="note uni-tn val-chk" id="val-chk">${th}${chart}<ul class="tb">${L.map(t=>`<li>${hAttr(t)}</li>`).join('')}</ul></div>`; }
 // ---- "⏱️ When will I know?" (one line until tapped) ----
 function valTimingNote(){

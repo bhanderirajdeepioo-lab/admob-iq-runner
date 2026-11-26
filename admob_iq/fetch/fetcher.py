@@ -406,6 +406,7 @@ def run_once(accounts: List[Dict], repo, *, today: date, mode="mock",
             except Exception as e:
                 import sys
                 print(f"account {acct.get('account_id')} skipped this run (auth/report error): {e}", file=sys.stderr)
+                print(f"admob account skipped: {type(e).__name__}", file=sys.stderr)   # health banner (no id: labels go public)
                 totals.setdefault("account_errors", []).append({"account_id": acct.get("account_id"), "error": str(e)[:200]})
                 continue
             # Ad-unit totals (mediation, NO AD_SOURCE) over the same window as the network report — the

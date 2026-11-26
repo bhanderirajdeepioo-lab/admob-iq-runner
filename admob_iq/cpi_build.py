@@ -7,8 +7,8 @@ engine.cpi_alarm (P_PROD) to the data day t, nothing trimmed:
   newest day final on every side. GA4 series end at their own data_till (later days null).
 
   inputs (in memory first): dashboard["roas"]["by_app"] (app NAME → store id; daily_dated = the page's $ view),
-  apps_catalog (selected apps: name → AdMob app id), placements (AdMob earnings net + impressions per IST day, every ad
-  source), countries_daily (AdMob country, gross), roas.d0, latest_complete; data/roas_spend_cache.json (cost INR as
+  apps_catalog (selected apps: name → AdMob app id), placements (AdMob earnings + impressions per IST day, every ad
+  source), countries_daily (AdMob country), roas.d0, latest_complete; data/roas_spend_cache.json (cost INR as
   billed, biddable installs, Google D0 value), data/fx_series.json (each day's own rate), data/ads_campaign_day,
   data/ads_geo_day, data/ads_archive (tROAS target, bidding, status), data/ads_hourly (the Ads account's clock); this
   build's site files through this build's pointers only: active_<key> (GA4 a1), nvr_<key> (first session vs returning),
@@ -329,7 +329,7 @@ def _spend(D, cache, sid, ok_till, R, dated, d0_open=None, d0_wait=False):
 
 
 def _admob(D, dashboard):
-    """{app NAME: (rev, imp)}: the page's AdMob rows (placements: every ad source, net of the tracked deduction), IST
+    """{app NAME: (rev, imp)}: the page's AdMob rows (placements: every ad source, AdMob's latest number), IST
     days; a day without a row is 0."""
     out = {}
     for p in dashboard.get("placements") or []:
