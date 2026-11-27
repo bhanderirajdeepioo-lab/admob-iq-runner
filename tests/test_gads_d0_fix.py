@@ -921,6 +921,13 @@ def ov(tmp_path_factory):
                                                                {"name": "roi", "error": "KeyError"}]}]
     fx["dcgap"] = json.loads(json.dumps(fx["daymiss"]))                   # (round 5: the Breakeven ledger check's
     fx["dcgap"]["build_faults"] = [{"kind": "step", "steps": [{"name": "be gap", "error": "BadGzipFile"}]}]   # own read)
+    fx["dclinks"] = json.loads(json.dumps(fx["dconly"]))                 # 🔎 … with its days by app (DATA.be.dc): one
+    dl = fx["dclinks"]                                                    # app with 2 days (+ a non-date), one with 1,
+    dl["be"] = {"v": 1, "apps": {}, "dc": {"ca-app-pub-0000000000000000~101": ["2026-01-02"],   # one the CPI vs eCPM list
+                                           "ca-app-pub-0000000000000000~102": ["2026-01-03", "2025-12-30", "bad"],   # lacks
+                                           "ca-app-pub-0000000000000000~103": ["2026-01-01"]}}
+    dl["cpi"] = {"v": 1, "t": "2026-01-07", "apps": {"ca-app-pub-0000000000000000~101": {"name": "Demo <Alpha>"},
+                                                     "ca-app-pub-0000000000000000~102": {"name": "Demo Zeta"}}}
     fx["dcboth"] = json.loads(json.dumps(fx["daymiss"]))
     fx["dcboth"]["build_faults"] = [{"kind": "step", "steps": [{"name": "be guard", "error": "DataWarning"},
                                                               {"name": "roi", "error": "ValueError"},
@@ -961,7 +968,8 @@ def ov(tmp_path_factory):
     assert rep["errors"] == []
     return {k: v["ov"] for k, v in rep["other"].items()} | {"_fx": fx} | {"_fb": {k: v["fb"] for k, v in
                                                                                 rep["other"].items()}} | \
-        {"_dc": {k: v["dc"] for k, v in rep["other"].items()}, "_bh": {k: v["bh"] for k, v in rep["other"].items()}}
+        {"_dc": {k: v["dc"] for k, v in rep["other"].items()}, "_bh": {k: v["bh"] for k, v in rep["other"].items()},
+         "_bhdev": {k: v["bhdev"] for k, v in rep["other"].items()}, "_go": {k: v["go"] for k, v in rep["other"].items()}}
 
 
 def _tds(h):
@@ -1921,6 +1929,22 @@ def test_day_a_morning_lost_to_the_build_machines_time_zone_says_so(ov):
           " (din kholkar wajah dekhein).")
     assert ov["_fb"]["dconly|USD"] == "" and ov["_dc"]["dconly|USD"] == DC                       # amber only
     assert ov["_bh"]["dconly|USD"] == '<div class="banner dcheck">' + DC.replace("'", "&#39;") + "</div>"
+    # 🔎 its apps (owner, 27 Nov 2026: "yellow line pr click kre to jisme affected ho vaha le jaye"): one button each (most
+    # days first; a non-date dropped; an app the CPI vs eCPM list lacks left out — nowhere to open), its newest day, the
+    # name escaped; the line's own words end "App pe tap = uska wo din:"; the developer copy (no money): the line as before
+    bl = ov["_bh"]["dclinks|USD"]
+    assert ov["_dc"]["dclinks|USD"] == DC and ov["_fb"]["dclinks|USD"] == ""
+    assert bl.startswith('<div class="banner dcheck">' + DC.replace("'", "&#39;").replace(
+        " (din kholkar wajah dekhein).", ". App pe tap = uska wo din:") + '<div class="dc-apps"><button type="button" class="dc-go"')
+    assert re.findall(r'data-dcgo="([^"]+)" data-dcday="([^"]+)"', bl) == [
+        ("ca-app-pub-0000000000000000~102", "2026-01-03"), ("ca-app-pub-0000000000000000~101", "2026-01-02")]
+    assert re.findall(r"<span>([^<]*)</span><small>([^<]*)</small>", bl) == [("Demo Zeta", "2 din"),
+                                                                              ("Demo &lt;Alpha&gt;", "1 din")]
+    assert "~103" not in bl and bl.endswith("</button></div></div>") and bl.count('class="dc-go"') == 2
+    assert ov["_bhdev"]["dclinks|USD"] == ov["_bh"]["dconly|USD"] and ov["_bhdev"]["dconly|USD"] == ov["_bh"]["dconly|USD"]
+    # the tap: that app's CPI vs eCPM (hubGo) and a paint — the hub already on that tab draws nothing by itself; an app the
+    # list lacks (~103): nothing
+    assert ov["_go"]["dclinks|USD"] == ["hubGo Demo Zeta cpx", "paint"] and ov["_go"]["dconly|USD"] == []
     assert ov["_dc"]["stepfault|USD"] == "" and ov["_bh"]["stepfault|USD"] == (                   # red only
         '<div class="banner fault">' + ov["_fb"]["stepfault|USD"] + "</div>")
     assert ov["_fb"]["dcboth|USD"] == ("⚠️ Build problem: ye hisse update nahi ho rahe: roi (robot me error). Fix hone"

@@ -1147,6 +1147,18 @@ def test_breakeven_one_day_open_at_a_time_and_keep(out):
         assert k["beu"] == {"dy": [120], "unc": True, "sel": ["[data-cpx-beu]"]}
 
 
+def test_breakeven_link_from_the_amber_data_check_line(out):
+    """🔎 (owner, 27 Nov 2026: "yellow line pr click kre to jisme affected ho vaha le jaye"): CPX.beOpen opens the app's
+    Breakeven with the day open (whatever was open before; the users switch stays the viewer's — never reset), finds the
+    drawn day, scrolls it to the middle and flashes it; an app the list does not have or a non-date changes nothing."""
+    k = out["be"]["link"]
+    assert k["name"] == "Alpha App" and k["st"] == [True, "be", "2026-03-25", False, "o", 60]   # 60 rows: its day in them
+    assert k["calls"] == ["scroll:center", "+cpx-flash", "-cpx-flash"] and k["sel"] == ['tr[data-cpx-bed="2026-03-25"]']
+    assert k["bad"] == [None, None] and k["kept"] and k["name2"] == "Beta App"
+    assert k["hidden"] == [None, None]                               # an app hidden in Settings: no button, no link
+    assert k["race"] == ['tr[data-cpx-bed="2026-03-25"] scroll', 'tr[data-cpx-bed="2026-03-25"] +cpx-flash']   # the newest only
+
+
 def test_breakeven_missing_failed_and_refused_files(out):
     b = out["be"]
     g = b["gamma"]                                                                      # the file is not there: ⚠️ + Try again, then it loads

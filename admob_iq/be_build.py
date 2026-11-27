@@ -3348,6 +3348,7 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
         #                                         FSC, the pack gaps' marks / dates, UPI; the lived anchors that fell back
         #                                         to the final one; the small rows answered "data kam")
         fsq = {}                                  # ⚖️ the input guard's broken first-session days per src "p" app key
+        dcd = {}                                  # 🔎 … and per app id the days that raise the amber line (its links)
         if paid:
             from . import roi_build as rbm       # (its PAID / PAID_DIR: run_uninstall ran its pass earlier, this process)
             for aid, key, _ in apps:
@@ -3403,10 +3404,14 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
                     elif (r.fq or 0) & (FQ_FS | FQ_CC):
                         fqd.append(r.day)
                         n["fs"] += 1
-                        n["fsl"] += bool(r.fq & FQ_LEFT) and win(r.X)
+                        if bool(r.fq & FQ_LEFT) and win(r.X):
+                            n["fsl"] += 1
+                            dcd.setdefault(aid, set()).add(r.day)
                     if (r.fq or 0) & FQ_COH:
                         n["coh"] += 1
-                        n["cohw"] += win(r.X)
+                        if win(r.X):
+                            n["cohw"] += 1
+                            dcd.setdefault(aid, set()).add(r.day)
                 if fqd:
                     fsq[key] = sorted(fqd)
             elif paid:
@@ -3713,6 +3718,11 @@ def _run(dashboard, data_dir, out_dir, s=None, now=None):
             return []
         dashboard["be"] = {"v": V, "origin": today, "calib": (cals.get("a") or cals.get("p") or {}).get("built"),
                            "apps": ptr}
+        # 🔎 the amber line's days by app (owner, 27 Nov 2026: "yellow line pr click kre to jisme affected ho vaha le jaye"):
+        # exactly the days its DataWarning counts (fsl / cohw), only apps with a file the link can open
+        dc = {a: sorted(ds) for a, ds in sorted(dcd.items()) if a in ptr}
+        if dc:
+            dashboard["be"]["dc"] = dc
         if (PROV, LAG) != (PROV0, LAG0):                 # the page's ages (absent: PROV0 / LAG0, the page's own)
             dashboard["be"].update(pv=PROV, lag=LAG)
         return list(HEADER_PATHS)

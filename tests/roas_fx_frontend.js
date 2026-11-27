@@ -57,7 +57,11 @@ for (const dash of Object.keys(ctx.__FX).filter(k => k !== 'app')) {
     try {
       other[k] = JSON.parse(run(set(dash, view, '') + `JSON.stringify({spa: spendByApp(curWin()), hub: hubSpend(__FX.app),
         dw: dateWiseRows(curWinArr()).reduce((t, r) => t + r.spend, 0), ov: renderOverview().innerHTML,
-        fb: faultBannerText(), dc: dataCheckBannerText(), bh: faultBannersHtml()})`));
+        fb: faultBannerText(), dc: dataCheckBannerText(), bh: faultBannersHtml(),
+        bhdev: (()=>{ window.__DEV_VIEW__=true; try{ return faultBannersHtml(); }finally{ window.__DEV_VIEW__=false; } })(),
+        go: (()=>{ const c=[], H0=hubGo, P0=CPX.paint; hubGo=(n,t)=>c.push('hubGo '+n+' '+t); CPX.paint=()=>c.push('paint');
+          try{ dcGo('ca-app-pub-0000000000000000~102','2026-01-03'); dcGo('ca-app-pub-0000000000000000~103','2026-01-01'); }finally{ hubGo=H0; CPX.paint=P0; }
+          return c; })()})`));
     } catch (e) { errors.push(k + ' other: ' + (e.stack || e.message)); }
   }
 }

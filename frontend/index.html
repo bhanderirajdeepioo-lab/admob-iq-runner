@@ -184,6 +184,10 @@
   .banner.empty{background:var(--panel);color:var(--muted);border:1px solid var(--line2)}
   .banner.fault{background:var(--bad-b);color:var(--bad);border:1px solid var(--bad)}
   .banner.dcheck{background:var(--watch-b);color:var(--watch);border:1px solid var(--watch)}   /* a data check: amber, nothing stopped */
+  .banner.dcheck .dc-apps{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}   /* 🔎 its apps: a tap = that app's day (dcGo) */
+  .banner.dcheck .dc-go{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:3px 10px 3px 6px;border:1px solid var(--watch);border-radius:999px;background:transparent;color:inherit;font:inherit;font-weight:700;cursor:pointer}
+  .banner.dcheck .dc-go:hover,.banner.dcheck .dc-go:focus-visible{background:rgba(230,184,78,.14)}
+  .banner.dcheck .dc-go small{font-weight:600;opacity:.85}
   .std-cus{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:6px 0 8px}
   .rng-mon{gap:2px;padding-left:4px;padding-right:4px}
   .rng-mon button{background:none;border:0;color:var(--ink2);font:inherit;font-weight:700;padding:2px 6px;border-radius:6px;cursor:pointer}
@@ -3103,6 +3107,9 @@ h2.cpx-h{font-size:20px;margin:0 0 3px;font-weight:800}.cpx-d{margin:0;color:var
 .cpx-bet tr>:first-child{position:sticky;left:0;z-index:1;background:var(--raise)}.cpx-bet tr>th:first-child{background:var(--panel2)}   /* the date (a country) stays in view while a phone scrolls the row; a head cell keeps the head's colour */
 .cpx-bet tr.cpx-ber{cursor:pointer}.cpx-bet tr.cpx-ber:hover>td,.cpx-bet tr.cpx-beon>td{background:var(--panel2)}
 .cpx-bedb{background:none;border:none;padding:0;font:inherit;color:var(--ink);font-weight:700;cursor:pointer;white-space:nowrap}
+.cpx-bet tr.cpx-flash>td{animation:cpxFlash 2.6s ease-out}   /* 🔎 the day the amber line's link opened */
+@keyframes cpxFlash{0%,35%{background:var(--watch-b);box-shadow:inset 0 1px 0 var(--watch),inset 0 -1px 0 var(--watch)}100%{box-shadow:none}}
+@media (prefers-reduced-motion:reduce){.cpx-bet tr.cpx-flash>td{animation:none;background:var(--watch-b)}}
 .cpx-bedb::before{content:'›';display:inline-block;width:12px;color:var(--faint);font-weight:800}.cpx-bedb[aria-expanded="true"]::before{content:'▾'}   /* details on tap */
 .cpx-bedb:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 .cpx-bet tr.cpx-bedr>td.cpx-bedc{position:static;padding:0;white-space:normal;background:var(--raise)}
@@ -5164,6 +5171,7 @@ function render(){
     const rs=document.getElementById('rangesel'); if(rs) rs.addEventListener('change',e=>setRange(e.target.value));
     const sel0=document.getElementById('appsel'); if(sel0) sel0.addEventListener('change',e=>setApp(e.target.value));
     apkWire();                    // the App picker over it (button + list with every app's icon)
+    document.addEventListener('click',e=>{ const b=e.target&&e.target.closest&&e.target.closest('[data-dcgo]'); if(b) dcGo(b.dataset.dcgo,b.dataset.dcday); });   // 🔎 the amber line's apps
     document.addEventListener('click',e=>{const c=e.target.closest('.chip');if(c&&c.parentElement){c.parentElement.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));c.classList.add('on');}});
   }
   const bn=document.getElementById('banner');
@@ -10554,6 +10562,19 @@ function paint(){ const s=(EL&&EL.isConnected!==false)?EL:document.querySelector
   try{ for(const k in keepX){ const b=document.getElementById(k); if(b) b.scrollLeft=keepX[k]; } }catch(e){} }
 function render(){ const s=screenDiv('cpx'); EL=s; return s; }
 function showMe(){ paint(); }
+// 🔎 the amber "Data check" line's app links (owner, 27 Nov 2026: "yellow line pr click kre to jisme affected ho vaha le
+// jaye"): that app's ⚖️ Breakeven tab with the day open (the users switch stays the viewer's: a day opens in either view);
+// once drawn (its file may still be on its way) the day is scrolled to the middle and flashed. → the app's name for the
+// caller's hubGo (null: no such app in this build's list, or not a date — nothing changed)
+let SEEK=0;   // the newest link's seek (an older one stops: never a flash / scroll on a row of another tap)
+function nameOf(id){ const p=ptr(), a=p&&has(p.apps,id)?p.apps[id]:null; return a&&typeof a.name==='string'&&a.name&&vis(a.name)?a.name:null; }
+function beOpen(id,day){ const nm=nameOf(id); if(!nm||!okD(day)) return null;
+  OPEN=id; TAB='be'; DN=60; AGD=null; BOPEN=day; BUNC=false;   // (60: the line's oldest day can be row 31 — Organic has today)
+  const k=++SEEK, seek=n=>{ if(k!==SEEK||OPEN!==id) return; const s=onScreen()?(EL&&EL.isConnected!==false?EL:document.querySelector('.screen[data-screen=cpx]')):null,
+      r=s&&s.querySelector(`tr[data-cpx-bed="${sq(day)}"]`);
+    if(r){ try{ r.scrollIntoView({block:'center'}); }catch(e){} r.classList.add('cpx-flash'); setTimeout(()=>{ try{ r.classList.remove('cpx-flash'); }catch(e){} },2600); return; }
+    if(n<40) setTimeout(()=>seek(n+1),250); };   // (10 s: the file's first load)
+  setTimeout(()=>seek(0),0); return nm; }
 // left by the menu / a link: the details' Back step goes (render() shows 'overview' under HUB.hold on every refresh — still on
 // this tab a microtask later: kept)
 function left(){ let has=false; try{ has=typeof HB!=='undefined'&&HB.st.some(z=>z.tag==='cpx-dd'); }catch(e){} if(!has) return;
@@ -10573,7 +10594,7 @@ function card(name){ const p=ptr(); if(!p) return null; const id=Object.keys(p.a
 // the hub's 💰 Marketing ROAS card follows this verdict (one verdict everywhere): the 📉 card of an app in the pointer, null for
 // an app without one (no Google Ads spend: that card keeps today's Review card)
 function hubVerdict(name){ const p=ptr(); if(!p||!Object.keys(p.apps).some(k=>p.apps[k]&&p.apps[k].name===name)) return null; return card(name); }
-return {ptr, render, paint, show:showMe, left, alarmN, alertNote, card, hubVerdict,
+return {ptr, render, paint, show:showMe, left, alarmN, alertNote, card, hubVerdict, nameOf, beOpen,
   _:{rg, fd, rng, isDef, sums, rows, rowOf, judge, normal, hLvl, lossG, epOf, eps, now3, perRestore, perLoad, keep, cal, fI, fU, fP, series, cSeries, ctyList, ctyOf, dayRows, dayHtml, ctyHtml, verdict, moneyLine, tabBody, ALLF, FILES, CHD,
     lvCheck, lvOf, lvV, lvActs, levelsHtml, tipHtml, chart, LVQ:()=>LVQ, PEND:()=>PEND, agTag, agRows, agBoard, agBt, agNums, agDetHtml, agListHtml, propLines,
     beP, beA, beF, beK, beHtml, beRow, beDet, beCard, beSvg, beSure, ensureBe, beEcDr, beVsB, beRsf, TABS,
@@ -14479,14 +14500,26 @@ function faultBannerText(){ const f=tzFault(), st=((DATA.build_faults||[]).find(
 // answers to doubt; nothing stopped updating, its days are marked on their tab). DCHK: a guard's step name → [the
 // tab's name, which days] (a new guard adds its own; an unknown name is shown as it is)
 const DCHK={'be guard':['Breakeven','kuch install dino'],'be gap':['Breakeven','kuch install dino']};   // ("be gap": round 5's ledger read)
-function dataCheckBannerText(){ const st=((DATA.build_faults||[]).find(x=>x&&x.kind==='step')||{}).steps||[],
+function dataCheckBannerText(links){ const st=((DATA.build_faults||[]).find(x=>x&&x.kind==='step')||{}).steps||[],
     dc=st.filter(x=>x&&x.name&&x.error==='DataWarning').map(x=>DCHK[x.name]||[x.name,'kuch dino']);
   return dc.length?'🔎 Data check: '+dc.map(([n,w])=>n+' — '+w+" pe 'data check' laga hai").join(' · ')
-    +'; un dino ke number pakka na maanein (din kholkar wajah dekhein).':''; }
+    +(links?'; un dino ke number pakka na maanein. App pe tap = uska wo din:':'; un dino ke number pakka na maanein (din kholkar wajah dekhein).'):''; }
+// 🔎 the line's apps (owner, 27 Nov 2026: "yellow line pr click kre to jisme affected ho vaha le jaye"): DATA.be.dc (be_build:
+// exactly the days its DataWarning counts, by app id) → one button per app (icon, name, its days' count; most days first), a
+// tap = that app's CPI vs eCPM → ⚖️ Breakeven with its newest such day open. '' = none: an older build, an app the CPI vs eCPM
+// list does not have (nowhere to open) — the developer copy's list is none (CPX.ptr: no money there)
+function dataCheckLinks(){ const dc=DATA&&DATA.be&&DATA.be.dc; if(!dc||typeof dc!=='object') return '';
+  const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let nm=()=>null; try{ if(CPX.ptr()) nm=CPX.nameOf; }catch(e){}
+  return Object.keys(dc).map(id=>{ const ds=(Array.isArray(dc[id])?dc[id]:[]).filter(d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)).sort(), n=nm(id);
+      return n&&ds.length?{id,n,ds}:null; }).filter(Boolean).sort((a,b)=>b.ds.length-a.ds.length||a.n.localeCompare(b.n))
+    .map(x=>`<button type="button" class="dc-go" data-dcgo="${esc(x.id)}" data-dcday="${esc(x.ds[x.ds.length-1])}">${appIconId(x.id,x.n,18)}<span>${esc(x.n)}</span><small>${x.ds.length} din</small></button>`).join(''); }
+function dcGo(id,day){ let nm=null; try{ nm=CPX.beOpen(String(id||''),String(day||'')); }catch(e){} if(!nm) return;
+  hubGo(nm,'cpx'); try{ CPX.paint(); }catch(e){} }   // (the hub already on that tab draws nothing: "already there")
 // both banners over every screen: the red one (a part not updating) first, then the amber data check
-function faultBannersHtml(){ const t=faultBannerText(), d=dataCheckBannerText(),
+function faultBannersHtml(){ const t=faultBannerText(), L=dataCheckLinks(), d=dataCheckBannerText(!!L),
     esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  return (t?`<div class="banner fault">${esc(t)}</div>`:'')+(d?`<div class="banner dcheck">${esc(d)}</div>`:''); }
+  return (t?`<div class="banner fault">${esc(t)}</div>`:'')+(d?`<div class="banner dcheck">${esc(d)}${L?`<div class="dc-apps">${L}</div>`:''}</div>`:''); }
 // The install-day ("Day") D0 of an app over the period vs DATA.roas.d0's Day keys: the backend (merge_spend) takes a
 // store's click date ONCE, from a complete read at most day_next.late_h after its Day moment ((date+1 00:00 in its
 // accounts' zone) + Google's lag: the next morning), and never changes it. by_app[app].d0day_next: the app's own next

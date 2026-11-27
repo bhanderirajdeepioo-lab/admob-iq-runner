@@ -76,13 +76,21 @@ def _all_ecpm(data, day):
     return {cc: round(v[0] / v[1] * 1000, 3) for cc, v in out.items() if v[1]}
 
 
-def _run(tmp, mp, prep=None, s=None):
+def _run(tmp, mp, prep=None, s=None, dash_out=None):
     site, data, dash, scr = P.paid_world(tmp)
     if prep:
         prep(site, data, scr)
     P._state(mp, scr)
     paths, line, err = P._go(dash, data, site, dict({"be_paid": True}, **(s or {})))
+    if dash_out is not None:                                    # (the dashboard the step wrote: its "be" pointer)
+        dash_out.update(dash)
     return P._be(site, KA), line, err, data
+
+
+def _dc(dash):
+    """🔎 the amber line's days by app ("be" "dc"), keyed by the app's key instead of its id (None: no "dc")."""
+    be_ = dash["be"]
+    return None if "dc" not in be_ else {be_["apps"][a]["key"]: ds for a, ds in be_["dc"].items()}
 
 
 @pytest.fixture(scope="module")
@@ -235,14 +243,18 @@ def test_the_health_line_only_when_the_re_reads_are_used_up_in_the_window(tmp_pa
             st["rq"] = {day: [n, "2031-06-01T00:00:00Z"]}
             P._wr(p, st)
         return prep
-    b, line, err, _ = _run(tmp_path / "used", monkeypatch, tries(D, be.FSQ_TRIES))
+    dash = {}
+    b, line, err, _ = _run(tmp_path / "used", monkeypatch, tries(D, be.FSQ_TRIES), dash_out=dash)
     assert err == "be guard skipped: DataWarning\n"                  # once (the health banner), counts only
     assert ", guard fs 1 (left 1), " in line and KA not in line and D not in line
-    _, line, err, _ = _run(tmp_path / "not", monkeypatch, tries(D, be.FSQ_TRIES - 1))
-    assert err == "" and ", guard fs 1 (left 0), " in line
+    assert _dc(dash) == {KA: [D]}       # 🔎 the line's day by app: exactly the one it counts (the page's link opens it)
+    dash = {}
+    _, line, err, _ = _run(tmp_path / "not", monkeypatch, tries(D, be.FSQ_TRIES - 1), dash_out=dash)
+    assert err == "" and ", guard fs 1 (left 0), " in line and _dc(dash) is None
     old = (T.TODAY - timedelta(days=be.FSQ_WIN + 5)).isoformat()      # used up but older than the window: counted only
-    _, line, err, _ = _run(tmp_path / "old", monkeypatch, tries(old, be.FSQ_TRIES))
-    assert err == "" and ", guard fs 1 (left 0), " in line
+    dash = {}
+    _, line, err, _ = _run(tmp_path / "old", monkeypatch, tries(old, be.FSQ_TRIES), dash_out=dash)
+    assert err == "" and ", guard fs 1 (left 0), " in line and _dc(dash) is None
 
 
 def test_a_broken_day_0_read_is_marked_counted_and_changes_nothing(tmp_path, monkeypatch, whole):
@@ -253,9 +265,10 @@ def test_a_broken_day_0_read_is_marked_counted_and_changes_nothing(tmp_path, mon
             if r[0] == D:
                 r[4] = [round(v * 0.1, 6) for v in r[4]]
         P._wr(p, f)
-    b, line, err, _ = _run(tmp_path, monkeypatch, prep)
+    dash = {}
+    b, line, err, _ = _run(tmp_path, monkeypatch, prep, dash_out=dash)
     day, w = {x["d"]: x for x in b["days"]}[D], {x["d"]: x for x in whole[0]["days"]}[D]
-    assert day["chk"] == 1 and day["ckw"] == "c"
+    assert day["chk"] == 1 and day["ckw"] == "c" and _dc(dash) == {KA: [D]}   # 🔎 its day in the line's links
     assert [c[3] for c in day["cty"]] == [c[3] for c in w["cty"]]     # (its eCPM_fs untouched: nothing replaces cells)
     assert ", cohort 1 (recent 1)" in line and err == "be guard skipped: DataWarning\n"
 

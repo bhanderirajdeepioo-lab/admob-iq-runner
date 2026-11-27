@@ -983,6 +983,24 @@ const rowJ = r => ({ id: r.id, st: r.st, since: r.since, wait: r.wait, fam: r.fa
     clickD('[data-cpx-bed]', { cpxBed: '2026-03-15' }); BO.taps.push(st());                          // the same day again: closed
     clickD('[data-cpx-bed]', { cpxBed: '"><x>' }); BO.taps.push(st());                               // not a date: nothing
     tapId = ID.b; _.set({ BOPEN: '2026-03-25', BUNC: true }); tap('[data-cpx-app]'); BO.taps.push(Object.assign(st(), { app: _.get().OPEN, tab: _.get().TAB }));   // another app: its Chart, nothing open
+    // 🔎 the amber line's link (CPX.beOpen): that app's Breakeven with the day open — from another app's tab with another day and
+    // its names open; the users switch (Organic here) stays the viewer's; the drawn day found, scrolled to the middle, flashed
+    { const calls = [], ROWF = { classList: { add: c => calls.push('+' + c), remove: c => calls.push('-' + c) }, scrollIntoView: o => calls.push('scroll:' + o.block) };
+      const QS = []; SCREEN.querySelector = s => { QS.push(s); return s === 'tr[data-cpx-bed="2026-03-25"]' ? ROWF : null; };
+      _.set({ OPEN: ID.b, TAB: 'ch', BOPEN: '2026-03-15', BUNC: true, BSRC: 'o', DN: 90 });
+      const nm = CPX.beOpen(ID.a, '2026-03-25'), g = _.get();
+      BO.link = { name: nm, st: [g.OPEN === ID.a, g.TAB, g.BOPEN, g.BUNC, g.BSRC, g.DN], calls: calls.slice(), sel: [...new Set(QS)] };
+      // not an app of the list / not a date: null, nothing changed (the open day stays)
+      BO.link.bad = [CPX.beOpen('ca-app-pub-0000000000000000~9999999999', '2026-03-15'), CPX.beOpen(ID.a, '"><x>')];
+      BO.link.kept = _.get().BOPEN === '2026-03-25' && _.get().TAB === 'be';
+      BO.link.name2 = CPX.nameOf(ID.b); SCREEN.querySelector = () => null;
+      // an app hidden in Settings: no name (no button), no link
+      BO.link.hidden = [CPX.nameOf(ID.h), CPX.beOpen(ID.h, '2026-03-25')];
+      // two taps before either day is drawn: only the newest seek acts (the older one stops — never its flash / scroll)
+      const T0 = ctx.setTimeout, Q = []; ctx.setTimeout = f => { Q.push(f); return 0; };
+      const c2 = []; SCREEN.querySelector = s => ({ classList: { add: c => c2.push(s + ' +' + c), remove: () => {} }, scrollIntoView: () => c2.push(s + ' scroll') });
+      try { CPX.beOpen(ID.a, '2026-03-15'); CPX.beOpen(ID.b, '2026-03-25'); while (Q.length) Q.shift()(); } finally { ctx.setTimeout = T0; }
+      BO.link.race = c2; SCREEN.querySelector = () => null; }
     // keep(): the tapped day stays where it was (1280 / 375); the page's height held through the repaint
     BO.keep = {};
     for (const w of [1280, 375]) { await beGo({ OPEN: ID.a }); ctx.window.innerWidth = w; SCROLL = []; let n = 0; const QS = [];
