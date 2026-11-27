@@ -372,6 +372,7 @@ class Acc:
         self.cubep = False                          # ⚖️ the Google Ads users' pass (GA4_CUBEP, BE_PAID, BE_TAB)
         self.cohortp = False                        # … its All row from their own D0 … D30 read (GA4_COHORTP)
         self.pdn = {"ok": 0, "busy": 0, "none": 0, "fail": 0}   # … its apps by PAID status (the ROI line)
+        self.held = []                              # the spend days of apps a held Google Ads store stops early
 
 
 def start(cal=None, adsrc=None, cube=False, cmon=None, cubep=False, cohortp=False):
@@ -2914,6 +2915,9 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
         write_json_gz_stable(os.path.join(out_dir, name), body)
         if body["life_till"] and spend and spend.get("sids"):
             acc.till.append(body["life_till"])
+        gt = (pre.get("spend") or {}).get("till")      # a store of an account the reads could not ask (merge_spend
+        if spend and spend.get("till") and gt and spend["till"] < gt:      # held_till): All apps' lifetime totals
+            acc.held.append(spend["till"])                                  # stop at its day too
         if spend and spend.get("ccy"):
             acc.ccy.add(spend["ccy"])
         lt_till = body["life_till"]                    # lifetime totals to the last day both sides are in (as the page)
@@ -3018,7 +3022,8 @@ def finish(acc, dashboard, out_dir):
                 "months": [[m, e["n"], _r(e["sp"]), [(_r(e["t"][j]) if e["ok"][j] else None) for j in range(len(T))],
                             e["days"], e["days"], _r(e["spi"], 2)] for m, e in sorted(months.items())],
                 "ccy": next(iter(acc.ccy)) if len(acc.ccy) == 1 else None, "f4c": f4_consts(),
-                "life_till": max(set(acc.till), key=lambda d: (acc.till.count(d), d)) if acc.till else None}
+                "life_till": min([max(set(acc.till), key=lambda d: (acc.till.count(d), d))] + acc.held)
+                if acc.till else None}
         raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
         write_json_gz_stable(os.path.join(out_dir, ALL_FILE), body)
         dashboard["roi"] = {"file": ALL_FILE, "v": hashlib.sha1(raw).hexdigest()[:12], "ccy": body["ccy"],

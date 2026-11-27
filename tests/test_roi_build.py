@@ -757,6 +757,20 @@ def _geo_files(data, days, ccy="USD"):
     write_json_gz_stable(os.path.join(d, "state.json.gz"), dict(gdd.DEFAULTS, v=gdd.GD_V, ccy=ccy))
 
 
+def test_all_apps_lifetime_totals_stop_at_a_held_stores_day(tmp_path):
+    """An app whose Google Ads store an account could not answer for (app_spend's till before the read's: merge_spend
+    held_till): All apps' lifetime totals stop at its day — its later days have partial spend."""
+    out = str(tmp_path)
+    acc = rb.start()
+    acc.apps.append({"app_id": "a~1", "app": "Alpha", "key": "aaaaaaaaaaaa", "file": "roi_aaaaaaaaaaaa.json.gz",
+                     "st": "Normal", "r7": 1.0, "u7": 1.0, "pb": 10, "life": [1.0, 1.0, 1.0], "cut": 0, "f4": {}})
+    open(os.path.join(out, "roi_aaaaaaaaaaaa.json.gz"), "w").close()
+    acc.life, acc.till, acc.held = {"2026-10-01": [5.0, 6.0, 500.0]}, ["2026-10-20", "2026-10-20"], ["2026-10-11"]
+    assert rb.finish(acc, {}, out) == ["/roi*"]
+    with gzip.open(os.path.join(out, "roi.json.gz"), "rt") as f:
+        assert json.load(f)["life_till"] == "2026-10-11"
+
+
 def _cc_world(tmp_path, kmul=None, mask_off=(), geo_holes=(date(2026, 9, 15),), geo_more=None, **kw):
     """The cube + AdMob by country × month (kmul[cc][month] × the country's GA4; whole months by default, the newest
     through Oct 12) + Google Ads by store × day × country on disk (from Sep 1; a store-day in geo_holes has spend but no
@@ -1177,6 +1191,22 @@ def _cc_app_step(tmp_path, monkeypatch, name, cube=True, strip=False, geo_calls=
     assert not acc.fails and len(acc.apps) == 1
     with open(os.path.join(str(out), "roi_aaaaaaaaaaaa.json.gz"), "rb") as f:
         return gzip.decompress(f.read()), acc, out
+
+
+def test_an_app_of_a_held_store_tells_all_apps(tmp_path, monkeypatch):
+    """app_spend's till before the read's (merge_spend held_till) → acc.held (All apps' lifetime totals stop there);
+    the same till as the read's → nothing."""
+    for name, till, want in (("held", "2026-10-02", ["2026-10-02"]), ("whole", None, [])):
+        data, P, pre, spend, acc0 = _cc_world(tmp_path / name)
+        if till:
+            spend = dict(spend, till=till)
+        _stub_app(monkeypatch, P, {"read_today": CTODAY.isoformat(), "stream_id": "222", "x": {}}, spend)
+        out = tmp_path / name / "out"
+        out.mkdir()
+        acc = rb.start(cube=True, cmon=acc0.cmon)
+        rb.app_step(acc, {"history_start": CHS.isoformat(), "stream_id": "222"}, {"app_id": "a~1", "app_name": "Alpha"},
+                    "aaaaaaaaaaaa", {"tz": "UTC"}, pre, {}, str(out), str(data), ids=["a~1"])
+        assert not acc.fails and acc.held == want
 
 
 def test_country_app_step_file_and_isolation(tmp_path, monkeypatch):

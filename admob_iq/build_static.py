@@ -1942,7 +1942,7 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
     roas_inr_usd = None   # exact INR→USD rate used to convert spend, so the display toggle matches it
     if mode == "live" and has_creds and repo.has_data():
         try:
-            from .fetch.google_ads import (fetch_app_spend, resolve_store_ids, merge_spend,
+            from .fetch.google_ads import (fetch_app_spend, resolve_store_ids, merge_spend, refetch_from,
                                            fetch_campaign_accounts, apply_campaign_accounts,
                                            needs_campaign_accounts, _fx_to_usd, SPEND_CACHE_V)
             from .fetch.fetcher import make_client
@@ -1991,9 +1991,18 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
             else:
                 # First-run backfill: from the earliest revenue date (dynamic). Falls back to ROAS_BACKFILL_DAYS.
                 refetch_start = _earliest or (today - timedelta(days=int(os.getenv("ROAS_BACKFILL_DAYS", "550")))).isoformat()
+            # back to a held store's last whole day. shortcut: an account that never answers again makes every read a
+            # day longer each day; cap it at ROAS_BACKFILL_DAYS if a hold ever lasts months (the banner shows it)
+            refetch_start = refetch_from(cached_spend, refetch_start)
             with _sc.stage("gads_spend"):
                 fresh_spend = fetch_app_spend(s, refetch_start, today.isoformat(), mode="live")
-            spend = merge_spend(cached_spend, fresh_spend, refetch_start)
+            try:                                                # the last day a read went through, as recorded
+                from .cpi_build import spend_ok_till
+                prev_ok = spend_ok_till(data_dir, {})
+            except Exception as _oe:                            # (its own try: never the whole Google Ads step)
+                prev_ok = None
+                print(f"spend ok_till skipped: {type(_oe).__name__}", file=sys.stderr)
+            spend = merge_spend(cached_spend, fresh_spend, refetch_start, ok_till=prev_ok)
             # Backfill the adwords account onto OLD/paused campaigns the windowed spend fetch didn't
             # re-tag (they showed a '?' account). A cheap roster query maps campaign→account for all —
             # asked only when a cached campaign has no account (else it could fill nothing: every fresh
@@ -2017,7 +2026,8 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                 except Exception as _ce:
                     print(f"roas cache write skipped: {_ce}", file=sys.stderr)
             # the last day a spend fetch went through, on EVERY build (Install value, CPI vs eCPM: a stale cache's
-            # later days are "not in yet", never $0) — recorded only once the cache holding those days is written
+            # later days are "not in yet", never $0) — recorded only once the cache holding those days is written (a
+            # store of an account that could not answer keeps its own last whole day: merge_spend held_till)
             if cache_written and isinstance(fresh_spend, dict) and not fresh_spend.get("error"):
                 try:
                     from .value_build import record_spend_fetch

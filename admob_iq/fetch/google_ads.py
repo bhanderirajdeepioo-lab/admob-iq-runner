@@ -793,6 +793,7 @@ def fetch_app_spend(s, start, end, *, mode="live", now=None):
     try:
         token = _access_token(cid, csec, rt)
     except Exception as e:
+        print("google ads spend skipped: %s" % type(e).__name__, file=sys.stderr)   # health banner (no id: labels go public)
         msg = str(e)[:260]
         # 'unauthorized_client' ~always = the refresh token was minted with a different OAuth client
         extra = (" — ye refresh token kisi ALAG OAuth client se bana lagta hai. Ya to wahi client "
@@ -803,6 +804,7 @@ def fetch_app_spend(s, start, end, *, mode="live", now=None):
     try:
         accounts = _child_accounts(mcc, dev, token) or [{"id": mcc, "currency": "USD", "name": ""}]
     except Exception as e:
+        print("google ads spend skipped: %s" % type(e).__name__, file=sys.stderr)
         em = str(e)[:450]
         low = em.lower()
         if "404" in em:
@@ -818,7 +820,11 @@ def fetch_app_spend(s, start, end, *, mode="live", now=None):
     # Each of the three queries goes to the accounts side by side (_per_account); the answers are taken in account
     # order, so every row, error and log line is in the same order as when asked one account after another.
     workers = _spend_workers()
-    rows, errs, gone, idle, denied, last = [], [], set(), set(), set(), {}
+    # failed: the accounts that could not answer cost or installs (not-enabled ones aside: they have no spend; an
+    # account with no cost in the window aside for installs: nothing to miss). Their stores keep the cache and their
+    # last whole day (merge_spend held_till: later days "not in yet"), and the health banner names the read ("google
+    # ads spend" / "google ads installs") — never a silent $0 for their new days
+    rows, errs, gone, idle, denied, last, failed = [], [], set(), set(), set(), {}, set()
     for i, (a, got, e) in enumerate(_per_account(
             accounts, lambda a: _app_spend_for(a["id"], mcc, dev, token, start, end), workers)):
         if e is not None:
@@ -826,6 +832,9 @@ def fetch_app_spend(s, start, end, *, mode="live", now=None):
             if _not_enabled(e):
                 gone.add(i)                  # a not-enabled account answers 403 to installs / day-1 too: not asked
             else:
+                if not failed:
+                    print("google ads spend skipped: %s" % type(e).__name__, file=sys.stderr)
+                failed.add(a["id"])
                 last[a["id"]] = "9999-12-31"   # its clicks are unknown: its zone counts for D0 finality (d0_final)
                 if str(e).startswith("HTTP 403"):
                     denied.add(a["id"])      # any other 403 (e.g. USER_PERMISSION_DENIED): it cannot answer at all
@@ -854,6 +863,9 @@ def fetch_app_spend(s, start, end, *, mode="live", now=None):
     for a, got, e in _per_account(asked, lambda a: _app_installs_for(a["id"], mcc, dev, token, start, end), workers):
         if e is not None:
             print("roas: installs/convval skipped for %s: %s" % (a.get("id"), e), file=sys.stderr)
+            if a["id"] not in idle:          # no cost in the window: no click, no install to miss
+                print("google ads installs skipped: %s" % type(e).__name__, file=sys.stderr)
+                failed.add(a["id"])
             continue
         for r in got:
             r["currency"] = a["currency"]; r["account"] = a["id"]; inst_rows.append(r)
@@ -876,6 +888,8 @@ def fetch_app_spend(s, start, end, *, mode="live", now=None):
             elif a["id"] not in idle:
                 d1_ok = False
             print("roas: day-1 convval skipped for %s: %s" % (a.get("id"), e), file=sys.stderr)
+            if a["id"] not in idle:
+                print("google ads day-1 skipped: %s" % type(e).__name__, file=sys.stderr)
             continue
         for r in got:
             r["currency"] = a["currency"]; r["account"] = a["id"]; d1_rows.append(r)
@@ -897,13 +911,22 @@ def fetch_app_spend(s, start, end, *, mode="live", now=None):
     agg["d1_ok"] = d1_ok
     if unread:
         agg["d1_unread"] = unread
+    if failed:
+        agg["failed"] = sorted(failed)
     if s.get("gads_archive"):                    # the per-campaign store's input (never part of the returned cache)
         _TAKEN = {"start": str(start), "end": str(end), "accounts": [dict(a) for a in accounts],
                   "spend": rows, "inst": inst_rows, "d1": d1_rows}
     return agg
 
 
-def merge_spend(cached, fresh, refetch_start):
+def refetch_from(cached, start):
+    """The re-read's first day: `start`, or a held store's own last whole day when that is older (merge_spend
+    held_till) — so once the store's accounts answer again the read covers every day the hold left partial."""
+    ht = (cached or {}).get("held_till")
+    return min([start] + [v for v in (ht.values() if isinstance(ht, dict) else ()) if isinstance(v, str) and v])
+
+
+def merge_spend(cached, fresh, refetch_start, ok_till=None):
     """Incremental spend cache. Google Ads restates spend/conversions for a while (~60 days), so we
     only ever re-pull a recent window and keep the SETTLED older history from the cache. `fresh`
     covers [refetch_start, today] and is OVERLAID onto the cached history per store/date — it only
@@ -913,6 +936,10 @@ def merge_spend(cached, fresh, refetch_start):
     - fresh is None      → Google Ads not configured: no ROAS (never serve stale cache).
     - fresh has 'error'  → transient failure: keep the settled history we already have.
     - cached is None     → first run / full backfill: just use fresh.
+    - fresh has 'failed' → accounts that could not answer: their stores ("held") keep the cached days and campaigns
+                           (this read only adds the days the cache lacks: the answering accounts' part) and their last
+                           whole day, held_till {store: day} — ok_till, the last day a read went through before this
+                           one, or the date the store was first held at; a store whose accounts all answer leaves it.
 
     convval_day1 (Google Ads' D0) is the one exception: a click date's D0 is FIXED once complete (owner: the number
     never changes after that). d1_fixed_till = the last fixed date: it moves on only with a complete read (fresh
@@ -964,6 +991,17 @@ def merge_spend(cached, fresh, refetch_start):
     out = {"v": SPEND_CACHE_V,
            "currency_src": fresh.get("currency_src") or cached.get("currency_src", "USD"),
            "fx": fresh.get("fx") or cached.get("fx", {}), "note": fresh.get("note")}
+    cc = cached.get("campaigns") or {}
+    fc = fresh.get("campaigns") or {}
+    # a store of an account this read could not ask (fresh "failed") keeps its cached days: this read has only the
+    # other accounts' part of it, which would replace the whole number; its days after held_till are "not in yet"
+    # (value_build.app_spend, cpi_build._spend) — every other store goes on
+    failed = {str(a) for a in fresh.get("failed") or ()}
+    held = {sid for sid, acc in _d0_owners(cc, fc).items() if acc & failed} if failed else set()
+    was = cached.get("held_till") if isinstance(cached.get("held_till"), dict) else {}
+    ht = {sid: was.get(sid) or ok_till for sid in held if was.get(sid) or ok_till}
+    if ht:
+        out["held_till"] = ht
     for key in ("daily", "installs", "convval"):
         cd = cached.get(key) or {}
         fd = fresh.get(key) or {}
@@ -973,15 +1011,14 @@ def merge_spend(cached, fresh, refetch_start):
             # A run whose fresh fetch is late/missing a store (Google Ads reports recent spend with a lag)
             # therefore can NEVER wipe that store's recent spend — which is what caused spend to flip in/out.
             m = dict(cd.get(sid) or {})
-            m.update(fd.get(sid) or {})
+            fs = fd.get(sid) or {}
+            m.update(fs if sid not in held else {d: v for d, v in fs.items() if d not in m})
             if m:
                 merged[sid] = m
         out[key] = merged
     old = _d0_date(cached.get("d1_fixed_till"))        # None: a cache written before D0 was fixed
     fin = _d0_date(fresh.get("d1_final_till")) if fresh.get("d1_ok") else None    # what this read can fix
     fixed = max((x for x in (old, fin) if x), default=None)
-    cc = cached.get("campaigns") or {}
-    fc = fresh.get("campaigns") or {}
     out["convval_day1"], still, n_fixed, drift = _merge_d0(
         cached.get("convval_day1") or {}, fresh.get("convval_day1") or {}, old, fixed, fin, spend=out["daily"],
         lo=refetch_start, opened=cached.get("d1_open"), unread=fresh.get("d1_unread"), owners=_d0_owners(cc, fc))
@@ -996,7 +1033,8 @@ def merge_spend(cached, fresh, refetch_start):
     day, took = _merge_d0day(cached, fresh, fresh.get("convval_day1"), out["daily"], still)
     out.update((k, v) for k, v in day.items() if v)
     _d0_log(fresh, fixed, n_fixed, still, took)
-    out["campaigns"] = {sid: (fc.get(sid) or cc.get(sid) or []) for sid in set(cc) | set(fc)}
+    out["campaigns"] = {sid: ((cc.get(sid) if sid in held else None) or fc.get(sid) or cc.get(sid) or [])
+                        for sid in set(cc) | set(fc)}   # a held store keeps the failed account's campaigns: it stays held
     return out
 
 

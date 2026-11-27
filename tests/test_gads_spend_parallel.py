@@ -8,9 +8,11 @@ import json
 import sys
 import threading
 import time
+from datetime import date, timedelta
 
 import pytest
 
+from admob_iq import health
 from admob_iq.fetch import google_ads
 
 MCC, DEV, TOK = "1110001111", "dev-SYNTH", "tok-SYNTH"
@@ -155,6 +157,7 @@ def mcc(monkeypatch):
             out = google_ads.fetch_app_spend(s, START, END, mode="live")
             taken = google_ads.take_rows()
             fake.d0 = {k: out.pop(k) for k in D0_KEYS if k in out}      # the rest: byte-compared with the old code
+            fake.failed = out.pop("failed", None)                       # (new too: the accounts that could not answer)
         return json.dumps(out), json.dumps(taken), fake
     return run
 
@@ -183,8 +186,15 @@ def test_same_cache_rows_and_lines_as_one_after_another(mcc, capsys, workers):
     # … so only their two lines each go; every other line is the same, in the same order
     keep = [ln for ln in err0.splitlines() if not any(a in ln and "CUSTOMER_NOT_ENABLED" in ln for a in gone)]
     assert len(keep) == len(err0.splitlines()) - 2 * len(gone)
-    assert err.splitlines() == ["roas: installs + day-1 not asked for %d not-enabled accounts" % len(gone)] + keep
+    lines = err.splitlines()
+    banner = [ln for ln in lines if health.SKIP.search(ln)]     # new: the health banner's lines (no id in them)
+    assert [ln for ln in lines if ln not in banner] == (
+        ["roas: installs + day-1 not asked for %d not-enabled accounts" % len(gone)] + keep)
     assert any("HTTP 500" in ln for ln in keep) and any("USER_PERMISSION_DENIED" in ln for ln in keep)
+    # the account refusing installs and the one refusing day-1 each tell the banner; the not-enabled ones never do.
+    # Installs missing makes the read "failed" for that account (its stores keep the cache: merge_spend)
+    assert banner == ["google ads installs skipped: RuntimeError", "google ads day-1 skipped: RuntimeError"]
+    assert f.failed == [f.inst_500]
 
 
 def test_answers_really_finish_out_of_order_and_side_by_side(mcc):
@@ -221,6 +231,169 @@ def test_no_archive_takes_nothing_and_all_failing_spend_is_the_same_error(mcc):
     out0, _, _ = mcc(1, fake=Down(), old=True)
     out, _, _ = mcc(4, fake=Down())
     assert out == out0 and "Spend query fail" in json.loads(out)["error"]
+
+
+# ── a read an account could not answer: the health banner, never a silent $0 ───────────────────────────────────────
+
+def test_an_account_that_cannot_answer_cost_tells_the_banner_and_marks_the_read(mcc, capsys, monkeypatch):
+    class Half(MCCFake):
+        def rows(self, acct, k):
+            if k == "spend" and acct in self.ids[:2]:
+                raise RuntimeError("HTTP 500: INTERNAL — synthetic")
+            return super().rows(acct, k)
+    monkeypatch.setattr(health, "FAULTS", {})
+    out, _, f = mcc(4, fake=Half())
+    lines = capsys.readouterr().err.splitlines()
+    assert json.loads(out)["daily"]                                   # the accounts that answered still count
+    assert f.failed == sorted(f.ids[:2] + [f.inst_500])
+    assert [ln for ln in lines if ln.startswith("google ads spend skipped")] == ["google ads spend skipped: RuntimeError"]
+    for ln in lines:
+        health.scan(ln)
+    assert health.FAULTS == {"google ads spend": "RuntimeError", "google ads installs": "RuntimeError",
+                             "google ads day-1": "RuntimeError"}
+    assert not any(a in ln for ln in lines if health.SKIP.search(ln) for a in f.ids)   # never an id in them
+
+
+def test_an_account_with_no_cost_in_the_window_has_nothing_to_miss(mcc, capsys):
+    """It answered cost with no row (no click): its installs / day-1 query failing misses nothing — no banner, the
+    read is not marked (the D0 rule's own "idle")."""
+    class Idle(MCCFake):
+        def __init__(self):
+            super().__init__()
+            self.idle = self.ids[0]
+            self.inst_500 = self.d1_403 = None                       # only the idle account fails here
+
+        def rows(self, acct, k):
+            if acct == self.idle:
+                if k == "spend":
+                    return []
+                raise RuntimeError("HTTP 500: INTERNAL — synthetic")
+            return super().rows(acct, k)
+    out, _, f = mcc(4, fake=Idle())
+    lines = capsys.readouterr().err.splitlines()
+    assert json.loads(out)["daily"] and f.failed is None
+    assert not [ln for ln in lines if health.SKIP.search(ln)]
+    assert sum(f.idle in ln for ln in lines) == 2                    # the private log still has both lines
+
+
+@pytest.mark.parametrize("step, error", [("_access_token", "OAuth fail"), ("_child_accounts", "MCC accounts nahi mile")])
+def test_a_google_ads_sign_in_or_account_list_that_fails_tells_the_banner(monkeypatch, capsys, step, error):
+    def refused(*a):
+        raise RuntimeError("HTTP 400: invalid_grant — synthetic")
+    monkeypatch.setattr(google_ads, "_access_token", lambda *a: TOK)
+    monkeypatch.setattr(google_ads, step, refused)
+    out = google_ads.fetch_app_spend(dict(SETTINGS), START, END, mode="live")
+    assert out["error"].startswith(error)
+    assert "google ads spend skipped: RuntimeError" in capsys.readouterr().err.splitlines()
+
+
+def _held_inputs():
+    cached = {"v": google_ads.SPEND_CACHE_V, "currency_src": "USD", "fx": {},
+              "daily": {"com.synth.both": {"2026-01-10": 100, "2026-01-11": 100}, "com.synth.b": {"2026-01-10": 7}},
+              "installs": {"com.synth.both": {"2026-01-10": 10}}, "convval": {"com.synth.both": {"2026-01-10": 5.0}},
+              "campaigns": {"com.synth.both": [{"id": "1", "account": "2220000001"}, {"id": "2", "account": "2220000002"}],
+                            "com.synth.b": [{"id": "3", "account": "2220000002"}]}}
+    fresh = {"currency_src": "USD", "fx": {}, "d1_ok": True,     # account …1 could not answer: only …2's part is here
+             "daily": {"com.synth.both": {"2026-01-10": 60, "2026-01-11": 60, "2026-01-12": 60},
+                       "com.synth.b": {"2026-01-10": 9}},
+             "installs": {"com.synth.both": {"2026-01-10": 6}}, "convval": {"com.synth.both": {"2026-01-10": 3.0}},
+             "campaigns": {"com.synth.both": [{"id": "2", "account": "2220000002"}],
+                           "com.synth.b": [{"id": "3", "account": "2220000002"}]},
+             "failed": ["2220000001"]}
+    return cached, fresh
+
+
+def test_a_store_of_an_account_that_could_not_answer_keeps_its_cached_days_and_its_own_last_day():
+    cached, fresh = _held_inputs()
+    out = google_ads.merge_spend(cached, fresh, "2026-01-01", ok_till="2026-01-11")
+    # …1's part of the days the cache has is not lost; a day the cache lacks takes what this read has (…2's part)
+    assert out["daily"]["com.synth.both"] == {"2026-01-10": 100, "2026-01-11": 100, "2026-01-12": 60}
+    assert out["installs"]["com.synth.both"] == {"2026-01-10": 10} and out["convval"]["com.synth.both"] == {
+        "2026-01-10": 5.0}
+    assert out["daily"]["com.synth.b"] == {"2026-01-10": 9}          # a store of answering accounts only: updated
+    assert [c["account"] for c in out["campaigns"]["com.synth.both"]] == ["2220000001", "2220000002"]   # stays held
+    assert out["held_till"] == {"com.synth.both": "2026-01-11"}      # its own last whole day: the last read through
+    # held again later: the first day stays (the cache's whole days stop there), whatever the newer reads' day
+    cached2, fresh2 = _held_inputs()
+    out2 = google_ads.merge_spend(dict(cached2, held_till=out["held_till"]), fresh2, "2026-01-01", ok_till="2026-01-20")
+    assert out2["held_till"] == {"com.synth.both": "2026-01-11"}
+    # every account answered: laid over as before, no store held
+    cached3, fresh3 = _held_inputs()
+    fresh3.pop("failed")
+    out3 = google_ads.merge_spend(dict(cached3, held_till=out["held_till"]), fresh3, "2026-01-01", ok_till="2026-01-20")
+    assert out3["daily"]["com.synth.both"] == {"2026-01-10": 60, "2026-01-11": 60, "2026-01-12": 60}
+    assert [c["account"] for c in out3["campaigns"]["com.synth.both"]] == ["2220000002"] and "held_till" not in out3
+    # a failed read keeps the cache whole, its held days with it
+    assert google_ads.merge_spend(dict(cached3, held_till={"com.synth.both": "2026-01-11"}), {"error": "x"},
+                                  "2026-01-01")["held_till"] == {"com.synth.both": "2026-01-11"}
+
+
+def test_a_held_store_stops_its_app_at_its_own_last_day_on_both_screens():
+    """Install value / ROI (value_build.app_spend) and CPI vs eCPM (cpi_build._spend): a held store's days after its
+    held_till are "not in yet" (None / the app's till), every other store goes on to the read's day."""
+    from datetime import date
+    from admob_iq import cpi_build, value_build
+    sp = {"ccy": "INR", "first": "2026-01-01", "till": "2026-01-20",
+          "daily": {"com.synth.both": {"2026-01-12": 60}, "com.synth.b": {"2026-01-12": 9}},
+          "installs": {}, "held": {"com.synth.both": "2026-01-11"}}
+    pre = {"spend": sp, "owner": {"com.synth.both": "Synth Both", "com.synth.b": "Synth B"}, "siblings": {}}
+    assert value_build.app_spend(pre, {"app_name": "Synth Both"}, {})["till"] == "2026-01-11"
+    assert value_build.app_spend(pre, {"app_name": "Synth B"}, {})["till"] == "2026-01-20"
+    D = cpi_build._Days(date(2026, 1, 1), date(2026, 1, 20))
+    cache = {"daily": {k: {d: v * 1e6 for d, v in x.items()} for k, x in sp["daily"].items()},
+             "held_till": {"com.synth.both": "2026-01-11"}}
+    R = [0.012] * D.n
+    held = cpi_build._spend(D, cache, "com.synth.both", "2026-01-20", R, None)["sp_inr"]
+    other = cpi_build._spend(D, cache, "com.synth.b", "2026-01-20", R, None)["sp_inr"]
+    assert held[D.ix["2026-01-11"]] == 0 and held[D.ix["2026-01-12"]] is None      # after its own day: not in yet
+    assert other[D.ix["2026-01-12"]] == 9
+
+
+def test_a_hold_longer_than_the_window_is_read_again_whole_once_its_account_answers():
+    """refetch_from: while a store is held the read reaches back to its last whole day, so the read after its account
+    answers again restates every day the hold left partial (a shared store: the other account's part only; a store of
+    the failed account alone: nothing) — however long the hold, whatever the window (here 3 days)."""
+    A, B, S, SOLO, W = "2220000001", "2220000002", "com.synth.shared", "com.synth.solo", 3
+
+    def d(i):
+        return (date(2026, 1, 1) + timedelta(days=i)).isoformat()
+
+    def read(lo, today, failed):
+        days = [d(i) for i in range(lo, today + 1)]
+        daily = {S: {x: 10 if failed else 20 for x in days}}
+        camps = {S: [{"id": "2", "account": B}] + ([] if failed else [{"id": "1", "account": A}])}
+        if not failed:
+            daily[SOLO], camps[SOLO] = {x: 5 for x in days}, [{"id": "3", "account": A}]
+        return {"currency_src": "USD", "fx": {}, "d1_ok": True, "daily": daily, "installs": {}, "convval": {},
+                "campaigns": camps, **({"failed": [A]} if failed else {})}
+    cache, ok = google_ads.merge_spend(None, read(-W, 0, False), d(-W)), d(-1)
+    for today in range(1, 10):                          # A fails on reads 1 … 7 (longer than the window), then answers
+        lo = google_ads.refetch_from(cache, d(today - W))
+        cache = google_ads.merge_spend(cache, read((date.fromisoformat(lo) - date(2026, 1, 1)).days, today, today < 8),
+                                       lo, ok_till=ok)
+        ok = d(today - 1)
+        if today < 8:
+            assert cache["held_till"] == {S: d(-1), SOLO: d(-1)} and lo == min(d(-1), d(today - W))
+    assert "held_till" not in cache
+    assert set(cache["daily"][S].values()) == {20} and set(cache["daily"][SOLO].values()) == {5}
+    assert sorted(cache["daily"][S]) == sorted(cache["daily"][SOLO]) == [d(i) for i in range(-W, 10)]
+    assert google_ads.refetch_from(None, "2026-03-01") == "2026-03-01"
+    assert google_ads.refetch_from({"held_till": {"x": "2026-02-01", "y": None, "z": 7}}, "2026-03-01") == "2026-02-01"
+
+
+def test_the_build_hands_the_last_read_day_to_merge_spend():
+    """build_static: every merge_spend call gets the recorded last day a read went through (ok_till) — a store held
+    from this read on keeps it as its own last day; without it the store's new days would read as $0."""
+    import ast
+    import inspect
+    from admob_iq import build_static
+    tree = ast.parse(inspect.getsource(build_static))
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "merge_spend"]
+    assert calls and all(any(k.arg == "ok_till" for k in c.keywords) for c in calls)
+    # … and its read starts at refetch_from's day (a held store's last whole day when older than the window)
+    assert any(isinstance(n, ast.Assign) and getattr(n.value, "func", None) is not None
+               and getattr(n.value.func, "id", None) == "refetch_from"
+               and [getattr(t, "id", None) for t in n.targets] == ["refetch_start"] for n in ast.walk(tree))
 
 
 def test_bad_worker_setting_falls_back(monkeypatch):

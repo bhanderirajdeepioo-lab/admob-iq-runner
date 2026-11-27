@@ -169,8 +169,11 @@ def _load_spend(data_dir, ok_till=None):
         rec = _load_json(os.path.join(data_dir, SPEND_OK_FILE))
         ok = rec.get("ok_till") if isinstance(rec, dict) and isinstance(rec.get("ok_till"), str) else None
     till = ok or (max(dates) if dates else None)
+    # held: {store: its own last whole day} — a store of an account the reads could not ask (merge_spend held_till)
+    held = raw.get("held_till") if isinstance(raw.get("held_till"), dict) else {}
     return {"ccy": raw.get("currency_src") or "INR", "daily": raw["daily"], "installs": raw.get("installs") or {},
-            "first": min(dates) if dates else None, "till": till, "till_src": "fetch" if ok else "max"}
+            "first": min(dates) if dates else None, "till": till, "till_src": "fetch" if ok else "max",
+            "held": {k: v for k, v in held.items() if isinstance(v, str) and v}}
 
 
 def record_spend_fetch(data_dir, today):
@@ -291,7 +294,9 @@ def app_spend(pre, a, store):
             daily[d] = daily.get(d, 0) + (v or 0)
         for d, v in (sp["installs"].get(sid) or {}).items():
             inst[d] = inst.get(d, 0) + (v or 0)
-    return {"ccy": sp["ccy"], "daily": daily, "installs": inst, "first": sp["first"], "till": sp["till"],
+    # a store of an account the last reads could not ask stops the app at its own last whole day (merge_spend)
+    tills = [x for x in [sp["till"]] + [(sp.get("held") or {}).get(sid) for sid in sids] if x]
+    return {"ccy": sp["ccy"], "daily": daily, "installs": inst, "first": sp["first"], "till": min(tills) if tills else None,
             "sids": len(sids)}
 
 

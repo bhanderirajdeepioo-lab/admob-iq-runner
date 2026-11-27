@@ -320,6 +320,9 @@ def _spend(D, cache, sid, ok_till, R, dated, d0_open=None, d0_wait=False):
         good = [D.ix[d] for d in known if d in D.ix and s["d0_inr"][D.ix[d]] is not None]
         for i in range(max(good, default=-1) + 1, D.n):
             s["d0_inr"][i] = None
+    held = ((cache or {}).get("held_till") or {}).get(sid) if isinstance((cache or {}).get("held_till"), dict) else None
+    if isinstance(held, str) and held and (not ok_till or held < ok_till):
+        ok_till = held                              # a store of an account that could not answer: its own last day
     if ok_till:
         cut = (_d(ok_till) - D.d0).days + 1
         for k in s:
