@@ -374,6 +374,7 @@ class Acc:
         self.pdn = {"ok": 0, "busy": 0, "none": 0, "fail": 0}   # … its apps by PAID status (the ROI line)
         self.held = []                              # the spend days of apps a held Google Ads store stops early
         self.mix, self.mixa, self.mixt = {}, {}, []  # 📊 revenue by install month: the split, the AdMob side, the days
+        self.mixs = {}                              # … and each install month's Google Ads spend (null: not all in)
 
 
 def start(cal=None, adsrc=None, cube=False, cmon=None, cubep=False, cohortp=False):
@@ -1334,7 +1335,7 @@ def _life(rev, spend, fxf, ded_rate):
     return [[d, _r(v[0]), _r(v[1]), _r(v[2], 2)] for d, v in sorted(out.items())]
 
 
-def _mix(rows, late, life, hs=None):
+def _mix(rows, late, life, hs=None, sw=None):
     """📊 Revenue by install month (owner, 27 Nov 2026: "this month ka total revenue … usme past month ka kitna %
     revenue … month wise … sab month ke"): each calendar month's revenue split by the month its users were installed,
     AdMob-matched (k) like every number here, over the activity days the cube's walk is through (late "MT").
@@ -1342,9 +1343,13 @@ def _mix(rows, late, life, hs=None):
     (late "EM"); ages 31 +: the cube's 30-day buckets, q on a week read whole (late "BM") — the cells the 30-day
     columns sum. hs: GA4's history start (AdMob's days before it are in no month's split — nor in its "adm"). →
     {"till": thru, "m": {month: {install month: USD}}, "adm": {month: AdMob USD hs … till}, "from": hs (only when not
-    a month's 1st: that month's row starts there)} (what a
-    month's AdMob revenue has beyond its split: GA4 gave it no install day — the page's "Unknown"), or None without
-    the cube's cells (no cube, its first walk on its way, no day through)."""
+    a month's 1st: that month's row starts there), "sp": {install month: [Google Ads USD, as billed]} (only with any)}
+    (what a month's AdMob revenue has beyond its split: GA4 gave it no install day — the page's "Unknown"), or None
+    without the cube's cells (no cube, its first walk on its way, no day through). sp (owner, 27 Nov 2026: "spending add
+    karo, fir % spending ke against dikhao"): life's Google Ads spend on the install days the split holds — hs … till,
+    an install row's day (the install-month P/L's own days) or a cube day cell's (EM); a spend day GA4 has neither for
+    is in neither. sw: the spend data's (first, last) day (None: no spend data — no "sp"); a month with such a day
+    outside them is null — its spend not all in, never a part passed off as the whole."""
     till = (late or {}).get("MT")
     if not till:
         return None
@@ -1372,10 +1377,26 @@ def _mix(rows, late, life, hs=None):
     for x in life or ():
         if (not hs or x[0] >= hs) and x[0] <= till and x[1]:
             adm[x[0][:7]] = adm.get(x[0][:7], 0.0) + x[1]
+    sp, unk = {}, set()
+    if sw:
+        lv = {x[0]: x for x in life or ()}
+        for X in sorted({_iso(r["X"]) for r in rows} | set(late["EM"])):    # (sorted: the same sums every build)
+            if (hs and X < hs) or X > till:
+                continue
+            if (sw[0] and X < sw[0]) or (sw[1] and X > sw[1]):   # a day the spend data does not cover
+                unk.add(X[:7])
+            elif X in lv and lv[X][2]:
+                e = sp.setdefault(X[:7], [0.0, 0.0])
+                e[0] += lv[X][2]
+                e[1] += lv[X][3] or 0
+    sp = {C: [_r(v[0]), _r(v[1], 2)] for C, v in sp.items()}
+    sp.update((C, None) for C in unk)
     out = {"till": till, "m": {M: {C: _r(v) for C, v in sorted(cs.items())} for M, cs in sorted(m.items())},
            "adm": {M: _r(v) for M, v in sorted(adm.items())}}
     if hs and not hs.endswith("-01"):
         out["from"] = hs
+    if sp:
+        out["sp"] = dict(sorted(sp.items()))
     return out
 
 
@@ -2977,7 +2998,7 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
             body["late"] = late["info"]
         mix = None
         try:                                            # 📊 revenue by install month (own try: a failure costs only it)
-            mix = _mix(rows, late, life, _iso(P["hs"]))
+            mix = _mix(rows, late, life, _iso(P["hs"]), (spend.get("first"), spend.get("till")) if spend else None)
         except Exception as e:
             print("roi mix skipped: %s" % type(e).__name__, file=sys.stderr)
         if mix:
@@ -3079,6 +3100,13 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
                 e[C] = e.get(C, 0.0) + v
         for M, v in (mix["adm"].items() if mix else ()):                   # (the split's own AdMob side: from hs)
             acc.mixa[M] = acc.mixa.get(M, 0.0) + v
+        for C, v in ((mix or {}).get("sp") or {}).items():                 # … its spend (one app's not all in: null)
+            if v is None or (C in acc.mixs and acc.mixs[C] is None):
+                acc.mixs[C] = None
+            else:
+                e = acc.mixs.setdefault(C, [0.0, 0.0])
+                e[0] += v[0]
+                e[1] += v[1]
         for x in (() if mix else life):                                     # (no split: all of it Unknown, from hs too)
             if mx_till and _iso(P["hs"]) <= x[0] <= mx_till and x[1]:
                 acc.mixa[x[0][:7]] = acc.mixa.get(x[0][:7], 0.0) + x[1]
@@ -3175,6 +3203,8 @@ def finish(acc, dashboard, out_dir):
             body["mix"] = {"till": max(set(acc.mixt), key=lambda d: (acc.mixt.count(d), d)),
                            "m": {M: {C: _r(v) for C, v in sorted(cs.items())} for M, cs in sorted(acc.mix.items())},
                            "adm": {M: _r(v) for M, v in sorted(acc.mixa.items())}}
+            if acc.mixs:
+                body["mix"]["sp"] = {C: (None if v is None else [_r(v[0]), _r(v[1], 2)]) for C, v in sorted(acc.mixs.items())}
         raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
         write_json_gz_stable(os.path.join(out_dir, ALL_FILE), body)
         dashboard["roi"] = {"file": ALL_FILE, "v": hashlib.sha1(raw).hexdigest()[:12], "ccy": body["ccy"],

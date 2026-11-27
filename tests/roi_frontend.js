@@ -982,7 +982,8 @@ async function benchReload(VW, file, packs) {
     const MIX = { till: '2026-10-12', from: '2026-06-15', adm: { '2026-10': 100, '2026-09': 200, '2026-07': 100, '2026-06': 100, '2026-03': 50 },
       m: { '2026-10': { '2026-10': 40, '2026-09': 30, '2026-08': 10, '2026-01': 5, '2025-11': 5 }, '2026-09': { '2026-09': 150, '2026-08': 60 },
         '2026-08': { '2026-08': 20 }, '2026-07': { '2026-07': 100.5 }, '2026-06': { '2026-06': 99.95, '2025-01': 0.03, '1978-04': 0.02 },
-        '2026-03': {} } };   // Aug: a split, no AdMob; Jun: two install months under 0.1% (one a wrong phone clock's)
+        '2026-03': {} },     // Aug: a split, no AdMob; Jun: two install months under 0.1% (one a wrong phone clock's)
+      sp: { '2026-10': [80, 760000], '2026-09': [200, 1900000], '2026-08': null, '2026-06': [50, 475000] } };   // 💸 Jul: none
     const dec = x => x.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
     const tdTexts = (h, M) => { const i = h.indexOf(`data-roi-mixm="${M}"`); if (i < 0) return null; const tr = h.slice(i, h.indexOf('</tr>', i));
       return [...tr.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(m => dec(m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())); };
@@ -1012,6 +1013,16 @@ async function benchReload(VW, file, packs) {
     out.mix.coh.hover = mco.includes('title="Sep 2026 installs → Oct 2026 (12 din): $30"');
     // a month after till (All apps' till = the apps' most common day: one app a month on): no column, so not in a Total
     out.mix.coh.next = U.mixCoh(Object.assign({}, MIX, { m: Object.assign({}, MIX.m, { '2026-11': { '2026-10': 25, '2026-09': 5 } }) })) === mco;
+    // 💸 spend: a month whose spend is not all in yet says why on hover; "% wapas" in the module's ROAS colours
+    out.mix.coh.notIn = mco.includes('<td title="Is mahine ke kuch install dino ka Google Ads spend abhi nahi aaya">—</td>');
+    out.mix.coh.cls = [...mco.matchAll(/<span class="mx-w ([^"]*)">([^<]*)<\/span>/g)].map(x => x[1] + ' ' + x[2]);
+    out.mix.coh.tint = mco.includes('<td class="mx" style="--mx:12.8%" title="Sep 2026 installs → Sep 2026: $150">');
+    { const row = (h, C) => { const i = h.indexOf(`<td class="roi-nm">${C}</td>`); return i < 0 ? null : [...h.slice(i, h.indexOf('</tr>', i)).matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)]
+        .map(c => dec(c[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim())).slice(1, 4); };
+      ctx.curView = () => 'INR'; ctx.cfx = () => 10000; ctx.csym = () => '₹';
+      U.set('CCY', 'INR'); out.mix.coh.billed = row(U.mixCoh(MIX), 'Oct 2026');      // ₹7,60,000 as billed: 4,00,000 ÷ it
+      U.set('CCY', null); out.mix.coh.rate = row(U.mixCoh(MIX), 'Oct 2026');        // not billed in ₹: $80 × 10,000
+      ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$'; }
     // ₹ (rate 10,000): the amounts convert like the exact one on hover; Older and Unknown in their own places (both 10%)
     ctx.curView = () => 'INR'; ctx.cfx = () => 10000; ctx.csym = () => '₹';
     const mi = U.mixTable(MIX); out.mix.inr = tdTexts(mi, '2026-10').slice(2, 5); out.mix.inrTip = mi.includes('title="Oct 2026 installs: ₹4,00,000"');
@@ -1029,10 +1040,12 @@ async function benchReload(VW, file, packs) {
     const ME = Object.assign({}, MIX, { till: '2026-10-31' });
     out.mix.endNf = [U.mixTable(ME), U.mixCoh(ME)].map(h => (h.match(/roi-rtnf/g) || []).length);
     out.mix.endNote = !U.mixCohNote(ME).includes('adhoora') && U.mixCohNote(MIX).includes('aakhri mahina adhoora');
+    // All apps: its Total has the apps with no ads that month (the agreed Total ÷ Spend) — said there, never on an app
+    out.mix.allNote = U.mixCohNote(MIX, true).includes('jin par us install mahine ads nahi chale') && !U.mixCohNote(MIX).includes('ads nahi chale');
     U.set('MXO', 'ins'); U.set('LG', 'mix');
     const lmc = U.lifeView(d.life, d.life_till, d, null, MIX);
-    out.mix.coh.view = lmc.includes('data-roi-mxo="ins" aria-pressed="true"') && lmc.includes('<th>Install month</th><th>Total (ab tak)</th>')
-      && lmc.includes('<b>Har line</b> = us mahine aaye users');
+    out.mix.coh.view = lmc.includes('data-roi-mxo="ins" aria-pressed="true"') && lmc.includes('<th>Install month</th><th>Spend</th><th>Total (ab tak)</th>')
+      && lmc.includes('<b>Har line</b> = us mahine aaye users') && lmc.includes('<b>% wapas</b> = Total ÷ Spend');
     U.set('MXO', 'cal');
     U.set('MIXO', '');
     U.set('LG', 'mix');

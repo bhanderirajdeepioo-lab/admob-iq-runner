@@ -105,6 +105,31 @@ def test_mix_joins_the_install_day_read_the_cube_and_admob():
     assert rb._mix(rows, {"info": {"thru": till}, "B": {}, "MT": None}, life) is None     # no day it can split
 
 
+def test_mix_spend_by_install_month_over_the_days_the_split_holds():
+    """💸 (owner, 27 Nov 2026: "spending add karo, fir % spending ke against dikhao"): life's Google Ads spend by install
+    month on the install days the split holds — hs … till, an install row's day or a cube day cell's (EM); a spend day
+    GA4 has neither for is in neither; a day outside the spend data's first … last → that month null (not all in)."""
+    till = "2026-10-12"
+    late = {"MT": till, "BM": {"2026-10": {"2026-09": 1.0}}, "EM": {"2026-10-05": {"2026-10": 1.0}}}   # Oct 5: the cube's
+    rows = [{"X": date(2026, 9, d)} for d in (14, 15, 30)] + [{"X": date(2026, 10, d)} for d in (1, 12, 13)]
+    life = [["2026-09-14", 1.0, 5.0, 450.0],                             # before GA4's history (15 Sep): no month
+            ["2026-09-15", 1.0, 10.0, 900.0], ["2026-09-20", 0.0, 50.0, 4500.0],   # 20 Sep: no row, no cube cell
+            ["2026-09-30", 0.0, 20.0, 1800.0], ["2026-10-01", 2.0, 0.0, 0.0],      # 1 Oct: no spend
+            ["2026-10-05", 0.0, 7.0, 630.0],                               # a cube day cell's day (no install row)
+            ["2026-10-12", 2.0, 30.0, 2700.0], ["2026-10-13", 9.0, 99.0, 8910.0]]   # after till: not taken
+    whole = {"2026-09": [30.0, 2700.0], "2026-10": [37.0, 3330.0]}
+    assert rb._mix(rows, late, life, "2026-09-15", ("2026-01-01", till))["sp"] == whole
+    assert rb._mix(rows, late, life, "2026-09-15", ("2026-01-01", "2026-12-31"))["sp"] == whole   # data past till
+    # Google Ads through 11 Oct only: October not all in → null; September whole. From 16 Sep: September null
+    assert rb._mix(rows, late, life, "2026-09-15", ("2026-01-01", "2026-10-11"))["sp"] == {"2026-09": [30.0, 2700.0],
+                                                                                           "2026-10": None}
+    assert rb._mix(rows, late, life, "2026-09-15", ("2026-09-16", till))["sp"] == {"2026-09": None,
+                                                                                   "2026-10": [37.0, 3330.0]}
+    # no spend data for the app, or no spend at all: no "sp"
+    assert "sp" not in rb._mix(rows, late, life, "2026-09-15")
+    assert "sp" not in rb._mix(rows, late, [[x[0], x[1], 0.0, 0.0] for x in life], "2026-09-15", ("2026-01-01", till))
+
+
 REV = {"tz": "UTC", "all_days": {(CHS + timedelta(days=i)).isoformat(): [50_000_000 + 1_000 * i]
                                 for i in range(-7, (CTODAY - CHS).days + 1)}}   # AdMob: $50 + a little a day, from a week
 #                                                                                 before GA4's history (in no split)
@@ -120,15 +145,19 @@ def _co(newest):
     return {"read_today": newest.isoformat(), "stream_id": "222", "x": x}
 
 
-def _step(tmp_path, monkeypatch, acc, out, key, nocube=False, co=None, rev=None):
+def _step(tmp_path, monkeypatch, acc, out, key, nocube=False, co=None, rev=None, st=None, nospend=False):
     """app_step on the country world (as tests/test_roi_build._cc_app_step) with AdMob revenue, into acc / out. co: the
-    install-day read (default none: every install day's ages 0 … 30 from the cube's day cells)."""
+    install-day read (default none: every install day's ages 0 … 30 from the cube's day cells). st: Google Ads' last day
+    (default the world's: Oct 12, a day before the split's); nospend: the app has no spend data."""
     import shutil
     from admob_iq.fetch import ga4_cube as cu
     data, P, pre, spend, acc0 = _cc_world(tmp_path / key)
+    if st:
+        spend["till"] = st
     if nocube:
         shutil.rmtree(str(data / cu.DIR))
-    _stub_app(monkeypatch, P, co or {"read_today": CTODAY.isoformat(), "stream_id": "222", "x": {}}, spend)
+    _stub_app(monkeypatch, P, co or {"read_today": CTODAY.isoformat(), "stream_id": "222", "x": {}},
+              None if nospend else spend)
     acc.cmon = acc0.cmon
     rb.app_step(acc, {"history_start": CHS.isoformat(), "stream_id": "222"}, {"app_id": "a~1", "app_name": key},
                 key, rev or REV, pre, {}, str(out), str(data), ids=["a~1"])
@@ -155,8 +184,11 @@ def test_app_step_writes_the_mix_and_all_apps_adds_it_up(tmp_path, monkeypatch):
         if CHS.isoformat() <= d <= mix["till"] and rv:                  # (AdMob's days before GA4: in no month)
             want[d[:7]] = want.get(d[:7], 0.0) + rv
     assert want and mix["adm"] == {M: round(v, 4) for M, v in want.items()}
+    # 💸 its Google Ads spend ($10 a day from 1 Aug) by install month; Google Ads through Oct 12, the split through Oct 13:
+    # October's spend not all in → null
+    assert mix["sp"] == {"2026-08": [310.0, 310.0], "2026-09": [300.0, 300.0], "2026-10": None}
     assert rb.finish(acc, {}, str(out)) == ["/roi*"]
-    assert _all(out)["mix"] == {"till": mix["till"], "m": mix["m"], "adm": mix["adm"]}     # one app: All apps = it
+    assert _all(out)["mix"] == {"till": mix["till"], "m": mix["m"], "adm": mix["adm"], "sp": mix["sp"]}   # one app: it
 
 
 def test_an_app_without_the_cube_counts_in_all_apps_as_unknown(tmp_path, monkeypatch):
@@ -169,9 +201,40 @@ def test_an_app_without_the_cube_counts_in_all_apps_as_unknown(tmp_path, monkeyp
     rb.finish(acc, {}, str(out))
     allm = _all(out)["mix"]
     assert allm["m"] == one["m"] and allm["till"] == one["till"]     # the split: the app that has one
+    assert allm["sp"] == one["sp"]                                   # … and its spend only (none for a split it has not)
     # its AdMob revenue: both apps (the second one's through its own last day — all of it "Unknown" on the page)
     assert allm["adm"] == {M: round(one["adm"][M] * 2, 4) for M in one["adm"]}
 
+
+
+@pytest.mark.parametrize("null_first", [False, True])
+def test_all_apps_spend_adds_up_and_a_month_not_all_in_stays_null(tmp_path, monkeypatch, null_first):
+    """All apps' spend = the apps' added up; one app's month not all in → All apps' not all in, whichever app comes first."""
+    out = tmp_path / "out"
+    out.mkdir()
+    acc = rb.start(cube=True)
+    sts = [CTODAY.isoformat(), None]                    # Google Ads in to the split's day · to the day before (the world's)
+    got = [_step(tmp_path, monkeypatch, acc, out, k * 12, st=st)["mix"]
+           for k, st in (zip("ba", sts[::-1]) if null_first else zip("ab", sts))]
+    one, two = (got[1], got[0]) if null_first else (got[0], got[1])
+    assert one["sp"]["2026-10"] == [120.0, 120.0] and two["sp"]["2026-10"] is None
+    rb.finish(acc, {}, str(out))
+    assert _all(out)["mix"]["sp"] == {"2026-08": [620.0, 620.0], "2026-09": [600.0, 600.0], "2026-10": None}
+
+
+def test_all_apps_total_has_an_app_without_spend_its_spend_never(tmp_path, monkeypatch):
+    """All apps: every app's earnings in the split (the agreed "% wapas" = Total ÷ Spend; the page's note says apps with
+    no ads that month are in the Total), the spend only from the apps that have it."""
+    out = tmp_path / "out"
+    out.mkdir()
+    acc = rb.start(cube=True)
+    one = _step(tmp_path, monkeypatch, acc, out, "aaaaaaaaaaaa")["mix"]
+    two = _step(tmp_path, monkeypatch, acc, out, "bbbbbbbbbbbb", nospend=True)["mix"]
+    assert "sp" not in two and two["m"]
+    rb.finish(acc, {}, str(out))
+    allm = _all(out)["mix"]
+    assert allm["sp"] == one["sp"]
+    _close(allm["m"], _sum(one["m"], two["m"]), tol=1e-3)
 
 
 def test_q_cells_split_by_month_sum_to_the_30_day_columns(tmp_path):

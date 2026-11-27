@@ -161,6 +161,7 @@ def test_revenue_by_install_month(out):
     assert m["ou"] == ["13% $13", "7.0% $7.0"]                       # Older 13 · Unknown 7: each in its own column
     assert m["edge"] == [True, True]       # the short form's unit edge: "₹1.00 Cr" / "$1.0M", never "₹100.0 lakh" / "$1000K"
     assert m["endNf"] == [0, 0] and m["endNote"]   # a month's last day: nothing "not final", the note never says "adhoora"
+    assert m["allNote"]                            # All apps: apps with no ads that month are in its Total — said there only
     assert m["open"] == ("Oct 2026 ka revenue, har install mahine ka hissa: 40% Oct 2026 $40 · 30% Sep 2026 $30 · "
                          "10% Aug 2026 $10 · 5.0% Jan 2026 $5.0 · 5.0% Nov 2025 $5.0 · 10% Unknown $10")
     assert m["openNf"] == 11                                         # the running month: its list's amounts not final too
@@ -170,17 +171,24 @@ def test_revenue_by_install_month(out):
                          "(har ek <0.1%) $0.05")
     assert m["life"] and m["nomix"] and m["dev"]                     # a 4th view only with a split; never for a developer
     # by install month (his "b"): the split's first month is Mar 2026, so the Jan 2026 / Nov 2025 / Jan 2025 / 1978
-    # install months are left out; Sep's installs earned 150 in Sep + 30 in Oct = 180 → 83% · 17%; Aug's 20 · 60 · 10
+    # install months are left out. 💸 Spend (owner, 27 Nov: "spending add karo, fir % spending ke against dikhao"): every %
+    # = that month's earnings ÷ the install month's spend, "% wapas" under Total = Total ÷ Spend — Sep: $200 spent, 150 in
+    # Sep + 30 in Oct → 75% · 15%, 90% back. Aug: its spend not all in (null) and Jul: none → "—", the amounts only
     c = m["coh"]
-    assert c["head"] == ["Install month", "Total (ab tak)", "Same month", "+1", "+2", "+3", "+4"]
-    assert c["rows"] == [["Oct 2026", "$40", "Oct 100% $40", "", "", "", ""],
-                         ["Sep 2026", "$180", "Sep 83% $150", "Oct 17% $30", "", "", ""],
-                         ["Aug 2026", "$90", "Aug 22% $20", "Sep 67% $60", "Oct 11% $10", "", ""],
-                         ["Jul 2026", "$101", "Jul 100% $101", "Aug —", "Sep —", "Oct —", ""],
-                         ["Jun 2026", "$100", "Jun 100% $100", "Jul —", "Aug —", "Sep —", "Oct —"]]
+    assert c["head"] == ["Install month", "Spend", "Total (ab tak)", "Same month", "+1", "+2", "+3", "+4"]
+    assert c["rows"] == [["Oct 2026", "$80", "$40 50% wapas", "Oct 50% $40", "", "", "", ""],
+                         ["Sep 2026", "$200", "$180 90% wapas", "Sep 75% $150", "Oct 15% $30", "", "", ""],
+                         ["Aug 2026", "—", "$90", "Aug — $20", "Sep — $60", "Oct — $10", "", ""],
+                         ["Jul 2026", "—", "$101", "Jul — $101", "Aug —", "Sep —", "Oct —", ""],
+                         ["Jun 2026", "$50", "$100 200% wapas", "Jun 200% $100", "Jul —", "Aug —", "Sep —", "Oct —"]]
+    assert c["notIn"] and c["tint"]                                  # why on hover; the tint by the share of spend
+    assert c["cls"] == ["roi-w 50% wapas", "roi-w 90% wapas", "roi-g 200% wapas"]   # the module's ROAS colours
+    # ₹ (rate 10,000): spend as billed (₹7,60,000, not $80 × 10,000) — the % in ₹ too; not billed in ₹: at the rate
+    assert c["billed"] == ["₹7,60,000", "₹4,00,000 53% wapas", "Oct 53% ₹4.0 lakh"]
+    assert c["rate"] == ["₹8,00,000", "₹4,00,000 50% wapas", "Oct 50% ₹4.0 lakh"]
     # the month still running (Oct, through the 12th): its days on hover, never in a cell; its 3 amounts "not final"
     assert c["nf"] == 3 and not c["days"] and c["hover"]
-    assert c["view"] and c["next"]   # a month after till (one app a month on in All apps): the same table, lines stay 100%
+    assert c["view"] and c["next"]   # a month after till (one app a month on in All apps): the same table
 
 
 def test_countries_and_devices_source_switch(out):

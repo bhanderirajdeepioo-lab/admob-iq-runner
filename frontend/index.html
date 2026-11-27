@@ -2653,6 +2653,7 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-mix .mx-l small{margin:0;color:var(--muted)}
 .roi-mix .mx-a{display:block;margin-top:2px;font-size:10.5px;line-height:1.2;font-weight:600;color:var(--ink2)}
 .roi-mixi .mx-ai{color:var(--ink2);font-size:11.5px}
+.roi-mix .mx-w{display:block;margin-top:2px;font-size:10.5px;line-height:1.2;font-weight:700}
 .roi-sub{min-width:560px}
 .roi-cv{color:var(--muted)}
 @media (max-width:760px){.roi-ks6{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.roi-k{padding:9px 10px}.roi-kv{font-size:16.5px}
@@ -11645,7 +11646,7 @@ function mixPc(x){ return !ok(x)?'—':x<=0?'0%':x<0.001?'<0.1%':(x<0.1?(Math.ro
 // not over yet (the amount in the "not final" style); the share tints the cell
 function mixCell(v,tot,lab,tip,nf){ const s=v>0&&tot>0?v/tot:0;
   return `<td class="mx"${s?` style="--mx:${(3+Math.min(1,s)*13).toFixed(1)}%"`:''} title="${E(tip)}: ${E(MV(RV(v)))}"><span class="mx-l"><small>${E(lab||'')}</small> <b>${s?E(mixPc(s)):'—'}</b></span>`
-    +(s?` <span class="mx-a${nf?' roi-rtnf':''}">${E(MC(RV(v)))}</span>`:'')+`</td>`; }
+    +(v>0?` <span class="mx-a${nf?' roi-rtnf':''}">${E(MC(RV(v)))}</span>`:'')+`</td>`; }
 function mixRows(mix){ const adm=mix.adm||{};
   return Object.keys(mix.m).sort().reverse().map(M=>{ const cs=mix.m[M]||{}, att=Object.values(cs).reduce((s,v)=>s+(+v||0),0), a=+adm[M]||0;
     const tot=Math.max(a,att); return {M,cs,tot,att,a,unk:Math.max(0,a-att)}; }).filter(r=>r.att>0); }   // (no split: no row)
@@ -11677,8 +11678,11 @@ function mixTable(mix){ if(!mixOk(mix)) return '';
 // month 30% … sab month dikhne chahiye" — the % of ITS OWN total so far, a line = 100%: his "b"): the same split read the
 // other way (mix.m[month][install month]); every month after it as a column, no limit; an install month before the
 // split's first month is left out (its first months are not in it), as are the wrong-clock ones that come with it
+// 💸 spend (owner, 27 Nov 2026: "spending add karo, fir % spending ke against dikhao"): each install month's Google Ads
+// spend (₹ as billed; the install days the split holds — roi_build._mix "sp"), every % = that month's earnings ÷ it, under
+// Total the share of it back so far (the module's ROAS colours). No spend: "—", the amounts only; null: not all in yet
 function mixCoh(mix){ if(!mixOk(mix)) return '';
-  const m=mix.m, till=String(mix.till||''), tm=till.slice(0,7), ms=Object.keys(m).sort(), first=ms[0];
+  const m=mix.m, sp=mix.sp||{}, till=String(mix.till||''), tm=till.slice(0,7), ms=Object.keys(m).sort(), first=ms[0];
   const ix=M=>+M.slice(0,4)*12+(+M.slice(5,7)-1), coh={};
   // (a month after till — All apps' till is the apps' most common day, one app can be a month on — is no column: so never
   // in a line's Total either, each line stays 100%)
@@ -11686,13 +11690,15 @@ function mixCoh(mix){ if(!mixOk(mix)) return '';
   const rows=Object.keys(coh).sort().reverse(); if(!rows.length) return '';
   const maxK=Math.max(...rows.map(C=>ix(tm)-ix(C))), part=+till.slice(8,10)<new Date(+tm.slice(0,4),+tm.slice(5,7),0).getDate();
   const body=rows.map(C=>{ const e=coh[C], tot=Object.values(e).reduce((t,v)=>t+v,0), last=ix(tm)-ix(C);
-    const cells=Array.from({length:maxK+1},(_,k)=>{ if(k>last) return '<td></td>';
+    const x=sp[C], spv=x?(billed()&&x[1]>0?x[1]:RV(x[0])):0, den=spv>0?spv/cfx():0, ro=spv>0?RV(tot)/spv:null;   // (den: the
+    const cells=Array.from({length:maxK+1},(_,k)=>{ if(k>last) return '<td></td>';           // spend in the cells' USD terms)
       const M=mixBack(C,-k), now=M===tm&&part;     // the month still running: "Nov", its days on hover + in the note
-      return mixCell(e[k]||0,tot,fmtMon(M).slice(0,3),fmtMon(C)+' installs → '+fmtMon(M)+(now?' ('+(+till.slice(8,10))+' din)':''),now); }).join('');
-    return `<tr><td class="roi-nm">${E(fmtMon(C))}</td><td>${MV(RV(tot))}</td>${cells}</tr>`; }).join('');
-  return `<table class="roi-t roi-mix"><thead><tr><th>Install month</th><th>Total (ab tak)</th><th>Same month</th>${Array.from({length:maxK},(_,i)=>`<th title="${i+1} mahina baad">+${i+1}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`; }
-function mixCohNote(mix){ const t=String((mix||{}).till||''), p=t&&+t.slice(8,10)<new Date(+t.slice(0,4),+t.slice(5,7),0).getDate();
-  return `<p class="roi-note"><b>Har line</b> = us mahine aaye users (ads + organic). <b>Total</b> = unki ab tak ki kul kamai (GA4 ke hisaab se, AdMob matched). <b>%</b> = us kamai ka kitna hissa kis mahine aaya — <b>Same month</b> = install wala mahina, <b>+1</b> = agla mahina, aise hi aage; line ka total 100%. <b>₹ / $</b> (neeche) = wo hissa paise me (chhota roop; poora amount hover par). Khaali = wo mahina abhi aaya nahi. Split ke pehle mahine se purane install mahine yahan nahi. ${t?`${E(fd(t))} tak${p?' — aakhri mahina adhoora (uska amount tircha)':''}.`:''}</p>`; }
+      return mixCell(e[k]||0,den,fmtMon(M).slice(0,3),fmtMon(C)+' installs → '+fmtMon(M)+(now?' ('+(+till.slice(8,10))+' din)':''),now); }).join('');
+    const spc=x===null?`<td title="${E('Is mahine ke kuch install dino ka Google Ads spend abhi nahi aaya')}">—</td>`:`<td>${spv>0?MV(spv):'—'}</td>`;
+    return `<tr><td class="roi-nm">${E(fmtMon(C))}</td>${spc}<td>${MV(RV(tot))}${ro!=null?` <span class="mx-w ${roasCls(ro)}">${E(mixPc(ro))} wapas</span>`:''}</td>${cells}</tr>`; }).join('');
+  return `<table class="roi-t roi-mix"><thead><tr><th>Install month</th><th>Spend</th><th>Total (ab tak)</th><th>Same month</th>${Array.from({length:maxK},(_,i)=>`<th title="${i+1} mahina baad">+${i+1}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`; }
+function mixCohNote(mix,all){ const t=String((mix||{}).till||''), p=t&&+t.slice(8,10)<new Date(+t.slice(0,4),+t.slice(5,7),0).getDate();
+  return `<p class="roi-note"><b>Har line</b> = us mahine aaye users (ads + organic). <b>Spend</b> = us install mahine ka Google Ads spend (₹ me jitna bill hua; sirf wo install din jinki kamai yahan gini hai). <b>Total</b> = unki ab tak ki kul kamai (GA4 ke hisaab se, AdMob matched); neeche <b>% wapas</b> = Total ÷ Spend (100% = poora paisa wapas). <b>%</b> = us mahine ki kamai ÷ Spend — <b>Same month</b> = install wala mahina, <b>+1</b> = agla mahina, aise hi aage. <b>₹ / $</b> (neeche) = wo kamai paise me (chhota roop; poora amount hover par). <b>—</b> = us install mahine ka spend nahi (ya abhi poora nahi aaya): sirf amount.${all?' <b>All apps</b>: Total me un apps ki kamai bhi hai jin par us install mahine ads nahi chale.':''} Khaali = wo mahina abhi aaya nahi. Split ke pehle mahine se purane install mahine yahan nahi. ${t?`${E(fd(t))} tak${p?' — aakhri mahina adhoora (uska amount tircha)':''}.`:''}</p>`; }
 function mixNote(mix,d){ const t=String((mix||{}).till||'');
   return `<p class="roi-note"><b>Revenue</b> = us mahine AdMob se aaya (${d&&d.app?'is app ke':'saare apps ke'} saare users — ads + organic). <b>%</b> = us revenue ka kitna hissa kis mahine ke installs ke users ne kamaya (GA4 ke hisaab se, AdMob matched): <b>Same month</b> = usi mahine aaye naye users, <b>1 month before</b> = pichhle mahine ke, aise hi aage; <b>Older</b> = usse purane sab. <b>Unknown</b> = jitne revenue ka install din GA4 ne nahi bataya (AdMob aur GA4 ke din alag time zone me hon to mahine ke kinare ke kuch ghante bhi). <b>≈</b> = GA4 ka split AdMob se zyada, % split par. <b>₹ / $</b> (neeche) = wo hissa paise me (chhota roop; poora amount hover par). GA4 se pehle ke mahine yahan nahi. Mahine pe tap = har install mahine ka % aur amount. ${t?`${E(fd(t))} tak.`:''}</p>`; }
 // ---- 💰 Lifetime P/L ----
@@ -11745,7 +11751,7 @@ function lifeView(life,till,d,co,mix){ life=life||[]; if(d) CCY=d.ccy||null; if(
           +`</tbody></table>`+(rs.length>sh.length?`<div class="roi-more"><button type="button" class="roi-btn" data-roi-lmore="60">Show 60 more</button><button type="button" class="roi-btn" data-roi-lmore="all">Show all ${rs.length}</button></div>`:''); })();
   return kp+`<div class="roi-card"><div class="roi-ct"><h3>Revenue vs ads spend · pehle din se</h3><span class="roi-note">line pe tap = us din tak ka total</span></div>${ch}</div>`
     +`<div class="roi-card"><div class="roi-ct"><h3>${lg==='mix'?'Revenue by install month · har mahine ka revenue kis install mahine ke users se aaya':lg==='cohort'?'Install month · har mahine ke installs ne ab tak kitna kamaya':lg==='month'?'Calendar month · us mahine kitna aaya, kitna gaya':'Every day'}</h3>${seg('lg',lg,[['cohort','Install month'],['month','Calendar month'],['day','Day']].concat(mx?[['mix','Revenue by install month']]:[]))}</div>${lg==='mix'?`<div class="roi-mxo">${seg('mxo',MXO,[['cal','By calendar month'],['ins','By install month']])}</div>`:''}<div class="roi-tw">${tbl}</div>`
-    +(lg==='mix'?(MXO==='ins'?mixCohNote(mix):mixNote(mix,d)):'')+(lg==='cohort'?`<p class="roi-note"><b>Install month</b> = us mahine aaye users (ads + organic) ki aaj tak ki kamai (AdMob matched, install se 1 saal tak) vs us mahine ka Google Ads spend — purane mahine samay ke saath profit me aate hain. <b>Calendar month</b> = us mahine saare users se kitna aaya vs us mahine kitna spend gaya (cash).</p>`:'')+`</div>`
+    +(lg==='mix'?(MXO==='ins'?mixCohNote(mix,!d):mixNote(mix,d)):'')+(lg==='cohort'?`<p class="roi-note"><b>Install month</b> = us mahine aaye users (ads + organic) ki aaj tak ki kamai (AdMob matched, install se 1 saal tak) vs us mahine ka Google Ads spend — purane mahine samay ke saath profit me aate hain. <b>Calendar month</b> = us mahine saare users se kitna aaya vs us mahine kitna spend gaya (cash).</p>`:'')+`</div>`
     +`<p class="roi-note">Revenue = AdMob (saare ad sources, ${d&&d.app?'is app ke':'saare apps ke'} saare users — ads + organic), spend = Google Ads (₹ me jitna bill hua). Totals ${E(fd(tl))} tak (us din tak dono ka pura data). ${live.length?'Uske baad ke din live — totals me nahi.':''}</p>`; }
 // ---- ⚖️ ROI ke 4 roop (roi_build._forms): blended (what this section shows) / paid-only / incremental / marginal at
 // D7 / D30 / D90 (+ the payback target), over the SAME install days as the section's own ROAS. The inputs not measured
@@ -12510,7 +12516,7 @@ function cardLine(aid){ const a=appPtr(aid); if(!a||a.r7==null&&a.pb==null&&!a.n
   if(a.pb!=null) parts.push(`paisa wapas ${PBT(a.pb)}`); else if(a.nb) parts.push(`${a.nb[0]} din me sirf ${P(a.nb[1])} wapas`);
   if(ok(lp)) parts.push(`lifetime <b class="${lp>=0?'roi-up':'roi-dn'}">${MC(lp,true)}</b>`);
   return {st:ST_KEY[a.st]||'lagu', line:'📈 '+parts.join(' · ')}; }
-return {ptr, appPtr, block, repaint, cardLine, _:{devView, devRange, devList, DVK, dvRetry, dvCtl, dvWarn, dvSet:(cc,k,dir,per,f,t)=>{ DVCC=cc||''; if(k) DVSORT={k,dir:dir||1}; if(per) DVPER=per; if(f!=null) DVF=f; if(t!=null) DVTO=t; DVC={k:'',d:null,v:null}; }, setView:v=>{ VIEW=v; }, cols, cum, groupRows, agg, cell, beGrp, beDay, beTd, cohortTable, beAvg, lateNote, zx, ccSrc, ccPick, cohCard, benchCard, lzNext, BN, LZ_STEP, st:()=>({GRAIN,MET,SHOW,CTY}), ccNote, ccQ, cdOf, keepAt, PK, CR, PKL, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, mixTable, mixCoh, mixOk, mixCohNote, ctyView, ctyOld, cpSum, cpRow, cpTot, cpJudge, cpNow, cpUnp, CPK, cpSet:(per,f,t,all)=>{ CPER=per; CPF=f||''; CPTO=t||''; CALL=!!all; CPC={k:'',v:null}; }, dayView, allView, hero, xMode, setMode:(c,dv)=>{ if(c) CMODE=c; if(dv) DMODE=dv; }, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; if(k==='MIXO') MIXO=v; if(k==='MXO') MXO=v; }, data:()=>({ALL,AF})}};
+return {ptr, appPtr, block, repaint, cardLine, _:{devView, devRange, devList, DVK, dvRetry, dvCtl, dvWarn, dvSet:(cc,k,dir,per,f,t)=>{ DVCC=cc||''; if(k) DVSORT={k,dir:dir||1}; if(per) DVPER=per; if(f!=null) DVF=f; if(t!=null) DVTO=t; DVC={k:'',d:null,v:null}; }, setView:v=>{ VIEW=v; }, cols, cum, groupRows, agg, cell, beGrp, beDay, beTd, cohortTable, beAvg, lateNote, zx, ccSrc, ccPick, cohCard, benchCard, lzNext, BN, LZ_STEP, st:()=>({GRAIN,MET,SHOW,CTY}), ccNote, ccQ, cdOf, keepAt, PK, CR, PKL, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, mixTable, mixCoh, mixOk, mixCohNote, ctyView, ctyOld, cpSum, cpRow, cpTot, cpJudge, cpNow, cpUnp, CPK, cpSet:(per,f,t,all)=>{ CPER=per; CPF=f||''; CPTO=t||''; CALL=!!all; CPC={k:'',v:null}; }, dayView, allView, hero, xMode, setMode:(c,dv)=>{ if(c) CMODE=c; if(dv) DMODE=dv; }, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; if(k==='MIXO') MIXO=v; if(k==='MXO') MXO=v; if(k==='CCY') CCY=v; }, data:()=>({ALL,AF})}};
 })();
 // ---- 💰 Revenue by source — a section of the 💸 Install value tab (owner, 31 Oct 2026: notification revenue = GA4 Traffic
 // acquisition → Session primary channel group "Mobile Push Notifications", exactly as his GA4 screen; Paid = Cross-network +
