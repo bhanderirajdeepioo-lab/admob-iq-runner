@@ -997,6 +997,18 @@ async function benchReload(VW, file, packs) {
     U.set('MIXO', '2026-06');
     const mj = U.mixTable(MIX), ji = mj.indexOf('<tr class="roi-xr">');
     out.mix.tiny = dec(mj.slice(ji, mj.indexOf('</tr>', ji)).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim());
+    // the same split by install month (his "b"): each install month's months, % of its own total (a line = 100%)
+    const mco = U.mixCoh(MIX);
+    out.mix.coh = { head: [...mco.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map(m => m[1]),
+      rows: [...mco.matchAll(/<tr><td class="roi-nm">([\s\S]*?)<\/tr>/g)].map(m => [...('<td>' + m[1]).matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)]
+        .map(c => dec(c[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()))) };
+    // a month after till (All apps' till = the apps' most common day: one app a month on): no column, so not in a Total
+    out.mix.coh.next = U.mixCoh(Object.assign({}, MIX, { m: Object.assign({}, MIX.m, { '2026-11': { '2026-10': 25, '2026-09': 5 } }) })) === mco;
+    U.set('MXO', 'ins'); U.set('LG', 'mix');
+    const lmc = U.lifeView(d.life, d.life_till, d, null, MIX);
+    out.mix.coh.view = lmc.includes('data-roi-mxo="ins" aria-pressed="true"') && lmc.includes('<th>Install month</th><th>Total (ab tak)</th>')
+      && lmc.includes('<b>Har line</b> = us mahine aaye users');
+    U.set('MXO', 'cal');
     U.set('MIXO', '');
     U.set('LG', 'mix');
     const lm = U.lifeView(d.life, d.life_till, d, null, MIX), ln = U.lifeView(d.life, d.life_till, d, null, null);

@@ -158,6 +158,16 @@ def test_revenue_by_install_month(out):
     # every install month under 0.1% (here one is a wrong phone clock's 1978) folded into one item
     assert m["tiny"] == "Jun 2026 ka revenue, har install mahine ka hissa: 100% Jun 2026 · <0.1% 2 aur mahine milake (har ek <0.1%)"
     assert m["life"] and m["nomix"] and m["dev"]                     # a 4th view only with a split; never for a developer
+    # by install month (his "b"): the split's first month is Mar 2026, so the Jan 2026 / Nov 2025 / Jan 2025 / 1978
+    # install months are left out; Sep's installs earned 150 in Sep + 30 in Oct = 180 → 83% · 17%; Aug's 20 · 60 · 10
+    c = m["coh"]
+    assert c["head"] == ["Install month", "Total (ab tak)", "Same month", "+1", "+2", "+3", "+4"]
+    assert c["rows"] == [["Oct 2026", "$40", "100% Oct 12d", "", "", "", ""],
+                         ["Sep 2026", "$180", "83% Sep", "17% Oct 12d", "", "", ""],
+                         ["Aug 2026", "$90", "22% Aug", "67% Sep", "11% Oct 12d", "", ""],
+                         ["Jul 2026", "$101", "100% Jul", "— Aug", "— Sep", "— Oct 12d", ""],
+                         ["Jun 2026", "$100", "100% Jun", "— Jul", "— Aug", "— Sep", "— Oct 12d"]]
+    assert c["view"] and c["next"]   # a month after till (one app a month on in All apps): the same table, lines stay 100%
 
 
 def test_countries_and_devices_source_switch(out):
