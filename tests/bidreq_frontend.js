@@ -42,7 +42,11 @@ const document = new Proxy({
 const store = () => { const b = {}; return { getItem: k => (k in b ? b[k] : null), setItem: (k, v) => { b[k] = String(v); }, removeItem: k => { delete b[k]; } }; };
 // the page's fetch: mediation_daily.json answers from the fixture (or fails / waits, as a step asks); everything else never settles
 const NET = { calls: 0, mode: 'ok', body: null, held: [] };
+const BQN = [];                 // 📡 every ad units file request waits here until the test answers it (in any order)
 function fetchStub(url) {
+  if (String(url).indexOf('bqu_') === 0) return new Promise((res, rej) => BQN.push({ url: String(url),
+    ok: body => res({ ok: true, arrayBuffer: () => Promise.resolve(new TextEncoder().encode(JSON.stringify(body)).buffer) }),
+    fail: () => rej(new TypeError('synthetic network error')) }));
   if (String(url).indexOf('mediation_daily.json') !== 0) return new Promise(() => {});
   NET.calls++;
   const answer = () => (NET.mode === 'fail' ? Promise.reject(new TypeError('synthetic network error'))
@@ -203,7 +207,7 @@ const tiles = () => J(`['won','req'].map(k=>bqTile(k))`);
     noFile(); NET.calls = 0; run(`show('overview')`); SCREEN.id = 'review'; await tick();   // render() passing through it: the real screen is another
     o.passThrough = { calls: NET.calls, med: run('!!MED') };
     loadFile(); SCREEN.id = 'bidreq'; LIST._h = ''; NET.calls = 0; run(`show('bidreq')`); await tick();   // the list shown: painted
-    o.showList = { rows: ((LIST._h.split('<tbody>')[1] || '').match(/<tr>/g) || []).length, total: LIST._h.indexOf('<tr class="dw-tot">') >= 0, calls: NET.calls };
+    o.showList = { rows: ((LIST._h.split('<tbody>')[1] || '').match(/<tr(?:>| class="clk")/g) || []).length, total: LIST._h.indexOf('<tr class="dw-tot">') >= 0, calls: NET.calls };
     SCREEN.id = 'overview';
     return o;
   });
@@ -223,6 +227,71 @@ const tiles = () => J(`['won','req'].map(k=>bqTile(k))`);
     run('bqPaint()'); o.paintFirst = LIST._h.indexOf('load ho raha hai') >= 0; await tick();
     o.paintAfter = LIST._h.indexOf('<tr class="dw-tot">') >= 0;
     return o;
+  });
+  // ── 📡 an app's ad units (bqu_<key>.json.gz): per network, the Period's requests; the three marks ──
+  await step('units', () => {
+    const tds = h => [...h.matchAll(/<tr>(<td class="nm">[\s\S]*?)<\/tr>/g)].map(m => [...m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)]
+      .map(c => c[1].replace(/<[^>]+>/g, ' ').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim()));
+    const cls = h => [...h.matchAll(/<td class="(bqu-[a-z]+)"/g)].map(m => m[1]);
+    reset('dash', 'Demo Gallery', 'yesterday'); loadFile();
+    run(`DATA.bqu={'Demo Gallery':'bqu_x.json.gz'}; BQU={'Demo Gallery':{st:'ok', b:medBuild(), d:JSON.parse(JSON.stringify(__FX.bqu))}}; 1`);
+    const h = run('bqHtml()').split('class="bqu-h"')[1] || '';   // the ad units card only (the app's own row is above it)
+    const o = { rows: tds(h), cls: cls(h), heads: [...h.matchAll(/<th[^>]*>([^<]*)<span class="bq-s">([^<]*)<\/span><\/th>/g)].map(m => m[1] + '|' + m[2]),
+      sum: (h.match(/<div class="bqu-sum">([\s\S]*?)<\/div>/) || ['', ''])[1].replace(/<\/span>/g, ' | ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(),
+      chips: [...h.matchAll(/<span class="bqu-chip( big)?"/g)].map(m => !!m[1]), note: h.includes('AdMob Waterfall pe ye niyam nahi') };
+    run(`BQU={'Demo Gallery':{st:'load', b:medBuild()}}; 1`); o.loading = run('bqHtml()').includes('⏳ Ad unit data load ho raha hai');
+    run(`BQU={'Demo Gallery':{st:'err', b:medBuild()}}; 1`); o.failed = run('bqHtml()').includes('Ad unit data load nahi hua');
+    run(`BQU={'Demo Gallery':{st:'ok', b:medBuild(), d:__FX.bqu}}; delete DATA.bqu; 1`); o.noPointer = !run('bqHtml()').includes('bqu-h');
+    run(`DATA.bqu={'Demo Gallery':'bqu_x.json.gz'}; 1`); noFile();
+    o.gapPeriod = !run('bqHtml()').includes('bqu-h');                // a Period the list cannot answer (here: its file not in): no card
+    loadFile();
+    run(`BQU={'Demo Gallery':{st:'ok', b:medBuild(), d:Object.assign({}, __FX.bqu, {units:{}})}}; 1`);
+    o.nothing = run('bqHtml()').includes('Is period me kisi ad unit ki request nahi');
+    reset('dash', '', 'yesterday'); loadFile();
+    const all = run('bqHtml()');
+    o.allTap = all.includes('class="clk" title="Tap = is app ke ad units" onclick="setApp(&quot;Demo Gallery&quot;)"') && !all.includes('bqu-h');
+    reset('dash', 'Demo Gallery', 'yesterday'); loadFile();
+    o.appNoTap = !run('bqHtml()').includes('class="clk"');
+    return o;
+  });
+  // ── 📡 the ad units file's load: a newer build's request wins whatever the order its answers land in; a failure ──
+  await step('bquLoad', async () => {
+    reset('dash', 'Demo Gallery', 'yesterday'); loadFile(); BQN.length = 0;
+    run(`DATA.bqu={'Demo Gallery':'bqu_x.json.gz'}; DATA.generated_at='B1'; BQU={}; window.__cb=0; bquLoad('Demo Gallery',()=>{ __cb++; }); 1`);
+    run(`DATA.generated_at='B2'; bquLoad('Demo Gallery',()=>{ __cb++; }); 1`);
+    const urls = BQN.map(x => x.url);
+    BQN[1].ok({ v: 1, tag: 'new' }); await tick();
+    BQN[0].ok({ v: 1, tag: 'old' }); await tick();                 // the older build's answer lands last
+    const o = { urls, kept: J(`{b:BQU['Demo Gallery'].b, st:BQU['Demo Gallery'].st, tag:BQU['Demo Gallery'].d.tag}`), cb: run('__cb') };
+    BQN.length = 0; run(`DATA.generated_at='B3'; bquLoad('Demo Gallery',()=>{}); 1`); BQN[0].fail(); await tick();
+    o.failed = J(`{b:BQU['Demo Gallery'].b, st:BQU['Demo Gallery'].st}`);
+    run(`BQU={}; 1`);
+    return o;
+  });
+  // ── ✨ the hub: an app picked on the Bid requests screen keeps it (its ad units follow the app); elsewhere and a hub step as before ──
+  await step('hubApp', () => {
+    reset('dash', '', 'yesterday'); loadFile();
+    run(`HUB.on=true; HUB.inHub=true; HUB.tab='overview'; window.__shown=[]; window.__show0=show; window.__render0=render; show=x=>{ __shown.push(x); }; render=()=>{}; 1`);
+    const prev = SCREEN.id;
+    SCREEN.id = 'bidreq'; run(`setApp('Demo Gallery')`); const onBid = J('__shown');
+    SCREEN.id = 'overview'; run(`__shown=[]; setApp('')`); const elsewhere = J('__shown');
+    // a hub step that sets its own tab (hubGo: a tab, the ←, Back / Forward) lands on that tab's page, never the list
+    SCREEN.id = 'bidreq'; run(`__shown=[]; APP=''; HUB.tab='overview'; hubGo('Demo Gallery','revenue')`);
+    const goRev = { shown: J('__shown'), want: J(`hubHost('revenue','Demo Gallery')`), tab: J('HUB.tab') };
+    SCREEN.id = 'bidreq'; run(`__shown=[]; APP='Demo Gallery'; HUB.tab='overview'; hubGo('','overview')`);
+    const goOv = { shown: J('__shown'), want: J(`hubHost('overview','')`) };
+    SCREEN.id = prev; run(`show=__show0; render=__render0; HUB.on=false; HUB.inHub=false; APP=''; 1`);
+    return { onBid, elsewhere, goRev, goOv };
+  });
+  // ── an app's own tile opens its ad units once the build shipped its file (no file: no button, as before) ──
+  await step('appTileTap', () => {
+    reset('dash', 'Demo Gallery', 'yesterday'); loadFile();
+    run(`DATA.bqu={'Demo Gallery':'bqu_x.json.gz'}; 1`);
+    const t = J(`['won','req'].map(k=>bqTile(k))`);
+    run(`delete DATA.bqu; 1`);
+    rep.bquNames = J(`['Meta Audience Network (bidding)','Meta Audience Network','AdMob Network Waterfall','AdMob Network','AppLovin (bidding)','AppLovin'].map(bquName)`);
+    return t.map(h => ({ tap: h.indexOf('onclick="bqOpen()"') >= 0, hint: (h.match(/<span class="mk-hint"[^>]*>([^<]*)</) || [null, ''])[1],
+      title: h.indexOf('Tap = is app ke ad units.') >= 0 }));
   });
   process.stdout.write(JSON.stringify({ errors, rep }));
 })().catch(e => { errors.push('MAIN ' + (e.stack || e.message)); process.stdout.write(JSON.stringify({ errors, rep })); });

@@ -1650,6 +1650,14 @@ def _daily_prep(frepo):
             pre["mediation_daily"] = (build_mediation_daily(frepo), None)
         except Exception as e:
             pre["mediation_daily"] = (None, f"mediation daily ship skipped: {e}")
+    with _sc.stage("mediation_units"):
+        try:
+            from .api.dataservice import build_mediation_units
+            pre["mediation_units"] = (build_mediation_units(frepo), None)
+        except Exception as e:
+            pre["mediation_units"] = (None, f"mediation units skipped: {type(e).__name__}")
+            from . import health                       # now: before the page's red banner is attached (its line is
+            health.fault("mediation units", e)         # printed at its own step, after it)
     with _sc.stage("deductions_daily"):
         try:
             from .api.dataservice import build_deductions_daily
@@ -1817,6 +1825,10 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
         # (build_from_db only). The monthly rollup goes after the baseline report, its only reader.
         if mode == "live":
             daily_files = _daily_prep(frepo)
+            mu = (daily_files.get("mediation_units") or (None, None))[0]
+            if mu:                                     # 📡 the page's pointer: app name → its ad units file (step below)
+                from .fetch.ga4_uninstall import file_key
+                dashboard["bqu"] = {app: "bqu_%s.json.gz" % file_key(app) for app in mu}
         repo.release("snap")
         repo.release("pc")
         # Build the ad-unit×country baseline report (standard ranges + market eCPM trend), but ship
@@ -2272,6 +2284,32 @@ def build(out_dir="site", data_dir="data", today=None, mode=None):
                         json.dump(med_daily, f, ensure_ascii=False, separators=(",", ":"))
             except Exception as e:
                 print(f"mediation daily ship skipped: {e}", file=sys.stderr)
+
+        _sc.step("mediation_units")
+        # 📡 Bid requests by ad unit × source × day, one file per app (the pointer is in dashboard["bqu"]); a file of an
+        # app no longer shipped goes
+        mu, skipped = daily_files.pop("mediation_units")
+        if skipped:
+            print(skipped, file=sys.stderr)
+        else:
+            keep = set()
+            try:
+                from .db import write_json_gz_stable
+                for app, body in mu.items():
+                    fn = (dashboard.get("bqu") or {}).get(app)
+                    if fn:
+                        write_json_gz_stable(os.path.join(out_dir, fn), body)
+                        keep.add(fn)
+                for fn in os.listdir(out_dir):
+                    if fn.startswith("bqu_") and fn.endswith(".json.gz") and fn not in keep:
+                        os.remove(os.path.join(out_dir, fn))
+            except Exception as e:                     # a file the pointer names but this build did not write is the
+                print(f"mediation units skipped: {type(e).__name__}", file=sys.stderr)   # last build's: never served
+                for fn in set((dashboard.get("bqu") or {}).values()) - keep:           # as this one's ("load nahi
+                    try:                                                               # hua" on the page instead)
+                        os.remove(os.path.join(out_dir, fn))
+                    except OSError:
+                        pass
 
         _sc.step("deductions_daily")
         # Per-unit estimate DECAY (deductions) — 'pehle itna, ab itna' — from the already-stored

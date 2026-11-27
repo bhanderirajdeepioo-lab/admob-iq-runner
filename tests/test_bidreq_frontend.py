@@ -103,6 +103,30 @@ TOT = {"y": [58_500, 41_700, 8_300], "today": [22_800, 16_600, 2_100], "w7": [40
        "all": [458_000, 324_600, 64_900]}
 
 
+def _bqu():
+    """📡 Demo Gallery's ad units file (build_mediation_units' shape): every day of DAYS but GAP, made-up units / counts.
+    Per day: Banner Home AdMob 10,000 (5,000 impr) · Meta 9,900 · Waterfall 3,000; Inter Exit AdMob 5,000 · Meta 3,000 ·
+    Pangle 2,000 with no impression; Rewarded AdMob 4,000 only; Native Small AdMob 100 only; Splash Open AdMob 2,000 +
+    its Waterfall 1,500 (AdMob's own lines only); Inter Boost AdMob 5,000 with no impression · Liftoff 6,500 (130%);
+    WF Only the Waterfall line alone, 1,900; Round Edge AdMob 10,000 · Meta 7,960 (79.6%); Old Unit only on 1 Jan."""
+    ds = [d for d in DAYS if d != GAP]
+    every = lambda req, imp: [[i, req, imp] for i in range(len(ds))]
+    return {"v": 1, "dates": ds,
+            "names": {"ADM": "AdMob Network", "META": "Meta Audience Network (bidding)", "WF": "AdMob Network Waterfall",
+                      "PNG": "Pangle ROW SDK (bidding)", "LIFT": "Liftoff Monetize (bidding)"},
+            "units": {"u1": {"n": "Banner Home", "f": "BANNER", "s": {"ADM": every(10000, 5000), "META": every(9900, 100),
+                                                                      "WF": every(3000, 500)}},
+                      "u2": {"n": "Inter Exit", "f": "INTERSTITIAL", "s": {"ADM": every(5000, 2000), "META": every(3000, 900),
+                                                                          "PNG": every(2000, 0)}},
+                      "u3": {"n": "Rewarded", "f": "REWARDED", "s": {"ADM": every(4000, 3000)}},
+                      "u4": {"n": "Native Small", "f": "NATIVE", "s": {"ADM": every(100, 80)}},
+                      "u5": {"n": "Old Unit", "f": "BANNER", "s": {"ADM": [[0, 700, 600]]}},
+                      "u6": {"n": "Splash Open", "f": "APP_OPEN", "s": {"ADM": every(2000, 1500), "WF": every(1500, 900)}},
+                      "u7": {"n": "Inter Boost", "f": "INTERSTITIAL", "s": {"ADM": every(5000, 0), "LIFT": every(6500, 3000)}},
+                      "u8": {"n": "WF Only", "f": "BANNER", "s": {"WF": every(1900, 600)}},
+                      "u9": {"n": "Round Edge", "f": "BANNER", "s": {"ADM": every(10000, 4000), "META": every(7960, 500)}}}}
+
+
 @pytest.fixture(scope="module")
 def page_html():
     with open(os.path.join(ROOT, "frontend", "index.html"), encoding="utf-8") as f:
@@ -116,7 +140,7 @@ def rep(tmp_path_factory, page_html):
     tmp = tmp_path_factory.mktemp("bidreq")
     fx = {"dash": _dash(), "dashAds": _dash({"configured": True, "by_app": {}, "unmatched_spend_usd": 0}), "med": _med(),
           "windows": WINDOWS, "gapIn": ["2026-01-03", GAP, "2026-01-05"], "other": OTHER,
-          "apps": ["Demo Gallery", "Puzzle Quest", "Tiny Notes", "Echo Radio", "Quiet App"]}
+          "apps": ["Demo Gallery", "Puzzle Quest", "Tiny Notes", "Echo Radio", "Quiet App"], "bqu": _bqu()}
     (tmp / "fx.json").write_text(json.dumps(fx))
     script = max(re.findall(r"<script>(.*?)</script>", page_html, re.S), key=len)
     (tmp / "app.js").write_text(script, encoding="utf-8")
@@ -356,3 +380,59 @@ def test_eleven_tiles_wrap_into_balanced_rows(page_html):
     assert ".ov-kpi.row.c11>.kpi:nth-child(11){grid-column:1/-1}" in phone   # 2-up, the 11th on its own row
     assert ".mk-kpi .v{min-height:calc(var(--vmax,24px)*1.5)}" in css       # "…" → the number: the same height
     assert ".card.pad0.bq-full table{min-width:0}" in phone                  # the list fits a phone
+
+
+
+def test_an_apps_ad_units_each_network_and_the_three_marks(rep):
+    """Yesterday (9 Jan) by hand: AdMob 36,100 requests in all; columns by each network's requests (Meta 20,860, Liftoff
+    6,500, Waterfall 6,400, Pangle 2,000); rows by AdMob's (a tie by name). Amber: Meta 60% on Inter Exit, Liftoff 130%
+    on Inter Boost (either way); not Meta 7,960 of 10,000 on Round Edge — 79.6% reads 80%, the mark follows the % as
+    printed. Red "0 impr": AdMob's own 5,000 on Inter Boost, Pangle 2,000 on Inter Exit. The Waterfall shows requests,
+    never a %. "Mediation nahi" (AdMob's own lines only): Rewarded (11% of the app's AdMob requests), Splash Open (5.5%)
+    and WF Only (the Waterfall line alone, no AdMob bidding: its 1,900 = 5.3%) red, Native Small (0.3%) light."""
+    u = rep["units"]
+    assert u["heads"] == ["AdMob|req", "Meta|req · % of AdMob", "Liftoff Monetize|req · % of AdMob", "AdMob Waterfall|req",
+                          "Pangle ROW SDK|req · % of AdMob"]
+    assert u["rows"] == [["Banner Home banner", "10.0k", "9,900 99%", "—", "3,000", "—"],
+                         ["Round Edge banner", "10.0k", "7,960 80%", "—", "—", "—"],
+                         ["Inter Boost interstitial", "5,000 0 impr", "—", "6,500 130%", "—", "—"],
+                         ["Inter Exit interstitial", "5,000", "3,000 60%", "—", "—", "2,000 40% 0 impr"],
+                         ["Rewarded rewarded Mediation nahi", "4,000", "—", "—", "—", "—"],
+                         ["Splash Open app open Mediation nahi", "2,000", "—", "—", "1,500", "—"],
+                         ["Native Small native Mediation nahi", "100", "—", "—", "—", "—"],
+                         ["WF Only banner Mediation nahi", "—", "—", "—", "1,900", "—"]]
+    assert u["cls"] == ["bqu-dead", "bqu-gap", "bqu-gap", "bqu-dead"] and u["chips"] == [True, True, False, True]
+    assert u["sum"] == "⚠️ Mediation nahi: 4 (3 bade) | Request farak: 2 | 0 impression: 2 |" and u["note"]
+
+
+def test_the_ad_units_card_states_and_the_tap_into_an_app(rep):
+    u = rep["units"]
+    assert u["loading"] and u["failed"] and u["noPointer"] and u["gapPeriod"] and u["nothing"]
+    assert u["allTap"] and u["appNoTap"]           # All apps: a row opens its app; an app's own row is no button
+
+
+def test_the_ad_units_file_a_newer_build_wins_and_a_failure_says_so(rep):
+    """Two builds' requests in flight: the older one's answer lands last and is dropped (the newer one's stays); a failed
+    fetch is "err" (the card says it could not load). Each request asks for its own build (?b=)."""
+    b = rep["bquLoad"]
+    assert b["urls"] == ["bqu_x.json.gz?b=B1", "bqu_x.json.gz?b=B2"]
+    assert b["kept"] == {"b": "B2", "st": "ok", "tag": "new"} and b["cb"] == 2
+    assert b["failed"] == {"b": "B3", "st": "err"}
+
+
+def test_the_hub_keeps_the_bid_requests_screen_when_the_app_changes(rep):
+    """A row tap / the header's pick on the list keeps the list (the app's ad units). A hub step that set its own tab
+    (another tab, the ← out to All apps' Overview, Back / Forward) lands on that tab's page, not on the list."""
+    h = rep["hubApp"]
+    assert h["onBid"] == ["bidreq"] and h["elsewhere"] and h["elsewhere"] != ["bidreq"]
+    assert h["goRev"]["want"] and h["goRev"]["shown"] == [h["goRev"]["want"]] and h["goRev"]["tab"] == "revenue"
+    assert h["goOv"]["want"] and h["goOv"]["shown"] == [h["goOv"]["want"]] and h["goOv"]["want"] != "bidreq"
+
+
+def test_an_apps_tile_opens_its_ad_units_when_the_build_shipped_them(rep):
+    assert rep["appTileTap"] == [{"tap": True, "hint": "Units →", "title": True}] * 2   # (short: the tile's label keeps its room)
+
+
+def test_a_networks_bidding_and_waterfall_lines_never_share_a_name(rep):
+    assert rep["bquNames"] == ["Meta", "Meta (waterfall)", "AdMob Waterfall", "AdMob Network", "AppLovin", "AppLovin (waterfall)"]
+

@@ -292,6 +292,9 @@ def _dump(obj):
 
 
 def test_the_daily_files_hold_what_their_functions_give_on_the_stored_history(tmp_path, live):
+    os.makedirs(os.path.join(str(tmp_path), "site"))                   # an earlier build's file of an app gone since
+    with gzip.open(os.path.join(str(tmp_path), "site", "bqu_000000000000.json.gz"), "wt") as f:
+        f.write("{}")
     sc.begin()
     try:
         out, data = live(str(tmp_path))
@@ -302,12 +305,21 @@ def test_the_daily_files_hold_what_their_functions_give_on_the_stored_history(tm
     assert hidden == {"app~photo"} and list(med["by_app"]) == ["Synth Renamed"] and ded["data"]   # (worth checking)
     assert open(os.path.join(out, "mediation_daily.json"), "rb").read() == _dump(med)
     assert open(os.path.join(out, "deductions_daily.json"), "rb").read() == _dump(ded)
+    # 📡 the ad units file of each app, pointed at by the dashboard (name → file), with what the function gives
+    mu = dataservice.build_mediation_units(frepo)
+    with gzip.open(os.path.join(out, "dashboard.json.gz"), "rt", encoding="utf-8") as f:
+        ptr = json.load(f)["bqu"]
+    assert sorted(ptr) == sorted(mu) == ["Synth Renamed"] and not os.path.exists(os.path.join(out, "bqu_000000000000.json.gz"))
+    for app, fn in ptr.items():
+        with gzip.open(os.path.join(out, fn), "rt", encoding="utf-8") as f:
+            assert json.load(f) == mu[app]
     # baseline_write ran before them (the stored rollup builds the baseline report), and the steps after them too
     assert os.path.exists(os.path.join(out, "baseline.json")) and os.path.exists(os.path.join(out, "_headers"))
     # timed under their own names: the work at dashboard_build, the write at the step of each
     by = {(e.get("parent"), e["name"]) for e in prof["stages"]}
     assert {("dashboard_build", "mediation_daily"), ("dashboard_build", "deductions_daily"),
-            (None, "mediation_daily"), (None, "deductions_daily")} <= by
+            (None, "mediation_daily"), (None, "deductions_daily"),
+            ("dashboard_build", "mediation_units"), (None, "mediation_units")} <= by
 
 
 @pytest.fixture
@@ -355,6 +367,46 @@ def test_a_daily_file_failure_is_said_at_its_own_step_as_before(tmp_path, live, 
     live(str(tmp_path / "write"))
     assert _between(buf.getvalue(), "mediation daily ship skipped: Object of type object is not JSON serializable",
                     "mediation_daily", "deductions_daily")
+
+
+def test_an_ad_units_failure_is_said_at_its_own_step_and_ships_nothing(tmp_path, live, steps, monkeypatch):
+    def boom(repo):
+        raise RuntimeError("synthetic boom")
+    monkeypatch.setattr(dataservice, "build_mediation_units", boom)
+    monkeypatch.setattr(health, "FAULTS", {})
+    buf = io.StringIO()
+    monkeypatch.setattr(build_static.sys, "stderr", health._Tee(buf))
+    out, _ = live(str(tmp_path))
+    assert _between(buf.getvalue(), "mediation units skipped: RuntimeError", "mediation_units", "deductions_daily")
+    assert health.FAULTS["mediation units"] == "RuntimeError"
+    assert not [n for n in os.listdir(out) if n.startswith("bqu_")]
+    with gzip.open(os.path.join(out, "dashboard.json.gz"), "rt", encoding="utf-8") as f:
+        assert "bqu" not in json.load(f)
+    assert os.path.exists(os.path.join(out, "mediation_daily.json"))   # the other daily files as before
+    with gzip.open(os.path.join(out, "dashboard.json.gz"), "rt", encoding="utf-8") as f:     # the page's red banner names it
+        steps = {x["name"] for f_ in json.load(f).get("build_faults") or [] if f_.get("kind") == "step" for x in f_["steps"]}
+    assert "mediation units" in steps
+
+
+def test_an_ad_units_file_not_written_is_never_the_last_builds(tmp_path, live, monkeypatch):
+    """The pointer is in dashboard.json before the files are written: a file it names that this build could not write is
+    removed (the page then says it could not load), never the last build's served as this one's."""
+    from admob_iq.fetch.ga4_uninstall import file_key
+    fn = "bqu_%s.json.gz" % file_key("Synth Renamed")
+    os.makedirs(os.path.join(str(tmp_path), "site"))
+    with gzip.open(os.path.join(str(tmp_path), "site", fn), "wt") as f:      # the last build's file of the same app
+        f.write('{"v": 1, "old": true}')
+    real = db.write_json_gz_stable
+
+    def failing(path, *a, **k):
+        if os.path.basename(path).startswith("bqu_"):
+            raise OSError("synthetic disk full")
+        return real(path, *a, **k)
+    monkeypatch.setattr(db, "write_json_gz_stable", failing)
+    out, _ = live(str(tmp_path))
+    with gzip.open(os.path.join(out, "dashboard.json.gz"), "rt", encoding="utf-8") as f:
+        assert json.load(f)["bqu"] == {"Synth Renamed": fn}
+    assert not os.path.exists(os.path.join(out, fn))
 
 
 def test_baseline_write_runs_first_and_the_daily_files_are_still_written(tmp_path, live, steps, capsys):

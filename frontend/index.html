@@ -357,6 +357,15 @@
   .bq-full th,.bq-full td{border-right:1px solid var(--line)}.bq-full th:last-child,.bq-full td:last-child{border-right:none}
   .bq-full th:not(:first-child),.bq-full td:not(:first-child){text-align:right;white-space:nowrap}
   .bq-full th .bq-s{display:block;font-weight:400;font-size:10px;text-transform:none;color:var(--faint)}
+  .bq-full tr.clk{cursor:pointer}.bq-full tr.clk:hover td{background:var(--panel2)}
+  .bqu{margin-top:14px}.bqu-h{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:12px 12px 0}
+  .bqu-sum{font-size:12.5px;padding:6px 12px 10px;display:flex;flex-wrap:wrap;gap:4px 14px}
+  .bq-full td small{color:var(--faint);font-size:10.5px}
+  .bq-full td.bqu-gap{background:rgba(240,180,41,.13);color:#f0b429}.bq-full td.bqu-gap small{color:#f0b429}
+  .bq-full td.bqu-dead{background:rgba(255,107,107,.14);color:var(--bad)}.bq-full td.bqu-dead small{color:var(--bad)}
+  .bqu-chip{display:inline-block;font-size:10.5px;padding:1px 7px;border-radius:9px;border:1px solid var(--line2);color:var(--muted);margin-left:6px;white-space:nowrap}
+  .bqu-chip.big{border-color:var(--bad);color:var(--bad);background:rgba(255,107,107,.1)}
+  .bqu-note{font-size:12px;line-height:1.55;padding:10px 12px 12px;color:var(--muted)}
   body[data-screen="ecpm"] #rangectl,body[data-screen="ecpm"] #rangecustom{display:none!important}   /* the view has its own range */
   #ec-root{min-width:0}
   .ec-nav{display:flex;align-items:center;gap:2px 16px;flex-wrap:wrap;margin:-4px 0 8px}
@@ -4868,11 +4877,11 @@ function hubAppOn(){ try{ return !!(HUB.on&&HUB.inHub&&APP); }catch(e){ return f
 // the whole header App selector in step with APP: the hidden <select>'s list (appSelHtml) + the icon + the picker button —
 // render() and a jump that changes APP without a render (bGotoUnit)
 function appSelSync(){ const sel=document.getElementById('appsel'); if(sel) sel.innerHTML=appSelHtml(); appSelIcon(); }
-function setApp(a){ const on=document.querySelector('.screen.on'); const cur=on?on.dataset.screen:'overview'; const was=APP; APP=a;
+function setApp(a,go){ const on=document.querySelector('.screen.on'); const cur=on?on.dataset.screen:'overview'; const was=APP; APP=a;
   if(UNIAPP&&uniName(UNIAPP)!==a) UNIAPP='';   // the header left the app whose Uninstall detail was open: close it (never one app under "All apps")
   if(ACTAPP&&actName(ACTAPP)!==a) ACTAPP='';   // … and the Active users tab's
   if(VALAPP&&valName(VALAPP)!==a) VALAPP='';   // … and the Install value tab's
-  if(HUB.on&&HUB.inHub){ render(); show(hubHost(hubTabs(a).indexOf(HUB.tab)>=0?HUB.tab:'overview',a)); if(!REFRESH_SILENT) window.scrollTo({top:0}); return; }   // ✨ hub: the same tab, the new scope
+  if(HUB.on&&HUB.inHub){ render(); show(cur==='bidreq'&&!go?'bidreq':hubHost(hubTabs(a).indexOf(HUB.tab)>=0?HUB.tab:'overview',a)); if(!REFRESH_SILENT) window.scrollTo({top:0}); return; }   // ✨ hub: the same tab, the new scope (📡 Bid requests stays: its ad units follow the app — not for go, a hub step that set its own tab: hubGo / hubBoot, e.g. the ←, lands on that tab)
   render(); show(cur==='reportcard'?'placements':cur); if(!REFRESH_SILENT) window.scrollTo({top:0});
   if(HUB.on) return;   // ✨ hub (a page outside Home): the hub's own Back step covers the app change
   if(!was&&a) hbPush('app',hbAppUndo); else if(was&&!a) hbDrop('app'); }   // phone Back = "← All apps"
@@ -5496,7 +5505,7 @@ function hubGo(app,tab,o){ app=app||''; if(!HUB_T[tab]||hubTabs(app).indexOf(tab
   if(!HUB.on){ if(app!==APP) setApp(app); show(hubHost(tab,app)||'overview'); return; }
   if(HUB.inHub&&app===APP&&tab===HUB.tab&&hubScr()===hubHost(tab,app)){ if(!REFRESH_SILENT) closeNav(); return; }   // already there
   HUB.inHub=true; HUB.tab=tab;
-  if(app!==APP) setApp(app); else show(hubHost(tab,app)); }
+  if(app!==APP) setApp(app,1); else show(hubHost(tab,app)); }
 function hubTab(t){ hubGo(APP,t); }
 // ← in the top bar (inside an app; owner: "app me andar gaye, fir bahar kaise nikle"): out to All apps — the view the app was
 // opened from, at the spot the reader left it; else (opened by a link / bookmark) All apps on the same tab, or its Overview
@@ -5517,7 +5526,7 @@ function hubOpenApp(name){ if(!HUB.on||HUB.inner||!name) return false; if(name==
 // the first view: a #home… URL wins (a bookmark / refresh), else the restored screen through the hub
 function hubBoot(){ if(!HUB.on) return; HB.mute++;
   try{ const r=hubParse(HUB.hash0), name=r?(hubNameOf(r.key)||''):null;   // (an app no longer in the build: All apps, same tab)
-    if(r){ HUB.inHub=true; HUB.tab=r.tab||'overview'; if(name!==APP){ setApp(name); } else show(hubHost(hubTabs(name).indexOf(HUB.tab)>=0?HUB.tab:'overview',name)); return; }
+    if(r){ HUB.inHub=true; HUB.tab=r.tab||'overview'; if(name!==APP){ setApp(name,1); } else show(hubHost(hubTabs(name).indexOf(HUB.tab)>=0?HUB.tab:'overview',name)); return; }
     let n=null; try{ n=JSON.parse(localStorage.getItem('navstate')||'null'); }catch(e){}
     if(n&&n.hub&&n.hub.in&&HUB_T[n.hub.tab]&&(!n.t||Date.now()-n.t<12*3600*1000)){ HUB.inHub=true; HUB.tab=n.hub.tab; show(hubHost(hubTabs(APP).indexOf(HUB.tab)>=0?HUB.tab:'overview',APP)); return; }
     const sc=hubScr(); if(sc==='appdetail'&&ADAPP) openAppDetail(ADAPP); else show(sc||'overview'); }
@@ -13884,7 +13893,7 @@ function bqPct(won,req){ return req>0?(won/req*100).toFixed(1)+'%':'—'; }
 // one tile ('won' = Meta won %, 'req' = Bid requests) for the header's App (All apps: the total) and Period; a button into
 // the list in All apps (an app's own tile already is its row)
 function bqTile(kind){
-  const W=bqWin(curWinArr()), ds=curWinLabel(), tap=!APP, won=kind==='won';
+  const W=bqWin(curWinArr()), ds=curWinLabel(), tap=!APP||!!(DATA&&DATA.bqu&&DATA.bqu[APP]), won=kind==='won';   // an app: its ad units
   const T=W.ok?(APP?(W.apps[APP]||[0,0,0]):W.t):null;
   let v, d;
   if(!W.ok){ v=W.why==='load'?'…':'—'; d=(W.why==='load'?(won?'won ÷ bid requests':'AdMob · Meta'):BQ_WHY[W.why])+' · '+ds; }
@@ -13893,9 +13902,9 @@ function bqTile(kind){
   const ex=W.ok?(won?(T[1]?'\n'+T[1].toLocaleString()+' bid requests · '+T[2].toLocaleString()+' won':''):'\nAdMob '+T[0].toLocaleString()+' · Meta '+T[1].toLocaleString()):'';
   const tip=(won?'Meta Audience Network (bidding): jitni bid requests Meta ko gayi, unme se kitni auction Meta ne jeeti aur ad diya. Ye AdMob ke “Bids in auction %” × “Win %” ke barabar hai — wo dono alag se AdMob ke API me nahi milte.'
     :'Upar wale Period me AdMob Network (bidding) aur Meta Audience Network (bidding) ko gayi bid requests. Ek hi ad request dono ko jaati hai — inko jodna nahi.')
-    +(tap?' Tap = har app ka.':'')+ex;
+    +(tap?(APP?' Tap = is app ke ad units.':' Tap = har app ka.'):'')+ex;
   return kpi(won?'Meta won %':'Bid requests',v,d,'muted').replace('<div class="card kpi">',`<div class="card kpi mk-kpi${tap?' mk-tap':''}" data-mk="${kind}" title="${hAttr(tip)}"`
-    +(tap?` role="button" tabindex="0" onclick="bqOpen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();bqOpen()}"><span class="mk-hint" aria-hidden="true">Apps →</span>`:'>')); }
+    +(tap?` role="button" tabindex="0" onclick="bqOpen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();bqOpen()}"><span class="mk-hint" aria-hidden="true">${APP?'Units →':'Apps →'}</span>`:'>')); }
 // the file landed: the tiles on the page take their numbers in place (the same size: nothing on the page moves)
 function bqOvPaint(){ document.querySelectorAll('.mk-kpi[data-mk]').forEach(el=>{ el.outerHTML=bqTile(el.dataset.mk); }); }
 // the list: one row per app with a bid request in the Period (most AdMob requests first), All apps last; an app picked in
@@ -13907,14 +13916,77 @@ function bqHtml(){ const W=bqWin(curWinArr());
   const cells=x=>`<td${x[0]?` title="${x[0].toLocaleString()}"`:''}>${x[0]?bqN(x[0]):'—'}</td><td${x[1]?` title="${x[1].toLocaleString()}"`:''}>${x[1]?bqN(x[1]):'—'}</td>`
     +`<td${x[1]?` title="${x[2].toLocaleString()} won of ${x[1].toLocaleString()}"`:''}>${bqPct(x[2],x[1])}</td>`;
   const apps=Object.keys(W.apps).filter(a=>!APP||a===APP).sort((a,b)=>(W.apps[b][0]-W.apps[a][0])||(W.apps[b][1]-W.apps[a][1])||(a<b?-1:a>b?1:0));
-  const rows=apps.map(a=>`<tr><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(a,22)}<span>${appNm(a)}</span></span></td>${cells(W.apps[a])}</tr>`).join('')
+  const rows=apps.map(a=>`<tr${APP?'':` class="clk" title="Tap = is app ke ad units" onclick="setApp(${hAttr(JSON.stringify(a))})"`}><td class="nm"><span style="display:inline-flex;align-items:center;gap:9px">${appIcon(a,22)}<span>${appNm(a)}</span></span></td>${cells(W.apps[a])}</tr>`).join('')
     ||`<tr><td colspan="4" class="muted" style="padding:16px">Is period me${APP?' is app ki':''} koi bid request nahi.</td></tr>`;
   return head+`<div class="card pad0 bq-full"><table><thead><tr><th>App</th><th title="AdMob Network (bidding) ko gayi requests">AdMob req</th>`
     +`<th title="Meta Audience Network (bidding) ko gayi bid requests">Meta bid req</th><th title="Meta ne jo auction jeeti aur ad diya ÷ Meta bid requests">Meta won %<span class="bq-s">won ÷ bid req</span></th></tr></thead>`
-    +`<tbody>${rows}${apps.length&&!APP?`<tr class="dw-tot"><td class="nm">All apps</td>${cells(W.t)}</tr>`:''}</tbody></table></div>`; }
+    +`<tbody>${rows}${apps.length&&!APP?`<tr class="dw-tot"><td class="nm">All apps</td>${cells(W.t)}</tr>`:''}</tbody></table></div>`+(APP?bquCard(W):''); }
 function renderBidReq(){ const s=screenDiv('bidreq'); s.innerHTML=bqHtml(); return s; }
+// 📡 an app's ad units (owner, 27 Nov 2026: "ad unit wise bid request chahiye for every ad network like admob meta and
+// admob waterfall" + marks): each network's requests over the header's Period from bqu_<key>.json.gz
+// (build_mediation_units: dates, names, units {n, f, s: {source: [[dayidx, requests, impressions] …]}}, the file named in
+// DATA.bqu[app]); a Period the list above cannot answer (bqWin: a date missing from the mediation file) shows no card.
+//   * "Mediation nahi": AdMob gets requests, no network but AdMob's own lines (bidding, waterfall) does — red when the unit
+//     has ≥ BQU_BIG of the app's AdMob requests, else a light chip;
+//   * a bidding network's requests off AdMob's by more than BQU_GAP (either way): amber, its % of AdMob's (Meta's median
+//     is 99%; "AdMob Network Waterfall" is a waterfall line — its share swings 3–144% by itself: no such mark);
+//   * ≥ BQU_DEAD requests and no impression: red ("0 impr").
+const BQU_BIG=0.05, BQU_GAP=0.2, BQU_DEAD=1000, BQU_ADMW=/^admob network waterfall$/i;
+let BQU={};                                    // app name → {st:'load'|'ok'|'err', d, b}
+function bquLoad(app,cb){ const fn=(DATA&&DATA.bqu||{})[app], b=medBuild(), cur=BQU[app];
+  if(!fn||(cur&&cur.b===b&&cur.st!=='err')){ if(cur&&cur.st==='load') return; cb&&cb(); return; }
+  BQU[app]={st:'load', b};
+  const mine=()=>(BQU[app]||{}).b===b;          // (a newer build's request since: its answer counts, never this one)
+  fetchGzJson(fn+'?b='+encodeURIComponent(b)).then(d=>{ if(mine()) BQU[app]={st:'ok', d, b}; }).catch(()=>{ if(mine()) BQU[app]={st:'err', b}; })
+    .then(()=>{ try{ cb&&cb(); }catch(e){} }); }
+function bquName(n){ n=String(n==null?'':n).trim(); const bid=/\(bidding\)\s*$/i.test(n);   // a network's bidding and waterfall lines: two names
+  if(/^admob network waterfall$/i.test(n)) return 'AdMob Waterfall';
+  const b=/^meta audience network/i.test(n)?'Meta':n.replace(/\s*\(bidding\)\s*$/i,'');
+  return bid||/^admob network$/i.test(n)?b:b+' (waterfall)'; }
+// the Period's sums → {rows:[{n, f, a (AdMob requests), ai (its impressions), s:{source:[requests, impressions]}}], others
+// (the other networks, most requests first), names} — or null without the app's file
+function bquWin(app,win){ const st=BQU[app]; if(!st||st.st!=='ok') return null;
+  const d=st.d||{}, want=new Set(win), keep=new Set(), nm=d.names||{};
+  (d.dates||[]).forEach((x,i)=>{ if(want.has(x)) keep.add(i); });
+  const adm=Object.keys(nm).filter(k=>BQ_ADM.test(String(nm[k]==null?'':nm[k]).trim())), tot={}, rows=[];
+  Object.entries(d.units||{}).forEach(([u,x])=>{ const s={}; let any=false;
+    Object.entries(x.s||{}).forEach(([k,cs])=>{ let r=0,i=0; (cs||[]).forEach(c=>{ if(keep.has(c[0])){ r+=+c[1]||0; i+=+c[2]||0; } });
+      if(r||i){ s[k]=[r,i]; any=true; tot[k]=(tot[k]||0)+r; } });
+    if(any){ const a=adm.reduce((t,k)=>t+((s[k]||[0])[0]),0), ai=adm.reduce((t,k)=>t+((s[k]||[0,0])[1]),0);
+      rows.push({n:x.n||u, f:x.f||'', a, ai, s}); } });
+  rows.sort((p,q)=>(q.a-p.a)||(String(p.n)<String(q.n)?-1:1));
+  return {rows, others:Object.keys(tot).filter(k=>adm.indexOf(k)<0&&tot[k]>0).sort((p,q)=>(tot[q]-tot[p])||(p<q?-1:1)), names:nm}; }
+function bquCard(W){ if(!W.ok||!(DATA&&DATA.bqu&&DATA.bqu[APP])) return '';
+  const st=BQU[APP], ds=curWinLabel();
+  const head=`<div class="card pad0 bq-full bqu"><div class="bqu-h"><b>Ad units · bid requests</b><span class="muted">har network · ${hAttr(ds)}</span></div>`;
+  if(!st||st.st==='load') return head+`<div class="bqu-note">⏳ Ad unit data load ho raha hai…</div></div>`;
+  if(st.st==='err') return head+`<div class="bqu-note">Ad unit data load nahi hua — page refresh karo.</div></div>`;
+  const U=bquWin(APP,curWinArr());
+  if(!U||!U.rows.length) return head+`<div class="bqu-note">Is period me kisi ad unit ki request nahi.</div></div>`;
+  const nm=U.names, appA=U.rows.reduce((t,r)=>t+r.a,0), n={no:0,big:0,gap:0,dead:0};
+  const fmtF=f=>String(f||'').replace(/_/g,' ').toLowerCase();
+  const cell=(name,v,ratio)=>{ if(!v||!v[0]) return '<td class="muted">—</td>';
+    const pc=ratio!=null?Math.round(ratio*100):null;   // (the mark follows the % as printed: 79.6% reads 80%, no mark)
+    const dead=v[0]>=BQU_DEAD&&!v[1], gap=pc!=null&&(pc<Math.round((1-BQU_GAP)*100)||pc>Math.round((1+BQU_GAP)*100));
+    if(dead) n.dead++; else if(gap) n.gap++;
+    const tip=name+': '+v[0].toLocaleString()+' requests · '+v[1].toLocaleString()+' impressions'+(ratio!=null?' · AdMob ki requests ka '+Math.round(ratio*100)+'%':'')
+      +(dead?' — requests ja rahi hain, par ek bhi ad nahi dikha':gap?' — AdMob se '+(ratio<1?'kam':'zyada')+' requests ja rahi hain':'');
+    return `<td${dead?' class="bqu-dead"':gap?' class="bqu-gap"':''} title="${hAttr(tip)}">${bqN(v[0])}${ratio!=null?` <small>${Math.round(ratio*100)}%</small>`:''}${dead?' <small>0 impr</small>':''}</td>`; };
+  // "Mediation nahi": no network but AdMob's own lines gets a request (its waterfall line is AdMob too)
+  const isW=k=>BQU_ADMW.test(String(nm[k]==null?'':nm[k]).trim());
+  const body=U.rows.map(r=>{ const oth=U.others.filter(k=>(r.s[k]||[0])[0]>0&&!isW(k)), wf=U.others.filter(isW).reduce((t,k)=>t+((r.s[k]||[0])[0]),0);
+    const no=(r.a>0||wf>0)&&!oth.length, big=no&&appA>0&&Math.max(r.a,wf)/appA>=BQU_BIG;
+    if(no){ n.no++; if(big) n.big++; }
+    const cells=U.others.map(k=>{ const v=r.s[k], bid=/\(bidding\)\s*$/i.test(String(nm[k]==null?'':nm[k]).trim());
+      return cell(bquName(nm[k]),v,bid&&r.a>0&&v&&v[0]?v[0]/r.a:null); }).join('');
+    return `<tr><td class="nm">${hAttr(r.n)} <small>${hAttr(fmtF(r.f))}</small>${no?` <span class="bqu-chip${big?' big':''}" title="${hAttr('Sirf AdMob (bidding / waterfall) ko request jaati hai, koi dusra network nahi'+(big?' — ye unit app ki AdMob requests ka '+Math.round(Math.max(r.a,wf)/appA*100)+'% leta hai':''))}">Mediation nahi</span>`:''}</td>`
+      +cell('AdMob',[r.a,r.ai],null)+cells+'</tr>'; }).join('');
+  const sum=`<div class="bqu-sum"><span>⚠️ Mediation nahi: <b>${n.no}</b>${n.big?` (<b style="color:var(--bad)">${n.big} bade</b>)`:''}</span><span>Request farak: <b>${n.gap}</b></span><span>0 impression: <b>${n.dead}</b></span></div>`;
+  const th=k=>`<th title="${hAttr(String(nm[k]==null?'':nm[k]))}">${hAttr(bquName(nm[k]))}<span class="bq-s">req${/\(bidding\)\s*$/i.test(String(nm[k]==null?'':nm[k]).trim())?' · % of AdMob':''}</span></th>`;
+  return head+sum+`<div style="overflow-x:auto"><table><thead><tr><th>Ad unit</th><th>AdMob<span class="bq-s">req</span></th>${U.others.map(th).join('')}</tr></thead><tbody>${body}</tbody></table></div>`
+    +`<div class="bqu-note"><b>Mediation nahi</b> = sirf AdMob (bidding / waterfall) ko request jaati hai, koi dusra network nahi (laal = app ki AdMob requests ka ${Math.round(BQU_BIG*100)}% ya zyada lene wala unit). <b>%</b> = bidding network ko AdMob ki requests ka kitna % mila — ${Math.round((1-BQU_GAP)*100)}% se kam ya ${Math.round((1+BQU_GAP)*100)}% se zyada: <span style="color:#f0b429">peela</span> (AdMob Waterfall pe ye niyam nahi: waterfall line apne aap kam-zyada requests leti hai). <b>0 impr</b> = ${BQU_DEAD.toLocaleString()}+ requests gayi par ek bhi ad nahi dikha. Ek hi ad request kai networks ko jaati hai — inko jodna nahi.</div></div>`; }
 function bqListPaint(){ const el=document.querySelector('.screen[data-screen=bidreq]'); if(el) el.innerHTML=bqHtml(); }
-function bqPaint(){ if(!(MED&&MEDB===medBuild())) bqListPaint(); loadMED(bqListPaint); }   // shown: now, and again once the file is in
+function bqPaint(){ if(!(MED&&MEDB===medBuild())) bqListPaint(); loadMED(bqListPaint); if(APP) bquLoad(APP,bqListPaint); }   // shown: now, and again once each file is in
 function bqOpen(){ hbOv('bidreq',true,bqUndo); show('bidreq'); }   // a tile's tap: phone Back → Overview (in the ✨ hub too)
 function bqUndo(){ if(bqScr()==='bidreq') show('overview'); }
 function bqClose(){ hbDrop('bidreq'); show('overview'); }               // "← Overview"

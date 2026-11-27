@@ -313,7 +313,8 @@ def test_structure():
     assert "root.append(hubOv(renderOverview()),renderPlacements()," in js and "if(HUB.on) root.append(renderHubRv());" in js
     assert "document.querySelectorAll('.nav button[data-screen]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.screen)));" in js
     assert "function openAppDetail(name){\n  if(hubOpenApp(name)) return;" in js and "if(HUB.on) hubPost('appdetail');" in js
-    assert "if(HUB.on&&HUB.inHub){ render(); show(hubHost(" in js and "if(HUB.on) return;   // ✨ hub (a page outside Home)" in js
+    assert "if(HUB.on&&HUB.inHub){ render(); show(cur==='bidreq'&&!go?'bidreq':hubHost(" in js and "if(HUB.on) return;   // ✨ hub (a page outside Home)" in js
+    assert "  if(app!==APP) setApp(app,1); else show(hubHost(tab,app)); }" in js   # (a hub step sets its own tab: that tab's page)
     assert "if((n<0||d==null)&&typeof HUB!=='undefined'&&HUB.on&&hubPop(d,nd)) return;" in js
     assert "if(x&&x.hub&&x.url!=null) H.pushState({iqb:HB.depth+1},'',location.pathname+location.search+x.url); else H.pushState({iqb:HB.depth+1},'');" in js
     assert "if(!HUB.on) hbOv('ecpm',true,ecUndo); show('ecpm'); }" in js

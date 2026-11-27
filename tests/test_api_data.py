@@ -139,6 +139,38 @@ def test_build_mediation_daily_is_compact_and_windowable():
     assert admob_d1 == 19_000_000
 
 
+def test_build_mediation_units_is_per_app_unit_source_day():
+    """📡 Ad units × source × day per app ([dayidx, requests, impressions]), the app's own dates; a row with neither
+    requests nor impressions is left out; a unit's name / format from its rows."""
+    from admob_iq.db import InMemoryRepo
+    from admob_iq.api.dataservice import build_mediation_units
+    repo = InMemoryRepo()
+    repo.upsert_mediation(_med_row("2026-07-20", "App A", "app-a", "ADMOB", "AdMob Network", 10))
+    repo.upsert_mediation(_med_row("2026-07-20", "App A", "app-a", "META", "Meta Audience", 4))
+    repo.upsert_mediation(_med_row("2026-07-22", "App A", "app-a", "ADMOB", "AdMob Network", 12))
+    repo.upsert_mediation(_med_row("2026-07-21", "App B", "app-b", "ADMOB", "AdMob Network", 7))
+    zero = _med_row("2026-07-21", "App A", "app-a", "WF", "AdMob Network Waterfall", 0)
+    zero.update(ad_requests=0, impressions=0)
+    repo.upsert_mediation(zero)
+    mu = build_mediation_units(repo)
+    assert sorted(mu) == ["App A", "App B"]
+    a = mu["App A"]
+    assert a["dates"] == ["2026-07-20", "2026-07-22"] and a["names"] == {"ADMOB": "AdMob Network", "META": "Meta Audience"}
+    assert a["units"] == {"app-a/u1": {"n": "u1", "f": "interstitial",
+                                       "s": {"ADMOB": [[0, 1000, 1000], [1, 1000, 1000]], "META": [[0, 1000, 1000]]}}}
+    assert mu["App B"]["dates"] == ["2026-07-21"] and mu["App B"]["units"]["app-b/u1"]["s"] == {"ADMOB": [[0, 1000, 1000]]}
+    assert build_mediation_units(InMemoryRepo()) == {}
+    # a source / unit renamed in AdMob since: its newest name (the bidding mark on the page reads it)
+    for first_old in (True, False):                     # whichever row comes first from the store
+        r2, old = InMemoryRepo(), _med_row("2026-07-19", "App A", "app-a", "META", "Meta Audience", 4)
+        old.update(source_name="Meta", unit_name="u1 old")
+        rows = [old, _med_row("2026-07-20", "App A", "app-a", "META", "Meta Audience", 4)]
+        for r in (rows if first_old else rows[::-1]):
+            r2.upsert_mediation(r)
+        mu = build_mediation_units(r2)
+        assert mu["App A"]["names"]["META"] == "Meta Audience" and mu["App A"]["units"]["app-a/u1"]["n"] == "u1"
+
+
 def test_build_mediation_daily_empty_is_safe():
     from admob_iq.db import InMemoryRepo
     from admob_iq.api.dataservice import build_mediation_daily

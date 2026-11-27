@@ -372,6 +372,42 @@ def build_mediation_daily(repo):
     return {"dates": dates, "names": names, "by_app": by_app, "currency": cur or "USD"}
 
 
+def build_mediation_units(repo):
+    """📡 Bid requests by AD UNIT × ad source × day, one dict per app (owner, 27 Nov 2026: "ad unit wise bid request
+    chahiye for every ad network like admob meta and admob waterfall" + marks for no mediation, a network's request gap
+    to AdMob's and requests with no impression — the page's 📡 Bid requests screen windows them to the header's Period).
+    The stored mediation report, every day (zero new fetch: the rows build_mediation_daily sums by app); a row with
+    neither requests nor impressions is left out. → {app name: {"v": 1, "dates": [YYYY-MM-DD …], "names": {source key:
+    name}, "units": {ad unit id: {"n": unit name, "f": format, "s": {source key: [[dayidx, requests, impressions] …]}}}}}"""
+    from collections import defaultdict
+    agg = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))   # app -> unit -> source -> day -> [req, impr]
+    names, nday, meta, days = {}, {}, {}, defaultdict(set)              # a source's / unit's name: its newest row's
+    for r in repo.fetch_mediation():
+        d, u, k = str(r.get("report_date") or ""), r.get("ad_unit_id"), r.get("ad_source")
+        req, imp = r.get("ad_requests") or 0, r.get("impressions") or 0
+        if d in ("", "None") or not u or not k or not (req or imp):
+            continue
+        app = r.get("app_name") or _clean_id(r.get("app_id"))
+        if d >= nday.get(k, ""):
+            nday[k], names[k] = d, r.get("source_name") or _clean_id(k)
+        if d >= nday.get((app, u), ""):
+            nday[(app, u)], meta[(app, u)] = d, (r.get("unit_name") or _clean_id(u), r.get("format") or "")
+        c = agg[app][u][k].setdefault(d, [0, 0])
+        c[0] += req
+        c[1] += imp
+        days[app].add(d)
+    out = {}
+    for app in sorted(agg):
+        units, ds = agg.pop(app), sorted(days[app])
+        ix = {d: i for i, d in enumerate(ds)}
+        out[app] = {"v": 1, "dates": ds, "names": {k: names[k] for k in sorted({k for s in units.values() for k in s})},
+                    "units": {u: {"n": meta[(app, u)][0], "f": meta[(app, u)][1],
+                                  "s": {k: [[ix[d], c[0], c[1]] for d, c in sorted(dd.items())]
+                                        for k, dd in sorted(srcs.items())}}
+                              for u, srcs in sorted(units.items())}}
+    return out
+
+
 def build_deductions_daily(repo):
     """Per (ad_unit, report_date) estimate DECAY from the append-only snapshots — 'pehle itna
     tha, ab itna hua'. AdMob revises a day's estimate DOWN after close (invalid-traffic removal);
