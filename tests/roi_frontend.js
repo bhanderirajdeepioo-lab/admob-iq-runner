@@ -990,10 +990,15 @@ async function benchReload(VW, file, packs) {
     const mt = U.mixTable(MIX);
     out.mix = { rows: [...mt.matchAll(/data-roi-mixm="([^"]+)"/g)].map(m => m[1]), oct: tdTexts(mt, '2026-10'), sep: tdTexts(mt, '2026-09'),
       aug: tdTexts(mt, '2026-08'), jul: tdTexts(mt, '2026-07'), jun: tdTexts(mt, '2026-06'), over: mt.includes('Split (GA4) $210 — AdMob se zyada: % split par') && mt.includes('Split (GA4) $20 — AdMob me is mahine kuch nahi'),
-      head: [...mt.matchAll(/<th>([^<]*)<\/th>/g)].map(m => m[1]), tip: mt.includes('title="Sep 2026 installs: $30"'), closed: !mt.includes('roi-xr') };
+      head: [...mt.matchAll(/<th>([^<]*)<\/th>/g)].map(m => m[1]), tip: mt.includes('title="Sep 2026 installs: $30"'), closed: !mt.includes('roi-xr'),
+      // one build for every split cell: the share's tint (3% + 13% × share; Unknown never tinted), the month still running
+      // ("not final" amounts: Oct 2026, through the 12th — its five amounts), the amount's exact value on hover
+      tint: mt.includes('<td class="mx" style="--mx:8.2%" title="Oct 2026 installs: $40">') && mt.includes('<td class="mx" title="GA4 ne install din nahi bataya: $10">'),
+      nf: (mt.match(/mx-a roi-rtnf/g) || []).length };
     U.set('MIXO', '2026-10');
     const mo = U.mixTable(MIX), xi = mo.indexOf('<tr class="roi-xr">'), xr = mo.slice(xi, mo.indexOf('</tr>', xi));
     out.mix.open = dec(xr.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim());
+    out.mix.openNf = (mo.match(/roi-rtnf/g) || []).length;   // the running month opened: its 5 cells + its 6 list amounts
     U.set('MIXO', '2026-06');
     const mj = U.mixTable(MIX), ji = mj.indexOf('<tr class="roi-xr">');
     out.mix.tiny = dec(mj.slice(ji, mj.indexOf('</tr>', ji)).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim());
@@ -1002,8 +1007,28 @@ async function benchReload(VW, file, packs) {
     out.mix.coh = { head: [...mco.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map(m => m[1]),
       rows: [...mco.matchAll(/<tr><td class="roi-nm">([\s\S]*?)<\/tr>/g)].map(m => [...('<td>' + m[1]).matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)]
         .map(c => dec(c[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()))) };
+    // the month still running (Oct, through the 12th): no "12d" in a cell (it widened the column), its amounts "not final"
+    out.mix.coh.nf = (mco.match(/mx-a roi-rtnf/g) || []).length; out.mix.coh.days = mco.includes('12d');
+    out.mix.coh.hover = mco.includes('title="Sep 2026 installs → Oct 2026 (12 din): $30"');
     // a month after till (All apps' till = the apps' most common day: one app a month on): no column, so not in a Total
     out.mix.coh.next = U.mixCoh(Object.assign({}, MIX, { m: Object.assign({}, MIX.m, { '2026-11': { '2026-10': 25, '2026-09': 5 } }) })) === mco;
+    // ₹ (rate 10,000): the amounts convert like the exact one on hover; Older and Unknown in their own places (both 10%)
+    ctx.curView = () => 'INR'; ctx.cfx = () => 10000; ctx.csym = () => '₹';
+    const mi = U.mixTable(MIX); out.mix.inr = tdTexts(mi, '2026-10').slice(2, 5); out.mix.inrTip = mi.includes('title="Oct 2026 installs: ₹4,00,000"');
+    // the short form's unit edge (MC): 999.6 × 10,000 = ₹99,96,000 → "₹1.00 Cr"; in $ × 1,000 = $999,600 → "$1.0M"
+    const MEDGE = { till: '2026-10-12', m: { '2026-10': { '2026-10': 999.6 } }, adm: {} };
+    out.mix.edge = [U.mixCoh(MEDGE).includes('>₹1.00 Cr<')];
+    ctx.curView = () => 'USD'; ctx.cfx = () => 1000; ctx.csym = () => '$'; out.mix.edge.push(U.mixCoh(MEDGE).includes('>$1.0M<'));
+    ctx.cfx = () => 1;
+    { const i = mt.indexOf('data-roi-mixm="2026-10"'), tr = mt.slice(i, mt.indexOf('</tr>', i));
+      out.mix.octTips = [...tr.matchAll(/<td[^>]*title="([^"]*)"/g)].map(x => dec(x[1])).slice(-2); }
+    // … and with values of their own (Older 8 + 5 = 13 of 100, Unknown 100 − 93 = 7): each number in its own column
+    const MX2 = Object.assign({}, MIX, { m: Object.assign({}, MIX.m, { '2026-10': { '2026-10': 40, '2026-09': 30, '2026-08': 10, '2026-01': 8, '2025-11': 5 } }) });
+    out.mix.ou = tdTexts(U.mixTable(MX2), '2026-10').slice(8, 10);
+    // a month's last day (till 31 Oct): Oct is over — nothing "not final" in either view, no "adhoora" in the note
+    const ME = Object.assign({}, MIX, { till: '2026-10-31' });
+    out.mix.endNf = [U.mixTable(ME), U.mixCoh(ME)].map(h => (h.match(/roi-rtnf/g) || []).length);
+    out.mix.endNote = !U.mixCohNote(ME).includes('adhoora') && U.mixCohNote(MIX).includes('aakhri mahina adhoora');
     U.set('MXO', 'ins'); U.set('LG', 'mix');
     const lmc = U.lifeView(d.life, d.life_till, d, null, MIX);
     out.mix.coh.view = lmc.includes('data-roi-mxo="ins" aria-pressed="true"') && lmc.includes('<th>Install month</th><th>Total (ab tak)</th>')

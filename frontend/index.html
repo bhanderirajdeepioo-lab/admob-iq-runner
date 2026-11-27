@@ -2644,6 +2644,15 @@ body.as-lock[data-screen="active"]{overflow:hidden}
 .roi-mxo{padding:0 0 8px}
 .roi-mixl{position:sticky;left:10px;max-width:min(calc(100vw - 80px),860px);line-height:1.6}   /* wraps in the view, never widens the table */
 .roi-mix td small{margin-left:2px}
+/* 📊 a split cell (both views): the month left, its % right, the amount under it — every cell the same build and width,
+   so the % and the amounts stand in one line down each column; tinted by its share (cyan, never a good / bad colour; at
+   most 16% like the module's heat cells, so the small month and the italic amount stay readable) */
+.roi-mix td{vertical-align:baseline}
+.roi-mix td.mx{min-width:5.4em;padding-top:6px;padding-bottom:6px;background:color-mix(in srgb,var(--cyan) var(--mx,0%),transparent)}
+.roi-mix .mx-l{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.roi-mix .mx-l small{margin:0;color:var(--muted)}
+.roi-mix .mx-a{display:block;margin-top:2px;font-size:10.5px;line-height:1.2;font-weight:600;color:var(--ink2)}
+.roi-mixi .mx-ai{color:var(--ink2);font-size:11.5px}
 .roi-sub{min-width:560px}
 .roi-cv{color:var(--muted)}
 @media (max-width:760px){.roi-ks6{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.roi-k{padding:9px 10px}.roi-kv{font-size:16.5px}
@@ -10636,7 +10645,8 @@ function inner(aid){
 // ---- the summary card on top (owner: "clear … boring na lage"): status, one sentence, 4 big numbers, the engine's next step ----
 function lifeTot(life,till){ let r=0,s=0,n=0; for(const x of life||[]){ if(till&&x[0]>till) continue; r+=RV(+x[1]||0)||0; s+=SV(+x[2]||0,x[3]!=null?+x[3]:null)||0; n++; } return {r,s,p:r-s,n}; }
 function MC(x,sign){ if(!ok(x)) return '—'; const a=Math.abs(x), inr=curView()==='INR', sg=x<0?MI:(sign&&x>0?'+':'');   // big money, short
-  const t=inr?(a>=1e7?(a/1e7).toFixed(a>=1e9?0:2)+' Cr':a>=1e5?(a/1e5).toFixed(a>=1e7?0:1)+' lakh':null):(a>=1e6?(a/1e6).toFixed(1)+'M':a>=1e4?(a/1e3).toFixed(0)+'K':null);
+  // (the unit on the rounded value: 99.96 lakh → "1.00 Cr", $999.6K → "$1.0M" — never "100.0 lakh" / "$1000K")
+  const t=inr?(a>=9.995e6?(a/1e7).toFixed(a>=1e9?0:2)+' Cr':a>=1e5?(a/1e5).toFixed(1)+' lakh':null):(a>=999.5e3?(a/1e6).toFixed(1)+'M':a>=1e4?(a/1e3).toFixed(0)+'K':null);
   return t?sg+csym()+t:MV(x,sign); }
 function bigN(lab,val,sub,cls){ return `<div class="roi-hn${cls?' '+cls:''}"><div class="roi-hl">${lab}</div><div class="roi-hv">${val}</div><div class="roi-hs">${sub||''}</div></div>`; }
 function hero(aid){
@@ -11630,15 +11640,20 @@ const MIX_COLS=6;                              // same month + 5 months before; 
 function mixOk(mix){ return !!(mix&&mix.m&&Object.keys(mix.m).length)&&!(typeof window!=='undefined'&&window.__DEV_VIEW__); }
 function mixBack(M,n){ const t=+M.slice(0,4)*12+(+M.slice(5,7)-1)-n; return String(Math.floor(t/12))+'-'+String(t%12+1).padStart(2,'0'); }
 function mixPc(x){ return !ok(x)?'—':x<=0?'0%':x<0.001?'<0.1%':(x<0.1?(Math.round(x*1000)/10).toFixed(1):String(Math.round(x*100)))+'%'; }
+// a split cell (owner, 27 Nov 2026: "percentage ke sath revenue bhi … dono view me … uneven he abhi vo thik kro"): the
+// month (lab) left, the % right, the amount under it — short (₹3.46 Cr · $34K; the exact one on hover); nf = the month is
+// not over yet (the amount in the "not final" style); the share tints the cell
+function mixCell(v,tot,lab,tip,nf){ const s=v>0&&tot>0?v/tot:0;
+  return `<td class="mx"${s?` style="--mx:${(3+Math.min(1,s)*13).toFixed(1)}%"`:''} title="${E(tip)}: ${E(MV(RV(v)))}"><span class="mx-l"><small>${E(lab||'')}</small> <b>${s?E(mixPc(s)):'—'}</b></span>`
+    +(s?` <span class="mx-a${nf?' roi-rtnf':''}">${E(MC(RV(v)))}</span>`:'')+`</td>`; }
 function mixRows(mix){ const adm=mix.adm||{};
   return Object.keys(mix.m).sort().reverse().map(M=>{ const cs=mix.m[M]||{}, att=Object.values(cs).reduce((s,v)=>s+(+v||0),0), a=+adm[M]||0;
     const tot=Math.max(a,att); return {M,cs,tot,att,a,unk:Math.max(0,a-att)}; }).filter(r=>r.att>0); }   // (no split: no row)
 function mixTable(mix){ if(!mixOk(mix)) return '';
   const till=String(mix.till||''), rows=mixRows(mix), mon=C=>fmtMon(C).slice(0,3), ncol=4+MIX_COLS;
-  const cell=(v,tot,lab,tip)=>`<td title="${E(tip)}: ${E(MV(RV(v)))}">${v>0?`<b>${E(mixPc(v/tot))}</b>`:'—'}${lab?` <small>${E(lab)}</small>`:''}</td>`;
   const body=rows.map(r=>{ const M=r.M, part=M===till.slice(0,7)&&+till.slice(8,10)<new Date(+M.slice(0,4),+M.slice(5,7),0).getDate();
       let old=0; const cells=[];
-      for(let n=0;n<MIX_COLS;n++){ const C=mixBack(M,n); cells.push(cell(+r.cs[C]||0,r.tot,mon(C),fmtMon(C)+' installs')); }
+      for(let n=0;n<MIX_COLS;n++){ const C=mixBack(M,n); cells.push(mixCell(+r.cs[C]||0,r.tot,mon(C),fmtMon(C)+' installs',part)); }
       for(const [C,v] of Object.entries(r.cs)) if(C<mixBack(M,MIX_COLS-1)) old+=+v||0;
       const open=MIXO===M;
       // Revenue = AdMob's own number ('—' without one); ≈ = the split (GA4 × k) is over it by more than 1% (less: the
@@ -11647,13 +11662,15 @@ function mixTable(mix){ if(!mixOk(mix)) return '';
         +`${r.a>0?(over?'≈ ':'')+MV(RV(r.a)):'—'}</td>`;
       const frm=String(mix.from||''), first=M===frm.slice(0,7);   // the app's first GA4 month: from its history start
       const tr=`<tr class="clk" data-roi-mixm="${E(M)}"><td class="roi-nm">${E(fmtMon(M))}${first?` <small>${+frm.slice(8,10)} se</small>`:''}${part?` <small>${+till.slice(8,10)}d</small>`:''}</td>${rev}${cells.join('')}`
-        +cell(old,r.tot,'',`Older than ${fmtMon(mixBack(M,MIX_COLS-1))}`)+`<td title="${E('GA4 ne install din nahi bataya: '+MV(RV(r.unk)))}">${r.unk>0?E(mixPc(r.unk/r.tot)):'—'}</td><td class="roi-cv">${open?'▾':'▸'}</td></tr>`;
+        +mixCell(old,r.tot,'',`Older than ${fmtMon(mixBack(M,MIX_COLS-1))}`,part)+mixCell(r.unk,r.tot,'','GA4 ne install din nahi bataya',part).replace(/ style="[^"]*"/,'')
+        +`<td class="roi-cv">${open?'▾':'▸'}</td></tr>`;   // (Unknown: no install month — never tinted like one)
       if(!open) return tr;
       // every install month of 0.1% + on its own; the rest (often GA4 first-session dates from a wrong phone clock) as one
       const ent=Object.entries(r.cs).filter(([,v])=>+v>0).sort((x,y)=>x[0]<y[0]?1:-1), tiny=ent.filter(([,v])=>v/r.tot<0.001);
-      const all=ent.filter(([,v])=>v/r.tot>=0.001).map(([C,v])=>`<span class="roi-mixi"><b>${E(mixPc(v/r.tot))}</b> ${E(fmtMon(C))}</span>`);
-      if(tiny.length) all.push(`<span class="roi-mixi"><b>${E(mixPc(tiny.reduce((t,[,v])=>t+(+v||0),0)/r.tot))}</b> ${tiny.length} aur ${tiny.length===1?'mahina':'mahine'} milake (har ek &lt;0.1%)</span>`);
-      if(r.unk>0) all.push(`<span class="roi-mixi"><b>${E(mixPc(r.unk/r.tot))}</b> Unknown</span>`);
+      const amt=v=>` <span class="mx-ai${part?' roi-rtnf':''}" title="${E(MV(RV(v)))}">${E(MC(RV(v)))}</span>`, tv=tiny.reduce((t,[,v])=>t+(+v||0),0);
+      const all=ent.filter(([,v])=>v/r.tot>=0.001).map(([C,v])=>`<span class="roi-mixi"><b>${E(mixPc(v/r.tot))}</b> ${E(fmtMon(C))}${amt(v)}</span>`);
+      if(tiny.length) all.push(`<span class="roi-mixi"><b>${E(mixPc(tv/r.tot))}</b> ${tiny.length} aur ${tiny.length===1?'mahina':'mahine'} milake (har ek &lt;0.1%)${amt(tv)}</span>`);
+      if(r.unk>0) all.push(`<span class="roi-mixi"><b>${E(mixPc(r.unk/r.tot))}</b> Unknown${amt(r.unk)}</span>`);
       return tr+`<tr class="roi-xr"><td colspan="${ncol+1}"><div class="roi-mixl"><b>${E(fmtMon(M))}</b> ka revenue, har install mahine ka hissa: ${all.join(' · ')}</div></td></tr>`; }).join('');
   return `<table class="roi-t roi-mix"><thead><tr><th>Calendar month</th><th>Revenue</th><th>Same month</th>${Array.from({length:MIX_COLS-1},(_,i)=>`<th>${i+1} month${i?'s':''} before</th>`).join('')}<th>Older</th><th>Unknown</th><th></th></tr></thead><tbody>${body}</tbody></table>`; }
 // 📊 an install month's earnings month by month (owner, 27 Nov 2026: "ak column month ka … fir same month 50%, agle
@@ -11668,17 +11685,16 @@ function mixCoh(mix){ if(!mixOk(mix)) return '';
   ms.filter(M=>M<=tm).forEach(M=>Object.entries(m[M]||{}).forEach(([C,v])=>{ const k=ix(M)-ix(C); if(C>=first&&k>=0&&+v>0) (coh[C]=coh[C]||{})[k]=+v; }));
   const rows=Object.keys(coh).sort().reverse(); if(!rows.length) return '';
   const maxK=Math.max(...rows.map(C=>ix(tm)-ix(C))), part=+till.slice(8,10)<new Date(+tm.slice(0,4),+tm.slice(5,7),0).getDate();
-  const mon=M=>fmtMon(M).slice(0,3)+(M===tm&&part?' '+(+till.slice(8,10))+'d':'');
   const body=rows.map(C=>{ const e=coh[C], tot=Object.values(e).reduce((t,v)=>t+v,0), last=ix(tm)-ix(C);
     const cells=Array.from({length:maxK+1},(_,k)=>{ if(k>last) return '<td></td>';
-      const M=mixBack(C,-k), v=e[k]||0;
-      return `<td title="${E(fmtMon(C)+' installs → '+fmtMon(M)+': '+MV(RV(v)))}">${v>0?`<b>${E(mixPc(v/tot))}</b>`:'—'} <small>${E(mon(M))}</small></td>`; }).join('');
+      const M=mixBack(C,-k), now=M===tm&&part;     // the month still running: "Nov", its days on hover + in the note
+      return mixCell(e[k]||0,tot,fmtMon(M).slice(0,3),fmtMon(C)+' installs → '+fmtMon(M)+(now?' ('+(+till.slice(8,10))+' din)':''),now); }).join('');
     return `<tr><td class="roi-nm">${E(fmtMon(C))}</td><td>${MV(RV(tot))}</td>${cells}</tr>`; }).join('');
   return `<table class="roi-t roi-mix"><thead><tr><th>Install month</th><th>Total (ab tak)</th><th>Same month</th>${Array.from({length:maxK},(_,i)=>`<th title="${i+1} mahina baad">+${i+1}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`; }
-function mixCohNote(mix){ const t=String((mix||{}).till||'');
-  return `<p class="roi-note"><b>Har line</b> = us mahine aaye users (ads + organic). <b>Total</b> = unki ab tak ki kul kamai (GA4 ke hisaab se, AdMob matched). <b>%</b> = us kamai ka kitna hissa kis mahine aaya — <b>Same month</b> = install wala mahina, <b>+1</b> = agla mahina, aise hi aage; line ka total 100%. Khaali = wo mahina abhi aaya nahi. Split ke pehle mahine se purane install mahine yahan nahi. ${t?`${E(fd(t))} tak (aakhri mahina adhoora).`:''}</p>`; }
+function mixCohNote(mix){ const t=String((mix||{}).till||''), p=t&&+t.slice(8,10)<new Date(+t.slice(0,4),+t.slice(5,7),0).getDate();
+  return `<p class="roi-note"><b>Har line</b> = us mahine aaye users (ads + organic). <b>Total</b> = unki ab tak ki kul kamai (GA4 ke hisaab se, AdMob matched). <b>%</b> = us kamai ka kitna hissa kis mahine aaya — <b>Same month</b> = install wala mahina, <b>+1</b> = agla mahina, aise hi aage; line ka total 100%. <b>₹ / $</b> (neeche) = wo hissa paise me (chhota roop; poora amount hover par). Khaali = wo mahina abhi aaya nahi. Split ke pehle mahine se purane install mahine yahan nahi. ${t?`${E(fd(t))} tak${p?' — aakhri mahina adhoora (uska amount tircha)':''}.`:''}</p>`; }
 function mixNote(mix,d){ const t=String((mix||{}).till||'');
-  return `<p class="roi-note"><b>Revenue</b> = us mahine AdMob se aaya (${d&&d.app?'is app ke':'saare apps ke'} saare users — ads + organic). <b>%</b> = us revenue ka kitna hissa kis mahine ke installs ke users ne kamaya (GA4 ke hisaab se, AdMob matched): <b>Same month</b> = usi mahine aaye naye users, <b>1 month before</b> = pichhle mahine ke, aise hi aage; <b>Older</b> = usse purane sab. <b>Unknown</b> = jitne revenue ka install din GA4 ne nahi bataya (AdMob aur GA4 ke din alag time zone me hon to mahine ke kinare ke kuch ghante bhi). <b>≈</b> = GA4 ka split AdMob se zyada, % split par. GA4 se pehle ke mahine yahan nahi. Mahine pe tap = har install mahine ka %. ${t?`${E(fd(t))} tak.`:''}</p>`; }
+  return `<p class="roi-note"><b>Revenue</b> = us mahine AdMob se aaya (${d&&d.app?'is app ke':'saare apps ke'} saare users — ads + organic). <b>%</b> = us revenue ka kitna hissa kis mahine ke installs ke users ne kamaya (GA4 ke hisaab se, AdMob matched): <b>Same month</b> = usi mahine aaye naye users, <b>1 month before</b> = pichhle mahine ke, aise hi aage; <b>Older</b> = usse purane sab. <b>Unknown</b> = jitne revenue ka install din GA4 ne nahi bataya (AdMob aur GA4 ke din alag time zone me hon to mahine ke kinare ke kuch ghante bhi). <b>≈</b> = GA4 ka split AdMob se zyada, % split par. <b>₹ / $</b> (neeche) = wo hissa paise me (chhota roop; poora amount hover par). GA4 se pehle ke mahine yahan nahi. Mahine pe tap = har install mahine ka % aur amount. ${t?`${E(fd(t))} tak.`:''}</p>`; }
 // ---- 💰 Lifetime P/L ----
 // install-month P/L (owner, 13 Oct: "december 2025 se april 2026 tak ka month ab profit me aa chuke he"): each install month's
 // Google Ads spend vs what ITS users earned so far (AdMob-matched, to day 365) — ROAS and profit in the view currency, so
@@ -12494,7 +12510,7 @@ function cardLine(aid){ const a=appPtr(aid); if(!a||a.r7==null&&a.pb==null&&!a.n
   if(a.pb!=null) parts.push(`paisa wapas ${PBT(a.pb)}`); else if(a.nb) parts.push(`${a.nb[0]} din me sirf ${P(a.nb[1])} wapas`);
   if(ok(lp)) parts.push(`lifetime <b class="${lp>=0?'roi-up':'roi-dn'}">${MC(lp,true)}</b>`);
   return {st:ST_KEY[a.st]||'lagu', line:'📈 '+parts.join(' · ')}; }
-return {ptr, appPtr, block, repaint, cardLine, _:{devView, devRange, devList, DVK, dvRetry, dvCtl, dvWarn, dvSet:(cc,k,dir,per,f,t)=>{ DVCC=cc||''; if(k) DVSORT={k,dir:dir||1}; if(per) DVPER=per; if(f!=null) DVF=f; if(t!=null) DVTO=t; DVC={k:'',d:null,v:null}; }, setView:v=>{ VIEW=v; }, cols, cum, groupRows, agg, cell, beGrp, beDay, beTd, cohortTable, beAvg, lateNote, zx, ccSrc, ccPick, cohCard, benchCard, lzNext, BN, LZ_STEP, st:()=>({GRAIN,MET,SHOW,CTY}), ccNote, ccQ, cdOf, keepAt, PK, CR, PKL, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, mixTable, mixCoh, mixOk, ctyView, ctyOld, cpSum, cpRow, cpTot, cpJudge, cpNow, cpUnp, CPK, cpSet:(per,f,t,all)=>{ CPER=per; CPF=f||''; CPTO=t||''; CALL=!!all; CPC={k:'',v:null}; }, dayView, allView, hero, xMode, setMode:(c,dv)=>{ if(c) CMODE=c; if(dv) DMODE=dv; }, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; if(k==='MIXO') MIXO=v; if(k==='MXO') MXO=v; }, data:()=>({ALL,AF})}};
+return {ptr, appPtr, block, repaint, cardLine, _:{devView, devRange, devList, DVK, dvRetry, dvCtl, dvWarn, dvSet:(cc,k,dir,per,f,t)=>{ DVCC=cc||''; if(k) DVSORT={k,dir:dir||1}; if(per) DVPER=per; if(f!=null) DVF=f; if(t!=null) DVTO=t; DVC={k:'',d:null,v:null}; }, setView:v=>{ VIEW=v; }, cols, cum, groupRows, agg, cell, beGrp, beDay, beTd, cohortTable, beAvg, lateNote, zx, ccSrc, ccPick, cohCard, benchCard, lzNext, BN, LZ_STEP, st:()=>({GRAIN,MET,SHOW,CTY}), ccNote, ccQ, cdOf, keepAt, PK, CR, PKL, inner, setCTY:x=>{ CTY=x; }, getCTY:()=>CTY, lifeView, cohortPL, mixTable, mixCoh, mixOk, mixCohNote, ctyView, ctyOld, cpSum, cpRow, cpTot, cpJudge, cpNow, cpUnp, CPK, cpSet:(per,f,t,all)=>{ CPER=per; CPF=f||''; CPTO=t||''; CALL=!!all; CPC={k:'',v:null}; }, dayView, allView, hero, xMode, setMode:(c,dv)=>{ if(c) CMODE=c; if(dv) DMODE=dv; }, fcView, fcOut, fcAll, fcPlan, fcChart, fcLine, fcAcc, fcHz, fcHN, fcBand, fcXs, fcAccTxt, fcCalEv, fcCalNote, fcHol, fcWk, fcAds, acChart, acSt, acJ, fcAdsBt, fcAdsLine, fcAdsMarks, plStep, plState, fcMul, f4Hero, f4All, M, MP, P, setAll:x=>{ ALL=x; }, set:(k,v)=>{ if(k==='F4H') F4H=v; if(k==='F4X') F4X=v; if(k==='FSORT') FSORT=v; if(k==='FCH') FCH=v; if(k==='FCM') FCM=v; if(k==='ACL') ACL=v; if(k==='ACN') ACN=v; if(k==='ACX') ACX=v; if(k==='PLAN') PLAN=v; if(k==='VIEW') VIEW=v; if(k==='GRAIN') GRAIN=v; if(k==='MET') MET=v; if(k==='SHOW') SHOW=v; if(k==='LG') LG=v; if(k==='MIXO') MIXO=v; if(k==='MXO') MXO=v; }, data:()=>({ALL,AF})}};
 })();
 // ---- 💰 Revenue by source — a section of the 💸 Install value tab (owner, 31 Oct 2026: notification revenue = GA4 Traffic
 // acquisition → Session primary channel group "Mobile Push Notifications", exactly as his GA4 screen; Paid = Cross-network +

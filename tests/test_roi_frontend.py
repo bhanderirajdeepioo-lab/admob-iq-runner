@@ -142,31 +142,44 @@ def test_revenue_by_install_month(out):
     assert m["rows"] == ["2026-10", "2026-09", "2026-08", "2026-07", "2026-06"]   # newest first; no split: no row
     assert m["head"] == ["Calendar month", "Revenue", "Same month", "1 month before", "2 months before", "3 months before",
                          "4 months before", "5 months before", "Older", "Unknown", ""]
-    # Oct (part month: through the 12th): AdMob $100, its split $90 → Unknown 10%; Jan + Nov 2025 are "Older"
-    assert m["oct"] == ["Oct 2026 12d", "$100", "40% Oct", "30% Sep", "10% Aug", "— Jul", "— Jun", "— May", "10%", "10%", "▸"]
+    # Oct (part month: through the 12th): AdMob $100, its split $90 → Unknown 10%; Jan + Nov 2025 are "Older". Every split
+    # cell (owner, 27 Nov: "percentage ke sath revenue bhi"): the month, its %, the amount under it (short form)
+    assert m["oct"] == ["Oct 2026 12d", "$100", "Oct 40% $40", "Sep 30% $30", "Aug 10% $10", "Jul —", "Jun —", "May —",
+                        "10% $10", "10% $10", "▸"]
     # Sep: the split ($210) over AdMob ($200): Revenue stays AdMob's own number, marked ≈; the % are of the split
-    assert m["sep"] == ["Sep 2026", "≈ $200", "71% Sep", "29% Aug", "— Jul", "— Jun", "— May", "— Apr", "—", "—", "▸"]
+    assert m["sep"] == ["Sep 2026", "≈ $200", "Sep 71% $150", "Aug 29% $60", "Jul —", "Jun —", "May —", "Apr —", "—", "—", "▸"]
     # Aug: a split and no AdMob revenue: never a GA4 number as Revenue
-    assert m["aug"] == ["Aug 2026", "—", "100% Aug", "— Jul", "— Jun", "— May", "— Apr", "— Mar", "—", "—", "▸"]
+    assert m["aug"] == ["Aug 2026", "—", "Aug 100% $20", "Jul —", "Jun —", "May —", "Apr —", "Mar —", "—", "—", "▸"]
     assert m["over"]                                                 # the hover says why
     # Jul: the split 0.5% over AdMob (the week ↔ month edge of k): no mark, AdMob's number, the split is the whole
-    assert m["jul"] == ["Jul 2026", "$100", "100% Jul", "— Jun", "— May", "— Apr", "— Mar", "— Feb", "—", "—", "▸"]
-    assert m["tip"] and m["closed"]                                  # the amount on hover; closed until tapped
-    assert m["open"] == ("Oct 2026 ka revenue, har install mahine ka hissa: 40% Oct 2026 · 30% Sep 2026 · 10% Aug 2026 · "
-                         "5.0% Jan 2026 · 5.0% Nov 2025 · 10% Unknown")
+    assert m["jul"] == ["Jul 2026", "$100", "Jul 100% $101", "Jun —", "May —", "Apr —", "Mar —", "Feb —", "—", "—", "▸"]
+    assert m["tip"] and m["closed"]                                  # the exact amount on hover; closed until tapped
+    assert m["tint"] and m["nf"] == 5                                # tinted by share (not Unknown); Oct's amounts not final
+    # ₹ (rate 10,000): the amounts convert like the exact hover; Older / Unknown (both 10%) each in its own place
+    assert m["inr"] == ["Oct 40% ₹4.0 lakh", "Sep 30% ₹3.0 lakh", "Aug 10% ₹1.0 lakh"] and m["inrTip"]
+    assert m["octTips"] == ["Older than May 2026: $10", "GA4 ne install din nahi bataya: $10"]
+    assert m["ou"] == ["13% $13", "7.0% $7.0"]                       # Older 13 · Unknown 7: each in its own column
+    assert m["edge"] == [True, True]       # the short form's unit edge: "₹1.00 Cr" / "$1.0M", never "₹100.0 lakh" / "$1000K"
+    assert m["endNf"] == [0, 0] and m["endNote"]   # a month's last day: nothing "not final", the note never says "adhoora"
+    assert m["open"] == ("Oct 2026 ka revenue, har install mahine ka hissa: 40% Oct 2026 $40 · 30% Sep 2026 $30 · "
+                         "10% Aug 2026 $10 · 5.0% Jan 2026 $5.0 · 5.0% Nov 2025 $5.0 · 10% Unknown $10")
+    assert m["openNf"] == 11                                         # the running month: its list's amounts not final too
     assert m["jun"][0] == "Jun 2026 15 se"                           # the first GA4 month: from GA4's history start
     # every install month under 0.1% (here one is a wrong phone clock's 1978) folded into one item
-    assert m["tiny"] == "Jun 2026 ka revenue, har install mahine ka hissa: 100% Jun 2026 · <0.1% 2 aur mahine milake (har ek <0.1%)"
+    assert m["tiny"] == ("Jun 2026 ka revenue, har install mahine ka hissa: 100% Jun 2026 $100 · <0.1% 2 aur mahine milake "
+                         "(har ek <0.1%) $0.05")
     assert m["life"] and m["nomix"] and m["dev"]                     # a 4th view only with a split; never for a developer
     # by install month (his "b"): the split's first month is Mar 2026, so the Jan 2026 / Nov 2025 / Jan 2025 / 1978
     # install months are left out; Sep's installs earned 150 in Sep + 30 in Oct = 180 → 83% · 17%; Aug's 20 · 60 · 10
     c = m["coh"]
     assert c["head"] == ["Install month", "Total (ab tak)", "Same month", "+1", "+2", "+3", "+4"]
-    assert c["rows"] == [["Oct 2026", "$40", "100% Oct 12d", "", "", "", ""],
-                         ["Sep 2026", "$180", "83% Sep", "17% Oct 12d", "", "", ""],
-                         ["Aug 2026", "$90", "22% Aug", "67% Sep", "11% Oct 12d", "", ""],
-                         ["Jul 2026", "$101", "100% Jul", "— Aug", "— Sep", "— Oct 12d", ""],
-                         ["Jun 2026", "$100", "100% Jun", "— Jul", "— Aug", "— Sep", "— Oct 12d"]]
+    assert c["rows"] == [["Oct 2026", "$40", "Oct 100% $40", "", "", "", ""],
+                         ["Sep 2026", "$180", "Sep 83% $150", "Oct 17% $30", "", "", ""],
+                         ["Aug 2026", "$90", "Aug 22% $20", "Sep 67% $60", "Oct 11% $10", "", ""],
+                         ["Jul 2026", "$101", "Jul 100% $101", "Aug —", "Sep —", "Oct —", ""],
+                         ["Jun 2026", "$100", "Jun 100% $100", "Jul —", "Aug —", "Sep —", "Oct —"]]
+    # the month still running (Oct, through the 12th): its days on hover, never in a cell; its 3 amounts "not final"
+    assert c["nf"] == 3 and not c["days"] and c["hover"]
     assert c["view"] and c["next"]   # a month after till (one app a month on in All apps): the same table, lines stay 100%
 
 
