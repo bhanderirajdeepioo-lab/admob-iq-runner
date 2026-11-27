@@ -126,12 +126,20 @@ def _chain(tmp, mp, on, mods=None, paid=None, head=None):
 
 def _digest(r):
     """sha256 of everything the two steps made: their site files (decompressed), the Breakeven caches, the board's
-    pointers, the lines, stderr, the header rules."""
-    files = {}
+    pointers, the lines, stderr, the header rules — the roi files without their 📊 "mix" (revenue by install month,
+    added after BEFORE was taken; the pass never reads or writes it) and the board's roi pointer "v" as of that file."""
+    from tests.test_roi_paid import _nomix
+    files, dash = {}, r["dash"]
     for side in ("out", "cache"):
         for n, raw in sorted(r[side].items()):
-            files[side + "/" + n] = hashlib.sha256(gzip.decompress(raw) if n.endswith(".gz") else raw).hexdigest()
-    top = {"files": files, "dash": r["dash"], "lines": r["lines"], "err": r["err"], "paths": r["paths"]}
+            body = gzip.decompress(raw) if n.endswith(".gz") else raw
+            if side == "out" and (rb.FILE_RE.match(n) or n == rb.ALL_FILE):
+                plain = _nomix(body)
+                if n == rb.ALL_FILE and plain != body and (dash.get("roi") or {}).get("v") == hashlib.sha1(body).hexdigest()[:12]:
+                    dash = dict(dash, roi=dict(dash["roi"], v=hashlib.sha1(plain).hexdigest()[:12]))
+                body = plain
+            files[side + "/" + n] = hashlib.sha256(body).hexdigest()
+    top = {"files": files, "dash": dash, "lines": r["lines"], "err": r["err"], "paths": r["paths"]}
     return hashlib.sha256(json.dumps(top, sort_keys=True).encode()).hexdigest()
 
 

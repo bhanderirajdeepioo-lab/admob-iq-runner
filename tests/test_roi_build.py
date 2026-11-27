@@ -658,7 +658,8 @@ def test_app_step_cube_block_and_byte_identical_without_it(tmp_path, monkeypatch
     assert all(len(r) == 16 for r in full["rows"] if len(r) > 14 and date.fromisoformat(r[0]) + timedelta(days=60) > LS)
     # every other part of the file as without the cube but what the columns feed (so far, breakeven → the forms)
     assert [r[:8] + r[11:14] for r in full["rows"]] == [r[:8] + r[11:14] for r in plain["rows"]]
-    assert {k for k in full if full[k] != plain.get(k)} <= {"rows", "late", "sum", "f4", "months"}
+    assert {k for k in full if full[k] != plain.get(k)} <= {"rows", "late", "sum", "f4", "months", "mix"}
+    assert "mix" in full and "mix" not in plain                         # 📊 only with the cube's cells
     assert full["months"] == plain["months"] and full["cty"] == plain["cty"] and full["life"] == plain["life"]
 
 
@@ -1221,9 +1222,15 @@ def test_country_app_step_file_and_isolation(tmp_path, monkeypatch):
     # every other byte of the file = the same cube without its country parts (no "cd")
     bare, acc_b, _ = _cc_app_step(tmp_path, monkeypatch, "bare", strip=True)
     assert "cd" not in json.loads(bare) and acc_b.cdn["apps"] == 0
-    rest = dict(body)
+    rest, nb = dict(body), json.loads(bare)
     rest.pop("cd")
-    assert json.dumps(rest, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode() == bare
+    nocd = json.dumps(rest, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()   # (mix and all)
+    # 📊 the mix takes the cube's day cells (ages 0 … 30) of the install days the install-day read lacks — here all of
+    # them (no install-day read): without the country parts only the 30-day buckets are split. Every other byte the same
+    assert sum(map(sum, (x.values() for x in rest.pop("mix")["m"].values()))) > sum(
+        map(sum, (x.values() for x in nb.pop("mix")["m"].values())))
+    assert json.dumps(rest, ensure_ascii=False, separators=(",", ":"), sort_keys=True) == json.dumps(
+        nb, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     # the switch off: no "late", no "cd", no pack — byte for byte the file without any cube
     off, acc_o, out_o = _cc_app_step(tmp_path, monkeypatch, "off", cube=False)
     assert "cd" not in json.loads(off) and "late" not in json.loads(off) and os.listdir(str(out_o)) == [
@@ -1233,7 +1240,7 @@ def test_country_app_step_file_and_isolation(tmp_path, monkeypatch):
     # any failure in the country part: no "cd", every other byte as without it, counted
     monkeypatch.setattr(rb, "_cty", lambda *a_, **k_: 1 / 0)
     bad, acc_x, out_x = _cc_app_step(tmp_path, monkeypatch, "bad")
-    assert bad == bare and acc_x.cdn["failed"] == 1 and os.listdir(str(out_x)) == ["roi_aaaaaaaaaaaa.json.gz"]
+    assert bad == nocd and acc_x.cdn["failed"] == 1 and os.listdir(str(out_x)) == ["roi_aaaaaaaaaaaa.json.gz"]
 
 
 def test_country_visit_failure_keeps_the_columns(tmp_path, monkeypatch):

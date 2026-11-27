@@ -140,11 +140,21 @@ BEFORE = {
 }
 
 
+def _nomix(raw):
+    """A roi file without its 📊 "mix" (revenue by install month, added after these digests were taken; nothing of the
+    pass reads or writes it) — every other byte as written."""
+    body = json.loads(raw)
+    if body.pop("mix", None) is None:
+        return raw
+    return json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+
+
 def _digest(top, od):
     files = {}
     for n in sorted(os.listdir(str(od))):
         with open(os.path.join(str(od), n), "rb") as f:
-            files[n] = hashlib.sha256(gzip.decompress(f.read())).hexdigest()
+            raw = gzip.decompress(f.read())
+            files[n] = hashlib.sha256(_nomix(raw) if rb.FILE_RE.match(n) else raw).hexdigest()
     return hashlib.sha256(json.dumps({"top": top, "files": files}, sort_keys=True).encode()).hexdigest()
 
 
@@ -152,7 +162,8 @@ def _digest(top, od):
 def test_country_outputs_byte_identical_to_the_build_before_the_pass(tmp_path, monkeypatch, world):
     if world == "app_step":
         full, _, out = _cc_app_step(tmp_path, monkeypatch, "on")
-        assert _digest(hashlib.sha256(full).hexdigest(), out) == BEFORE[world]
+        assert "mix" in json.loads(full)
+        assert _digest(hashlib.sha256(_nomix(full)).hexdigest(), out) == BEFORE[world]
         return
     if world == "users":
         kw = dict(inst=dict(CINST, EE=3), rate=dict(CRATE, EE=50000), only={"EE": {date(2026, 9, 5), date(2026, 9, 6)}})

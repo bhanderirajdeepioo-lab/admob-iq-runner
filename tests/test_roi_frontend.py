@@ -137,6 +137,29 @@ def test_countries_life_all(out):
     assert out["card"] == "📈 D7 ROAS <b>40%</b> (usual 50%) · paisa wapas ~12 days"   # ROI's own numbers replace the card's
 
 
+def test_revenue_by_install_month(out):
+    m = out["mix"]
+    assert m["rows"] == ["2026-10", "2026-09", "2026-08", "2026-07", "2026-06"]   # newest first; no split: no row
+    assert m["head"] == ["Calendar month", "Revenue", "Same month", "1 month before", "2 months before", "3 months before",
+                         "4 months before", "5 months before", "Older", "Unknown", ""]
+    # Oct (part month: through the 12th): AdMob $100, its split $90 → Unknown 10%; Jan + Nov 2025 are "Older"
+    assert m["oct"] == ["Oct 2026 12d", "$100", "40% Oct", "30% Sep", "10% Aug", "— Jul", "— Jun", "— May", "10%", "10%", "▸"]
+    # Sep: the split ($210) over AdMob ($200): Revenue stays AdMob's own number, marked ≈; the % are of the split
+    assert m["sep"] == ["Sep 2026", "≈ $200", "71% Sep", "29% Aug", "— Jul", "— Jun", "— May", "— Apr", "—", "—", "▸"]
+    # Aug: a split and no AdMob revenue: never a GA4 number as Revenue
+    assert m["aug"] == ["Aug 2026", "—", "100% Aug", "— Jul", "— Jun", "— May", "— Apr", "— Mar", "—", "—", "▸"]
+    assert m["over"]                                                 # the hover says why
+    # Jul: the split 0.5% over AdMob (the week ↔ month edge of k): no mark, AdMob's number, the split is the whole
+    assert m["jul"] == ["Jul 2026", "$100", "100% Jul", "— Jun", "— May", "— Apr", "— Mar", "— Feb", "—", "—", "▸"]
+    assert m["tip"] and m["closed"]                                  # the amount on hover; closed until tapped
+    assert m["open"] == ("Oct 2026 ka revenue, har install mahine ka hissa: 40% Oct 2026 · 30% Sep 2026 · 10% Aug 2026 · "
+                         "5.0% Jan 2026 · 5.0% Nov 2025 · 10% Unknown")
+    assert m["jun"][0] == "Jun 2026 15 se"                           # the first GA4 month: from GA4's history start
+    # every install month under 0.1% (here one is a wrong phone clock's 1978) folded into one item
+    assert m["tiny"] == "Jun 2026 ka revenue, har install mahine ka hissa: 100% Jun 2026 · <0.1% 2 aur mahine milake (har ek <0.1%)"
+    assert m["life"] and m["nomix"] and m["dev"]                     # a 4th view only with a split; never for a developer
+
+
 def test_countries_and_devices_source_switch(out):
     """🌍 / 📱 (owner, 3 Nov 2026: "Countries + Devices"): 🎯 Decision is the tab as it was, 💰 Source the SRC module's view."""
     assert out["xmode"] == {"dec": True, "cty": True, "dev": True}

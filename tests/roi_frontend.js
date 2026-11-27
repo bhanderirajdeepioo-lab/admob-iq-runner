@@ -977,6 +977,36 @@ async function benchReload(VW, file, packs) {
     ctx.curView = () => 'USD'; ctx.cfx = () => 1; ctx.csym = () => '$';
     const cpu = U.cohortPL(co);
     out.co_usd = cpu.includes('⏳ 40% wapas') && cpu.includes('✅ Wapas aa gaya · ~day 6');
+    // 📊 revenue by install month (roi_build._mix): newest month first; same month, 1 … 5 before, older, unknown (adm −
+    // the split); a split bigger than AdMob: no unknown, the split is the 100%; a month with no split: no row; part month
+    const MIX = { till: '2026-10-12', from: '2026-06-15', adm: { '2026-10': 100, '2026-09': 200, '2026-07': 100, '2026-06': 100, '2026-03': 50 },
+      m: { '2026-10': { '2026-10': 40, '2026-09': 30, '2026-08': 10, '2026-01': 5, '2025-11': 5 }, '2026-09': { '2026-09': 150, '2026-08': 60 },
+        '2026-08': { '2026-08': 20 }, '2026-07': { '2026-07': 100.5 }, '2026-06': { '2026-06': 99.95, '2025-01': 0.03, '1978-04': 0.02 },
+        '2026-03': {} } };   // Aug: a split, no AdMob; Jun: two install months under 0.1% (one a wrong phone clock's)
+    const dec = x => x.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+    const tdTexts = (h, M) => { const i = h.indexOf(`data-roi-mixm="${M}"`); if (i < 0) return null; const tr = h.slice(i, h.indexOf('</tr>', i));
+      return [...tr.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(m => dec(m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())); };
+    U.set('MIXO', '');
+    const mt = U.mixTable(MIX);
+    out.mix = { rows: [...mt.matchAll(/data-roi-mixm="([^"]+)"/g)].map(m => m[1]), oct: tdTexts(mt, '2026-10'), sep: tdTexts(mt, '2026-09'),
+      aug: tdTexts(mt, '2026-08'), jul: tdTexts(mt, '2026-07'), jun: tdTexts(mt, '2026-06'), over: mt.includes('Split (GA4) $210 — AdMob se zyada: % split par') && mt.includes('Split (GA4) $20 — AdMob me is mahine kuch nahi'),
+      head: [...mt.matchAll(/<th>([^<]*)<\/th>/g)].map(m => m[1]), tip: mt.includes('title="Sep 2026 installs: $30"'), closed: !mt.includes('roi-xr') };
+    U.set('MIXO', '2026-10');
+    const mo = U.mixTable(MIX), xi = mo.indexOf('<tr class="roi-xr">'), xr = mo.slice(xi, mo.indexOf('</tr>', xi));
+    out.mix.open = dec(xr.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim());
+    U.set('MIXO', '2026-06');
+    const mj = U.mixTable(MIX), ji = mj.indexOf('<tr class="roi-xr">');
+    out.mix.tiny = dec(mj.slice(ji, mj.indexOf('</tr>', ji)).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim());
+    U.set('MIXO', '');
+    U.set('LG', 'mix');
+    const lm = U.lifeView(d.life, d.life_till, d, null, MIX), ln = U.lifeView(d.life, d.life_till, d, null, null);
+    out.mix.life = lm.includes('Revenue by install month · har mahine ka revenue kis install mahine') && lm.includes('data-roi-lg="mix" aria-pressed="true"')
+      && lm.includes('roi-mix') && lm.includes('<b>Unknown</b> = jitne revenue') && lm.includes('alag time zone') && lm.includes('<b>≈</b> = GA4 ka split');
+    out.mix.nomix = !ln.includes('data-roi-lg="mix"') && ln.includes('Calendar month · us mahine kitna aaya') && ln.includes('data-roi-lg="month" aria-pressed="true"');
+    ctx.window.__DEV_VIEW__ = true;
+    out.mix.dev = U.mixTable(MIX) === '' && !U.lifeView(d.life, d.life_till, d, null, MIX).includes('data-roi-lg="mix"');
+    ctx.window.__DEV_VIEW__ = false;
+    U.set('LG', 'cohort');
     // all apps
     U.setAll({ v: 1, T, apps: [{ app_id: 'id-b', app: 'Beta', st: 'Normal', r7: 0.5, u7: 0.5, r30: 0.9, life: [10, 5], cut: 0 },
       { app_id: 'id-a', app: 'Alpha', st: 'Worse', r7: 0.2, u7: 0.5, pb: null, best: [30, 0.6, '2026-09'], life: [5, 10], cut: 2 },

@@ -373,6 +373,7 @@ class Acc:
         self.cohortp = False                        # … its All row from their own D0 … D30 read (GA4_COHORTP)
         self.pdn = {"ok": 0, "busy": 0, "none": 0, "fail": 0}   # … its apps by PAID status (the ROI line)
         self.held = []                              # the spend days of apps a held Google Ads store stops early
+        self.mix, self.mixa, self.mixt = {}, {}, []  # 📊 revenue by install month: the split, the AdMob side, the days
 
 
 def start(cal=None, adsrc=None, cube=False, cmon=None, cubep=False, cohortp=False):
@@ -447,7 +448,7 @@ def _same(qrec, led):
     except (TypeError, ValueError, AttributeError):
         return False
 
-def _late(data_dir, aid, sid, P, visit=None, cu=gcu):
+def _late(data_dir, aid, sid, P, visit=None, cu=gcu, mix=None, to=None):
     """The app's cohort cube (fetch.ga4_cube, GA4_CUBE) folded month by month (one month in memory at a time, with its q
     file) + its hot days → {"B": {X: {j: USD}} the 30-day buckets (AdMob-matched with kf of each activity week; j ≤ QJ
     from q on a week read whole), "full" (lo, hi): every activity day lo … hi folded or hot, "fin" (lo, hi): every one
@@ -458,7 +459,12 @@ def _late(data_dir, aid, sid, P, visit=None, cu=gcu):
     visit("m", YYYY-MM, month file) / visit("h", D, hot record): the 🌍 country filter's read riding this one pass over
     the files (each month and each hot day this uses, as it uses them); a visit that raises is dropped — never these
     columns. cu: the cube whose store, knobs and rules every read here goes through (fetch.ga4_cube; ⚖️ the paid pass:
-    fetch.ga4_cube_paid.MOD — the same code on the Google Ads users' store, its users off)."""
+    fetch.ga4_cube_paid.MOD — the same code on the Google Ads users' store, its users off).
+    mix: 📊 the install days whose ages 0 … 30 the install-day read has (a set of YYYY-MM-DD; None: none of this) — the
+    result then also has "BM" {activity month: {install month: USD}} (every 30-day bucket cell above, the same USD, by
+    its month file / hot day ≤ thru) and "EM" {install day: {activity month: USD}} (the cube's own ages 0 … 30 of the
+    install days NOT in mix, day by day × the k of each day's week: the older installs the install-day read never has),
+    both through MT (to: the last day the other reads have — the split never takes a day one of them lacks)."""
     def seen(*args):
         nonlocal visit
         if visit is not None:
@@ -519,16 +525,26 @@ def _late(data_dir, aid, sid, P, visit=None, cu=gcu):
     def wk(Dd):
         return _iso(cu._mon(Dd))
 
-    def add(b, onq=()):
-        """The cube's cells, but a bucket j ≤ QJ of a week read whole (onq: q's cells instead)."""
+    BM, BH, EM, EH = {}, {}, {}, {}         # 📊 (mix only): by activity month / hot day / install day — see the doc
+    mbad = None                             # 📊 a day cell e0 could not read: the mix off (its type), nothing else
+
+    def put(to, k, X, s):
+        e = to.setdefault(k, {})
+        e[X[:7]] = e.get(X[:7], 0.0) + s
+
+    def add(b, onq=(), mk=None, to=BM):
+        """The cube's cells, but a bucket j ≤ QJ of a week read whole (onq: q's cells instead). mk: 📊 their activity
+        month (or hot day) for the mix — None: no mix."""
         for X, js in (b or {}).items():
             e = B.setdefault(X, {})
             for j, ws in (js or {}).items():
                 jj = int(j)
-                e[jj] = e.get(jj, 0.0) + sum(v / 1e6 * k_of(W) for W, v in (ws or {}).items()
-                                             if not (jj <= cu.QJ and W in onq))
+                s = sum(v / 1e6 * k_of(W) for W, v in (ws or {}).items() if not (jj <= cu.QJ and W in onq))
+                e[jj] = e.get(jj, 0.0) + s
+                if mk and s:
+                    put(to, mk, X, s)
 
-    def add_q(q, onq):
+    def add_q(q, onq, mk=None, to=BM):
         for X, js in (q or {}).items():
             for j, ws in (js or {}).items():
                 jj = int(j)
@@ -536,6 +552,27 @@ def _late(data_dir, aid, sid, P, visit=None, cu=gcu):
                 if s:
                     e = B.setdefault(X, {})
                     e[jj] = e.get(jj, 0.0) + s
+                    if mk:
+                        put(to, mk, X, s)
+
+    def e0(e, into=EM):
+        """📊 A month file's (or a hot day's) ages 0 … 30 ("e": {cc: {X: [u0, r0 … r30]}}) of the install days not in
+        mix, every country summed → into {X: {activity month: USD}}, each day × its week's k (the k every cell here
+        takes)."""
+        tot = {}
+        for xs in (e or {}).values():
+            for X, arr in (xs or {}).items():
+                if X not in mix and arr:
+                    t = tot.setdefault(X, [0] * cu.LAGS)
+                    for L, v in enumerate(arr[1:cu.LAGS + 1]):
+                        t[L] += v or 0
+        for X, t in tot.items():
+            Xd, m = _d(X), into.setdefault(X, {})
+            for L, v in enumerate(t):
+                if v:
+                    Dd = Xd + timedelta(days=L)
+                    mo = _iso(Dd)[:7]
+                    m[mo] = m.get(mo, 0.0) + v / 1e6 * k_of(wk(Dd))
 
     def past(b):
         """{W: micros of the cube's buckets past QJ} (ages 421 + — never on q)."""
@@ -656,9 +693,15 @@ def _late(data_dir, aid, sid, P, visit=None, cu=gcu):
             fin.add(Dd)
             W = wk(Dd)
             note(Dd, led if isinstance(led, dict) else {}, "q" if W in onq else "fl" if W in held else None)
-        add(mo["b"], onq)
+        mx = mk if mix is not None else None            # 📊 the mix: this month file's cells by its month
+        add(mo["b"], onq, mx)
         if onq:
-            add_q(qm["q"], onq)
+            add_q(qm["q"], onq, mx)
+        if mx:
+            try:
+                e0(mo.get("e"))
+            except Exception as e:                      # (as the country filter's own read of "e": only the mix goes)
+                mbad = mbad or type(e).__name__
         seen("m", mk, mo)
         um = cu.load_u(data_dir, aid, sid, mk) if uuse else None      # 👥 the month's users (its folded days only)
         if um is not None:
@@ -685,9 +728,15 @@ def _late(data_dir, aid, sid, P, visit=None, cu=gcu):
                     onq = {W}
                     gap(W, s_, past(rec.get("b")).get(W, 0), {Dd}, True)
         note(Dd, rec, "q" if onq else None)
-        add(rec.get("b"), onq)
+        mx = D if mix is not None else None             # 📊 a hot day: by its day (≤ thru at the end)
+        add(rec.get("b"), onq, mx, BH)
         if onq:
-            add_q(rec["q"], onq)
+            add_q(rec["q"], onq, mx, BH)
+        if mx:
+            try:
+                e0(rec.get("e"), EH.setdefault(D, {}))
+            except Exception as e:
+                mbad = mbad or type(e).__name__
         seen("h", D, rec)
         ue = ((uh or {}).get("d") or {}).get(D)     # 👥 a hot day's users: only those of this very read ("at")
         if isinstance(ue, dict):
@@ -756,7 +805,31 @@ def _late(data_dir, aid, sid, P, visit=None, cu=gcu):
     if ui["on"]:                                    # 👥 only with users' files: days with All users kept (a whole read
         info["u"] = {f: ui[f] for f in ("q", "qfl", "c", "qou", "qou_days")}   # "ok" / not whole), country users, the
         #                                             "ok" reads' users with no install day (their sum / days)
-    return {"B": B, "full": full, "fin": final, "q": q_bits, "info": info, "uq": UQ}
+    out = {"B": B, "full": full, "fin": final, "q": q_bits, "info": info, "uq": UQ}
+    if mix is not None:
+        # 📊 the split stops at thru and `to` — and, with a folded day past that (a hole in the walk, a read behind),
+        # at the end of the month before unless it is a month's last day: a month file's 30-day buckets are by week,
+        # never cut at a day. MT: that day (None: none, or a day cell e0 could not read — the health line says so)
+        cut = min(thru, _d(to)) if to else thru
+        if fin and max(fin) > cut and (cut + timedelta(days=1)).day != 1:
+            cut = cut.replace(day=1) - timedelta(days=1)
+        mt = _iso(cut) if cut >= hs and not mbad else None
+        if mbad:
+            print("roi mix skipped: %s" % mbad, file=sys.stderr)
+        if mt:
+            for D, cs in BH.items():
+                if D <= mt:
+                    for C, v in cs.items():
+                        put(BM, D[:7], C, v)
+            for D, xs in EH.items():
+                if D <= mt:
+                    for X, ms in xs.items():
+                        m = EM.setdefault(X, {})
+                        for M, v in ms.items():
+                            m[M] = m.get(M, 0.0) + v
+        out.update(MT=mt, BM={M: cs for M, cs in BM.items() if mt and M <= mt[:7]},
+                   EM={X: {M: v for M, v in ms.items() if M <= mt[:7]} for X, ms in EM.items()} if mt else {})
+    return out
 
 
 def _walk(late, X):
@@ -1261,10 +1334,60 @@ def _life(rev, spend, fxf, ded_rate):
     return [[d, _r(v[0]), _r(v[1]), _r(v[2], 2)] for d, v in sorted(out.items())]
 
 
+def _mix(rows, late, life, hs=None):
+    """📊 Revenue by install month (owner, 27 Nov 2026: "this month ka total revenue … usme past month ka kitna %
+    revenue … month wise … sab month ke"): each calendar month's revenue split by the month its users were installed,
+    AdMob-matched (k) like every number here, over the activity days the cube's walk is through (late "MT").
+    Ages 0 … 30: the install-day read (the rows' d, day by day) where an install day has it, else the cube's own cells
+    (late "EM"); ages 31 +: the cube's 30-day buckets, q on a week read whole (late "BM") — the cells the 30-day
+    columns sum. hs: GA4's history start (AdMob's days before it are in no month's split — nor in its "adm"). →
+    {"till": thru, "m": {month: {install month: USD}}, "adm": {month: AdMob USD hs … till}, "from": hs (only when not
+    a month's 1st: that month's row starts there)} (what a
+    month's AdMob revenue has beyond its split: GA4 gave it no install day — the page's "Unknown"), or None without
+    the cube's cells (no cube, its first walk on its way, no day through)."""
+    till = (late or {}).get("MT")
+    if not till:
+        return None
+    m = {}
+
+    def put(M, C, v):
+        if v:
+            e = m.setdefault(M, {})
+            e[C] = e.get(C, 0.0) + v
+    for M, cs in late["BM"].items():
+        for C, v in cs.items():
+            put(M, C, v)
+    for X, ms in late["EM"].items():                    # (folded months only: every day of them ≤ thru)
+        for M, v in ms.items():
+            put(M, X[:7], v)
+    for r in rows:                                      # d: cumulative by age, so a day's revenue is its step
+        C, prev = _iso(r["X"])[:7], 0.0
+        for L, v in enumerate(r.get("d") or ()):
+            D = _iso(r["X"] + timedelta(days=L))
+            if D > till:
+                break
+            put(D[:7], C, v - prev)
+            prev = v
+    adm = {}
+    for x in life or ():
+        if (not hs or x[0] >= hs) and x[0] <= till and x[1]:
+            adm[x[0][:7]] = adm.get(x[0][:7], 0.0) + x[1]
+    out = {"till": till, "m": {M: {C: _r(v) for C, v in sorted(cs.items())} for M, cs in sorted(m.items())},
+           "adm": {M: _r(v) for M, v in sorted(adm.items())}}
+    if hs and not hs.endswith("-01"):
+        out["from"] = hs
+    return out
+
+
+def _rev_last(rev):
+    """AdMob's last day with revenue (rev's days), or None."""
+    days = (rev or {}).get("all_days") or (rev or {}).get("days") or {}
+    return max((d for d, v in days.items() if v and v[0]), default=None)
+
+
 def _life_till(rev, spend):
     """The last day both AdMob revenue and Google Ads spend are in (the lifetime totals stop there; later days: live)."""
-    days = (rev or {}).get("all_days") or (rev or {}).get("days") or {}
-    a = max((d for d, v in days.items() if v and v[0]), default=None)
+    a = _rev_last(rev)
     b = (spend or {}).get("till")
     return min(x for x in (a, b) if x) if (a or b) else None
 
@@ -2771,10 +2894,13 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
         fclk = getattr(acc.fc, "clock", None)          # 🌍 the country filter: its read rides the cube's one pass;
         cv = _Cty(P["hs"], clock=fclk) if acc.cube else None   # its time never counts in the forecast's budget
         perr = None                                     # ⚖️ the raise that keeps the paid pass from running (its type)
+        nw = co.get("read_today") if co else None       # 📊 the install days whose ages 0 … 30 the rows' d holds
+        cov = {k for k in ((co or {}).get("x") or {}) if _iso(P["hs"]) <= k <= nw} if nw else set()
+        mto = min([x for x in (nw, _rev_last(rev)) if x], default=None)    # … no later than that read's day and AdMob's
         try:                                            # the cohort cube (D60, D90 … the app's age; GA4_CUBE only):
             with _sc.stage("roi_cube"):                 # (⏱ measure only, stage_clock: summed over the apps)
-                late = (_late(data_dir, aid, store.get("stream_id"), P, visit=cv.visit)   # a bad file costs only
-                        if acc.cube else None)                                           # those columns
+                late = (_late(data_dir, aid, store.get("stream_id"), P, visit=cv.visit, mix=cov, to=mto)
+                        if acc.cube else None)          # a bad file costs only those columns
         except Exception as e:
             late, perr = None, type(e).__name__
         rows = _cohorts(P, spend, fxf, co, today, late if late and "B" in late else None)
@@ -2849,6 +2975,13 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
             acc.dvn["apps"] += 1
         if late is not None:
             body["late"] = late["info"]
+        mix = None
+        try:                                            # 📊 revenue by install month (own try: a failure costs only it)
+            mix = _mix(rows, late, life, _iso(P["hs"]))
+        except Exception as e:
+            print("roi mix skipped: %s" % type(e).__name__, file=sys.stderr)
+        if mix:
+            body["mix"] = mix
         if cv is not None and late is not None and "B" in late:   # 🌍 one country's install-day table (own try:
             t0 = fclk() if fclk else None                          # a failure costs only it — no "cd", counted)
             ctx, cd = ({} if acc.cubep else None), None            # ⚖️ (what the paid pass takes of it)
@@ -2937,6 +3070,20 @@ def app_step(acc, store, a, key, rev, pre, cfg, out_dir, data_dir, now=None, ids
             p[0] += rv or 0
             p[1] += sp or 0
             p[2] += spi or 0
+        # 📊 All apps' revenue by install month: each app's split + its AdMob revenue through its own day (an app
+        # without a split: all of it through its last day — the page's "Unknown"), so no app is ever split past it
+        mx_till = mix["till"] if mix else (life[-1][0] if life else None)
+        for M, cs in ((mix or {}).get("m") or {}).items():
+            e = acc.mix.setdefault(M, {})
+            for C, v in cs.items():
+                e[C] = e.get(C, 0.0) + v
+        for M, v in (mix["adm"].items() if mix else ()):                   # (the split's own AdMob side: from hs)
+            acc.mixa[M] = acc.mixa.get(M, 0.0) + v
+        for x in (() if mix else life):                                     # (no split: all of it Unknown, from hs too)
+            if mx_till and _iso(P["hs"]) <= x[0] <= mx_till and x[1]:
+                acc.mixa[x[0][:7]] = acc.mixa.get(x[0][:7], 0.0) + x[1]
+        if mix:
+            acc.mixt.append(mix["till"])
         for r in rows:
             if not (r["sp"] and r["sp"] > 0):
                 continue
@@ -3024,6 +3171,10 @@ def finish(acc, dashboard, out_dir):
                 "ccy": next(iter(acc.ccy)) if len(acc.ccy) == 1 else None, "f4c": f4_consts(),
                 "life_till": min([max(set(acc.till), key=lambda d: (acc.till.count(d), d))] + acc.held)
                 if acc.till else None}
+        if acc.mix:                                     # 📊 revenue by install month (till: the apps' usual day)
+            body["mix"] = {"till": max(set(acc.mixt), key=lambda d: (acc.mixt.count(d), d)),
+                           "m": {M: {C: _r(v) for C, v in sorted(cs.items())} for M, cs in sorted(acc.mix.items())},
+                           "adm": {M: _r(v) for M, v in sorted(acc.mixa.items())}}
         raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
         write_json_gz_stable(os.path.join(out_dir, ALL_FILE), body)
         dashboard["roi"] = {"file": ALL_FILE, "v": hashlib.sha1(raw).hexdigest()[:12], "ccy": body["ccy"],
