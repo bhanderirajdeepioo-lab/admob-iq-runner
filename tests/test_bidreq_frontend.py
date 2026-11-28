@@ -1,10 +1,11 @@
-"""📡 Meta won % / Bid requests — two Overview tiles (All apps and each app, on the top bar's Period) and, behind a tap in All
-apps, one row per app: App · AdMob req · Meta bid req · Meta won %. The other tiles stay as they were.
+"""📡 Meta revenue / AdMob revenue — two Overview tiles (All apps and each app, on the top bar's Period: Estimated earnings of
+Meta bidding / of AdMob Network + its Waterfall line) and, still on its own screen, the list: one row per app: App · AdMob req ·
+Meta bid req · Meta won %. The other tiles stay as they were.
 
 The numbers are the mediation file the page already ships (mediation_daily.json, date × app × ad source → [revenue,
 impressions, matched, requests]) summed over the Period: AdMob req = the "AdMob Network" source's requests; Meta bid req =
 "Meta Audience Network (bidding)"'s requests and Meta won = its matched requests, so Meta won % = won ÷ bid requests. Other
-sources (the AdMob and Meta waterfall lines, a third network) never count; the two are never added up; a Period with a day
+sources (the Meta waterfall line, a third network) never count in the requests or in the Meta revenue; the two are never added up; a Period with a day
 the file lacks shows "—", never a part-sum.
 
 tests/bidreq_frontend.js runs the page's own script on the SYNTHETIC file below (made-up apps, source ids and counts); every
@@ -32,6 +33,7 @@ AXIS = [d for d in DAYS if d != GAP]
 ADM, ADM_WF, META, META_WF, OTHER = "9001", "9002", "9003", "9004", "9005"
 NAMES = {ADM: "AdMob Network", ADM_WF: "AdMob Network Waterfall", META: "Meta Audience Network (bidding)",
          META_WF: "Meta Audience Network", OTHER: "Pangle (bidding)"}
+REV = {ADM: 20_000_000, ADM_WF: 5_000_000, META: 12_000_000, META_WF: 3_000_000, OTHER: 40_000_000}   # micros per app-day
 APPS = ["Demo Gallery", "Puzzle Quest", "Alpha Tools", "Tiny Notes", "Echo Radio", "Quiet App"]   # Quiet App: no mediation rows
 
 
@@ -61,7 +63,7 @@ def _med():
         srcs = {}
         for i, d in enumerate(AXIS):
             for k, (m, q) in _per_day(app, d).items():
-                srcs.setdefault(k, []).append([i, 1_000_000, m // 2, m, q])
+                srcs.setdefault(k, []).append([i, REV[k], m // 2, m, q])
         if srcs:
             by_app[app] = srcs
     return {"dates": AXIS, "names": NAMES, "by_app": by_app, "currency": "USD"}
@@ -208,74 +210,81 @@ def test_counts_and_rates_read_short(rep):
 
 # ── the tiles ──────────────────────────────────────────────────────────────────────────────────
 def _tile(h):
-    m = re.match(r'<div class="card kpi mk-kpi( mk-tap)?" data-mk="(won|req)" title="([^"]*)"(.*?)>(<span class="mk-hint" '
-                 r'aria-hidden="true">Apps →</span>)?<div class="l">([^<]*)</div><div class="v[^"]*">([^<]*)</div>'
-                 r'<div class="d muted">([^<]*)</div></div>$', h, re.S)
+    m = re.match(r'<div class="card kpi mk-kpi" data-mk="(meta|admob)" title="([^"]*)">'
+                 r'<div class="l">([^<]*)</div><div class="v[^"]*">([^<]*)</div><div class="d muted">([^<]*)</div></div>$', h, re.S)
     assert m, h
-    tap, kind, title, attrs, hint, label, v, d = m.groups()
-    return {"tap": bool(tap), "kind": kind, "title": H.unescape(title), "attrs": attrs, "hint": bool(hint), "label": label,
-            "v": v, "d": d}
+    kind, title, label, v, d = m.groups()
+    return {"kind": kind, "title": H.unescape(title), "label": label, "v": v, "d": d}
+
+
+# by hand, USD per app-day: AdMob (ADM 20 + ADM_WF 5) Demo 25, Puzzle 20, Alpha 20, Tiny 20 (from 6 Jan); Meta (META 12 only)
+# Demo 12, Tiny 12 (from 8 Jan), Echo 12 (from 7 Jan). META_WF (3) and OTHER (40) never count.
+REVT = {"y": (85, 36), "today": (85, 36), "w7": (535, 144), "all": (600, 156)}
+TIP_MIDDLE = " ki Estimated earnings — AdMob report ka “Estimated earnings” column, upar wale Period me. Revenue tile me ye shamil hai (Revenue = saare networks)."
 
 
 def test_all_apps_tiles_by_period(rep):
     for r, w in (("today", "today"), ("yesterday", "y"), ("7d", "w7"), ("all", "all")):
         x = rep["tiles"]["all|" + r]
-        assert x["win"] == WINDOWS[w], r                   # the page's own Period (so the sums above are what it shows)
-        won, req = (_tile(h) for h in x["t"])
-        t = TOT[w]
-        assert won["label"] == "Meta won %" and req["label"] == "Bid requests"
-        assert won["v"] == _pct(t[2], t[1]) and won["d"] == "won ÷ bid requests · " + x["label"], r
-        assert req["v"] == _n(t[0]) + " · " + _n(t[1]) and req["d"] == "AdMob · Meta · " + x["label"], r
-        assert won["tap"] and won["hint"] and req["tap"] and req["hint"]
-        for tl in (won, req):
-            assert 'role="button" tabindex="0" onclick="bqOpen()"' in tl["attrs"] and tl["title"].count("Tap = har app ka.") == 1
-        assert won["title"].endswith("\n%s bid requests · %s won" % (format(t[1], ","), format(t[2], ",")))
-        assert req["title"].endswith("\nAdMob %s · Meta %s" % (format(t[0], ","), format(t[1], ",")))
-    assert [_tile(h)["v"] for h in rep["tiles"]["all|today"]["t"]] == ["12.7%", "22.8k · 16.6k"]
-    assert [_tile(h)["v"] for h in rep["tiles"]["all|yesterday"]["t"]] == ["19.9%", "58.5k · 41.7k"]
-    assert [_tile(h)["v"] for h in rep["tiles"]["all|7d"]["t"]] == ["20.0%", "402.0k · 284.6k"]
-    assert [_tile(h)["v"] for h in rep["tiles"]["all|all"]["t"]] == ["20.0%", "458.0k · 324.6k"]
+        assert x["win"] == WINDOWS[w], r
+        meta, adm = (_tile(h) for h in x["t"])
+        assert meta["label"] == "Meta revenue" and adm["label"] == "AdMob revenue"
+        assert meta["v"] == "$%d" % REVT[w][1] and adm["v"] == "$%d" % REVT[w][0], r
+        assert meta["d"] == "Meta (bidding) · " + x["label"] and adm["d"] == "AdMob + Waterfall · " + x["label"], r
+        assert meta["title"] == "Meta Audience Network (bidding)" + TIP_MIDDLE + "\n$%d.00" % REVT[w][1], r
+        assert adm["title"] == "AdMob Network + AdMob Network Waterfall" + TIP_MIDDLE + "\n$%d.00" % REVT[w][0], r
     assert rep["tiles"]["all|7d"]["label"].endswith("7d")
 
 
 def test_an_apps_tiles_are_its_own_numbers_and_no_button(rep):
-    want = {"Demo Gallery": ("20.0%", "won ÷ bid requests", "350.0k · 280.0k", "AdMob · Meta"),
-            "Puzzle Quest": ("—", "no Meta bidding", "21.0k · —", "AdMob · Meta"),
-            "Tiny Notes": ("0.0%", "won ÷ bid requests", "10.0k · 1,000", "AdMob · Meta"),
-            "Echo Radio": ("25.0%", "won ÷ bid requests", "— · 3,600", "AdMob · Meta"),      # no AdMob: "—", as the list
-            "Quiet App": ("—", "no Meta bidding", "—", "no bid requests")}
-    for app, (wv, wd, rv, rd) in want.items():
+    want = {"Demo Gallery": ("$84", "$175"), "Puzzle Quest": ("—", "$140"), "Tiny Notes": ("$24", "$80"),
+            "Echo Radio": ("$36", "—"), "Quiet App": ("—", "—")}
+    for app, (mv, av) in want.items():
         x = rep["tiles"]["app|" + app]
-        won, req = (_tile(h) for h in x["t"])
-        assert (won["v"], won["d"], req["v"], req["d"]) == (wv, wd + " · " + x["label"], rv, rd + " · " + x["label"]), app
-        assert not won["tap"] and not req["tap"] and not won["hint"] and not req["hint"] and "onclick" not in won["attrs"] + req["attrs"]
-        assert "Tap = har app ka." not in won["title"] + req["title"]
+        meta, adm = (_tile(h) for h in x["t"])
+        assert (meta["v"], adm["v"]) == (mv, av), app
+        assert meta["d"] == ("Meta (bidding)" if mv != "—" else "no Meta") + " · " + x["label"], app
+        assert adm["d"] == ("AdMob + Waterfall" if av != "—" else "no AdMob") + " · " + x["label"], app
+        for h in x["t"]:
+            assert "onclick" not in h and "<button" not in h and "mk-hint" not in h and "mk-tap" not in h
+        assert "\n$" not in (meta["title"] if mv == "—" else "") + (adm["title"] if av == "—" else "")   # no amount without rows
+    assert "\n$84.00" in _tile(rep["tiles"]["app|Demo Gallery"]["t"][0])["title"]
+
+
+def test_in_inr_the_tiles_convert_at_the_dashboards_rate(rep):
+    meta, adm = (_tile(h) for h in rep["inr"]["t"])
+    assert rep["inr"]["sym"] == "₹"
+    assert adm["v"] == "₹48,150" and meta["v"] == "₹12,960"          # 535 × 90 and 144 × 90
+    assert "\n$535.00" in adm["title"] and "\n$144.00" in meta["title"]   # the title keeps the exact USD
 
 
 def test_tiles_while_loading_failed_or_empty(rep):
     for k, v, why in (("loading", "…", None), ("failed", "—", "couldn't load"), ("empty", "—", "no mediation data")):
         x = rep["tiles"][k]
-        won, req = (_tile(h) for h in x["t"])
-        assert won["v"] == v and req["v"] == v, k
+        meta, adm = (_tile(h) for h in x["t"])
+        assert meta["v"] == v and adm["v"] == v, k
         if why is None:      # loading: the same caption as with the numbers — the tile never changes size when they land
-            assert won["d"] == "won ÷ bid requests · " + x["label"] and req["d"] == "AdMob · Meta · " + x["label"]
+            assert meta["d"] == "Meta (bidding) · " + x["label"] and adm["d"] == "AdMob + Waterfall · " + x["label"]
         else:
-            assert won["d"] == why + " · " + x["label"] and req["d"] == why + " · " + x["label"], k
+            assert meta["d"] == why + " · " + x["label"] and adm["d"] == why + " · " + x["label"], k
+        assert "\n$" not in meta["title"] + adm["title"]
+    x = rep["tiles"]["noSource"]                                    # a file with no "AdMob Network" source
+    assert [_tile(h)["v"] for h in x["t"]] == ["—", "—"] and _tile(x["t"][0])["d"] == "no AdMob Network source · " + x["label"]
 
 
 def test_the_tiles_on_the_page_take_their_numbers_in_place(rep):
     p = rep["repaint"]
-    assert p["won"] == p["want"][0] and p["req"] == p["want"][1]
-    assert _tile(p["won"])["v"] == "19.9%" and _tile(p["req"])["v"] == "58.5k · 41.7k"
+    assert p["meta"] == p["want"][0] and p["admob"] == p["want"][1]
+    assert _tile(p["meta"])["v"] == "$36" and _tile(p["admob"])["v"] == "$85"
 
 
-def test_overview_row_keeps_every_old_tile_and_adds_two_after_match_rate(rep):
+def test_overview_row_swaps_the_two_bid_tiles_for_revenue_in_the_same_place(rep):
     o = rep["overview"]
-    assert o["dash"] == {"cls": "c6", "labels": ["Revenue", "Avg eCPM", "Match rate", "Meta won %", "Bid requests",
+    assert o["dash"] == {"cls": "c6", "labels": ["Revenue", "Avg eCPM", "Match rate", "Meta revenue", "AdMob revenue",
                                                  "Apps · Accounts"], "mk": 2}
     assert o["dashAds"] == {"cls": "c11", "labels": ["Revenue", "Ad spend", "Profit / Loss", "Google Ads installs",
-                                                     "New revenue", "Old revenue", "Avg eCPM", "Match rate", "Meta won %",
-                                                     "Bid requests", "Apps · Accounts"], "mk": 2}
+                                                     "New revenue", "Old revenue", "Avg eCPM", "Match rate", "Meta revenue",
+                                                     "AdMob revenue", "Apps · Accounts"], "mk": 2}
 
 
 # ── the list ───────────────────────────────────────────────────────────────────────────────────
@@ -427,10 +436,6 @@ def test_the_hub_keeps_the_bid_requests_screen_when_the_app_changes(rep):
     assert h["onBid"] == ["bidreq"] and h["elsewhere"] and h["elsewhere"] != ["bidreq"]
     assert h["goRev"]["want"] and h["goRev"]["shown"] == [h["goRev"]["want"]] and h["goRev"]["tab"] == "revenue"
     assert h["goOv"]["want"] and h["goOv"]["shown"] == [h["goOv"]["want"]] and h["goOv"]["want"] != "bidreq"
-
-
-def test_an_apps_tile_opens_its_ad_units_when_the_build_shipped_them(rep):
-    assert rep["appTileTap"] == [{"tap": True, "hint": "Units →", "title": True}] * 2   # (short: the tile's label keeps its room)
 
 
 def test_a_networks_bidding_and_waterfall_lines_never_share_a_name(rep):

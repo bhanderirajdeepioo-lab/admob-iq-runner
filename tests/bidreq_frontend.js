@@ -1,11 +1,11 @@
-// 📡 Meta won % / Bid requests (frontend/index.html) — the page side, run for real: the dashboard script (the page's largest
+// 📡 Meta revenue / AdMob revenue tiles + the Bid requests list (frontend/index.html) — the page side, run for real: the dashboard script (the page's largest
 // <script>) in a node vm with stub browser globals, on the SYNTHETIC dashboard + mediation file tests/test_bidreq_frontend.py
 // writes (made-up apps, source ids and counts — no real data). It reports:
 //   * bqWin: the Period's sums per app (AdMob Network requests, Meta bidding requests, Meta won) for many windows, its states
 //     (the file on its way / failed / nothing for the Period / a Period day the file lacks / no "AdMob Network" source / a
 //     stale file) and its cache (a new file or another Period never reads an old answer);
-//   * the two Overview tiles (All apps: buttons into the list; an app: its own numbers, no button), their texts and titles,
-//     and their in-place repaint (bqOvPaint) once the file lands;
+//   * the two Overview revenue tiles (Meta · AdMob Estimated earnings; All apps or an app, read-only), their texts, titles,
+//     INR view and in-place repaint (bqOvPaint) once the file lands;
 //   * the Overview's tile row (its class, the tiles in order) with and without Google Ads;
 //   * the list (rows, cells, the All apps row, an app picked in the header, the empty states), bqN's rounding edges;
 //   * loadMED: one fetch for several callers, every caller called back (also on a failure), a new build fetched again, a
@@ -82,7 +82,7 @@ const reset = (dash, app, range) => run(`DATA=JSON.parse(JSON.stringify(__FX[${J
 const loadFile = () => run(`MED=JSON.parse(JSON.stringify(__FX.med)); MEDB=medBuild(); MEDERR=false; MEDLOADING=false; MEDCB=[]; 1`);
 const noFile = (extra) => run(`MED=null; MEDB=null; MEDERR=false; MEDLOADING=false; MEDCB=[]; ${extra || ''} 1`);
 const J = v => JSON.parse(run(`JSON.stringify(${v})`));
-const tiles = () => J(`['won','req'].map(k=>bqTile(k))`);
+const tiles = () => J(`['meta','admob'].map(k=>revTile(k))`);
 
 (async () => {
   await step('wiring', () => J(`{title:TITLES.bidreq, drill:HUB_DRILL.bidreq, render:String(render).indexOf('root.append(renderBidReq())')>=0}`));
@@ -133,15 +133,17 @@ const tiles = () => J(`['won','req'].map(k=>bqTile(k))`);
     reset('dash', '', '7d'); noFile('MEDLOADING=true;'); o.loading = { t: tiles(), label: run('curWinLabel()') };
     run('MEDLOADING=false; MEDERR=true;'); o.failed = { t: tiles(), label: run('curWinLabel()') };
     run('MEDERR=false; MED={dates:[],names:{},by_app:{}}; MEDB=medBuild();'); o.empty = { t: tiles(), label: run('curWinLabel()') };
+    loadFile(); run(`MED.names={};`); o.noSource = { t: tiles(), label: run('curWinLabel()') };
     loadFile();
     return o;
   });
+  await step('inr', () => { reset('dash', '', '7d'); loadFile(); run(`CURVIEW='INR'`); const t = tiles(), sym = run('csym()'); run(`CURVIEW=null`); return { t, sym }; });
   await step('repaint', () => {                                 // the file landed: each tile on the page is redrawn in place
     reset('dash', '', 'yesterday'); loadFile();
     const el = k => { const e = mk('div'); e.dataset.mk = k; e._o = null; Object.defineProperty(e, 'outerHTML', { get: () => e._o || '', set: v => { e._o = String(v); } }); return e; };
-    const a = el('won'), b = el('req'); QSA['.mk-kpi[data-mk]'] = [a, b];
+    const a = el('meta'), b = el('admob'); QSA['.mk-kpi[data-mk]'] = [a, b];
     run('bqOvPaint()'); delete QSA['.mk-kpi[data-mk]'];
-    return { won: a._o, req: b._o, want: tiles() };
+    return { meta: a._o, admob: b._o, want: tiles() };
   });
   await step('overview', () => {
     const o = {};
@@ -283,15 +285,6 @@ const tiles = () => J(`['won','req'].map(k=>bqTile(k))`);
     SCREEN.id = prev; run(`show=__show0; render=__render0; HUB.on=false; HUB.inHub=false; APP=''; 1`);
     return { onBid, elsewhere, goRev, goOv };
   });
-  // ── an app's own tile opens its ad units once the build shipped its file (no file: no button, as before) ──
-  await step('appTileTap', () => {
-    reset('dash', 'Demo Gallery', 'yesterday'); loadFile();
-    run(`DATA.bqu={'Demo Gallery':'bqu_x.json.gz'}; 1`);
-    const t = J(`['won','req'].map(k=>bqTile(k))`);
-    run(`delete DATA.bqu; 1`);
-    rep.bquNames = J(`['Meta Audience Network (bidding)','Meta Audience Network','AdMob Network Waterfall','AdMob Network','AppLovin (bidding)','AppLovin'].map(bquName)`);
-    return t.map(h => ({ tap: h.indexOf('onclick="bqOpen()"') >= 0, hint: (h.match(/<span class="mk-hint"[^>]*>([^<]*)</) || [null, ''])[1],
-      title: h.indexOf('Tap = is app ke ad units.') >= 0 }));
-  });
+  await step('bquNames', () => J(`['Meta Audience Network (bidding)','Meta Audience Network','AdMob Network Waterfall','AdMob Network','AppLovin (bidding)','AppLovin'].map(bquName)`));
   process.stdout.write(JSON.stringify({ errors, rep }));
 })().catch(e => { errors.push('MAIN ' + (e.stack || e.message)); process.stdout.write(JSON.stringify({ errors, rep })); });

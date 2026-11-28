@@ -5322,7 +5322,7 @@ function show(id){
   if(!REFRESH_SILENT) closeNav();          // mobile: selecting a screen closes the drawer (not a silent background refresh — don't shut a menu the reader has open)
   if(id==='baseline') loadBaseline();     // lazy-fetch the baseline payload on first open
   if(id==='mediation') loadMED(()=>medRerender());   // lazy-fetch daily-by-source → window to period
-  if(id==='overview') Promise.resolve().then(()=>{ if(bqScr()==='overview') loadMED(bqOvPaint); });   // 📡 its two Meta tiles: the same file, once the Overview really is on screen (render() passes through it)
+  if(id==='overview') Promise.resolve().then(()=>{ if(bqScr()==='overview') loadMED(bqOvPaint); });   // 📡 its two revenue tiles (Meta · AdMob): the same file, once the Overview really is on screen (render() passes through it)
   if(id==='deductions') loadDED(()=>dedRerender());  // lazy-fetch per-unit decay → window to period
   if(id==='uninstall'){ loadUNI(()=>uniRerender()); US.ensure(()=>uniRerender()); }   // lazy-fetch the GA4 uninstall detail (uninstall.json.gz) + the 🧭 Studio's file
   if(id==='active'){ actEnsure(); AS.ensure(()=>actRerender()); }   // the open app's active_<key>.json.gz (also after setApp on this screen) + the 🧭 Studio's file
@@ -5923,8 +5923,8 @@ function renderOverview(){
         ${SHOWSP?kpi('Old revenue',plFmt(oldRevTot),'Rev − D0 · '+dspan,'muted'):''}
         ${ecKpiTile(kpi('Avg eCPM',cm(k.ecpm),dspan,'muted',sparkbars(trendSeries)))}
         ${kpi('Match rate',pct(k.match_rate||0),dspan,'muted',sparkbars(trendSeries,'g'))}
-        ${bqTile('won')}
-        ${bqTile('req')}
+        ${revTile('meta')}
+        ${revTile('admob')}
         ${lastTile}
       </div>
       <div class="ov-note muted" style="font-size:11.5px;margin:0;opacity:.85">💡 Revenue AdMob ka <b>latest number</b> hai (baad me hua revision isme <b>pehle se shamil</b>) — aapke <b>live AdMob se match</b>. Pehle kitna tha aur kitna revise hua, wo <b>Deductions</b> tab me.${SHOWSP?` Spend <b>Google Ads (MCC)</b> se, USD me — <b>ROAS ${blended!=null?blended.toFixed(2)+'×':'—'}</b> matlab har $1 marketing pe ${blended!=null?'$'+blended.toFixed(2):'—'} revenue.${roasFxRule()} Installs yahan <b>sirf Google Ads</b> wale hain — 💸 Install value tab <b>all installs</b> (ads + organic) ginta hai, isliye wahan number bada.`:''}${unmatched>0?` <span class="down">⚠️ ${money(unmatched)} spend abhi kisi app se match nahi hua — detail <b>Marketing ROAS</b> tab me.</span>`:''}</div>
@@ -13957,23 +13957,31 @@ function bqWin(win){
 function bqN(n){ n=Math.round(+n||0); const a=Math.abs(n);
   return a>=999950000?(n/1e9).toFixed(1)+'B':a>=999950?(n/1e6).toFixed(1)+'M':a>=1e4?(n/1e3).toFixed(1)+'k':n.toLocaleString(); }
 function bqPct(won,req){ return req>0?(won/req*100).toFixed(1)+'%':'—'; }
-// one tile ('won' = Meta won %, 'req' = Bid requests) for the header's App (All apps: the total) and Period; a button into
-// the list in All apps (an app's own tile already is its row)
-function bqTile(kind){
-  const W=bqWin(curWinArr()), ds=curWinLabel(), tap=!APP||!!(DATA&&DATA.bqu&&DATA.bqu[APP]), won=kind==='won';   // an app: its ad units
-  const T=W.ok?(APP?(W.apps[APP]||[0,0,0]):W.t):null;
+// Owner, 28 Nov 2026: "kpi me ye meta won and bid req dono hata do, uski jagah meta revenue and admob revenue ka kpi add kar do".
+// Two Overview tiles on the same mediation file: Estimated earnings of AdMob (AdMob Network + its Waterfall line) and of Meta
+// bidding only (not the plain Meta waterfall line, not other networks), over the Period; app = that app only, '' = all apps.
+const BQ_ADMWF=/^admob network waterfall$/i;
+function revWin(win,app){
+  const W=bqWin(win); if(!W.ok) return W;
+  const want=new Set(win), keep=new Set(), nm=MED.names||{}, ka=[], km=[], usd=[0,0], has=[false,false];
+  (MED.dates||[]).forEach((d,i)=>{ if(want.has(d)) keep.add(i); });
+  Object.keys(nm).forEach(k=>{ const n=String(nm[k]==null?'':nm[k]).trim(); if(BQ_ADM.test(n)||BQ_ADMWF.test(n)) ka.push(k); else if(BQ_META.test(n)) km.push(k); });
+  (app?[app]:Object.keys(MED.by_app)).forEach(a=>{ const src=MED.by_app[a]||{};
+    [ka,km].forEach((ks,j)=>ks.forEach(k=>(src[k]||[]).forEach(r=>{ if(keep.has(r[0])){ usd[j]+=(+r[1]||0)/1e6; has[j]=true; } }))); });
+  return {ok:true, usd, has}; }
+// one tile ('meta' | 'admob') for the header's App and Period; read-only (no button)
+function revTile(kind){
+  const j=kind==='meta'?1:0, W=revWin(curWinArr(),APP), ds=curWinLabel();
+  const pre=j?'Meta (bidding)':'AdMob + Waterfall', label=j?'Meta revenue':'AdMob revenue', ok=W.ok&&W.has[j];
   let v, d;
-  if(!W.ok){ v=W.why==='load'?'…':'—'; d=(W.why==='load'?(won?'won ÷ bid requests':'AdMob · Meta'):BQ_WHY[W.why])+' · '+ds; }
-  else if(won){ v=bqPct(T[2],T[1]); d=(T[1]?'won ÷ bid requests':'no Meta bidding')+' · '+ds; }
-  else { const any=T[0]||T[1]; v=any?(T[0]?bqN(T[0]):'—')+' · '+(T[1]?bqN(T[1]):'—'):'—'; d=(any?'AdMob · Meta':'no bid requests')+' · '+ds; }
-  const ex=W.ok?(won?(T[1]?'\n'+T[1].toLocaleString()+' bid requests · '+T[2].toLocaleString()+' won':''):'\nAdMob '+T[0].toLocaleString()+' · Meta '+T[1].toLocaleString()):'';
-  const tip=(won?'Meta Audience Network (bidding): jitni bid requests Meta ko gayi, unme se kitni auction Meta ne jeeti aur ad diya. Ye AdMob ke “Bids in auction %” × “Win %” ke barabar hai — wo dono alag se AdMob ke API me nahi milte.'
-    :'Upar wale Period me AdMob Network (bidding) aur Meta Audience Network (bidding) ko gayi bid requests. Ek hi ad request dono ko jaati hai — inko jodna nahi.')
-    +(tap?(APP?' Tap = is app ke ad units.':' Tap = har app ka.'):'')+ex;
-  return kpi(won?'Meta won %':'Bid requests',v,d,'muted').replace('<div class="card kpi">',`<div class="card kpi mk-kpi${tap?' mk-tap':''}" data-mk="${kind}" title="${hAttr(tip)}"`
-    +(tap?` role="button" tabindex="0" onclick="bqOpen()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();bqOpen()}"><span class="mk-hint" aria-hidden="true">${APP?'Units →':'Apps →'}</span>`:'>')); }
+  if(!W.ok){ v=W.why==='load'?'…':'—'; d=(W.why==='load'?pre:BQ_WHY[W.why])+' · '+ds; }
+  else if(!ok){ v='—'; d='no '+(j?'Meta':'AdMob')+' · '+ds; }
+  else { v=money(W.usd[j]); d=pre+' · '+ds; }
+  const tip=(j?'Meta Audience Network (bidding)':'AdMob Network + AdMob Network Waterfall')+' ki Estimated earnings — AdMob report ka “Estimated earnings” column, upar wale Period me. Revenue tile me ye shamil hai (Revenue = saare networks).'
+    +(ok?'\n$'+W.usd[j].toFixed(2):'');
+  return kpi(label,v,d,'muted').replace('<div class="card kpi">',`<div class="card kpi mk-kpi" data-mk="${kind}" title="${hAttr(tip)}">`); }
 // the file landed: the tiles on the page take their numbers in place (the same size: nothing on the page moves)
-function bqOvPaint(){ document.querySelectorAll('.mk-kpi[data-mk]').forEach(el=>{ el.outerHTML=bqTile(el.dataset.mk); }); }
+function bqOvPaint(){ document.querySelectorAll('.mk-kpi[data-mk]').forEach(el=>{ el.outerHTML=revTile(el.dataset.mk); }); }
 // the list: one row per app with a bid request in the Period (most AdMob requests first), All apps last; an app picked in
 // the header (on the list, or restored with it): that app's row only
 function bqHtml(){ const W=bqWin(curWinArr());
